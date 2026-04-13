@@ -120,22 +120,29 @@ Genotypes (0/1/2 encoding) for each individual.
 
 Individual metadata. Created when founders are added.
 
-**Required columns:**
+**Core columns** (created by `add_founders()`):
 ```
-- pop_id (VARCHAR): Population ID
 - ind_id (VARCHAR): Individual ID (primary key)
-- sire_id (VARCHAR): Sire ID (parent 1)
-- dam_id (VARCHAR): Dam ID (parent 2)
+- parent_1 (VARCHAR): First parent ID ("0" for founders)
+- parent_2 (VARCHAR): Second parent ID ("0" for founders)
+- population (VARCHAR): Population name
+- sex (VARCHAR): Sex ("M" or "F")
 ```
 
-**User-added columns** (via `mutate_ind_meta()` or similar):
+**User-added columns** (via `mutate_ind_meta()`):
 ```
 - gen (INTEGER): Generation number
-- sex (VARCHAR): "M" or "F"
 - farm (VARCHAR): Farm identifier
 - date_birth (DATE): Birth date
+- weight_kg (DOUBLE): Body weight in kg
+- is_selected (BOOLEAN): Selection status
 - ... (any user-defined field)
 ```
+
+**Notes:**
+- Sex is automatically populated by `add_founders()` based on `n_males` and `n_females` parameters
+- Custom columns are added using `mutate_ind_meta()` with automatic type inference
+- Reserved columns (ind_id, parent_1, parent_2, population, sex) cannot be modified
 
 #### 5. `ind_phenotype`
 

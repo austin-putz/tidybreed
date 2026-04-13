@@ -140,27 +140,23 @@ pop %>% add_founders(n_males = 10, n_females = 100)
 - Populate `genome_haplotype` and `genome_genotype` tables
 - ID naming convention (e.g., "A_F0_001")
 
-### Step 5: Individual Metadata Functions
+### Step 5: Individual Metadata Functions ✅
 
 **`mutate_ind_meta()`** - Add new fields:
 ```r
 pop %>% mutate_ind_meta(gen = 0, farm = "A", date_birth = Sys.Date())
 ```
 
-**`add_ind_meta()`** - Set field values:
-```r
-# Single value for all
-pop %>% add_ind_meta(field_name = "gen", value = 0)
+**Implementation complete:**
+- ✅ ALTER TABLE to add columns to `ind_meta`
+- ✅ Automatic type detection (logical, integer, numeric, Date, POSIXct, character)
+- ✅ UPDATE queries for scalar and vector values
+- ✅ Vector length validation
+- ✅ Field name validation (SQL injection prevention, reserved words)
+- ✅ Reserved column protection (ind_id, parent_1, parent_2, population, sex)
+- ✅ Comprehensive test coverage
 
-# Vector of values
-pop %>% add_ind_meta(field_name = "farm", values = c("A", "B", "C", ...))
-```
-
-**Implementation needs:**
-- ALTER TABLE to add columns to `ind_meta`
-- Type detection or specification
-- UPDATE queries to set values
-- Validation of vector lengths
+**Note:** Only `mutate_ind_meta()` was implemented (not `add_ind_meta()`). The single function handles both scalar and vector updates, providing a simpler API.
 
 ## 🎯 Current State
 
@@ -168,23 +164,26 @@ The package now has:
 - ✅ Working S3 class
 - ✅ Database initialization
 - ✅ Genome structure creation
+- ✅ Founder haplotype generation
+- ✅ Individual metadata management (mutate_ind_meta)
 - ✅ dplyr integration via lazy tibbles
 - ✅ Comprehensive tests
 - ✅ Design documentation
 
 **You can now:**
 1. Create populations with genomes
-2. Query genome metadata with dplyr
-3. Persist data to disk
-4. Customize chromosome structures
+2. Generate founder haplotypes with configurable allele frequencies
+3. Add custom metadata fields to individuals
+4. Query genome metadata with dplyr
+5. Persist data to disk
+6. Customize chromosome structures
 
 **Still need to add:**
 1. SNP chip annotations
-2. Founder individuals
-3. Custom metadata fields
-4. Trait architecture
-5. Phenotype generation
-6. Mating and recombination
+2. Founder individuals (add_founders)
+3. Trait architecture
+4. Phenotype generation
+5. Mating and recombination
 
 ## 📦 Files Created
 
