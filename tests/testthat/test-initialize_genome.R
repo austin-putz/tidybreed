@@ -187,3 +187,110 @@ test_that("print method works", {
   close_pop(pop)
   unlink(temp_db)
 })
+
+
+test_that("initialize_genome creates founder haplotypes with uniform frequencies", {
+
+  temp_db <- tempfile(fileext = ".duckdb")
+
+  pop <- initialize_genome(
+    pop_name = "test_founders",
+    n_loci = 100,
+    n_chr = 2,
+    chr_len_Mb = 50,
+    db_path = temp_db,
+    n_haplotypes = 50,
+    min_allele_freq = 0.1,
+    max_allele_freq = 0.9
+  )
+
+  # Check founder_haplotypes table exists
+  expect_true("founder_haplotypes" %in% pop$tables)
+
+  # Check table dimensions
+  founder_haps <- get_table(pop, "founder_haplotypes") %>% dplyr::collect()
+  expect_equal(nrow(founder_haps), 50)
+  expect_equal(ncol(founder_haps), 101)  # hap_id + 100 loci
+
+  # Check haplotype IDs
+  expect_equal(founder_haps$hap_id, paste0("hap_", 1:50))
+
+  # Check alleles are 0 or 1
+  locus_cols <- paste0("locus_", 1:100)
+  alleles <- as.matrix(founder_haps[, locus_cols])
+  expect_true(all(alleles %in% c(0, 1)))
+
+  # Check genome_meta has founder_allele_freq column
+  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
+  expect_true("founder_allele_freq" %in% colnames(genome_meta))
+  expect_equal(length(genome_meta$founder_allele_freq), 100)
+
+  # Check allele frequencies are within bounds
+  expect_true(all(genome_meta$founder_allele_freq >= 0.1))
+  expect_true(all(genome_meta$founder_allele_freq <= 0.9))
+
+  # Check metadata
+  expect_equal(pop$metadata$n_haplotypes, 50)
+  expect_equal(pop$metadata$allele_freq_dist, "uniform")
+
+  close_pop(pop)
+  unlink(temp_db)
+})
+
+
+test_that("initialize_genome creates founder haplotypes with fixed frequency", {
+
+  temp_db <- tempfile(fileext = ".duckdb")
+
+  pop <- initialize_genome(
+    pop_name = "test_fixed",
+    n_loci = 50,
+    n_chr = 2,
+    chr_len_Mb = 50,
+    db_path = temp_db,
+    n_haplotypes = 30,
+    fixed_allele_freq = 0.5
+  )
+
+  # Check founder_haplotypes table exists
+  expect_true("founder_haplotypes" %in% pop$tables)
+
+  # Check genome_meta has founder_allele_freq column with all 0.5
+  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
+  expect_true(all(genome_meta$founder_allele_freq == 0.5))
+
+  # Check metadata
+  expect_equal(pop$metadata$n_haplotypes, 30)
+  expect_equal(pop$metadata$allele_freq_dist, "fixed")
+  expect_equal(pop$metadata$fixed_allele_freq, 0.5)
+
+  close_pop(pop)
+  unlink(temp_db)
+})
+
+
+test_that("initialize_genome works without founder haplotypes", {
+
+  temp_db <- tempfile(fileext = ".duckdb")
+
+  pop <- initialize_genome(
+    pop_name = "test_no_founders",
+    n_loci = 100,
+    n_chr = 2,
+    chr_len_Mb = 50,
+    db_path = temp_db
+  )
+
+  # Check founder_haplotypes table does NOT exist
+  expect_false("founder_haplotypes" %in% pop$tables)
+
+  # Check genome_meta does NOT have founder_allele_freq column
+  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
+  expect_false("founder_allele_freq" %in% colnames(genome_meta))
+
+  # Check metadata does not have founder info
+  expect_null(pop$metadata$n_haplotypes)
+
+  close_pop(pop)
+  unlink(temp_db)
+})

@@ -44,7 +44,7 @@ Created **`initialize_genome()`** function that:
 
 1. **`genome_meta`** - Locus metadata
    - `locus_id` (INTEGER): 1, 2, 3, ...
-   - `locus_name` (VARCHAR): "SNP_1", "SNP_2", ... (or custom)
+   - `locus_name` (VARCHAR): "Locus_1", "Locus_2", ... (or custom)
    - `chr` (INTEGER): Chromosome number
    - `chr_name` (VARCHAR): Chromosome name
    - `pos_Mb` (DOUBLE): Position in megabases

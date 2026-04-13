@@ -53,7 +53,7 @@ Metadata for all genomic loci.
 **Required columns:**
 ```
 - locus_id (INTEGER): Unique locus identifier (1, 2, 3, ...)
-- locus_name (VARCHAR): Locus name (e.g., "SNP_1", "rs12345")
+- locus_name (VARCHAR): Locus name (e.g., "Locus_1", "rs12345")
 - chr (INTEGER): Chromosome number (1, 2, ..., n_chr)
 - chr_name (VARCHAR): Chromosome name (for compatibility with different naming)
 - pos_Mb (DOUBLE): Position in megabases
@@ -69,9 +69,9 @@ Metadata for all genomic loci.
 **Example:**
 | locus_id | locus_name | chr | chr_name | pos_Mb | is_50K | is_HD |
 |----------|------------|-----|----------|--------|--------|-------|
-| 1        | SNP_1      | 1   | 1        | 0.5    | TRUE   | TRUE  |
-| 2        | SNP_2      | 1   | 1        | 1.0    | TRUE   | TRUE  |
-| 3        | SNP_3      | 1   | 1        | 1.5    | FALSE  | TRUE  |
+| 1        | Locus_1    | 1   | 1        | 0.5    | TRUE   | TRUE  |
+| 2        | Locus_2    | 1   | 1        | 1.0    | TRUE   | TRUE  |
+| 3        | Locus_3    | 1   | 1        | 1.5    | FALSE  | TRUE  |
 
 #### 2. `genome_haplotype`
 

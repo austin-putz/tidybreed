@@ -12,7 +12,12 @@ initialize_genome(
   db_path = NULL,
   locus_names = NULL,
   chr_names = NULL,
-  overwrite = FALSE
+  overwrite = FALSE,
+  n_haplotypes = NULL,
+  allele_freq_dist = "uniform",
+  min_allele_freq = 0.01,
+  max_allele_freq = 0.99,
+  fixed_allele_freq = NULL
 )
 }
 \arguments{
@@ -33,20 +38,37 @@ a file in the current directory named \verb{\{pop_name\}_tidybreed.duckdb}.
 Use \verb{:memory:} for in-memory database (not recommended for large sims).}
 
 \item{locus_names}{Character vector of locus names. If NULL (default),
-names are generated as "SNP_1", "SNP_2", etc.}
+names are generated as "Locus_1", "Locus_2", etc.}
 
 \item{chr_names}{Character vector of chromosome names. If NULL (default),
 chromosomes are numbered 1, 2, ..., n_chr.}
 
 \item{overwrite}{Logical. If TRUE and \code{db_path} exists, overwrite it.
 Default is FALSE.}
+
+\item{n_haplotypes}{Integer. Number of founder haplotypes to generate.
+If NULL (default), no founder haplotypes are created.}
+
+\item{allele_freq_dist}{Character. Distribution for sampling allele frequencies.
+Currently only "uniform" is supported. Ignored if \code{fixed_allele_freq} is provided.}
+
+\item{min_allele_freq}{Numeric. Minimum allele frequency for uniform distribution.
+Default is 0.01 (1\%).}
+
+\item{max_allele_freq}{Numeric. Maximum allele frequency for uniform distribution.
+Default is 0.99 (99\%).}
+
+\item{fixed_allele_freq}{Numeric. If provided, use this fixed allele frequency
+for all loci (e.g., 0.5 for 50\% frequency). Overrides \code{allele_freq_dist},
+\code{min_allele_freq}, and \code{max_allele_freq}.}
 }
 \value{
 A \code{tidybreed_pop} object containing:
 \itemize{
 \item DuckDB connection
 \item Population metadata
-\item Three genome tables (genome_meta, genome_haplotype, genome_genotype)
+\item Genome tables (genome_meta, genome_haplotype, genome_genotype)
+\item Optionally: founder_haplotypes table (if \code{n_haplotypes} is provided)
 }
 }
 \description{
@@ -59,6 +81,11 @@ The function creates three core genome tables:
 \item \code{genome_meta}: Locus metadata (position, chromosome, etc.)
 \item \code{genome_haplotype}: Phased haplotypes for each individual (2 rows per individual)
 \item \code{genome_genotype}: Genotypes coded as 0/1/2 for each individual
+}
+
+Optionally creates founder haplotypes for later sampling:
+\itemize{
+\item \code{founder_haplotypes}: Pool of haplotypes to sample from when adding founders
 }
 }
 \examples{
@@ -88,6 +115,27 @@ pop <- initialize_genome(
   n_chr = 2,
   chr_len_Mb = 100,
   db_path = ":memory:"
+)
+
+# With founder haplotypes (uniform allele frequencies)
+pop <- initialize_genome(
+  pop_name = "B",
+  n_loci = 1000,
+  n_chr = 10,
+  chr_len_Mb = 100,
+  n_haplotypes = 100,
+  min_allele_freq = 0.05,
+  max_allele_freq = 0.95
+)
+
+# With founder haplotypes (fixed 50\% allele frequency)
+pop <- initialize_genome(
+  pop_name = "C",
+  n_loci = 1000,
+  n_chr = 10,
+  chr_len_Mb = 100,
+  n_haplotypes = 50,
+  fixed_allele_freq = 0.5
 )
 }
 }
