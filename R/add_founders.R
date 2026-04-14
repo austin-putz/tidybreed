@@ -14,7 +14,8 @@
 #' @param pop_name Character. Population identifier used for individual IDs.
 #'   IDs are formatted as `"{pop_name}-{number}"` (e.g., "A-1", "A-2")
 #'
-#' @return The `tidybreed_pop` object (invisibly), modified in place
+#' @return The modified `tidybreed_pop` object (invisibly).
+#'   **Important:** Assign the result back to update your object: `pop <- add_founders(pop, ...)`
 #'
 #' @details
 #' **Requirements:**
@@ -256,7 +257,8 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
     DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
   } else {
     DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, overwrite = FALSE)
-    pop$tables <- c(pop$tables, "ind_meta")
+    # Refresh tables list from database to keep in sync
+    pop$tables <- DBI::dbListTables(pop$db_conn)
   }
 
   # Append to genome_haplotype
