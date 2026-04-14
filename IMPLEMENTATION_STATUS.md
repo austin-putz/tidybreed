@@ -123,22 +123,27 @@ pop %>% add_SNP_chip(chip_name = "custom", loci = is_on_chip)
 - Validate locus IDs exist
 - Update population metadata
 
-### Step 4: `add_founders()` Function
+### Step 4: `add_founders()` Function ✅
 
 Create founder individuals with genotypes/haplotypes.
 
 **API Design:**
 ```r
-pop %>% add_founders(n_males = 10, n_females = 100)
+pop %>% add_founders(n_males = 10, n_females = 100, pop_name = "A")
 ```
 
-**Implementation needs:**
-- Create `ind_meta` table with required fields:
-  - `pop_id`, `ind_id`, `sire_id`, `dam_id`
-- Generate random haplotypes for founders
-- Compute genotypes from haplotypes
-- Populate `genome_haplotype` and `genome_genotype` tables
-- ID naming convention (e.g., "A_F0_001")
+**Implementation complete:**
+- ✅ Creates/updates `ind_meta` table with 5 required fields:
+  - `ind_id`, `parent_1`, `parent_2`, `population`, `sex`
+- ✅ Samples haplotypes from `founder_haplotypes` table (with replacement)
+- ✅ Computes genotypes from haplotypes (element-wise sum)
+- ✅ Populates `genome_haplotype` (2 rows per individual)
+- ✅ Populates `genome_genotype` (1 row per individual)
+- ✅ ID naming convention: `"{pop_name}-{number}"` (e.g., "A-1", "A-2")
+- ✅ Sequential numbering within populations
+- ✅ Supports multiple populations in same database
+- ✅ Founder parents are NULL (NA)
+- ✅ Comprehensive test coverage (23 tests)
 
 ### Step 5: Individual Metadata Functions ✅
 
@@ -165,6 +170,7 @@ The package now has:
 - ✅ Database initialization
 - ✅ Genome structure creation
 - ✅ Founder haplotype generation
+- ✅ Founder individual creation (add_founders)
 - ✅ Individual metadata management (mutate_ind_meta)
 - ✅ dplyr integration via lazy tibbles
 - ✅ Comprehensive tests
@@ -173,35 +179,49 @@ The package now has:
 **You can now:**
 1. Create populations with genomes
 2. Generate founder haplotypes with configurable allele frequencies
-3. Add custom metadata fields to individuals
-4. Query genome metadata with dplyr
-5. Persist data to disk
-6. Customize chromosome structures
+3. Create founder individuals by sampling haplotypes
+4. Add custom metadata fields to individuals
+5. Query genome metadata with dplyr
+6. Persist data to disk
+7. Customize chromosome structures
+8. Manage multiple populations in one database
 
 **Still need to add:**
 1. SNP chip annotations
-2. Founder individuals (add_founders)
-3. Trait architecture
-4. Phenotype generation
-5. Mating and recombination
+2. Trait architecture
+3. Phenotype generation
+4. Mating and recombination
+5. Selection functions
 
 ## 📦 Files Created
 
 ```
 R/
-├── tidybreed_pop.R           # S3 class (177 lines)
-└── initialize_genome.R       # Genome initialization (185 lines)
+├── tidybreed_pop.R           # S3 class (151 lines)
+├── initialize_genome.R       # Genome initialization (316 lines)
+├── mutate_ind_meta.R        # Individual metadata (320 lines)
+└── add_founders.R           # Founder creation (307 lines)
 
 tests/testthat/
-└── test-initialize_genome.R  # Test suite (145 lines)
+├── test-initialize_genome.R  # Genome tests (145 lines)
+├── test-mutate_ind_meta.R   # Metadata tests (230 lines)
+└── test-add_founders.R      # Founder tests (530 lines)
+
+man/
+├── tidybreed_pop.Rd
+├── initialize_genome.Rd
+├── mutate_ind_meta.Rd
+└── add_founders.Rd
 
 Documentation/
 ├── DESIGN.md                 # Design document (490 lines)
 ├── QUICKSTART.md            # Quick start guide (240 lines)
-└── IMPLEMENTATION_STATUS.md  # This file
+├── IMPLEMENTATION_STATUS.md  # This file
+└── PLAN_add_founders.md     # Implementation plan for add_founders
 
 Modified/
-└── R/tidybreed-package.R    # Updated imports
+├── R/tidybreed-package.R    # Updated imports
+└── NAMESPACE                # Exports add_founders
 ```
 
 ## 🧪 Testing Instructions
@@ -212,16 +232,29 @@ See `QUICKSTART.md` for detailed testing steps, but quick version:
 # In R console
 devtools::load_all()
 
-# Create test population
+# Create test population with founder haplotypes
 pop <- initialize_genome(
   pop_name = "test",
   n_loci = 100,
   n_chr = 2,
-  chr_len_Mb = 50
+  chr_len_Mb = 50,
+  n_haplotypes = 50
 )
 
-# View it
-print(pop)
+# Add founders
+pop <- pop %>%
+  add_founders(n_males = 10, n_females = 100, pop_name = "A")
+
+# Add custom metadata
+pop <- pop %>%
+  mutate_ind_meta(
+    gen = 0,
+    farm = "A",
+    date_birth = Sys.Date()
+  )
+
+# View individuals
+get_table(pop, "ind_meta") %>% collect()
 
 # Query genome
 get_table(pop, "genome_meta") %>%
