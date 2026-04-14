@@ -4,7 +4,7 @@
 \alias{add_founders}
 \title{Add founder individuals to population}
 \usage{
-add_founders(pop, n_males, n_females, pop_name)
+add_founders(pop, n_males, n_females, line_name)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object}
@@ -13,11 +13,12 @@ add_founders(pop, n_males, n_females, pop_name)
 
 \item{n_females}{Integer. Number of female founders to create}
 
-\item{pop_name}{Character. Population identifier used for individual IDs.
-IDs are formatted as \code{"{pop_name}-{number}"} (e.g., "A-1", "A-2")}
+\item{line_name}{Character. Line identifier used for individual IDs.
+IDs are formatted as \code{"{line_name}-{number}"} (e.g., "A-1", "A-2")}
 }
 \value{
-The \code{tidybreed_pop} object (invisibly), modified in place
+The modified \code{tidybreed_pop} object (invisibly).
+\strong{Important:} Assign the result back to update your object: \code{pop <- add_founders(pop, ...)}
 }
 \description{
 Creates founder individuals by sampling haplotypes from the \code{founder_haplotypes}
@@ -44,15 +45,15 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 
 \strong{ID Format:}
 \itemize{
-\item Individual IDs: \code{"{pop_name}-{number}"} (e.g., "A-1", "A-2", "B-1")
-\item Numbers are sequential within each population
-\item If founders already exist for a population, numbering continues from max ID
+\item Individual IDs: \code{"{line_name}-{number}"} (e.g., "A-1", "A-2", "B-1")
+\item Numbers are sequential within each line
+\item If founders already exist for a line, numbering continues from max ID
 }
 
-\strong{Multiple Populations:}
+\strong{Multiple Lines:}
 \itemize{
-\item Can be called multiple times to add different populations to same database
-\item Each population has independent ID numbering
+\item Can be called multiple times to add different lines to same database
+\item Each line has independent ID numbering
 }
 }
 \examples{
@@ -68,7 +69,7 @@ pop <- initialize_genome(
 
 # Add founders
 pop <- pop \%>\%
-  add_founders(n_males = 10, n_females = 100, pop_name = "A")
+  add_founders(n_males = 10, n_females = 100, line_name = "A")
 
 # Add custom metadata
 pop <- pop \%>\%
@@ -78,9 +79,9 @@ pop <- pop \%>\%
     date_birth = Sys.Date()
   )
 
-# Add second population to same database
+# Add second line to same database
 pop <- pop \%>\%
-  add_founders(n_males = 5, n_females = 50, pop_name = "B")
+  add_founders(n_males = 5, n_females = 50, line_name = "B")
 
 # View founders
 get_table(pop, "ind_meta") \%>\% collect()
