@@ -125,7 +125,7 @@ Individual metadata. Created when founders are added.
 - ind_id (VARCHAR): Individual ID (primary key)
 - parent_1 (VARCHAR): First parent ID ("0" for founders)
 - parent_2 (VARCHAR): Second parent ID ("0" for founders)
-- population (VARCHAR): Population name
+- line (VARCHAR): Line name (genetic line identifier within population)
 - sex (VARCHAR): Sex ("M" or "F")
 ```
 
@@ -142,7 +142,7 @@ Individual metadata. Created when founders are added.
 **Notes:**
 - Sex is automatically populated by `add_founders()` based on `n_males` and `n_females` parameters
 - Custom columns are added using `mutate_ind_meta()` with automatic type inference
-- Reserved columns (ind_id, parent_1, parent_2, population, sex) cannot be modified
+- Reserved columns (ind_id, parent_1, parent_2, line, sex) cannot be modified
 
 #### 5. `ind_phenotype`
 

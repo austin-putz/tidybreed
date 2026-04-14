@@ -5,7 +5,7 @@
 #' Values can be scalar (applied to all individuals) or vectors (one per individual).
 #' The function automatically infers DuckDB column types from R data types.
 #'
-#' Reserved columns (`ind_id`, `parent_1`, `parent_2`, `population`, `sex`) cannot be modified.
+#' Reserved columns (`ind_id`, `parent_1`, `parent_2`, `line`, `sex`) cannot be modified.
 #'
 #' @param pop A `tidybreed_pop` object
 #' @param ... Named arguments specifying column names and values.
@@ -28,7 +28,7 @@
 #' - Must start with a letter
 #' - Can contain letters, numbers, and underscores
 #' - Cannot be SQL reserved words
-#' - Cannot be reserved columns (ind_id, parent_1, parent_2, population, sex)
+#' - Cannot be reserved columns (ind_id, parent_1, parent_2, line, sex)
 #'
 #' @export
 #'
@@ -36,7 +36,7 @@
 #' \dontrun{
 #' # Initialize and add founders
 #' pop <- initialize_genome(pop_name = "A", n_loci = 1000, n_chr = 10) %>%
-#'   add_founders(n_males = 10, n_females = 100, population = "A")
+#'   add_founders(n_males = 10, n_females = 100, line_name = "A")
 #'
 #' # Add scalar fields (same value for all individuals)
 #' pop <- pop %>%
@@ -202,7 +202,7 @@ validate_field_name <- function(field_name, existing_cols) {
   }
 
   # Check for reserved columns (cannot be modified by user)
-  reserved_cols <- c("ind_id", "parent_1", "parent_2", "population", "sex")
+  reserved_cols <- c("ind_id", "parent_1", "parent_2", "line", "sex")
   if (field_name %in% reserved_cols) {
     stop(
       "Cannot modify reserved column '", field_name, "'. ",

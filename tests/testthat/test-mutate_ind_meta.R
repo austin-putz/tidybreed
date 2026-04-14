@@ -19,7 +19,7 @@ create_mock_pop_with_ind_meta <- function(n_males = 10, n_females = 100) {
     ind_id = paste0("ind_", seq_len(n_ind)),
     parent_1 = "0",
     parent_2 = "0",
-    population = "A",
+    line = "A",
     sex = c(rep("M", n_males), rep("F", n_females))
   )
 
@@ -244,8 +244,8 @@ test_that("mutate_ind_meta errors on reserved column names", {
   )
 
   expect_error(
-    pop %>% mutate_ind_meta(population = "B"),
-    "Cannot modify reserved column 'population'"
+    pop %>% mutate_ind_meta(line = "B"),
+    "Cannot modify reserved column 'line'"
   )
 
   expect_error(
@@ -350,7 +350,7 @@ test_that("mutate_ind_meta handles empty ind_meta table", {
   # Create empty ind_meta table
   DBI::dbExecute(
     pop$db_conn,
-    "CREATE TABLE ind_meta (ind_id VARCHAR, parent_1 VARCHAR, parent_2 VARCHAR, population VARCHAR, sex VARCHAR)"
+    "CREATE TABLE ind_meta (ind_id VARCHAR, parent_1 VARCHAR, parent_2 VARCHAR, line VARCHAR, sex VARCHAR)"
   )
   pop$tables <- c(pop$tables, "ind_meta")
 
@@ -432,7 +432,7 @@ test_that("mutate_ind_meta works in pipe workflow", {
     ind_id = paste0("ind_", 1:110),
     parent_1 = "0",
     parent_2 = "0",
-    population = "A",
+    line = "A",
     sex = c(rep("M", 10), rep("F", 100))
   )
   DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta, overwrite = TRUE)

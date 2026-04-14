@@ -38,7 +38,8 @@ pop_A <- initialize_genome(
 ) %>%
   add_founders(
     n_males = 10,
-    n_females = 100
+    n_females = 100,
+    line_name = "A"
   ) %>%
   add_trait(
     name = "ADG",

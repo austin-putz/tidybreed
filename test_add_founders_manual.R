@@ -21,7 +21,7 @@ pop <- initialize_genome(
   db_path = ":memory:"
 )
 
-pop <- add_founders(pop, n_males = 10, n_females = 20, pop_name = "A")
+pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 cat("✓ Created", nrow(ind_meta), "founders\n")
@@ -53,9 +53,9 @@ cat("✓ Genotype = sum of haplotypes:", hap_sum == geno_val,
 
 close_pop(pop)
 
-# Test 3: Multiple populations
-cat("Test 3: Multiple populations\n")
-cat("---------------------------\n")
+# Test 3: Multiple lines
+cat("Test 3: Multiple lines\n")
+cat("----------------------\n")
 
 pop <- initialize_genome(
   pop_name = "test",
@@ -66,24 +66,24 @@ pop <- initialize_genome(
   db_path = ":memory:"
 )
 
-pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
-pop <- add_founders(pop, n_males = 3, n_females = 7, pop_name = "B")
+pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+pop <- add_founders(pop, n_males = 3, n_females = 7, line_name = "B")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
-pop_a <- ind_meta %>% filter(population == "A")
-pop_b <- ind_meta %>% filter(population == "B")
+line_a <- ind_meta %>% filter(line == "A")
+line_b <- ind_meta %>% filter(line == "B")
 
-cat("✓ Population A:", nrow(pop_a), "individuals\n")
-cat("✓ Population A IDs:", paste(head(pop_a$ind_id, 5), collapse = ", "), "\n")
-cat("✓ Population B:", nrow(pop_b), "individuals\n")
-cat("✓ Population B IDs:", paste(head(pop_b$ind_id, 5), collapse = ", "), "\n\n")
+cat("✓ Line A:", nrow(line_a), "individuals\n")
+cat("✓ Line A IDs:", paste(head(line_a$ind_id, 5), collapse = ", "), "\n")
+cat("✓ Line B:", nrow(line_b), "individuals\n")
+cat("✓ Line B IDs:", paste(head(line_b$ind_id, 5), collapse = ", "), "\n\n")
 
 close_pop(pop)
 
 # Test 4: Sequential additions
-cat("Test 4: Sequential additions to same population\n")
-cat("-----------------------------------------------\n")
+cat("Test 4: Sequential additions to same line\n")
+cat("-----------------------------------------\n")
 
 pop <- initialize_genome(
   pop_name = "test",
@@ -94,8 +94,8 @@ pop <- initialize_genome(
   db_path = ":memory:"
 )
 
-pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
-pop <- add_founders(pop, n_males = 2, n_females = 3, pop_name = "A")
+pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+pop <- add_founders(pop, n_males = 2, n_females = 3, line_name = "A")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
@@ -117,7 +117,7 @@ pop <- initialize_genome(
   n_haplotypes = 50,
   db_path = ":memory:"
 ) %>%
-  add_founders(n_males = 10, n_females = 100, pop_name = "A") %>%
+  add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
   mutate_ind_meta(
     gen = 0,
     farm = "FarmA",

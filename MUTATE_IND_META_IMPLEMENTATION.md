@@ -31,7 +31,7 @@ Successfully implemented the `mutate_ind_meta()` function for adding and modifyi
    - Added `importFrom(DBI, dbListFields)`
 
 3. **DESIGN.md**
-   - Updated ind_meta schema to reflect 5 core columns: `ind_id`, `parent_1`, `parent_2`, `population`, `sex`
+   - Updated ind_meta schema to reflect 5 core columns: `ind_id`, `parent_1`, `parent_2`, `line`, `sex`
    - Added documentation for custom columns and mutate_ind_meta() usage
 
 4. **IMPLEMENTATION_STATUS.md**
@@ -46,7 +46,7 @@ Successfully implemented the `mutate_ind_meta()` function for adding and modifyi
 - `ind_id` (VARCHAR) - Individual identifier
 - `parent_1` (VARCHAR) - First parent ID ("0" for founders)
 - `parent_2` (VARCHAR) - Second parent ID ("0" for founders)
-- `population` (VARCHAR) - Population name
+- `line` (VARCHAR) - Line name
 - `sex` (VARCHAR) - Sex ("M" or "F")
 
 **User-added columns** (via `mutate_ind_meta()`):
@@ -68,7 +68,7 @@ Successfully implemented the `mutate_ind_meta()` function for adding and modifyi
 ```r
 # Initialize population (once add_founders() is implemented)
 pop <- initialize_genome(pop_name = "A", n_loci = 1000, n_chr = 10) %>%
-  add_founders(n_males = 10, n_females = 100, population = "A")
+  add_founders(n_males = 10, n_females = 100, line_name = "A")
 
 # Add scalar fields (same value for all individuals)
 pop <- pop %>%
@@ -100,7 +100,7 @@ get_table(pop, "ind_meta") %>% collect()
 - Must start with a letter
 - Can contain only letters, numbers, underscores
 - Cannot be SQL reserved keywords
-- Cannot modify reserved columns (ind_id, parent_1, parent_2, population, sex)
+- Cannot modify reserved columns (ind_id, parent_1, parent_2, line, sex)
 
 **Value validation:**
 - Scalar values: Applied to all individuals
@@ -155,7 +155,7 @@ get_table(pop, "ind_meta") %>% collect()
 ## Next Steps
 
 1. **Implement `add_founders()`** - Will create the ind_meta table with 5 core columns
-   - Parameters: `n_males`, `n_females`, `population`
+   - Parameters: `n_males`, `n_females`, `line_name`
    - Auto-generates ind_id values
    - Sets parent_1 and parent_2 to "0" for founders
    - Populates sex based on n_males/n_females
@@ -187,13 +187,13 @@ pop <- initialize_genome(
   add_founders(
     n_males = 10,
     n_females = 100,
-    population = "A"
+    line_name = "A"
   )
 
 # Verify ind_meta exists with 5 core columns
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 print(colnames(ind_meta))
-# Expected: "ind_id" "parent_1" "parent_2" "population" "sex"
+# Expected: "ind_id" "parent_1" "parent_2" "line" "sex"
 
 # Verify sex is populated correctly
 table(ind_meta$sex)

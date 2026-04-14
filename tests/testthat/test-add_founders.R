@@ -10,7 +10,7 @@ test_that("add_founders creates ind_meta table with correct structure", {
   )
 
   # Add founders
-  pop <- add_founders(pop, n_males = 10, n_females = 20, pop_name = "A")
+  pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
 
   # Check ind_meta table exists
   expect_true("ind_meta" %in% pop$tables)
@@ -22,13 +22,13 @@ test_that("add_founders creates ind_meta table with correct structure", {
   # Check structure
   expect_equal(nrow(ind_meta), 30)
   expect_equal(ncol(ind_meta), 5)
-  expect_true(all(c("ind_id", "parent_1", "parent_2", "population", "sex") %in% colnames(ind_meta)))
+  expect_true(all(c("ind_id", "parent_1", "parent_2", "line", "sex") %in% colnames(ind_meta)))
 
   # Check data types
   expect_type(ind_meta$ind_id, "character")
   expect_type(ind_meta$parent_1, "character")
   expect_type(ind_meta$parent_2, "character")
-  expect_type(ind_meta$population, "character")
+  expect_type(ind_meta$line, "character")
   expect_type(ind_meta$sex, "character")
 
   close_pop(pop)
@@ -45,7 +45,7 @@ test_that("add_founders correctly assigns IDs and sex", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 5, n_females = 10, pop_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 10, line_name = "A")
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
@@ -53,8 +53,8 @@ test_that("add_founders correctly assigns IDs and sex", {
   expected_ids <- paste0("A-", 1:15)
   expect_equal(ind_meta$ind_id, expected_ids)
 
-  # Check population
-  expect_true(all(ind_meta$population == "A"))
+  # Check line
+  expect_true(all(ind_meta$line == "A"))
 
   # Check sex assignment
   expect_equal(sum(ind_meta$sex == "M"), 5)
@@ -80,7 +80,7 @@ test_that("add_founders creates correct genome_haplotype table", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
   haps <- get_table(pop, "genome_haplotype") %>% dplyr::collect()
 
@@ -125,7 +125,7 @@ test_that("add_founders creates correct genome_genotype table", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
   genos <- get_table(pop, "genome_genotype") %>% dplyr::collect()
 
@@ -158,7 +158,7 @@ test_that("genotypes equal sum of haplotypes", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
   haps <- get_table(pop, "genome_haplotype") %>% dplyr::collect()
   genos <- get_table(pop, "genome_genotype") %>% dplyr::collect()
@@ -186,7 +186,7 @@ test_that("genotypes equal sum of haplotypes", {
 })
 
 
-test_that("add_founders works with multiple populations", {
+test_that("add_founders works with multiple lines", {
   pop <- initialize_genome(
     pop_name = "test",
     n_loci = 50,
@@ -196,26 +196,26 @@ test_that("add_founders works with multiple populations", {
     db_path = ":memory:"
   )
 
-  # Add population A
-  pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
+  # Add line A
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
-  # Add population B
-  pop <- add_founders(pop, n_males = 3, n_females = 7, pop_name = "B")
+  # Add line B
+  pop <- add_founders(pop, n_males = 3, n_females = 7, line_name = "B")
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   # Check total individuals
   expect_equal(nrow(ind_meta), 20)
 
-  # Check population A IDs
-  pop_a <- ind_meta %>% dplyr::filter(population == "A")
-  expect_equal(nrow(pop_a), 10)
-  expect_equal(pop_a$ind_id, paste0("A-", 1:10))
+  # Check line A IDs
+  line_a <- ind_meta %>% dplyr::filter(line == "A")
+  expect_equal(nrow(line_a), 10)
+  expect_equal(line_a$ind_id, paste0("A-", 1:10))
 
-  # Check population B IDs
-  pop_b <- ind_meta %>% dplyr::filter(population == "B")
-  expect_equal(nrow(pop_b), 10)
-  expect_equal(pop_b$ind_id, paste0("B-", 1:10))
+  # Check line B IDs
+  line_b <- ind_meta %>% dplyr::filter(line == "B")
+  expect_equal(nrow(line_b), 10)
+  expect_equal(line_b$ind_id, paste0("B-", 1:10))
 
   # Check sex assignment
   expect_equal(sum(pop_a$sex == "M"), 5)
@@ -227,7 +227,7 @@ test_that("add_founders works with multiple populations", {
 })
 
 
-test_that("sequential additions to same population continue numbering", {
+test_that("sequential additions to same line continue numbering", {
   pop <- initialize_genome(
     pop_name = "test",
     n_loci = 50,
@@ -238,10 +238,10 @@ test_that("sequential additions to same population continue numbering", {
   )
 
   # First batch
-  pop <- add_founders(pop, n_males = 5, n_females = 5, pop_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
   # Second batch
-  pop <- add_founders(pop, n_males = 2, n_females = 3, pop_name = "A")
+  pop <- add_founders(pop, n_males = 2, n_females = 3, line_name = "A")
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
@@ -252,8 +252,8 @@ test_that("sequential additions to same population continue numbering", {
   expected_ids <- paste0("A-", 1:15)
   expect_equal(ind_meta$ind_id, expected_ids)
 
-  # Check all belong to population A
-  expect_true(all(ind_meta$population == "A"))
+  # Check all belong to line A
+  expect_true(all(ind_meta$line == "A"))
 
   # Check metadata counter
   expect_equal(pop$metadata$n_individuals, 15)
@@ -272,7 +272,7 @@ test_that("add_founders works with only males", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 10, n_females = 0, pop_name = "A")
+  pop <- add_founders(pop, n_males = 10, n_females = 0, line_name = "A")
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
@@ -293,7 +293,7 @@ test_that("add_founders works with only females", {
     db_path = ":memory:"
   )
 
-  pop <- add_founders(pop, n_males = 0, n_females = 10, pop_name = "A")
+  pop <- add_founders(pop, n_males = 0, n_females = 10, line_name = "A")
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
@@ -315,7 +315,7 @@ test_that("add_founders errors if founder_haplotypes doesn't exist", {
   )
 
   expect_error(
-    add_founders(pop, n_males = 5, n_females = 5, pop_name = "A"),
+    add_founders(pop, n_males = 5, n_females = 5, line_name = "A"),
     "founder_haplotypes table does not exist"
   )
 
@@ -325,7 +325,7 @@ test_that("add_founders errors if founder_haplotypes doesn't exist", {
 
 test_that("add_founders errors if pop not valid tidybreed_pop", {
   expect_error(
-    add_founders(list(), n_males = 5, n_females = 5, pop_name = "A"),
+    add_founders(list(), n_males = 5, n_females = 5, line_name = "A"),
     NA  # Will fail stopifnot check
   )
 })
@@ -342,7 +342,7 @@ test_that("add_founders errors if n_males + n_females = 0", {
   )
 
   expect_error(
-    add_founders(pop, n_males = 0, n_females = 0, pop_name = "A"),
+    add_founders(pop, n_males = 0, n_females = 0, line_name = "A"),
     "At least one founder must be specified"
   )
 
@@ -350,7 +350,7 @@ test_that("add_founders errors if n_males + n_females = 0", {
 })
 
 
-test_that("add_founders errors if pop_name has invalid format", {
+test_that("add_founders errors if line_name has invalid format", {
   pop <- initialize_genome(
     pop_name = "test",
     n_loci = 50,
@@ -362,14 +362,14 @@ test_that("add_founders errors if pop_name has invalid format", {
 
   # Starts with number
   expect_error(
-    add_founders(pop, n_males = 5, n_females = 5, pop_name = "1A"),
-    "pop_name must start with letter"
+    add_founders(pop, n_males = 5, n_females = 5, line_name = "1A"),
+    "line_name must start with letter"
   )
 
   # Contains invalid characters
   expect_error(
-    add_founders(pop, n_males = 5, n_females = 5, pop_name = "A B"),
-    "pop_name must start with letter"
+    add_founders(pop, n_males = 5, n_females = 5, line_name = "A B"),
+    "line_name must start with letter"
   )
 
   close_pop(pop)
@@ -388,16 +388,16 @@ test_that("add_founders errors if n_males or n_females invalid", {
 
   # Negative values
   expect_error(
-    add_founders(pop, n_males = -1, n_females = 5, pop_name = "A")
+    add_founders(pop, n_males = -1, n_females = 5, line_name = "A")
   )
 
   expect_error(
-    add_founders(pop, n_males = 5, n_females = -1, pop_name = "A")
+    add_founders(pop, n_males = 5, n_females = -1, line_name = "A")
   )
 
   # Non-numeric
   expect_error(
-    add_founders(pop, n_males = "five", n_females = 5, pop_name = "A")
+    add_founders(pop, n_males = "five", n_females = 5, line_name = "A")
   )
 
   close_pop(pop)
@@ -414,7 +414,7 @@ test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
     n_haplotypes = 50,
     db_path = ":memory:"
   ) %>%
-    add_founders(n_males = 10, n_females = 100, pop_name = "A") %>%
+    add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
     mutate_ind_meta(
       gen = 0,
       farm = "FarmA",
@@ -425,7 +425,7 @@ test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   expect_equal(nrow(ind_meta), 110)
-  expect_true(all(c("ind_id", "parent_1", "parent_2", "population", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
+  expect_true(all(c("ind_id", "parent_1", "parent_2", "line", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
 
   # Check custom metadata
   expect_true(all(ind_meta$gen == 0))
@@ -437,7 +437,7 @@ test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
 
 
 test_that("haplotypes are sampled with replacement", {
-  # Create population with small number of haplotypes
+  # Create genome with small number of haplotypes
   pop <- initialize_genome(
     pop_name = "test",
     n_loci = 10,
@@ -448,7 +448,7 @@ test_that("haplotypes are sampled with replacement", {
   )
 
   # Add many founders (will require sampling with replacement)
-  pop <- add_founders(pop, n_males = 20, n_females = 20, pop_name = "A")
+  pop <- add_founders(pop, n_males = 20, n_females = 20, line_name = "A")
 
   # Should not error (would error if sampling without replacement)
   # Just check it worked
@@ -459,7 +459,7 @@ test_that("haplotypes are sampled with replacement", {
 })
 
 
-test_that("add_founders handles large populations efficiently", {
+test_that("add_founders handles large lines efficiently", {
   skip_on_cran()
 
   pop <- initialize_genome(
@@ -473,7 +473,7 @@ test_that("add_founders handles large populations efficiently", {
 
   # Add 1000 founders
   expect_no_error({
-    pop <- add_founders(pop, n_males = 500, n_females = 500, pop_name = "A")
+    pop <- add_founders(pop, n_males = 500, n_females = 500, line_name = "A")
   })
 
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()

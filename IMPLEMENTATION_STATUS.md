@@ -129,19 +129,19 @@ Create founder individuals with genotypes/haplotypes.
 
 **API Design:**
 ```r
-pop %>% add_founders(n_males = 10, n_females = 100, pop_name = "A")
+pop %>% add_founders(n_males = 10, n_females = 100, line_name = "A")
 ```
 
 **Implementation complete:**
 - ✅ Creates/updates `ind_meta` table with 5 required fields:
-  - `ind_id`, `parent_1`, `parent_2`, `population`, `sex`
+  - `ind_id`, `parent_1`, `parent_2`, `line`, `sex`
 - ✅ Samples haplotypes from `founder_haplotypes` table (with replacement)
 - ✅ Computes genotypes from haplotypes (element-wise sum)
 - ✅ Populates `genome_haplotype` (2 rows per individual)
 - ✅ Populates `genome_genotype` (1 row per individual)
-- ✅ ID naming convention: `"{pop_name}-{number}"` (e.g., "A-1", "A-2")
-- ✅ Sequential numbering within populations
-- ✅ Supports multiple populations in same database
+- ✅ ID naming convention: `"{line_name}-{number}"` (e.g., "A-1", "A-2")
+- ✅ Sequential numbering within lines
+- ✅ Supports multiple lines in same database
 - ✅ Founder parents are NULL (NA)
 - ✅ Comprehensive test coverage (23 tests)
 
@@ -158,7 +158,7 @@ pop %>% mutate_ind_meta(gen = 0, farm = "A", date_birth = Sys.Date())
 - ✅ UPDATE queries for scalar and vector values
 - ✅ Vector length validation
 - ✅ Field name validation (SQL injection prevention, reserved words)
-- ✅ Reserved column protection (ind_id, parent_1, parent_2, population, sex)
+- ✅ Reserved column protection (ind_id, parent_1, parent_2, line, sex)
 - ✅ Comprehensive test coverage
 
 **Note:** Only `mutate_ind_meta()` was implemented (not `add_ind_meta()`). The single function handles both scalar and vector updates, providing a simpler API.
@@ -184,7 +184,7 @@ The package now has:
 5. Query genome metadata with dplyr
 6. Persist data to disk
 7. Customize chromosome structures
-8. Manage multiple populations in one database
+8. Manage multiple lines in one database
 
 **Still need to add:**
 1. SNP chip annotations
@@ -242,7 +242,7 @@ pop <- initialize_genome(
 
 # Add founders
 pop <- pop %>%
-  add_founders(n_males = 10, n_females = 100, pop_name = "A")
+  add_founders(n_males = 10, n_females = 100, line_name = "A")
 
 # Add custom metadata
 pop <- pop %>%
@@ -274,7 +274,7 @@ Before implementing next steps, we should decide:
    - Read from real data?
 
 2. **Individual ID format:**
-   - `{pop_name}_{gen}_{seq}` (e.g., "A_0_001")?
+   - `{line_name}_{gen}_{seq}` (e.g., "A_0_001")?
    - User-specified prefix?
    - UUID for guaranteed uniqueness?
 

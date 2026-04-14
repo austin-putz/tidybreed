@@ -11,8 +11,8 @@
 #' @param pop A `tidybreed_pop` object
 #' @param n_males Integer. Number of male founders to create
 #' @param n_females Integer. Number of female founders to create
-#' @param pop_name Character. Population identifier used for individual IDs.
-#'   IDs are formatted as `"{pop_name}-{number}"` (e.g., "A-1", "A-2")
+#' @param line_name Character. Line identifier used for individual IDs.
+#'   IDs are formatted as `"{line_name}-{number}"` (e.g., "A-1", "A-2")
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'   **Important:** Assign the result back to update your object: `pop <- add_founders(pop, ...)`
@@ -29,13 +29,13 @@
 #' 4. Populates `genome_genotype` (1 row per individual, sum of haplotypes)
 #'
 #' **ID Format:**
-#' - Individual IDs: `"{pop_name}-{number}"` (e.g., "A-1", "A-2", "B-1")
-#' - Numbers are sequential within each population
-#' - If founders already exist for a population, numbering continues from max ID
+#' - Individual IDs: `"{line_name}-{number}"` (e.g., "A-1", "A-2", "B-1")
+#' - Numbers are sequential within each line
+#' - If founders already exist for a line, numbering continues from max ID
 #'
-#' **Multiple Populations:**
-#' - Can be called multiple times to add different populations to same database
-#' - Each population has independent ID numbering
+#' **Multiple Lines:**
+#' - Can be called multiple times to add different lines to same database
+#' - Each line has independent ID numbering
 #'
 #' @export
 #'
@@ -52,7 +52,7 @@
 #'
 #' # Add founders
 #' pop <- pop %>%
-#'   add_founders(n_males = 10, n_females = 100, pop_name = "A")
+#'   add_founders(n_males = 10, n_females = 100, line_name = "A")
 #'
 #' # Add custom metadata
 #' pop <- pop %>%
@@ -62,14 +62,14 @@
 #'     date_birth = Sys.Date()
 #'   )
 #'
-#' # Add second population to same database
+#' # Add second line to same database
 #' pop <- pop %>%
-#'   add_founders(n_males = 5, n_females = 50, pop_name = "B")
+#'   add_founders(n_males = 5, n_females = 50, line_name = "B")
 #'
 #' # View founders
 #' get_table(pop, "ind_meta") %>% collect()
 #' }
-add_founders <- function(pop, n_males, n_females, pop_name) {
+add_founders <- function(pop, n_males, n_females, line_name) {
 
   # ============================================================================
   # 1. Validate inputs
@@ -91,13 +91,13 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
     )
   }
 
-  # Validate pop_name
-  stopifnot(is.character(pop_name), length(pop_name) == 1, nchar(pop_name) > 0)
+  # Validate line_name
+  stopifnot(is.character(line_name), length(line_name) == 1, nchar(line_name) > 0)
 
-  # Validate field name format for pop_name
-  if (!grepl("^[a-zA-Z][a-zA-Z0-9_-]*$", pop_name)) {
+  # Validate field name format for line_name
+  if (!grepl("^[a-zA-Z][a-zA-Z0-9_-]*$", line_name)) {
     stop(
-      "pop_name must start with letter and contain only letters, numbers, underscores, or hyphens",
+      "line_name must start with letter and contain only letters, numbers, underscores, or hyphens",
       call. = FALSE
     )
   }
@@ -144,13 +144,13 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
   # Check if ind_meta already exists
   ind_meta_exists <- "ind_meta" %in% DBI::dbListTables(pop$db_conn)
 
-  # Determine starting ID number for this population
+  # Determine starting ID number for this line
   if (ind_meta_exists) {
-    # Query max ID number for this population
+    # Query max ID number for this line
     max_num_query <- paste0(
       "SELECT MAX(CAST(SUBSTRING(ind_id FROM POSITION('-' IN ind_id) + 1) AS INTEGER)) as max_num ",
       "FROM ind_meta ",
-      "WHERE ind_id LIKE '", pop_name, "-%'"
+      "WHERE ind_id LIKE '", line_name, "-%'"
     )
 
     max_num_result <- DBI::dbGetQuery(pop$db_conn, max_num_query)
@@ -183,7 +183,7 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
   # ============================================================================
 
   # Generate individual IDs
-  ind_ids <- paste0(pop_name, "-", seq(start_id, start_id + n_founders - 1))
+  ind_ids <- paste0(line_name, "-", seq(start_id, start_id + n_founders - 1))
 
   # Create sex vector
   sex_vector <- c(rep("M", n_males), rep("F", n_females))
@@ -193,7 +193,7 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
     ind_id = ind_ids,
     parent_1 = NA_character_,  # NULL for founders
     parent_2 = NA_character_,  # NULL for founders
-    population = pop_name,
+    line = line_name,
     sex = sex_vector
   )
 
@@ -278,7 +278,7 @@ add_founders <- function(pop, n_males, n_females, pop_name) {
     pop$metadata$n_individuals <- pop$metadata$n_individuals + n_founders
   }
 
-  message("Added ", n_founders, " founders (", n_males, " males, ", n_females, " females) to population '", pop_name, "'")
+  message("Added ", n_founders, " founders (", n_males, " males, ", n_females, " females) to line '", line_name, "'")
 
   # Return modified pop object
   invisible(pop)
