@@ -216,8 +216,7 @@ man/
 Documentation/
 ├── DESIGN.md                 # Design document (490 lines)
 ├── QUICKSTART.md            # Quick start guide (240 lines)
-├── IMPLEMENTATION_STATUS.md  # This file
-└── PLAN_add_founders.md     # Implementation plan for add_founders
+└── IMPLEMENTATION_STATUS.md  # This file
 
 Modified/
 ├── R/tidybreed-package.R    # Updated imports
