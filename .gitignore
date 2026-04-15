@@ -5,5 +5,4 @@
 *.Rproj
 inst/doc
 PACKAGE_OUTLINE.md
-run_R.md
 .claude/*

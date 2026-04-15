@@ -252,6 +252,26 @@ datasets larger than RAM, excellent R integration.
 recombination and phased exports. Genotypes are required for GWAS and genomic
 prediction. Computing genotypes on the fly during every query would be wasteful.
 
+## Development Environment
+
+### Running R Commands
+
+The R executable path is platform-specific. When running R or Rscript via the
+Bash tool, use the appropriate path:
+
+**Windows (Hendrix Genetics AVD):**
+- Check if working directory contains "Hendrix"
+- R: `"/c/Program Files/R/R-4.5.1/bin/x64/R.exe"`
+- Rscript: `"/c/Program Files/R/R-4.5.1/bin/x64/Rscript.exe"`
+
+**Mac/Linux:**
+- Use standard shell commands: `R` or `r` and `Rscript`
+
+Example test command:
+```bash
+"/c/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "print('Hello from R')"
+```
+
 
 
 
