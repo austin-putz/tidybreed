@@ -7,7 +7,8 @@
 define_chip(
   pop,
   name,
-  n_snp = NULL,
+  n = NULL,
+  locus_tf = NULL,
   locus_ids = NULL,
   locus_names = NULL,
   method = "random",
@@ -19,13 +20,18 @@ define_chip(
 
 \item{name}{Character. Name of the SNP chip (used in messages and default column name)}
 
-\item{n_snp}{Integer. Number of SNPs to select (mutually exclusive with locus_ids/locus_names)}
+\item{n}{Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)}
 
-\item{locus_ids}{Integer vector. Specific locus IDs to select (mutually exclusive with n_snp/locus_names)}
+\item{locus_tf}{Logical vector. TRUE/FALSE membership vector with one element per locus, in the
+same order as \code{genome_meta}. Useful when you have already computed membership (e.g., pass
+\code{!pop_50k$is_50k} to select the complement of an existing chip). Mutually exclusive with
+n/locus_ids/locus_names.}
 
-\item{locus_names}{Character vector. Specific locus names to select (mutually exclusive with n_snp/locus_ids)}
+\item{locus_ids}{Integer vector. Specific locus IDs to select (mutually exclusive with n/locus_tf/locus_names)}
 
-\item{method}{Character. Selection method when using \code{n_snp}. One of:
+\item{locus_names}{Character vector. Specific locus names to select (mutually exclusive with n/locus_tf/locus_ids)}
+
+\item{method}{Character. Selection method when using \code{n}. One of:
 \itemize{
 \item \code{"random"}: Randomly sample SNPs across entire genome (default)
 \item \code{"even"}: Evenly space SNPs across entire genome
@@ -43,9 +49,10 @@ The modified \code{tidybreed_pop} object (invisibly).
 Convenience function to mark which loci are on a SNP chip. Creates a logical
 column in the \code{genome_meta} table indicating chip membership.
 
-Three selection methods are supported:
+Four selection methods are supported:
 \itemize{
-\item \strong{By count} (\code{n_snp}): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
+\item \strong{By count} (\code{n}): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
+\item \strong{By logical vector} (\code{locus_tf}): Pass a TRUE/FALSE vector the same length as the number of loci
 \item \strong{By ID} (\code{locus_ids}): Select specific loci by their locus_id values
 \item \strong{By name} (\code{locus_names}): Select specific loci by their locus_name values
 }
@@ -53,21 +60,27 @@ Three selection methods are supported:
 \details{
 \strong{Selection Methods:}
 \enumerate{
-\item \strong{Random} (\code{n_snp} + \code{method = "random"}):
+\item \strong{Random} (\code{n} + \code{method = "random"}):
 \itemize{
-\item Randomly samples n_snp loci without replacement
+\item Randomly samples n loci without replacement
 \item Uniform distribution across entire genome
 }
-\item \strong{Even spacing} (\code{n_snp} + \code{method = "even"}):
+\item \strong{Even spacing} (\code{n} + \code{method = "even"}):
 \itemize{
-\item Evenly spaces n_snp loci across genome by position
+\item Evenly spaces n loci across genome by position
 \item Based on sequential locus order in genome_meta
 }
-\item \strong{Chromosome-even} (\code{n_snp} + \code{method = "chromosome_even"}):
+\item \strong{Chromosome-even} (\code{n} + \code{method = "chromosome_even"}):
 \itemize{
-\item Distributes n_snp proportionally across chromosomes
-\item Each chromosome gets n_snp * (chr_loci / total_loci) SNPs
+\item Distributes n proportionally across chromosomes
+\item Each chromosome gets n * (chr_loci / total_loci) SNPs
 \item SNPs are evenly spaced within each chromosome
+}
+\item \strong{By logical vector} (\code{locus_tf}):
+\itemize{
+\item Pass a logical vector with one element per locus (same length as genome_meta)
+\item TRUE marks the locus as on the chip, FALSE marks it as off
+\item Useful for building chips from existing chip membership, e.g., \code{!existing_tf} for the complement
 }
 \item \strong{By locus IDs} (\code{locus_ids}):
 \itemize{
@@ -106,15 +119,21 @@ pop <- initialize_genome(
 
 # Random selection of 500 SNPs
 pop <- pop \%>\%
-  define_chip(name = "50k", n_snp = 500, method = "random")
+  define_chip(name = "50k", n = 500, method = "random")
 
-# Evenly spaced 50,000 SNPs
+# Evenly spaced SNPs
 pop <- pop \%>\%
-  define_chip(name = "HD", n_snp = 50000, method = "even")
+  define_chip(name = "HD", n = 900, method = "even")
 
 # Proportional distribution across chromosomes
 pop <- pop \%>\%
-  define_chip(name = "10k", n_snp = 10000, method = "chromosome_even")
+  define_chip(name = "10k", n = 100, method = "chromosome_even")
+
+# Logical vector — complement of an existing chip
+chip_tf <- get_table(pop, "genome_meta") \%>\%
+  dplyr::pull(is_50k)
+pop <- pop \%>\%
+  define_chip(name = "non50k", locus_tf = !chip_tf)
 
 # Specific loci by ID
 pop <- pop \%>\%
@@ -127,7 +146,7 @@ pop <- pop \%>\%
 
 # Custom column name
 pop <- pop \%>\%
-  define_chip(name = "bovine_50k", n_snp = 500, col_name = "SNP_50k")
+  define_chip(name = "bovine_50k", n = 500, col_name = "SNP_50k")
 
 # View chip definition
 get_table(pop, "genome_meta") \%>\%

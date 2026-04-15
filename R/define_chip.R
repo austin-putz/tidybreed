@@ -4,17 +4,22 @@
 #' Convenience function to mark which loci are on a SNP chip. Creates a logical
 #' column in the `genome_meta` table indicating chip membership.
 #'
-#' Three selection methods are supported:
-#' - **By count** (`n_snp`): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
+#' Four selection methods are supported:
+#' - **By count** (`n`): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
+#' - **By logical vector** (`locus_tf`): Pass a TRUE/FALSE vector the same length as the number of loci
 #' - **By ID** (`locus_ids`): Select specific loci by their locus_id values
 #' - **By name** (`locus_names`): Select specific loci by their locus_name values
 #'
 #' @param pop A `tidybreed_pop` object
 #' @param name Character. Name of the SNP chip (used in messages and default column name)
-#' @param n_snp Integer. Number of SNPs to select (mutually exclusive with locus_ids/locus_names)
-#' @param locus_ids Integer vector. Specific locus IDs to select (mutually exclusive with n_snp/locus_names)
-#' @param locus_names Character vector. Specific locus names to select (mutually exclusive with n_snp/locus_ids)
-#' @param method Character. Selection method when using `n_snp`. One of:
+#' @param n Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)
+#' @param locus_tf Logical vector. TRUE/FALSE membership vector with one element per locus, in the
+#'   same order as `genome_meta`. Useful when you have already computed membership (e.g., pass
+#'   `!pop_50k$is_50k` to select the complement of an existing chip). Mutually exclusive with
+#'   n/locus_ids/locus_names.
+#' @param locus_ids Integer vector. Specific locus IDs to select (mutually exclusive with n/locus_tf/locus_names)
+#' @param locus_names Character vector. Specific locus names to select (mutually exclusive with n/locus_tf/locus_ids)
+#' @param method Character. Selection method when using `n`. One of:
 #'   - `"random"`: Randomly sample SNPs across entire genome (default)
 #'   - `"even"`: Evenly space SNPs across entire genome
 #'   - `"chromosome_even"`: Distribute SNPs proportionally across chromosomes
@@ -27,24 +32,29 @@
 #' @details
 #' **Selection Methods:**
 #'
-#' 1. **Random** (`n_snp` + `method = "random"`):
-#'    - Randomly samples n_snp loci without replacement
+#' 1. **Random** (`n` + `method = "random"`):
+#'    - Randomly samples n loci without replacement
 #'    - Uniform distribution across entire genome
 #'
-#' 2. **Even spacing** (`n_snp` + `method = "even"`):
-#'    - Evenly spaces n_snp loci across genome by position
+#' 2. **Even spacing** (`n` + `method = "even"`):
+#'    - Evenly spaces n loci across genome by position
 #'    - Based on sequential locus order in genome_meta
 #'
-#' 3. **Chromosome-even** (`n_snp` + `method = "chromosome_even"`):
-#'    - Distributes n_snp proportionally across chromosomes
-#'    - Each chromosome gets n_snp * (chr_loci / total_loci) SNPs
+#' 3. **Chromosome-even** (`n` + `method = "chromosome_even"`):
+#'    - Distributes n proportionally across chromosomes
+#'    - Each chromosome gets n * (chr_loci / total_loci) SNPs
 #'    - SNPs are evenly spaced within each chromosome
 #'
-#' 4. **By locus IDs** (`locus_ids`):
+#' 4. **By logical vector** (`locus_tf`):
+#'    - Pass a logical vector with one element per locus (same length as genome_meta)
+#'    - TRUE marks the locus as on the chip, FALSE marks it as off
+#'    - Useful for building chips from existing chip membership, e.g., `!existing_tf` for the complement
+#'
+#' 5. **By locus IDs** (`locus_ids`):
 #'    - Select specific loci by their locus_id values (1, 2, 3, ...)
 #'    - All specified IDs must exist in genome_meta
 #'
-#' 5. **By locus names** (`locus_names`):
+#' 6. **By locus names** (`locus_names`):
 #'    - Select specific loci by their locus_name values
 #'    - All specified names must exist in genome_meta
 #'
@@ -71,15 +81,21 @@
 #'
 #' # Random selection of 500 SNPs
 #' pop <- pop %>%
-#'   define_chip(name = "50k", n_snp = 500, method = "random")
+#'   define_chip(name = "50k", n = 500, method = "random")
 #'
-#' # Evenly spaced 50,000 SNPs
+#' # Evenly spaced SNPs
 #' pop <- pop %>%
-#'   define_chip(name = "HD", n_snp = 50000, method = "even")
+#'   define_chip(name = "HD", n = 900, method = "even")
 #'
 #' # Proportional distribution across chromosomes
 #' pop <- pop %>%
-#'   define_chip(name = "10k", n_snp = 10000, method = "chromosome_even")
+#'   define_chip(name = "10k", n = 100, method = "chromosome_even")
+#'
+#' # Logical vector — complement of an existing chip
+#' chip_tf <- get_table(pop, "genome_meta") %>%
+#'   dplyr::pull(is_50k)
+#' pop <- pop %>%
+#'   define_chip(name = "non50k", locus_tf = !chip_tf)
 #'
 #' # Specific loci by ID
 #' pop <- pop %>%
@@ -92,7 +108,7 @@
 #'
 #' # Custom column name
 #' pop <- pop %>%
-#'   define_chip(name = "bovine_50k", n_snp = 500, col_name = "SNP_50k")
+#'   define_chip(name = "bovine_50k", n = 500, col_name = "SNP_50k")
 #'
 #' # View chip definition
 #' get_table(pop, "genome_meta") %>%
@@ -102,7 +118,8 @@
 #' }
 define_chip <- function(pop,
                         name,
-                        n_snp = NULL,
+                        n = NULL,
+                        locus_tf = NULL,
                         locus_ids = NULL,
                         locus_names = NULL,
                         method = "random",
@@ -121,14 +138,15 @@ define_chip <- function(pop,
 
   # Validate exactly one selection method provided
   methods_provided <- sum(
-    !is.null(n_snp),
+    !is.null(n),
+    !is.null(locus_tf),
     !is.null(locus_ids),
     !is.null(locus_names)
   )
 
   if (methods_provided == 0) {
     stop(
-      "Must specify one selection method: n_snp, locus_ids, or locus_names",
+      "Must specify one selection method: n, locus_tf, locus_ids, or locus_names",
       call. = FALSE
     )
   }
@@ -136,13 +154,13 @@ define_chip <- function(pop,
   if (methods_provided > 1) {
     stop(
       "Cannot specify multiple selection methods. ",
-      "Choose one of: n_snp, locus_ids, locus_names",
+      "Choose one of: n, locus_tf, locus_ids, locus_names",
       call. = FALSE
     )
   }
 
-  # Validate method parameter (only relevant for n_snp)
-  if (!is.null(n_snp)) {
+  # Validate method parameter (only relevant for n)
+  if (!is.null(n)) {
     valid_methods <- c("random", "even", "chromosome_even")
     if (!method %in% valid_methods) {
       stop(
@@ -182,14 +200,30 @@ define_chip <- function(pop,
 
   chip_indicator <- rep(FALSE, n_loci)
 
-  if (!is.null(n_snp)) {
-    # Selection by n_snp
-    chip_indicator <- select_by_n_snp(genome, n_snp, method)
+  if (!is.null(n)) {
+    # Selection by count
+    chip_indicator <- select_by_n(genome, n, method)
     n_selected <- sum(chip_indicator)
     message(
       "Defined chip '", name, "' with ", n_selected, " SNPs ",
       "(method: ", method, ")"
     )
+
+  } else if (!is.null(locus_tf)) {
+    # Selection by logical vector
+    if (!is.logical(locus_tf)) {
+      stop("locus_tf must be a logical vector", call. = FALSE)
+    }
+    if (length(locus_tf) != n_loci) {
+      stop(
+        "locus_tf length (", length(locus_tf), ") must equal number of loci (",
+        n_loci, ")",
+        call. = FALSE
+      )
+    }
+    chip_indicator <- locus_tf
+    n_selected <- sum(chip_indicator)
+    message("Defined chip '", name, "' with ", n_selected, " SNPs (by locus_tf)")
 
   } else if (!is.null(locus_ids)) {
     # Selection by locus IDs

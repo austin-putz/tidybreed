@@ -160,11 +160,14 @@ by `define_chip()` to write chip membership columns.
 `R/define_chip.R`
 
 Convenience wrapper. Marks loci as members of a named chip by writing a
-`BOOLEAN` column `is_{chip_name}` to `genome_meta`. Three selection methods:
+`BOOLEAN` column `is_{chip_name}` to `genome_meta`. Four selection methods:
 
-- `"random"` — randomly sample `n` loci
-- `"even"` — evenly spaced across all loci by position
-- `"chr_even"` — proportional to chromosome length
+- `n` + `method = "random"` — randomly sample `n` loci
+- `n` + `method = "even"` — evenly spaced across all loci by position
+- `n` + `method = "chromosome_even"` — proportional to chromosome length
+- `locus_tf` — logical vector (same length as `genome_meta` rows); TRUE = on chip. Useful for passing the complement of an existing chip (`!existing_tf`).
+- `locus_ids` — integer vector of specific locus IDs
+- `locus_names` — character vector of specific locus names
 
 ### `get_table()` / `close_pop()` / `print.tidybreed_pop()`
 

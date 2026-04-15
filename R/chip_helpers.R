@@ -1,18 +1,18 @@
-#' Select loci by count (n_snp)
+#' Select loci by count (n)
 #'
 #' @param genome Data frame of genome_meta table
-#' @param n_snp Number of SNPs to select
+#' @param n Number of SNPs to select
 #' @param method Selection method: "random", "even", or "chromosome_even"
 #' @return Logical vector indicating selected loci
 #' @keywords internal
-select_by_n_snp <- function(genome, n_snp, method) {
+select_by_n <- function(genome, n, method) {
 
   n_loci <- nrow(genome)
 
-  # Validate n_snp
-  if (n_snp > n_loci) {
+  # Validate n
+  if (n > n_loci) {
     stop(
-      "n_snp (", n_snp, ") exceeds total loci (", n_loci, ")",
+      "n (", n, ") exceeds total loci (", n_loci, ")",
       call. = FALSE
     )
   }
@@ -21,12 +21,12 @@ select_by_n_snp <- function(genome, n_snp, method) {
 
   if (method == "random") {
     # Random selection
-    selected_indices <- sample(1:n_loci, size = n_snp, replace = FALSE)
+    selected_indices <- sample(1:n_loci, size = n, replace = FALSE)
     chip_vector[selected_indices] <- TRUE
 
   } else if (method == "even") {
     # Even spacing across genome
-    selected_indices <- round(seq(1, n_loci, length.out = n_snp))
+    selected_indices <- round(seq(1, n_loci, length.out = n))
     # Remove duplicates that can occur with rounding
     selected_indices <- unique(selected_indices)
     chip_vector[selected_indices] <- TRUE
@@ -34,17 +34,17 @@ select_by_n_snp <- function(genome, n_snp, method) {
   } else if (method == "chromosome_even") {
     # Proportional distribution across chromosomes
     chr_counts <- table(genome$chr)
-    n_per_chr <- round(n_snp * chr_counts / sum(chr_counts))
+    n_per_chr <- round(n * chr_counts / sum(chr_counts))
 
-    # Ensure we don't exceed n_snp due to rounding
-    while (sum(n_per_chr) > n_snp) {
+    # Ensure we don't exceed n due to rounding
+    while (sum(n_per_chr) > n) {
       # Find chromosome with most SNPs and reduce by 1
       max_chr <- which.max(n_per_chr)
       n_per_chr[max_chr] <- n_per_chr[max_chr] - 1
     }
 
-    # Distribute remaining SNPs if sum is less than n_snp
-    while (sum(n_per_chr) < n_snp) {
+    # Distribute remaining SNPs if sum is less than n
+    while (sum(n_per_chr) < n) {
       # Find chromosome with fewest SNPs (but still has room)
       chr_with_space <- which(n_per_chr < chr_counts)
       if (length(chr_with_space) > 0) {

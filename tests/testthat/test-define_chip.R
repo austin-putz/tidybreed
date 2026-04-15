@@ -8,7 +8,7 @@ test_that("define_chip works with random selection", {
   )
 
   # Define chip with random selection
-  pop <- define_chip(pop, name = "50k", n_snp = 500, method = "random")
+  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -35,7 +35,7 @@ test_that("define_chip works with even spacing", {
   )
 
   # Define chip with even spacing
-  pop <- define_chip(pop, name = "HD", n_snp = 100, method = "even")
+  pop <- define_chip(pop, name = "HD", n = 100, method = "even")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -63,7 +63,7 @@ test_that("define_chip works with chromosome_even spacing", {
   )
 
   # Define chip with chromosome-even spacing
-  pop <- define_chip(pop, name = "10k", n_snp = 500, method = "chromosome_even")
+  pop <- define_chip(pop, name = "10k", n = 500, method = "chromosome_even")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -146,6 +146,73 @@ test_that("define_chip works with locus names", {
 })
 
 
+test_that("define_chip works with locus_tf logical vector", {
+  pop <- initialize_genome(
+    pop_name = "test_chip_tf",
+    n_loci = 1000,
+    n_chr = 10,
+    chr_len_Mb = 100,
+    db_path = ":memory:"
+  )
+
+  # Define a 50k chip first
+  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
+
+  # Pull the logical vector for the 50k chip
+  chip_tf <- get_table(pop, "genome_meta") %>%
+    dplyr::pull(is_50k)
+
+  # Define complement chip using !chip_tf
+  pop <- define_chip(pop, name = "non50k", locus_tf = !chip_tf)
+
+  result <- get_table(pop, "genome_meta") %>%
+    dplyr::select(is_50k, is_non50k) %>%
+    dplyr::collect()
+
+  # Complement: every locus is on exactly one chip
+  expect_true(all(result$is_50k != result$is_non50k))
+  expect_equal(sum(result$is_non50k), 500)
+
+  close_pop(pop)
+})
+
+
+test_that("define_chip errors with non-logical locus_tf", {
+  pop <- initialize_genome(
+    pop_name = "test_chip_tf_bad_type",
+    n_loci = 100,
+    n_chr = 5,
+    chr_len_Mb = 100,
+    db_path = ":memory:"
+  )
+
+  expect_error(
+    define_chip(pop, name = "bad", locus_tf = 1:100),
+    "locus_tf must be a logical vector"
+  )
+
+  close_pop(pop)
+})
+
+
+test_that("define_chip errors with wrong-length locus_tf", {
+  pop <- initialize_genome(
+    pop_name = "test_chip_tf_bad_len",
+    n_loci = 100,
+    n_chr = 5,
+    chr_len_Mb = 100,
+    db_path = ":memory:"
+  )
+
+  expect_error(
+    define_chip(pop, name = "bad", locus_tf = rep(TRUE, 50)),
+    "locus_tf length"
+  )
+
+  close_pop(pop)
+})
+
+
 test_that("define_chip respects custom column name", {
   pop <- initialize_genome(
     pop_name = "test_chip_colname",
@@ -159,7 +226,7 @@ test_that("define_chip respects custom column name", {
   pop <- define_chip(
     pop,
     name = "bovine_50k",
-    n_snp = 500,
+    n = 500,
     col_name = "SNP_50k"
   )
 
@@ -183,8 +250,8 @@ test_that("define_chip can define multiple chips", {
 
   # Define multiple chips
   pop <- pop %>%
-    define_chip(name = "50k", n_snp = 500, method = "random") %>%
-    define_chip(name = "HD", n_snp = 900, method = "even")
+    define_chip(name = "50k", n = 500, method = "random") %>%
+    define_chip(name = "HD", n = 900, method = "even")
 
   # Check both columns exist
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -215,7 +282,7 @@ test_that("define_chip errors with no selection method", {
   # No selection method specified
   expect_error(
     define_chip(pop, name = "50k"),
-    "Must specify one selection method"
+    "Must specify one selection method: n, locus_tf, locus_ids, or locus_names"
   )
 
   close_pop(pop)
@@ -233,7 +300,7 @@ test_that("define_chip errors with multiple selection methods", {
 
   # Multiple selection methods
   expect_error(
-    define_chip(pop, name = "50k", n_snp = 500, locus_ids = c(1, 2, 3)),
+    define_chip(pop, name = "50k", n = 500, locus_ids = c(1, 2, 3)),
     "Cannot specify multiple selection methods"
   )
 
@@ -252,7 +319,7 @@ test_that("define_chip errors with invalid method", {
 
   # Invalid method
   expect_error(
-    define_chip(pop, name = "50k", n_snp = 500, method = "bad_method"),
+    define_chip(pop, name = "50k", n = 500, method = "bad_method"),
     "Invalid method"
   )
 
@@ -260,7 +327,7 @@ test_that("define_chip errors with invalid method", {
 })
 
 
-test_that("define_chip errors when n_snp exceeds total loci", {
+test_that("define_chip errors when n exceeds total loci", {
   pop <- initialize_genome(
     pop_name = "test_chip_toomany",
     n_loci = 100,
@@ -269,9 +336,9 @@ test_that("define_chip errors when n_snp exceeds total loci", {
     db_path = ":memory:"
   )
 
-  # n_snp exceeds total loci
+  # n exceeds total loci
   expect_error(
-    define_chip(pop, name = "50k", n_snp = 500),
+    define_chip(pop, name = "50k", n = 500),
     "exceeds total loci"
   )
 
@@ -327,7 +394,7 @@ test_that("define_chip integration: chip + effects", {
   )
 
   # Define chip
-  pop <- define_chip(pop, name = "50k", n_snp = 500, method = "random")
+  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
 
   # Get genome metadata
   genome <- get_table(pop, "genome_meta") %>% dplyr::collect()

@@ -48,10 +48,12 @@ instance and go between filtering the individual data and the genome data.
 
 ```r
 pop <- initialize_genome(
-  pop_name   = "PigLine_A",
-  n_loci     = 50000,
-  n_chr      = 18,
-  chr_len_Mb = 100
+  pop_name   = "Pigs",         # name population (name individual genetic lines below)
+  n_loci     = 100,            # total n loci to simulate
+  n_chr      = 18,             # total n chromosomes to simulate
+  chr_len_Mb = 100,            # length of each chromosome
+  n_haplotypes = 200,          # number of haplotypes generated to sample from in founders
+  overwrite    = TRUE          # overwrite the current duckdb (database) if it exists
 )
 
 print(pop)
@@ -65,23 +67,37 @@ print(pop)
 
 ### 2. Add founder animals
 
+We start by adding founder individuals. 
+
 ```r
 pop <- pop |>
   add_founders(
-    n_males   = 20,
-    n_females = 200,
-    line_name = "A"
+    n_males   = 2,     # 2 male founders (sampled from haplotypes generated above)
+    n_females = 8,     # 8 female founders
+    line_name = "A"    # name of genetic line if you want to crossbred later
   )
+```
 
+This function adds 10 total individuals as founders and calls them line "A". 
+
+Let's peak at that new table created. 
+
+```r
 # Inspect individual data
-pop %>% get_table("ind_meta")
+pop |> 
+  get_table("ind_meta")
+```
 
-# or return a tibble() with 
-pop %>% get_table("ind_meta") |>
+You can see we have 5 default columns that are the only ones required to simulate. 
+
+```r
+# or return a tibble() with the collect() function
+pop |> 
+  get_table("ind_meta") |>
   dplyr::collect()   # collect will pull into R memory and create a tibble
 ```
 
-Users can then summarize or manipulate the tibble() however they desire. 
+Users can then summarize or manipulate the `tibble()` however they desire. 
 
 This means they can pull genotypes, haplotypes and say QTL effects
 and calculate it all on their own which means possibilities are endless. 
@@ -98,7 +114,7 @@ pop <- pop |>
   mutate_ind_meta(
     gen        = 0L,       # add 0 as integer
     farm       = "Iowa",   # add farm name to all individuals
-    date_birth = as.Date("2024-01-01")  # add your own date, now possible to run "real life" simulations without hacks
+    date_birth = as.Date("2026-01-01")  # add your own date, now possible to run "real life" simulations without hacks
   )
 ```
 
@@ -107,23 +123,37 @@ Types are inferred automatically. Scalar values are broadcast to all current ind
 ### 4. Define a SNP chip
 
 ```r
-# Evenly spaced 50K chip
-pop <- pop |>
-  define_chip(chip_name = "50K", n = 50000, method = "even")
+# use mutate_genome_meta() to create your own custom chip 
+pop <- pop %>%
+  mutate_genome_meta(
+    is_CustomSNPChip = sample(c(rep(TRUE,50), rep(FALSE,50)), size=100, replace=FALSE)    # generates exactly 50 SNP for this panel
+  )
 
-# Add a denser HD chip proportional to chromosome length
+# Evenly spaced low-density chip
 pop <- pop |>
-  define_chip(chip_name = "HD", n = 80000, method = "chr_even")
+  define_chip(name = "LowDensity", n = 30, method = "even")
+
+# Denser chip proportional to chromosome length
+pop <- pop |>
+  define_chip(name = "HighDensity", n = 90, method = "random")
+
+# Logical vector — define a chip as the complement of an existing one
+ld_tf <- get_table(pop, "genome_meta") |> dplyr::pull(is_LowDensity)
+pop <- pop |>
+  define_chip(name = "NonLD", locus_tf = !ld_tf)
 ```
 
-By default, this adds 'is_<chip_name>' to the 'genome_meta' table in the database. 
+By default, this adds `is_<chip_name>` to the `genome_meta` table in the database.
+
+The `locus_tf` argument accepts any logical vector of the same length as the number of loci,
+making it easy to compose chips from existing membership columns or custom logic.
 
 This provides the user the ability to filter the genotypes by QTL, SNP chip, or whatever they desire. 
 
 ```r
 # Check chip assignment on genome_meta
 get_table(pop, "genome_meta") |>
-  dplyr::filter(is_50K == TRUE) |>
+  dplyr::filter(is_LowDensity == TRUE) |>
   dplyr::select(locus_name, chr, pos_Mb) |>
   dplyr::collect()
 ```
@@ -137,13 +167,14 @@ All tables are lazy — filter and select before pulling data into R:
 
 ```r
 # Males from generation 0
-get_table(pop, "ind_meta") |>
-  dplyr::filter(sex == "M", gen == 0L) |>
+pop %>%
+  get_table("ind_meta") %>%
+  dplyr::filter(sex == "M", gen == 0L) %>%
   dplyr::collect()
 
 # Chromosome 1 loci on the 50K chip
 get_table(pop, "genome_meta") |>
-  dplyr::filter(chr == 1, is_50K == TRUE) |>
+  dplyr::filter(chr == 1, is_HighDensity == TRUE) |>
   dplyr::arrange(pos_Mb) |>
   dplyr::collect()
 ```
