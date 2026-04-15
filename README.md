@@ -74,7 +74,7 @@ pop <- pop |>
   )
 
 # Inspect individual data
-pop %>% get_table("ind_meta)
+pop %>% get_table("ind_meta")
 
 # or return a tibble() with 
 pop %>% get_table("ind_meta") |>
