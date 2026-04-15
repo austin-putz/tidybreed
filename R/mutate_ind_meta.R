@@ -157,16 +157,8 @@ mutate_ind_meta <- function(pop, ...) {
 #' @keywords internal
 infer_duckdb_type <- function(value) {
 
-  # Take first element if vector
-  sample_val <- value[1]
-
-  # Handle NA
-  if (is.na(sample_val)) {
-    warning("Cannot infer type from NA. Defaulting to VARCHAR.", call. = FALSE)
-    return("VARCHAR")
-  }
-
-  # Type mapping
+  # Check R class first — works correctly even when elements are NA,
+  # since class(c(NA, 1.5)) is "numeric", class(c(NA, FALSE)) is "logical", etc.
   if (is.logical(value)) {
     return("BOOLEAN")
   } else if (is.integer(value)) {
@@ -179,13 +171,25 @@ infer_duckdb_type <- function(value) {
     return("TIMESTAMP")
   } else if (is.character(value)) {
     return("VARCHAR")
-  } else {
-    stop(
-      "Unsupported type: ", class(value)[1], ". ",
-      "Supported types: logical, integer, numeric, Date, POSIXct, character",
+  }
+
+  # Fallback: try first non-NA value (handles exotic/unclassed vectors)
+  sample_val <- value[!is.na(value)][1]
+  if (is.na(sample_val)) {
+    warning(
+      "Cannot infer type from an all-NA vector. Defaulting to VARCHAR. ",
+      "Use typed NA (e.g. NA_real_, NA_integer_, NA_character_) or supply a ",
+      "non-NA seed value first to get the correct type.",
       call. = FALSE
     )
+    return("VARCHAR")
   }
+
+  stop(
+    "Unsupported type: ", class(value)[1], ". ",
+    "Supported types: logical, integer, numeric, Date, POSIXct, character",
+    call. = FALSE
+  )
 }
 
 

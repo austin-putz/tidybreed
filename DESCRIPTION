@@ -1,7 +1,7 @@
 Package: tidybreed
 Type: Package
 Title: Tidy Breeding Program Simulation
-Version: 0.0.1
+Version: 0.0.2
 Authors@R:
     person("Austin", "Putz", , "putz.austin@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-6459-7123"))

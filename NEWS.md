@@ -1,3 +1,14 @@
+# tidybreed 0.0.2 (2026-04-15)
+
+## Bug Fixes
+
+* `infer_duckdb_type()`: fixed incorrect VARCHAR inference when a typed vector
+  starts with `NA` (e.g. `c(NA_real_, rnorm(n))`). Type is now determined from
+  the R class of the full vector before inspecting individual elements, so
+  `NA_real_` → `DOUBLE`, `NA_integer_` → `INTEGER`, `NA` → `BOOLEAN`. A bare
+  all-`NA` vector (class `logical`) now warns with a message pointing users to
+  typed NA constants.
+
 # tidybreed 0.0.1 (2026-04-14)
 
 ## Breaking Changes
