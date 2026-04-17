@@ -2,6 +2,7 @@
 
 S3method(print,tidybreed_pop)
 export(add_founders)
+export(add_offspring)
 export(close_pop)
 export(define_chip)
 export(get_table)
