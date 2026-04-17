@@ -1,3 +1,20 @@
+# tidybreed 0.1.0 (2026-04-17)
+
+## New Functions
+
+* `add_offspring()` — core mating function. User supplies a `matings` tibble
+  (one row per offspring) with required columns `id_parent_1`, `id_parent_2`,
+  `sex`, and `line`. Gametes are produced via chromosomal crossover simulation
+  (Haldane map: crossovers per chromosome ~ Poisson(chr_len_Mb / 100)).
+  New `ind_meta`, `genome_haplotype`, and `genome_genotype` rows are written
+  for all offspring. Animal-breeder aliases `id_sire` / `id_dam` are accepted.
+  Any extra columns in `matings` (e.g. `gen = 2L`) are validated and written
+  to `ind_meta`, with automatic `ALTER TABLE` if the column is new.
+* `make_gamete()` — internal recombination helper (`R/recombination_helpers.R`).
+  Not exported; used by `add_offspring()`.
+
+---
+
 # tidybreed 0.0.3 (2026-04-17)
 
 ## Breaking Changes
