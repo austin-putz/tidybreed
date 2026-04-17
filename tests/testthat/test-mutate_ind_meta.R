@@ -16,9 +16,9 @@ create_mock_pop_with_ind_meta <- function(n_males = 10, n_females = 100) {
   # Create ind_meta table manually (simulating what add_founders will do)
   n_ind <- n_males + n_females
   ind_meta <- tibble::tibble(
-    ind_id = paste0("ind_", seq_len(n_ind)),
-    parent_1 = "0",
-    parent_2 = "0",
+    id_ind = paste0("ind_", seq_len(n_ind)),
+    id_parent_1 = "0",
+    id_parent_2 = "0",
     line = "A",
     sex = c(rep("M", n_males), rep("F", n_females))
   )
@@ -229,18 +229,18 @@ test_that("mutate_ind_meta errors on reserved column names", {
   pop <- create_mock_pop_with_ind_meta()
 
   expect_error(
-    pop %>% mutate_ind_meta(ind_id = "new_id"),
-    "Cannot modify reserved column 'ind_id'"
+    pop %>% mutate_ind_meta(id_ind = "new_id"),
+    "Cannot modify reserved column 'id_ind'"
   )
 
   expect_error(
-    pop %>% mutate_ind_meta(parent_1 = "parent"),
-    "Cannot modify reserved column 'parent_1'"
+    pop %>% mutate_ind_meta(id_parent_1 = "parent"),
+    "Cannot modify reserved column 'id_parent_1'"
   )
 
   expect_error(
-    pop %>% mutate_ind_meta(parent_2 = "parent"),
-    "Cannot modify reserved column 'parent_2'"
+    pop %>% mutate_ind_meta(id_parent_2 = "parent"),
+    "Cannot modify reserved column 'id_parent_2'"
   )
 
   expect_error(
@@ -350,7 +350,7 @@ test_that("mutate_ind_meta handles empty ind_meta table", {
   # Create empty ind_meta table
   DBI::dbExecute(
     pop$db_conn,
-    "CREATE TABLE ind_meta (ind_id VARCHAR, parent_1 VARCHAR, parent_2 VARCHAR, line VARCHAR, sex VARCHAR)"
+    "CREATE TABLE ind_meta (id_ind VARCHAR, id_parent_1 VARCHAR, id_parent_2 VARCHAR, line VARCHAR, sex VARCHAR)"
   )
   pop$tables <- c(pop$tables, "ind_meta")
 
@@ -429,9 +429,9 @@ test_that("mutate_ind_meta works in pipe workflow", {
 
   # Manually create ind_meta
   ind_meta <- tibble::tibble(
-    ind_id = paste0("ind_", 1:110),
-    parent_1 = "0",
-    parent_2 = "0",
+    id_ind = paste0("ind_", 1:110),
+    id_parent_1 = "0",
+    id_parent_2 = "0",
     line = "A",
     sex = c(rep("M", 10), rep("F", 100))
   )

@@ -265,10 +265,13 @@ test_that("mutate_genome_meta warns on no fields", {
 
 
 test_that("mutate_genome_meta errors if genome_meta doesn't exist", {
-  # Create pop without genome_meta (not possible with normal workflow, but test edge case)
+  # Create a valid pop with a real connection but no genome_meta table
+  conn <- duckdb::dbConnect(duckdb::duckdb())
   pop <- list(
-    db_conn = NULL,
-    tables = c(),
+    db_conn = conn,
+    pop_name = "test",
+    db_path = ":memory:",
+    tables = character(0),
     metadata = list()
   )
   class(pop) <- "tidybreed_pop"
@@ -277,4 +280,6 @@ test_that("mutate_genome_meta errors if genome_meta doesn't exist", {
     mutate_genome_meta(pop, test = 1),
     "genome_meta table does not exist"
   )
+
+  duckdb::dbDisconnect(conn, shutdown = TRUE)
 })

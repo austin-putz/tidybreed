@@ -1,3 +1,33 @@
+# tidybreed 0.0.3 (2026-04-17)
+
+## Breaking Changes
+
+* `ind_meta`, `genome_haplotype`, `genome_genotype`: column `ind_id` renamed to
+  `id_ind`; `parent_1` → `id_parent_1`; `parent_2` → `id_parent_2`. The `id_`
+  prefix groups all identifier columns together for clarity.
+
+**Migration for existing databases:**
+```r
+conn <- DBI::dbConnect(duckdb::duckdb(), "your_database.duckdb")
+DBI::dbExecute(conn, "ALTER TABLE ind_meta RENAME COLUMN ind_id TO id_ind")
+DBI::dbExecute(conn, "ALTER TABLE ind_meta RENAME COLUMN parent_1 TO id_parent_1")
+DBI::dbExecute(conn, "ALTER TABLE ind_meta RENAME COLUMN parent_2 TO id_parent_2")
+DBI::dbExecute(conn, "ALTER TABLE genome_haplotype RENAME COLUMN ind_id TO id_ind")
+DBI::dbExecute(conn, "ALTER TABLE genome_genotype RENAME COLUMN ind_id TO id_ind")
+DBI::dbDisconnect(conn)
+```
+
+## Bug Fixes
+
+* `infer_duckdb_type()`: bare `NA` (untyped logical) now warns and returns
+  `VARCHAR` instead of silently returning `BOOLEAN`
+* `mutate_ind_meta()`: type check now runs before length check, so passing an
+  unsupported type (e.g. a `list`) produces "Unsupported type" rather than a
+  misleading length-mismatch error
+* Fixed pre-existing test bugs: `expect_error(expr, NA)` inverted assertion in
+  `test-add_founders.R`; null `db_conn` in `test-mutate_genome_meta.R` now uses
+  a real in-memory connection
+
 # tidybreed 0.0.2 (2026-04-15)
 
 ## Bug Fixes

@@ -25,9 +25,9 @@ pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 cat("✓ Created", nrow(ind_meta), "founders\n")
-cat("✓ IDs:", paste(head(ind_meta$ind_id, 5), collapse = ", "), "...\n")
+cat("✓ IDs:", paste(head(ind_meta$id_ind, 5), collapse = ", "), "...\n")
 cat("✓ Males:", sum(ind_meta$sex == "M"), ", Females:", sum(ind_meta$sex == "F"), "\n")
-cat("✓ All parents are NA:", all(is.na(ind_meta$parent_1)) && all(is.na(ind_meta$parent_2)), "\n\n")
+cat("✓ All parents are NA:", all(is.na(ind_meta$id_parent_1)) && all(is.na(ind_meta$id_parent_2)), "\n\n")
 
 # Test 2: Haplotype and genotype verification
 cat("Test 2: Haplotype and genotype verification\n")
@@ -40,9 +40,9 @@ cat("✓ Haplotype rows (should be 60):", nrow(haps), "\n")
 cat("✓ Genotype rows (should be 30):", nrow(genos), "\n")
 
 # Verify genotype = sum of haplotypes for first individual
-ind_id <- ind_meta$ind_id[1]
-hap_rows <- haps %>% filter(ind_id == !!ind_id)
-geno_row <- genos %>% filter(ind_id == !!ind_id)
+ind_id <- ind_meta$id_ind[1]
+hap_rows <- haps %>% filter(id_ind == !!ind_id)
+geno_row <- genos %>% filter(id_ind == !!ind_id)
 
 locus_name <- "locus_1"
 hap_sum <- sum(hap_rows[[locus_name]])
@@ -75,9 +75,9 @@ line_a <- ind_meta %>% filter(line == "A")
 line_b <- ind_meta %>% filter(line == "B")
 
 cat("✓ Line A:", nrow(line_a), "individuals\n")
-cat("✓ Line A IDs:", paste(head(line_a$ind_id, 5), collapse = ", "), "\n")
+cat("✓ Line A IDs:", paste(head(line_a$id_ind, 5), collapse = ", "), "\n")
 cat("✓ Line B:", nrow(line_b), "individuals\n")
-cat("✓ Line B IDs:", paste(head(line_b$ind_id, 5), collapse = ", "), "\n\n")
+cat("✓ Line B IDs:", paste(head(line_b$id_ind, 5), collapse = ", "), "\n\n")
 
 close_pop(pop)
 
@@ -100,8 +100,8 @@ pop <- add_founders(pop, n_males = 2, n_females = 3, line_name = "A")
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
 cat("✓ Total individuals:", nrow(ind_meta), "\n")
-cat("✓ IDs are sequential:", all(ind_meta$ind_id == paste0("A-", 1:15)), "\n")
-cat("✓ All IDs:", paste(ind_meta$ind_id, collapse = ", "), "\n\n")
+cat("✓ IDs are sequential:", all(ind_meta$id_ind == paste0("A-", 1:15)), "\n")
+cat("✓ All IDs:", paste(ind_meta$id_ind, collapse = ", "), "\n\n")
 
 close_pop(pop)
 

@@ -24,7 +24,7 @@ Adds new columns to the \code{ind_meta} table or updates existing custom columns
 Values can be scalar (applied to all individuals) or vectors (one per individual).
 The function automatically infers DuckDB column types from R data types.
 
-Reserved columns (\code{ind_id}, \code{parent_1}, \code{parent_2}, \code{line}, \code{sex}) cannot be modified.
+Reserved columns (\code{id_ind}, \code{id_parent_1}, \code{id_parent_2}, \code{line}, \code{sex}) cannot be modified.
 }
 \details{
 \strong{Type Inference:}
@@ -42,7 +42,7 @@ Reserved columns (\code{ind_id}, \code{parent_1}, \code{parent_2}, \code{line}, 
 \item Must start with a letter
 \item Can contain letters, numbers, and underscores
 \item Cannot be SQL reserved words
-\item Cannot be reserved columns (ind_id, parent_1, parent_2, line, sex)
+\item Cannot be reserved columns (id_ind, id_parent_1, id_parent_2, line, sex)
 }
 }
 \examples{

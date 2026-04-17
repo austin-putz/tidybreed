@@ -54,7 +54,7 @@ Phased haplotypes. Two rows per individual (parent_origin 1 = paternal, 2 = mate
 
 | Column        | Type    |
 |---------------|---------|
-| ind_id        | VARCHAR |
+| id_ind        | VARCHAR |
 | parent_origin | INTEGER |
 | locus_1 … locus_n | INTEGER (0 or 1) |
 
@@ -64,7 +64,7 @@ Genotypes in 0/1/2 encoding. One row per individual.
 
 | Column        | Type    |
 |---------------|---------|
-| ind_id        | VARCHAR |
+| id_ind        | VARCHAR |
 | locus_1 … locus_n | INTEGER (0, 1, or 2) |
 
 Both haplotypes and genotypes are stored (not computed on demand) because disk
@@ -74,16 +74,16 @@ is cheap and recomputation during mating is expensive.
 
 Individual-level metadata. Created by `add_founders()`.
 
-| Column   | Type    | Notes                          |
-|----------|---------|--------------------------------|
-| ind_id   | VARCHAR | Primary key, format `{line}-{n}` |
-| parent_1 | VARCHAR | "0" for founders               |
-| parent_2 | VARCHAR | "0" for founders               |
-| line     | VARCHAR | Genetic line name              |
-| sex      | VARCHAR | "M" or "F"                     |
-| *user cols* | any  | Added via `mutate_ind_meta()`  |
+| Column      | Type    | Notes                          |
+|-------------|---------|--------------------------------|
+| id_ind      | VARCHAR | Primary key, format `{line}-{n}` |
+| id_parent_1 | VARCHAR | NA for founders                |
+| id_parent_2 | VARCHAR | NA for founders                |
+| line        | VARCHAR | Genetic line name              |
+| sex         | VARCHAR | "M" or "F"                     |
+| *user cols* | any     | Added via `mutate_ind_meta()`  |
 
-**Reserved**: `ind_id`, `parent_1`, `parent_2`, `line`, `sex`
+**Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line`, `sex`
 
 ### `ind_phenotype`
 
@@ -93,7 +93,7 @@ We need to think through this table more before implementing.
 
 | Column        | Type    | Notes          |
 |---------------|---------|----------------|
-| ind_id        | VARCHAR |                |
+| id_ind        | VARCHAR |                |
 | trait         | VARCHAR | Trait name     |
 | value         | DOUBLE  | Phenotypic value |
 | env           | VARCHAR | Optional       |

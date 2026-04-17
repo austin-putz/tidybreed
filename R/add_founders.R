@@ -148,9 +148,9 @@ add_founders <- function(pop, n_males, n_females, line_name) {
   if (ind_meta_exists) {
     # Query max ID number for this line
     max_num_query <- paste0(
-      "SELECT MAX(CAST(SUBSTRING(ind_id FROM POSITION('-' IN ind_id) + 1) AS INTEGER)) as max_num ",
+      "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('-' IN id_ind) + 1) AS INTEGER)) as max_num ",
       "FROM ind_meta ",
-      "WHERE ind_id LIKE '", line_name, "-%'"
+      "WHERE id_ind LIKE '", line_name, "-%'"
     )
 
     max_num_result <- DBI::dbGetQuery(pop$db_conn, max_num_query)
@@ -190,9 +190,9 @@ add_founders <- function(pop, n_males, n_females, line_name) {
 
   # Create ind_meta data frame
   ind_meta_df <- tibble::tibble(
-    ind_id = ind_ids,
-    parent_1 = NA_character_,  # NULL for founders
-    parent_2 = NA_character_,  # NULL for founders
+    id_ind = ind_ids,
+    id_parent_1 = NA_character_,  # NULL for founders
+    id_parent_2 = NA_character_,  # NULL for founders
     line = line_name,
     sex = sex_vector
   )
@@ -211,7 +211,7 @@ add_founders <- function(pop, n_males, n_females, line_name) {
 
     # Create 2-row data frame for this individual
     hap_list[[i]] <- tibble::tibble(
-      ind_id = rep(ind_ids[i], 2),
+      id_ind = rep(ind_ids[i], 2),
       parent_origin = c(1L, 2L)
     )
 
@@ -233,7 +233,7 @@ add_founders <- function(pop, n_males, n_females, line_name) {
   # ============================================================================
 
   # Build genotype data frame (1 row per individual)
-  geno_df <- tibble::tibble(ind_id = ind_ids)
+  geno_df <- tibble::tibble(id_ind = ind_ids)
 
   for (j in 1:n_loci) {
     locus_name <- paste0("locus_", j)

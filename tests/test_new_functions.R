@@ -77,7 +77,7 @@ cat("  First 10 chip loci:", paste(head(chip_loci, 10), collapse = ", "), "\n")
 
 # Get genotypes for chip SNPs
 chip_genotypes <- get_table(pop, "genome_genotype") %>%
-  select(ind_id, all_of(chip_loci)) %>%
+  select(id_ind, all_of(chip_loci)) %>%
   collect()
 
 cat("  Genotype matrix dimensions:", nrow(chip_genotypes), "x", ncol(chip_genotypes), "\n")

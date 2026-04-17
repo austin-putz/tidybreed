@@ -5,7 +5,7 @@
 #' Values can be scalar (applied to all individuals) or vectors (one per individual).
 #' The function automatically infers DuckDB column types from R data types.
 #'
-#' Reserved columns (`ind_id`, `parent_1`, `parent_2`, `line`, `sex`) cannot be modified.
+#' Reserved columns (`id_ind`, `id_parent_1`, `id_parent_2`, `line`, `sex`) cannot be modified.
 #'
 #' @param pop A `tidybreed_pop` object
 #' @param ... Named arguments specifying column names and values.
@@ -28,7 +28,7 @@
 #' - Must start with a letter
 #' - Can contain letters, numbers, and underscores
 #' - Cannot be SQL reserved words
-#' - Cannot be reserved columns (ind_id, parent_1, parent_2, line, sex)
+#' - Cannot be reserved columns (id_ind, id_parent_1, id_parent_2, line, sex)
 #'
 #' @export
 #'
@@ -105,7 +105,10 @@ mutate_ind_meta <- function(pop, ...) {
     # 6a. Validate field name
     validate_field_name(field_name, existing_cols)
 
-    # 6b. Determine if value is scalar or vector
+    # 6b. Infer DuckDB type (before length check so unsupported types fail early)
+    db_type <- infer_duckdb_type(value)
+
+    # 6c. Determine if value is scalar or vector
     if (length(value) == 1) {
       # Scalar - will be replicated for all individuals
       value_to_use <- value
@@ -123,9 +126,6 @@ mutate_ind_meta <- function(pop, ...) {
       is_vector <- TRUE
     }
 
-    # 6c. Infer DuckDB type from R type
-    db_type <- infer_duckdb_type(value_to_use)
-
     # 6d. Add column if it doesn't exist
     if (!field_name %in% existing_cols) {
       add_column_query <- paste0(
@@ -137,7 +137,7 @@ mutate_ind_meta <- function(pop, ...) {
 
     # 6e. Update values
     if (is_vector) {
-      # Vector: Update row by row using ind_id
+      # Vector: Update row by row using id_ind
       update_column_vector(pop$db_conn, field_name, value_to_use, db_type)
     } else {
       # Scalar: Update all rows with same value
@@ -156,6 +156,18 @@ mutate_ind_meta <- function(pop, ...) {
 #' @return Character string representing DuckDB type
 #' @keywords internal
 infer_duckdb_type <- function(value) {
+
+  # A bare NA (untyped logical NA) carries no useful type information.
+  # Warn and default to VARCHAR; callers should use NA_real_, NA_integer_, etc.
+  if (is.logical(value) && all(is.na(value))) {
+    warning(
+      "Cannot infer type from NA value. Defaulting to VARCHAR. ",
+      "Use typed NA (e.g. NA_real_, NA_integer_, NA_character_) or supply a ",
+      "non-NA seed value first to get the correct type.",
+      call. = FALSE
+    )
+    return("VARCHAR")
+  }
 
   # Check R class first — works correctly even when elements are NA,
   # since class(c(NA, 1.5)) is "numeric", class(c(NA, FALSE)) is "logical", etc.
@@ -177,7 +189,7 @@ infer_duckdb_type <- function(value) {
   sample_val <- value[!is.na(value)][1]
   if (is.na(sample_val)) {
     warning(
-      "Cannot infer type from an all-NA vector. Defaulting to VARCHAR. ",
+      "Cannot infer type from NA value. Defaulting to VARCHAR. ",
       "Use typed NA (e.g. NA_real_, NA_integer_, NA_character_) or supply a ",
       "non-NA seed value first to get the correct type.",
       call. = FALSE
@@ -206,7 +218,7 @@ validate_field_name <- function(field_name, existing_cols) {
   }
 
   # Check for reserved columns (cannot be modified by user)
-  reserved_cols <- c("ind_id", "parent_1", "parent_2", "line", "sex")
+  reserved_cols <- c("id_ind", "id_parent_1", "id_parent_2", "line", "sex")
   if (field_name %in% reserved_cols) {
     stop(
       "Cannot modify reserved column '", field_name, "'. ",
@@ -289,15 +301,15 @@ update_column_scalar <- function(conn, field_name, value, db_type) {
 #' @keywords internal
 update_column_vector <- function(conn, field_name, values, db_type) {
 
-  # Get individual IDs (assumes ind_id exists and is unique)
+  # Get individual IDs (assumes id_ind exists and is unique)
   ind_ids <- DBI::dbGetQuery(
     conn,
-    "SELECT ind_id FROM ind_meta ORDER BY ROWID"
-  )$ind_id
+    "SELECT id_ind FROM ind_meta ORDER BY ROWID"
+  )$id_ind
 
   # Create temporary data frame
   update_df <- data.frame(
-    ind_id = ind_ids,
+    id_ind = ind_ids,
     new_value = values,
     stringsAsFactors = FALSE
   )
@@ -311,7 +323,7 @@ update_column_vector <- function(conn, field_name, values, db_type) {
     "UPDATE ind_meta ",
     "SET ", field_name, " = temp.new_value ",
     "FROM ", temp_table, " AS temp ",
-    "WHERE ind_meta.ind_id = temp.ind_id"
+    "WHERE ind_meta.id_ind = temp.id_ind"
   )
 
   DBI::dbExecute(conn, update_query)

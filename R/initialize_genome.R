@@ -202,10 +202,10 @@ initialize_genome <- function(pop_name,
   DBI::dbWriteTable(db_conn, "genome_meta", genome_meta, overwrite = TRUE)
 
   # Create empty genome_haplotype table
-  # Structure: ind_id, parent_origin (1 or 2), then one column per locus
+  # Structure: id_ind, parent_origin (1 or 2), then one column per locus
   hap_cols <- paste0("locus_", seq_len(n_loci))
   hap_schema <- paste(
-    "ind_id VARCHAR,",
+    "id_ind VARCHAR,",
     "parent_origin INTEGER,",
     paste(hap_cols, "INTEGER", collapse = ", ")
   )
@@ -216,9 +216,9 @@ initialize_genome <- function(pop_name,
   )
 
   # Create empty genome_genotype table
-  # Structure: ind_id, then one column per locus with genotype (0/1/2)
+  # Structure: id_ind, then one column per locus with genotype (0/1/2)
   geno_schema <- paste(
-    "ind_id VARCHAR,",
+    "id_ind VARCHAR,",
     paste(hap_cols, "INTEGER", collapse = ", ")
   )
 

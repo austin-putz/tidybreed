@@ -22,12 +22,12 @@ test_that("add_founders creates ind_meta table with correct structure", {
   # Check structure
   expect_equal(nrow(ind_meta), 30)
   expect_equal(ncol(ind_meta), 5)
-  expect_true(all(c("ind_id", "parent_1", "parent_2", "line", "sex") %in% colnames(ind_meta)))
+  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line", "sex") %in% colnames(ind_meta)))
 
   # Check data types
-  expect_type(ind_meta$ind_id, "character")
-  expect_type(ind_meta$parent_1, "character")
-  expect_type(ind_meta$parent_2, "character")
+  expect_type(ind_meta$id_ind, "character")
+  expect_type(ind_meta$id_parent_1, "character")
+  expect_type(ind_meta$id_parent_2, "character")
   expect_type(ind_meta$line, "character")
   expect_type(ind_meta$sex, "character")
 
@@ -51,7 +51,7 @@ test_that("add_founders correctly assigns IDs and sex", {
 
   # Check IDs
   expected_ids <- paste0("A-", 1:15)
-  expect_equal(ind_meta$ind_id, expected_ids)
+  expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check line
   expect_true(all(ind_meta$line == "A"))
@@ -63,8 +63,8 @@ test_that("add_founders correctly assigns IDs and sex", {
   expect_equal(ind_meta$sex[6:15], rep("F", 10))
 
   # Check parents are NULL
-  expect_true(all(is.na(ind_meta$parent_1)))
-  expect_true(all(is.na(ind_meta$parent_2)))
+  expect_true(all(is.na(ind_meta$id_parent_1)))
+  expect_true(all(is.na(ind_meta$id_parent_2)))
 
   close_pop(pop)
 })
@@ -87,9 +87,9 @@ test_that("add_founders creates correct genome_haplotype table", {
   # Check 2 rows per individual
   expect_equal(nrow(haps), 20)  # 10 individuals × 2
 
-  # Check structure: ind_id, parent_origin, locus_1, ..., locus_50
-  expect_equal(ncol(haps), 52)  # ind_id + parent_origin + 50 loci
-  expect_true("ind_id" %in% colnames(haps))
+  # Check structure: id_ind, parent_origin, locus_1, ..., locus_50
+  expect_equal(ncol(haps), 52)  # id_ind + parent_origin + 50 loci
+  expect_true("id_ind" %in% colnames(haps))
   expect_true("parent_origin" %in% colnames(haps))
 
   # Check locus columns exist
@@ -102,7 +102,7 @@ test_that("add_founders creates correct genome_haplotype table", {
   # Check each individual has exactly 2 rows
   for (i in 1:10) {
     ind_id <- paste0("A-", i)
-    ind_haps <- haps %>% dplyr::filter(ind_id == !!ind_id)
+    ind_haps <- haps %>% dplyr::filter(id_ind == !!ind_id)
     expect_equal(nrow(ind_haps), 2)
     expect_equal(sort(ind_haps$parent_origin), c(1L, 2L))
   }
@@ -132,9 +132,9 @@ test_that("add_founders creates correct genome_genotype table", {
   # Check 1 row per individual
   expect_equal(nrow(genos), 10)
 
-  # Check structure: ind_id, locus_1, ..., locus_50
-  expect_equal(ncol(genos), 51)  # ind_id + 50 loci
-  expect_true("ind_id" %in% colnames(genos))
+  # Check structure: id_ind, locus_1, ..., locus_50
+  expect_equal(ncol(genos), 51)  # id_ind + 50 loci
+  expect_true("id_ind" %in% colnames(genos))
 
   # Check locus columns exist
   locus_cols <- paste0("locus_", 1:50)
@@ -167,8 +167,8 @@ test_that("genotypes equal sum of haplotypes", {
   for (i in 1:10) {
     ind_id <- paste0("A-", i)
 
-    hap_rows <- haps %>% dplyr::filter(ind_id == !!ind_id)
-    geno_row <- genos %>% dplyr::filter(ind_id == !!ind_id)
+    hap_rows <- haps %>% dplyr::filter(id_ind == !!ind_id)
+    geno_row <- genos %>% dplyr::filter(id_ind == !!ind_id)
 
     # Check each locus
     for (j in 1:50) {
@@ -210,18 +210,18 @@ test_that("add_founders works with multiple lines", {
   # Check line A IDs
   line_a <- ind_meta %>% dplyr::filter(line == "A")
   expect_equal(nrow(line_a), 10)
-  expect_equal(line_a$ind_id, paste0("A-", 1:10))
+  expect_equal(line_a$id_ind, paste0("A-", 1:10))
 
   # Check line B IDs
   line_b <- ind_meta %>% dplyr::filter(line == "B")
   expect_equal(nrow(line_b), 10)
-  expect_equal(line_b$ind_id, paste0("B-", 1:10))
+  expect_equal(line_b$id_ind, paste0("B-", 1:10))
 
   # Check sex assignment
-  expect_equal(sum(pop_a$sex == "M"), 5)
-  expect_equal(sum(pop_a$sex == "F"), 5)
-  expect_equal(sum(pop_b$sex == "M"), 3)
-  expect_equal(sum(pop_b$sex == "F"), 7)
+  expect_equal(sum(line_a$sex == "M"), 5)
+  expect_equal(sum(line_a$sex == "F"), 5)
+  expect_equal(sum(line_b$sex == "M"), 3)
+  expect_equal(sum(line_b$sex == "F"), 7)
 
   close_pop(pop)
 })
@@ -250,7 +250,7 @@ test_that("sequential additions to same line continue numbering", {
 
   # Check IDs are sequential
   expected_ids <- paste0("A-", 1:15)
-  expect_equal(ind_meta$ind_id, expected_ids)
+  expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check all belong to line A
   expect_true(all(ind_meta$line == "A"))
@@ -325,8 +325,7 @@ test_that("add_founders errors if founder_haplotypes doesn't exist", {
 
 test_that("add_founders errors if pop not valid tidybreed_pop", {
   expect_error(
-    add_founders(list(), n_males = 5, n_females = 5, line_name = "A"),
-    NA  # Will fail stopifnot check
+    add_founders(list(), n_males = 5, n_females = 5, line_name = "A")
   )
 })
 
@@ -425,7 +424,7 @@ test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   expect_equal(nrow(ind_meta), 110)
-  expect_true(all(c("ind_id", "parent_1", "parent_2", "line", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
+  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
 
   # Check custom metadata
   expect_true(all(ind_meta$gen == 0))
