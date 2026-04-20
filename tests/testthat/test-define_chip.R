@@ -1,6 +1,6 @@
 test_that("define_chip works with random selection", {
   pop <- initialize_genome(
-    pop_name = "test_chip_random",
+    pop_chip_name = "test_chip_random",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -8,7 +8,7 @@ test_that("define_chip works with random selection", {
   )
 
   # Define chip with random selection
-  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
+  pop <- define_chip(pop, chip_name = "50k", n = 500, method = "random")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -27,7 +27,7 @@ test_that("define_chip works with random selection", {
 
 test_that("define_chip works with even spacing", {
   pop <- initialize_genome(
-    pop_name = "test_chip_even",
+    pop_chip_name = "test_chip_even",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -35,7 +35,7 @@ test_that("define_chip works with even spacing", {
   )
 
   # Define chip with even spacing
-  pop <- define_chip(pop, name = "HD", n = 100, method = "even")
+  pop <- define_chip(pop, chip_name = "HD", n = 100, method = "even")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -55,7 +55,7 @@ test_that("define_chip works with even spacing", {
 
 test_that("define_chip works with chromosome_even spacing", {
   pop <- initialize_genome(
-    pop_name = "test_chip_chreve",
+    pop_chip_name = "test_chip_chreve",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -63,7 +63,7 @@ test_that("define_chip works with chromosome_even spacing", {
   )
 
   # Define chip with chromosome-even spacing
-  pop <- define_chip(pop, name = "10k", n = 500, method = "chromosome_even")
+  pop <- define_chip(pop, chip_name = "10k", n = 500, method = "chromosome_even")
 
   # Check column exists
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -92,7 +92,7 @@ test_that("define_chip works with chromosome_even spacing", {
 
 test_that("define_chip works with locus IDs", {
   pop <- initialize_genome(
-    pop_name = "test_chip_ids",
+    pop_chip_name = "test_chip_ids",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -103,7 +103,7 @@ test_that("define_chip works with locus IDs", {
   selected_ids <- c(1, 10, 50, 100, 200, 500, 1000)
 
   # Define chip
-  pop <- define_chip(pop, name = "custom", locus_ids = selected_ids)
+  pop <- define_chip(pop, chip_name = "custom", locus_ids = selected_ids)
 
   # Check selected loci
   result <- get_table(pop, "genome_meta") %>%
@@ -120,7 +120,7 @@ test_that("define_chip works with locus IDs", {
 
 test_that("define_chip works with locus names", {
   pop <- initialize_genome(
-    pop_name = "test_chip_names",
+    pop_chip_name = "test_chip_names",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -131,7 +131,7 @@ test_that("define_chip works with locus names", {
   selected_names <- c("Locus_1", "Locus_10", "Locus_50", "Locus_100")
 
   # Define chip
-  pop <- define_chip(pop, name = "manifest", locus_names = selected_names)
+  pop <- define_chip(pop, chip_name = "manifest", locus_names = selected_names)
 
   # Check selected loci
   result <- get_table(pop, "genome_meta") %>%
@@ -148,7 +148,7 @@ test_that("define_chip works with locus names", {
 
 test_that("define_chip works with locus_tf logical vector", {
   pop <- initialize_genome(
-    pop_name = "test_chip_tf",
+    pop_chip_name = "test_chip_tf",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -156,14 +156,14 @@ test_that("define_chip works with locus_tf logical vector", {
   )
 
   # Define a 50k chip first
-  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
+  pop <- define_chip(pop, chip_name = "50k", n = 500, method = "random")
 
   # Pull the logical vector for the 50k chip
   chip_tf <- get_table(pop, "genome_meta") %>%
     dplyr::pull(is_50k)
 
   # Define complement chip using !chip_tf
-  pop <- define_chip(pop, name = "non50k", locus_tf = !chip_tf)
+  pop <- define_chip(pop, chip_name = "non50k", locus_tf = !chip_tf)
 
   result <- get_table(pop, "genome_meta") %>%
     dplyr::select(is_50k, is_non50k) %>%
@@ -179,7 +179,7 @@ test_that("define_chip works with locus_tf logical vector", {
 
 test_that("define_chip errors with non-logical locus_tf", {
   pop <- initialize_genome(
-    pop_name = "test_chip_tf_bad_type",
+    pop_chip_name = "test_chip_tf_bad_type",
     n_loci = 100,
     n_chr = 5,
     chr_len_Mb = 100,
@@ -187,7 +187,7 @@ test_that("define_chip errors with non-logical locus_tf", {
   )
 
   expect_error(
-    define_chip(pop, name = "bad", locus_tf = 1:100),
+    define_chip(pop, chip_name = "bad", locus_tf = 1:100),
     "locus_tf must be a logical vector"
   )
 
@@ -197,7 +197,7 @@ test_that("define_chip errors with non-logical locus_tf", {
 
 test_that("define_chip errors with wrong-length locus_tf", {
   pop <- initialize_genome(
-    pop_name = "test_chip_tf_bad_len",
+    pop_chip_name = "test_chip_tf_bad_len",
     n_loci = 100,
     n_chr = 5,
     chr_len_Mb = 100,
@@ -205,7 +205,7 @@ test_that("define_chip errors with wrong-length locus_tf", {
   )
 
   expect_error(
-    define_chip(pop, name = "bad", locus_tf = rep(TRUE, 50)),
+    define_chip(pop, chip_name = "bad", locus_tf = rep(TRUE, 50)),
     "locus_tf length"
   )
 
@@ -215,7 +215,7 @@ test_that("define_chip errors with wrong-length locus_tf", {
 
 test_that("define_chip respects custom column name", {
   pop <- initialize_genome(
-    pop_name = "test_chip_colname",
+    pop_chip_name = "test_chip_colname",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -225,9 +225,9 @@ test_that("define_chip respects custom column name", {
   # Define chip with custom column name
   pop <- define_chip(
     pop,
-    name = "bovine_50k",
+    chip_name = "bovine_50k",
     n = 500,
-    col_name = "SNP_50k"
+    col_chip_name = "SNP_50k"
   )
 
   # Check custom column name exists
@@ -241,7 +241,7 @@ test_that("define_chip respects custom column name", {
 
 test_that("define_chip can define multiple chips", {
   pop <- initialize_genome(
-    pop_name = "test_chip_multi",
+    pop_chip_name = "test_chip_multi",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -250,8 +250,8 @@ test_that("define_chip can define multiple chips", {
 
   # Define multiple chips
   pop <- pop %>%
-    define_chip(name = "50k", n = 500, method = "random") %>%
-    define_chip(name = "HD", n = 900, method = "even")
+    define_chip(chip_name = "50k", n = 500, method = "random") %>%
+    define_chip(chip_name = "HD", n = 900, method = "even")
 
   # Check both columns exist
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
@@ -272,7 +272,7 @@ test_that("define_chip can define multiple chips", {
 
 test_that("define_chip errors with no selection method", {
   pop <- initialize_genome(
-    pop_name = "test_chip_nomethod",
+    pop_chip_name = "test_chip_nomethod",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -281,7 +281,7 @@ test_that("define_chip errors with no selection method", {
 
   # No selection method specified
   expect_error(
-    define_chip(pop, name = "50k"),
+    define_chip(pop, chip_name = "50k"),
     "Must specify one selection method: n, locus_tf, locus_ids, or locus_names"
   )
 
@@ -291,7 +291,7 @@ test_that("define_chip errors with no selection method", {
 
 test_that("define_chip errors with multiple selection methods", {
   pop <- initialize_genome(
-    pop_name = "test_chip_multimethod",
+    pop_chip_name = "test_chip_multimethod",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -300,7 +300,7 @@ test_that("define_chip errors with multiple selection methods", {
 
   # Multiple selection methods
   expect_error(
-    define_chip(pop, name = "50k", n = 500, locus_ids = c(1, 2, 3)),
+    define_chip(pop, chip_name = "50k", n = 500, locus_ids = c(1, 2, 3)),
     "Cannot specify multiple selection methods"
   )
 
@@ -310,7 +310,7 @@ test_that("define_chip errors with multiple selection methods", {
 
 test_that("define_chip errors with invalid method", {
   pop <- initialize_genome(
-    pop_name = "test_chip_badmethod",
+    pop_chip_name = "test_chip_badmethod",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -319,7 +319,7 @@ test_that("define_chip errors with invalid method", {
 
   # Invalid method
   expect_error(
-    define_chip(pop, name = "50k", n = 500, method = "bad_method"),
+    define_chip(pop, chip_name = "50k", n = 500, method = "bad_method"),
     "Invalid method"
   )
 
@@ -329,7 +329,7 @@ test_that("define_chip errors with invalid method", {
 
 test_that("define_chip errors when n exceeds total loci", {
   pop <- initialize_genome(
-    pop_name = "test_chip_toomany",
+    pop_chip_name = "test_chip_toomany",
     n_loci = 100,
     n_chr = 5,
     chr_len_Mb = 100,
@@ -338,7 +338,7 @@ test_that("define_chip errors when n exceeds total loci", {
 
   # n exceeds total loci
   expect_error(
-    define_chip(pop, name = "50k", n = 500),
+    define_chip(pop, chip_name = "50k", n = 500),
     "exceeds total loci"
   )
 
@@ -348,7 +348,7 @@ test_that("define_chip errors when n exceeds total loci", {
 
 test_that("define_chip errors with invalid locus IDs", {
   pop <- initialize_genome(
-    pop_name = "test_chip_badids",
+    pop_chip_name = "test_chip_badids",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -357,7 +357,7 @@ test_that("define_chip errors with invalid locus IDs", {
 
   # Invalid locus IDs
   expect_error(
-    define_chip(pop, name = "custom", locus_ids = c(1, 2, 9999)),
+    define_chip(pop, chip_name = "custom", locus_ids = c(1, 2, 9999)),
     "Invalid locus_ids"
   )
 
@@ -367,7 +367,7 @@ test_that("define_chip errors with invalid locus IDs", {
 
 test_that("define_chip errors with invalid locus names", {
   pop <- initialize_genome(
-    pop_name = "test_chip_badnames",
+    pop_chip_name = "test_chip_badnames",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -376,7 +376,7 @@ test_that("define_chip errors with invalid locus names", {
 
   # Invalid locus names
   expect_error(
-    define_chip(pop, name = "custom", locus_names = c("Locus_1", "BadName")),
+    define_chip(pop, chip_name = "custom", locus_names = c("Locus_1", "BadName")),
     "Invalid locus_names"
   )
 
@@ -386,7 +386,7 @@ test_that("define_chip errors with invalid locus names", {
 
 test_that("define_chip integration: chip + effects", {
   pop <- initialize_genome(
-    pop_name = "test_chip_integration",
+    pop_chip_name = "test_chip_integration",
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
@@ -394,7 +394,7 @@ test_that("define_chip integration: chip + effects", {
   )
 
   # Define chip
-  pop <- define_chip(pop, name = "50k", n = 500, method = "random")
+  pop <- define_chip(pop, chip_name = "50k", n = 500, method = "random")
 
   # Get genome metadata
   genome <- get_table(pop, "genome_meta") %>% dplyr::collect()

@@ -1,0 +1,314 @@
+#' Generate phenotype records for a subset of individuals
+#'
+#' @description
+#' Simulates phenotype values for one or more traits and writes them to
+#' `ind_phenotype`. Also computes and stores the underlying true breeding
+#' value (TBV) per individual per trait in `ind_tbv`.
+#'
+#' **Model** (per trait, on the liability / continuous scale):
+#' \preformatted{
+#'   y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+#' }
+#'
+#' * `mean` comes from `trait_meta`.
+#' * Fixed and random shifts come from `trait_effects` rows.
+#' * `TBV_i` = sum over QTL of `add_{trait}` * genotype dose (or haplotype
+#'   dose for imprinted traits).
+#' * `e_i` is residual: drawn from `MVN(0, R)` across traits when a residual
+#'   covariance matrix is stored (see [set_residual_cov()]) and multiple
+#'   traits share the same subset; otherwise drawn independently.
+#'
+#' Trait-type specific output:
+#' * `"continuous"`: liability written verbatim.
+#' * `"count"`: liability rounded and clipped to `[min_value, max_value]`.
+#' * `"binary"`: 0/1 via quantile threshold at `1 - prevalence`.
+#' * `"categorical"`: integer level via `thresholds` cutpoints.
+#'
+#' **Subset selection**: if [`filter()`][filter.tidybreed_pop] has stashed a
+#' predicate on `pop`, that determines the candidate individuals; otherwise
+#' all rows in `ind_meta` are candidates. The candidate set is then
+#' intersected with `trait_meta$expressed_sex` (e.g. `"F"`-only traits skip
+#' males).
+#'
+#' **Escape hatches**:
+#' * `user_values`: skip model computation and write these values as
+#'   phenotype records for the subset. For multi-trait calls, supply a
+#'   named list keyed by trait.
+#' * `user_residual`: supply a numeric vector (or named list for multi-trait)
+#'   to override the residual draw.
+#'
+#' @param pop A `tidybreed_pop` object.
+#' @param trait Character vector of trait name(s).
+#' @param env Optional environment label stored with each record.
+#' @param rep Integer. Repetition / measurement number stored with each
+#'   record. Use for repeated-measures traits.
+#' @param date_measured Date written to each record.
+#' @param user_residual Optional override for residual draws. Numeric vector
+#'   of length `n_subset` for single trait, or a named list keyed by trait
+#'   for multi-trait.
+#' @param user_values Optional override for the full phenotype value. If
+#'   supplied, the model is not evaluated — these values are written
+#'   directly (but TBVs are still computed and stored).
+#' @param seed Optional integer for reproducibility.
+#'
+#' @return The modified `tidybreed_pop` (invisibly) with `pending_filter`
+#'   cleared.
+#'
+#' @seealso [add_trait()], [define_qtl()], [set_qtl_effects()],
+#'   [set_residual_cov()], [add_trait_covariate()], [add_tbv()]
+#'
+#' @examples
+#' \dontrun{
+#' pop <- pop |>
+#'   dplyr::filter(sex == "F", gen == 1L) |>
+#'   add_phenotype("ADG")
+#'
+#' pop <- pop |>
+#'   dplyr::filter(gen == 1L) |>
+#'   add_phenotype(c("ADG", "BW"))   # joint MVN residuals if R is stored
+#' }
+#' @export
+add_phenotype <- function(pop,
+                          trait,
+                          env           = NA_character_,
+                          rep           = 1L,
+                          date_measured = Sys.Date(),
+                          user_residual = NULL,
+                          user_values   = NULL,
+                          seed          = NULL) {
+
+  stopifnot(inherits(pop, "tidybreed_pop"))
+  validate_tidybreed_pop(pop)
+  stopifnot(is.character(trait), length(trait) >= 1)
+  lapply(trait, validate_sql_identifier, what = "trait name")
+
+  if (!is.null(seed)) set.seed(seed)
+
+  # 1. Resolve the pending filter (if any)
+  resolved <- resolve_pending_filter(pop)
+  pop <- resolved$pop
+  subset_ids <- resolved$ids
+
+  # 2. Pull candidate ind_meta rows (push filter down when possible)
+  if (!is.null(subset_ids)) {
+    ind_meta_subset <- get_table(pop, "ind_meta") |>
+      dplyr::filter(.data$id_ind %in% !!subset_ids) |>
+      dplyr::collect()
+  } else {
+    ind_meta_subset <- dplyr::collect(get_table(pop, "ind_meta"))
+  }
+  if (nrow(ind_meta_subset) == 0) {
+    warning("No individuals matched the filter; no phenotypes generated.",
+            call. = FALSE)
+    return(invisible(pop))
+  }
+
+  # 3. Validate each trait and collect metadata
+  meta_rows <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT * FROM trait_meta WHERE trait_name IN (",
+           paste0("'", trait, "'", collapse = ", "), ")")
+  )
+  missing_t <- setdiff(trait, meta_rows$trait_name)
+  if (length(missing_t) > 0) {
+    stop("Traits not found: ", paste(missing_t, collapse = ", "),
+         call. = FALSE)
+  }
+  meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
+
+  genome_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
+  for (t in trait) {
+    if (!paste0("is_QTL_", t) %in% genome_cols) {
+      stop("QTL column 'is_QTL_", t, "' not found. Call define_qtl('", t,
+           "', ...) first.", call. = FALSE)
+    }
+    if (!paste0("add_", t) %in% genome_cols) {
+      stop("Additive-effect column 'add_", t, "' not found. Call ",
+           "set_qtl_effects('", t, "', ...) first.", call. = FALSE)
+    }
+  }
+
+  # 4. Apply sex filter (intersect subset with expressed_sex)
+  # Record per-trait subset (may differ because of sex-limited traits).
+  subset_by_trait <- lapply(seq_len(nrow(meta_rows)), function(i) {
+    ex_sex <- meta_rows$expressed_sex[i]
+    if (ex_sex == "both") return(ind_meta_subset)
+    ind_meta_subset[ind_meta_subset$sex == ex_sex, , drop = FALSE]
+  })
+  names(subset_by_trait) <- trait
+
+  # 5. Pull genome data needed for TBV. Only push a subset filter to DuckDB
+  #    when the user actually filtered — a 1-million-wide IN() list for the
+  #    full population is slower than a plain SELECT *.
+  genome <- dplyr::collect(get_table(pop, "genome_meta"))
+  geno_mat_full <- get_genotype_matrix(pop, subset_ids = subset_ids)
+
+  # 6. Compute TBV per trait for each trait's subset + store in ind_tbv
+  tbv_by_trait <- list()
+  for (t in trait) {
+    m <- meta_rows[meta_rows$trait_name == t, ]
+    ids_t <- subset_by_trait[[t]]$id_ind
+    if (length(ids_t) == 0) {
+      tbv_by_trait[[t]] <- numeric(0)
+      next
+    }
+    a <- genome[[paste0("add_", t)]]
+    a[is.na(a)] <- 0
+
+    if (m$expressed_parent == "both") {
+      rows_idx <- match(ids_t, rownames(geno_mat_full))
+      tbv <- as.numeric(geno_mat_full[rows_idx, , drop = FALSE] %*% a)
+    } else {
+      parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
+      hap_mat <- get_haplotype_matrix(pop, parent_origin, ids_t)
+      tbv <- as.numeric(hap_mat %*% a)
+    }
+    tbv_by_trait[[t]] <- stats::setNames(tbv, ids_t)
+
+    tbv_df <- tibble::tibble(
+      id_ind     = ids_t,
+      trait_name = t,
+      tbv        = tbv,
+      date_calc  = as.Date(date_measured)
+    )
+    upsert_ind_tbv(pop, tbv_df)
+  }
+
+  # 7. If user_values supplied, short-circuit the model
+  if (!is.null(user_values)) {
+    write_user_phenotype_values(pop, trait, subset_by_trait, user_values,
+                                env, rep, date_measured)
+    return(invisible(pop))
+  }
+
+  # 8. Joint residuals if all traits share the same subset + R is stored
+  joint_resid <- NULL
+  if (length(trait) >= 2 && is.null(user_residual)) {
+    subset_ids_list <- lapply(subset_by_trait, function(df) sort(df$id_ind))
+    all_equal <- length(unique(subset_ids_list)) == 1
+    if (all_equal) {
+      R_mat <- load_residual_cov(pop, trait)
+      if (!is.null(R_mat)) {
+        n_common <- length(subset_ids_list[[1]])
+        var_vec <- stats::setNames(meta_rows$residual_var, meta_rows$trait_name)
+        draws <- sample_residuals(n_common, var_vec, R = R_mat)
+        rownames(draws) <- subset_ids_list[[1]]
+        joint_resid <- draws
+      }
+    }
+  }
+
+  # 9. Per-trait phenotype generation
+  for (t_idx in seq_along(trait)) {
+    t <- trait[t_idx]
+    m <- meta_rows[meta_rows$trait_name == t, ]
+    subset_df <- subset_by_trait[[t]]
+    ids_t <- subset_df$id_ind
+    n_ind <- length(ids_t)
+    if (n_ind == 0) next
+
+    # Covariate (fixed + random) contribution
+    covariate_contrib <- compute_covariate_contribution(pop, t, subset_df)
+
+    # Residual
+    if (!is.null(user_residual)) {
+      resid <- if (is.list(user_residual)) user_residual[[t]] else user_residual
+      if (length(resid) != n_ind) {
+        stop("user_residual length for trait '", t, "' must equal ",
+             n_ind, ".", call. = FALSE)
+      }
+    } else if (!is.null(joint_resid)) {
+      resid <- joint_resid[ids_t, t]
+    } else {
+      resid <- stats::rnorm(n_ind, sd = sqrt(m$residual_var))
+    }
+
+    tbv <- tbv_by_trait[[t]]
+    liability <- m$mean + covariate_contrib + as.numeric(tbv) + resid
+
+    value <- switch(
+      m$trait_type,
+      continuous  = liability,
+      count       = as.numeric(clip_count(liability, m$min_value, m$max_value)),
+      binary      = as.numeric(liability_to_binary(liability, m$prevalence)),
+      categorical = as.numeric(liability_to_categorical(
+                       liability,
+                       as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]]))),
+      liability
+    )
+
+    records <- tibble::tibble(
+      id_record     = next_record_ids(pop, t, n_ind),
+      id_ind        = ids_t,
+      trait_name    = t,
+      value         = as.numeric(value),
+      env           = as.character(env),
+      rep           = as.integer(rep),
+      date_measured = as.Date(date_measured)
+    )
+    DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
+    message("Wrote ", n_ind, " phenotype records for trait '", t, "'.")
+  }
+
+  invisible(pop)
+}
+
+
+#' Write user-supplied phenotype values verbatim
+#'
+#' @keywords internal
+write_user_phenotype_values <- function(pop, trait, subset_by_trait,
+                                        user_values, env, rep, date_measured) {
+  if (length(trait) == 1 && !is.list(user_values)) {
+    user_values <- stats::setNames(list(user_values), trait)
+  }
+  for (t in trait) {
+    vals <- user_values[[t]]
+    if (is.null(vals)) {
+      stop("user_values missing entry for trait '", t, "'.", call. = FALSE)
+    }
+    ids_t <- subset_by_trait[[t]]$id_ind
+
+    # If the user supplies a named vector, honour those ids
+    if (!is.null(names(vals))) {
+      ids_t <- names(vals)
+      vals <- unname(vals)
+    } else if (length(vals) != length(ids_t)) {
+      stop("user_values for '", t, "' must have length equal to subset (",
+           length(ids_t), ") or be a named vector.", call. = FALSE)
+    }
+    if (length(vals) == 0) next
+
+    records <- tibble::tibble(
+      id_record     = next_record_ids(pop, t, length(vals)),
+      id_ind        = ids_t,
+      trait_name    = t,
+      value         = as.numeric(vals),
+      env           = as.character(env),
+      rep           = as.integer(rep),
+      date_measured = as.Date(date_measured)
+    )
+    DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
+    message("Wrote ", nrow(records), " user-supplied phenotype records for '",
+            t, "'.")
+  }
+  invisible(NULL)
+}
+
+
+#' Upsert TBV rows (delete existing by id_ind + trait, then insert)
+#'
+#' @keywords internal
+upsert_ind_tbv <- function(pop, tbv_df) {
+  if (nrow(tbv_df) == 0) return(invisible(NULL))
+  trait <- unique(tbv_df$trait_name)
+  stopifnot(length(trait) == 1)
+  ids_sql <- paste0("'", tbv_df$id_ind, "'", collapse = ", ")
+  DBI::dbExecute(
+    pop$db_conn,
+    paste0("DELETE FROM ind_tbv WHERE trait_name = '", trait,
+           "' AND id_ind IN (", ids_sql, ")")
+  )
+  DBI::dbWriteTable(pop$db_conn, "ind_tbv", tbv_df, append = TRUE)
+  invisible(NULL)
+}

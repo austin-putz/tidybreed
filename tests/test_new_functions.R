@@ -20,9 +20,9 @@ pop <- initialize_genome(
 # Define SNP chips
 cat("2. Defining SNP chips...\n")
 pop <- pop %>%
-  define_chip(name = "50k", n_snp = 500, method = "random") %>%
-  define_chip(name = "HD", n_snp = 900, method = "even") %>%
-  define_chip(name = "10k", n_snp = 100, method = "chromosome_even")
+  define_chip(chip_name = "50k", n_snp = 500, method = "random") %>%
+  define_chip(chip_name = "HD", n_snp = 900, method = "even") %>%
+  define_chip(chip_name = "10k", n_snp = 100, method = "chromosome_even")
 
 # Check chips were created
 cat("3. Checking chip columns...\n")

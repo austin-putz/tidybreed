@@ -11,7 +11,7 @@
 #' - **By name** (`locus_names`): Select specific loci by their locus_name values
 #'
 #' @param pop A `tidybreed_pop` object
-#' @param name Character. Name of the SNP chip (used in messages and default column name)
+#' @param chip_name Character. Name of the SNP chip (used in messages and default column name)
 #' @param n Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)
 #' @param locus_tf Logical vector. TRUE/FALSE membership vector with one element per locus, in the
 #'   same order as `genome_meta`. Useful when you have already computed membership (e.g., pass
@@ -24,7 +24,7 @@
 #'   - `"even"`: Evenly space SNPs across entire genome
 #'   - `"chromosome_even"`: Distribute SNPs proportionally across chromosomes
 #' @param col_name Character. Column name to create in genome_meta.
-#'   Default: `paste0("is_", name)` (e.g., "50k" → "is_50k")
+#'   Default: `paste0("is_", chip_name)` (e.g., "50k" → "is_50k")
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'   **Important:** Assign the result back to update your object: `pop <- define_chip(pop, ...)`
@@ -81,34 +81,34 @@
 #'
 #' # Random selection of 500 SNPs
 #' pop <- pop %>%
-#'   define_chip(name = "50k", n = 500, method = "random")
+#'   define_chip(chip_name = "50k", n = 500, method = "random")
 #'
 #' # Evenly spaced SNPs
 #' pop <- pop %>%
-#'   define_chip(name = "HD", n = 900, method = "even")
+#'   define_chip(chip_name = "HD", n = 900, method = "even")
 #'
 #' # Proportional distribution across chromosomes
 #' pop <- pop %>%
-#'   define_chip(name = "10k", n = 100, method = "chromosome_even")
+#'   define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
 #'
 #' # Logical vector — complement of an existing chip
 #' chip_tf <- get_table(pop, "genome_meta") %>%
 #'   dplyr::pull(is_50k)
 #' pop <- pop %>%
-#'   define_chip(name = "non50k", locus_tf = !chip_tf)
+#'   define_chip(chip_name = "non50k", locus_tf = !chip_tf)
 #'
 #' # Specific loci by ID
 #' pop <- pop %>%
-#'   define_chip(name = "custom", locus_ids = c(1, 10, 50, 100))
+#'   define_chip(chip_name = "custom", locus_ids = c(1, 10, 50, 100))
 #'
 #' # Specific loci by name (e.g., from external chip manifest)
 #' chip_manifest <- c("Locus_1", "Locus_10", "Locus_50")
 #' pop <- pop %>%
-#'   define_chip(name = "custom", locus_names = chip_manifest)
+#'   define_chip(chip_name = "custom", locus_names = chip_manifest)
 #'
 #' # Custom column name
 #' pop <- pop %>%
-#'   define_chip(name = "bovine_50k", n = 500, col_name = "SNP_50k")
+#'   define_chip(chip_name = "bovine_50k", n = 500, col_name = "SNP_50k")
 #'
 #' # View chip definition
 #' get_table(pop, "genome_meta") %>%
@@ -117,13 +117,13 @@
 #'   collect()
 #' }
 define_chip <- function(pop,
-                        name,
+                        chip_name,
                         n = NULL,
                         locus_tf = NULL,
                         locus_ids = NULL,
                         locus_names = NULL,
                         method = "random",
-                        col_name = paste0("is_", name)) {
+                        col_name = paste0("is_", chip_name)) {
 
   # ============================================================================
   # 1. Validate inputs
@@ -133,8 +133,8 @@ define_chip <- function(pop,
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
 
-  # Validate name
-  stopifnot(is.character(name), length(name) == 1, nchar(name) > 0)
+  # Validate chip_name
+  stopifnot(is.character(chip_name), length(chip_name) == 1, nchar(chip_name) > 0)
 
   # Validate exactly one selection method provided
   methods_provided <- sum(
@@ -205,7 +205,7 @@ define_chip <- function(pop,
     chip_indicator <- select_by_n(genome, n, method)
     n_selected <- sum(chip_indicator)
     message(
-      "Defined chip '", name, "' with ", n_selected, " SNPs ",
+      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
       "(method: ", method, ")"
     )
 
@@ -223,14 +223,14 @@ define_chip <- function(pop,
     }
     chip_indicator <- locus_tf
     n_selected <- sum(chip_indicator)
-    message("Defined chip '", name, "' with ", n_selected, " SNPs (by locus_tf)")
+    message("Defined chip '", chip_name, "' with ", n_selected, " SNPs (by locus_tf)")
 
   } else if (!is.null(locus_ids)) {
     # Selection by locus IDs
     chip_indicator <- select_by_locus_ids(genome, locus_ids)
     n_selected <- sum(chip_indicator)
     message(
-      "Defined chip '", name, "' with ", n_selected, " SNPs ",
+      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
       "(by locus IDs)"
     )
 
@@ -239,7 +239,7 @@ define_chip <- function(pop,
     chip_indicator <- select_by_locus_names(genome, locus_names)
     n_selected <- sum(chip_indicator)
     message(
-      "Defined chip '", name, "' with ", n_selected, " SNPs ",
+      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
       "(by locus names)"
     )
   }

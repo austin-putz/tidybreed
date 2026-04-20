@@ -131,16 +131,16 @@ pop <- pop %>%
 
 # Evenly spaced low-density chip
 pop <- pop |>
-  define_chip(name = "LowDensity", n = 30, method = "even")
+  define_chip(chip_name = "LowDensity", n = 30, method = "even")
 
 # Denser chip proportional to chromosome length
 pop <- pop |>
-  define_chip(name = "HighDensity", n = 90, method = "random")
+  define_chip(chip_name = "HighDensity", n = 90, method = "random")
 
 # Logical vector — define a chip as the complement of an existing one
 ld_tf <- get_table(pop, "genome_meta") |> dplyr::pull(is_LowDensity)
 pop <- pop |>
-  define_chip(name = "NonLD", locus_tf = !ld_tf)
+  define_chip(chip_name = "NonLD", locus_tf = !ld_tf)
 ```
 
 By default, this adds `is_<chip_name>` to the `genome_meta` table in the database.
@@ -185,7 +185,7 @@ get_table(pop, "genome_meta") |>
 # Define trait architecture (QTL + residual variance)
 pop <- pop |>
   add_trait(
-    name           = "ADG",
+    trait_name     = "ADG",
     n_qtl          = 20,
     target_add_var = 1.0,
     res_var        = 0.5

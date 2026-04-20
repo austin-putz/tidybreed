@@ -6,19 +6,19 @@
 \usage{
 define_chip(
   pop,
-  name,
+  chip_name,
   n = NULL,
   locus_tf = NULL,
   locus_ids = NULL,
   locus_names = NULL,
   method = "random",
-  col_name = paste0("is_", name)
+  col_name = paste0("is_", chip_name)
 )
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object}
 
-\item{name}{Character. Name of the SNP chip (used in messages and default column name)}
+\item{chip_name}{Character. Name of the SNP chip (used in messages and default column name)}
 
 \item{n}{Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)}
 
@@ -39,7 +39,7 @@ n/locus_ids/locus_names.}
 }}
 
 \item{col_name}{Character. Column name to create in genome_meta.
-Default: \code{paste0("is_", name)} (e.g., "50k" → "is_50k")}
+Default: \code{paste0("is_", chip_name)} (e.g., "50k" → "is_50k")}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).
@@ -96,7 +96,7 @@ Four selection methods are supported:
 
 \strong{Column naming:}
 \itemize{
-\item Default column name is \verb{is_\{name\}} (e.g., "50k" → "is_50k")
+\item Default column name is \verb{is_\{chip_name\}} (e.g., "50k" → "is_50k")
 \item Can override with \code{col_name} parameter for custom naming
 \item Column contains logical TRUE/FALSE values
 }
@@ -119,34 +119,34 @@ pop <- initialize_genome(
 
 # Random selection of 500 SNPs
 pop <- pop \%>\%
-  define_chip(name = "50k", n = 500, method = "random")
+  define_chip(chip_name = "50k", n = 500, method = "random")
 
 # Evenly spaced SNPs
 pop <- pop \%>\%
-  define_chip(name = "HD", n = 900, method = "even")
+  define_chip(chip_name = "HD", n = 900, method = "even")
 
 # Proportional distribution across chromosomes
 pop <- pop \%>\%
-  define_chip(name = "10k", n = 100, method = "chromosome_even")
+  define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
 
 # Logical vector — complement of an existing chip
 chip_tf <- get_table(pop, "genome_meta") \%>\%
   dplyr::pull(is_50k)
 pop <- pop \%>\%
-  define_chip(name = "non50k", locus_tf = !chip_tf)
+  define_chip(chip_name = "non50k", locus_tf = !chip_tf)
 
 # Specific loci by ID
 pop <- pop \%>\%
-  define_chip(name = "custom", locus_ids = c(1, 10, 50, 100))
+  define_chip(chip_name = "custom", locus_ids = c(1, 10, 50, 100))
 
 # Specific loci by name (e.g., from external chip manifest)
 chip_manifest <- c("Locus_1", "Locus_10", "Locus_50")
 pop <- pop \%>\%
-  define_chip(name = "custom", locus_names = chip_manifest)
+  define_chip(chip_name = "custom", locus_names = chip_manifest)
 
 # Custom column name
 pop <- pop \%>\%
-  define_chip(name = "bovine_50k", n = 500, col_name = "SNP_50k")
+  define_chip(chip_name = "bovine_50k", n = 500, col_name = "SNP_50k")
 
 # View chip definition
 get_table(pop, "genome_meta") \%>\%

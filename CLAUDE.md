@@ -85,38 +85,97 @@ Individual-level metadata. Created by `add_founders()`.
 
 **Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line`, `sex`
 
-### `ind_phenotype`
-
-Phenotypic records in long format. Populated by `add_phenotype()` (not yet implemented).
-
-We need to think through this table more before implementing. 
-
-| Column        | Type    | Notes          |
-|---------------|---------|----------------|
-| id_ind        | VARCHAR |                |
-| trait         | VARCHAR | Trait name     |
-| value         | DOUBLE  | Phenotypic value |
-| env           | VARCHAR | Optional       |
-| rep           | INTEGER | Optional       |
-| date_measured | DATE    | Optional       |
-
 ### `trait_meta`
 
-Trait genetic architecture. Populated by `add_trait()` (not yet implemented).
+One row per trait. Populated by `add_trait()`.
 
-We need to think through this function and table before implementing. 
+| Column             | Type    | Notes                                                         |
+|--------------------|---------|---------------------------------------------------------------|
+| trait_name         | VARCHAR | Primary key                                                   |
+| description        | VARCHAR | Free text                                                     |
+| units              | VARCHAR | e.g. "kg"                                                     |
+| trait_type         | VARCHAR | `"continuous"` / `"count"` / `"binary"` / `"categorical"`     |
+| repeatable         | BOOLEAN | Repeated measures allowed?                                    |
+| recorded_on        | VARCHAR | `"self"` / `"dam"` / `"sire"` / `"offspring_mean"`            |
+| expressed_sex      | VARCHAR | `"both"` / `"M"` / `"F"` for sex-limited traits               |
+| expressed_parent   | VARCHAR | `"both"` / `"parent_1"` / `"parent_2"` for imprinting         |
+| mean               | DOUBLE  | Overall mean / intercept on liability scale                   |
+| target_add_var     | DOUBLE  | Target σ²_A (used by `set_qtl_effects()` rescaling)           |
+| residual_var       | DOUBLE  | Residual σ²_e                                                 |
+| min_value          | DOUBLE  | For count traits; clip (NA = no limit)                        |
+| max_value          | DOUBLE  | For count traits; clip                                        |
+| prevalence         | DOUBLE  | For binary traits                                             |
+| thresholds         | VARCHAR | For categorical traits; comma-separated cutpoints             |
+| index_weight       | DOUBLE  | Weight in selection index                                     |
+| economic_value     | DOUBLE  | Economic value per unit                                       |
 
-| Column      | Type    | Notes                                    |
-|-------------|---------|------------------------------------------|
-| trait_name  | VARCHAR | e.g. "ADG"                               |
-| effect_name | VARCHAR | e.g. "QTL_1", "residual"                 |
-| effect_type | VARCHAR | "QTL", "polygenic", "environmental"      |
-| level       | VARCHAR | "additive", "dominance", "epistasis"     |
-| locus_id    | INTEGER | Associated locus (NULL for residual)     |
-| true_effect | DOUBLE  | True effect size                         |
-| distribution| VARCHAR | "normal", "uniform", …                   |
-| mean        | DOUBLE  | Distribution mean in founder pop         |
-| variance    | DOUBLE  | Distribution variance in founder pop     |
+### `trait_effects`
+
+Non-additive-genetic, non-residual terms in the phenotype model (fixed and
+random effects). One row per (trait × effect).
+
+| Column        | Type    | Notes                                                    |
+|---------------|---------|----------------------------------------------------------|
+| trait_name    | VARCHAR |                                                          |
+| effect_name   | VARCHAR | e.g. "sex", "gen", "litter"                              |
+| effect_class  | VARCHAR | `"fixed"` or `"random"`                                  |
+| source_column | VARCHAR | Column in `ind_meta` used as grouping variable           |
+| distribution  | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
+| variance      | DOUBLE  | For random effects                                       |
+| levels_json   | VARCHAR | For fixed effects: JSON-like `{"M":30,"F":0}`            |
+| value         | DOUBLE  | Rarely used scalar                                       |
+
+### `trait_residual_cov`
+
+Residual covariance `R` across traits. One row per (trait_1, trait_2) pair
+including the diagonal.
+
+| Column  | Type    |
+|---------|---------|
+| trait_1 | VARCHAR |
+| trait_2 | VARCHAR |
+| cov     | DOUBLE  |
+
+### `ind_phenotype`
+
+Phenotype records in long format. Populated by `add_phenotype()`.
+
+| Column        | Type    | Notes                   |
+|---------------|---------|-------------------------|
+| id_record     | VARCHAR | Auto `{trait}-{n}`      |
+| id_ind        | VARCHAR |                         |
+| trait_name    | VARCHAR |                         |
+| value         | DOUBLE  | Phenotype value         |
+| env           | VARCHAR | Optional                |
+| rep           | INTEGER | Optional                |
+| date_measured | DATE    |                         |
+
+### `ind_tbv`
+
+True breeding values (simulation ground truth). Populated by
+`add_phenotype()` and `add_tbv()`. Composite key `(id_ind, trait_name)`.
+
+| Column     | Type    |
+|------------|---------|
+| id_ind     | VARCHAR |
+| trait_name | VARCHAR |
+| tbv        | DOUBLE  |
+| date_calc  | DATE    |
+
+### `ind_ebv`
+
+Estimated breeding values from external BLUP / GBLUP runs. Composite key
+`(id_ind, trait_name, model)`. Populated by `add_ebv()`.
+
+| Column     | Type    | Notes                          |
+|------------|---------|--------------------------------|
+| id_ind     | VARCHAR |                                |
+| trait_name | VARCHAR |                                |
+| model      | VARCHAR | User label, e.g. "ssGBLUP_v1"  |
+| ebv        | DOUBLE  |                                |
+| acc        | DOUBLE  | Optional accuracy              |
+| se         | DOUBLE  | Optional standard error        |
+| date_calc  | DATE    |                                |
 
 ## Implemented Functions (Phase 1 Complete)
 
@@ -169,55 +228,78 @@ Convenience wrapper. Marks loci as members of a named chip by writing a
 - `locus_ids` — integer vector of specific locus IDs
 - `locus_names` — character vector of specific locus names
 
-### `get_table()` / `close_pop()` / `print.tidybreed_pop()`
+### `get_table()` / `close_pop()` / `print.tidybreed_pop()` / `filter.tidybreed_pop()`
 
 `R/tidybreed_pop.R`
 
 `get_table(pop, "table_name")` returns a lazy `dplyr` tibble (`tbl()`).
 `close_pop()` safely closes the DuckDB connection.
 
-## Roadmap
-
-### Next: Trait Architecture
-
-**`add_trait()`** — creates/populates `trait_meta`:
-
-- User specifies trait name, number of QTLs, additive variance target,
-  residual variance
-- Function samples QTL loci from `genome_meta`, draws effect sizes scaled to
-  hit `target_add_var`, writes rows to `trait_meta`
-- Should also write a `BOOLEAN` column `is_QTL_{trait}` to `genome_meta` for
-  easy filtering
-
-### Next: Phenotype Simulation
-
-**`add_phenotype(trait)`** — populates `ind_phenotype`:
-
-- Reads `trait_meta` to get QTL loci and effects
-- Reads `genome_genotype` to compute true breeding value (TBV) per individual
-- Adds residual drawn from N(0, res_var)
-- Writes `ind_id`, `trait`, `value` rows to `ind_phenotype`
-- Should accept a filtered subset of individuals (via pipe) so users can
-  phenotype only e.g. females in a given generation
-
-### `filter()` Integration
-
-Users should be able to pipe `dplyr::filter()` on `ind_meta` before calling
-`add_phenotype()` or genotyping functions to restrict which animals are
-processed:
+`filter.tidybreed_pop()` is an S3 method: it stashes dplyr predicates on the
+pop object (`pop$pending_filter`) for the next `add_phenotype()` /
+`add_tbv()` call to consume. Multiple `filter()` calls stack with AND
+semantics. Non-consuming operations leave the filter intact.
 
 ```r
 pop |>
-  filter(sex == "F", gen == 1L) |>
-  add_phenotype(trait = "ADG")
+  dplyr::filter(sex == "F", gen == 1L) |>
+  add_phenotype("ADG")
 ```
+
+### `add_trait()` / `define_qtl()` / `set_qtl_effects()` / `set_qtl_effects_multi()`
+
+`R/add_trait.R`, `R/define_qtl.R`, `R/set_qtl_effects.R`
+
+- `add_trait()` — one row in `trait_meta`. Creates the six trait tables on
+  first call.
+- `define_qtl()` — mirror of `define_chip()` for QTL. Writes
+  `is_QTL_{trait}` BOOLEAN. Reuses all `chip_helpers.R` selection methods.
+- `set_qtl_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
+  (normal/gamma) with optional rescale to `target_add_var`.
+- `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
+  multiple traits via `MASS::mvrnorm`. `method = "shared"` (pleiotropy) or
+  `"union"`.
+
+### `set_residual_cov()` / `add_trait_covariate()`
+
+`R/set_residual_cov.R`, `R/add_trait_covariate.R`
+
+- `set_residual_cov()` — stores `R` across traits in `trait_residual_cov`;
+  diagonal must match `trait_meta$residual_var`.
+- `add_trait_covariate()` — appends rows to `trait_effects` for fixed
+  (`levels = c(M = 30, F = 0)`) or random (`variance`, `distribution`)
+  effects on any `ind_meta` column.
+
+### `add_phenotype()` / `add_tbv()` / `add_ebv()`
+
+`R/add_phenotype.R`, `R/add_tbv.R`, `R/add_ebv.R`
+
+- `add_phenotype()` — the workhorse. Resolves the pending filter, intersects
+  with `expressed_sex`, computes TBV (genotype × effects, or haplotype dose
+  for imprinted traits), adds fixed/random covariate contributions, samples
+  residuals (joint `MVN(0, R)` when multiple traits share the subset and
+  `R` is stored; otherwise independent). Converts liability to phenotype
+  per `trait_type`. Writes `ind_phenotype` rows and updates `ind_tbv`.
+- `add_tbv()` — TBV-only; no phenotype records.
+- `add_ebv()` — ingest external BLUP/GBLUP values into `ind_ebv`, tagged
+  with a `model` label so multiple runs can coexist.
+
+### `add_trait_simple()`
+
+`R/add_trait_simple.R`
+
+Convenience wrapper that chains `add_trait()` → `define_qtl()` →
+`set_qtl_effects()` for a single uncorrelated trait.
+
+## Roadmap
 
 ### Longer-Term
 
-- `mate()` — recombination engine, produces offspring haplotypes/genotypes
 - `select_parents()` — selection index or truncation selection
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
+- `mutate_ind_phenotype()` — user columns on `ind_phenotype`
+- Dominance and epistasis effects (currently only additive)
 
 ## Versioning Policy
 

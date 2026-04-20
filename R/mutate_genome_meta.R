@@ -159,47 +159,11 @@ mutate_genome_meta <- function(pop, ...) {
 #' @param existing_cols Character vector of existing column names
 #' @keywords internal
 validate_field_name_genome <- function(field_name, existing_cols) {
-
-  # Check it's a valid string
-  if (!is.character(field_name) || length(field_name) != 1) {
-    stop("Field name must be a single character string", call. = FALSE)
-  }
-
-  # Check for reserved columns (cannot be modified by user)
-  reserved_cols <- c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb")
-  if (field_name %in% reserved_cols) {
-    stop(
-      "Cannot modify reserved column '", field_name, "'. ",
-      "Reserved columns: ", paste(reserved_cols, collapse = ", "),
-      call. = FALSE
-    )
-  }
-
-  # Check for valid SQL identifier (alphanumeric + underscore, starts with letter)
-  if (!grepl("^[a-zA-Z][a-zA-Z0-9_]*$", field_name)) {
-    stop(
-      "Invalid field name '", field_name, "'. ",
-      "Must start with letter and contain only letters, numbers, and underscores.",
-      call. = FALSE
-    )
-  }
-
-  # Check for SQL reserved words (DuckDB specific)
-  sql_keywords <- c(
-    "SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE",
-    "CREATE", "DROP", "ALTER", "TABLE", "INDEX", "PRIMARY",
-    "KEY", "FOREIGN", "REFERENCES", "AND", "OR", "NOT", "NULL",
-    "TRUE", "FALSE", "AS", "ON", "JOIN", "LEFT", "RIGHT", "INNER"
+  validate_sql_identifier(
+    field_name,
+    what     = "field name",
+    reserved = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb")
   )
-
-  if (toupper(field_name) %in% sql_keywords) {
-    stop(
-      "Field name '", field_name, "' is a SQL reserved keyword.",
-      call. = FALSE
-    )
-  }
-
-  invisible(NULL)
 }
 
 
