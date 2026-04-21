@@ -15,7 +15,7 @@
 #' (via [mutate_ind_meta()] or as an extra column in [add_offspring()]).
 #'
 #' @param pop A `tidybreed_pop` object.
-#' @param trait Character. Name of an existing trait.
+#' @param trait_name Character. Name of an existing trait.
 #' @param effect_name Character. Label for this effect (unique within a
 #'   trait). Valid SQL identifier.
 #' @param effect_class Character. `"fixed"` or `"random"`.
@@ -45,7 +45,7 @@
 #' }
 #' @export
 add_trait_covariate <- function(pop,
-                                trait,
+                                trait_name,
                                 effect_name,
                                 effect_class  = c("fixed", "random"),
                                 source_column = NULL,
@@ -57,7 +57,7 @@ add_trait_covariate <- function(pop,
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
-  validate_sql_identifier(trait, what = "trait name")
+  validate_sql_identifier(trait_name, what = "trait name")
   validate_sql_identifier(effect_name, what = "effect name")
   effect_class <- match.arg(effect_class)
   distribution <- match.arg(distribution)
@@ -72,10 +72,10 @@ add_trait_covariate <- function(pop,
   trait_exists <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT COUNT(*) AS n FROM trait_meta WHERE trait_name = '",
-           trait, "'")
+           trait_name, "'")
   )$n
   if (trait_exists == 0) {
-    stop("Trait '", trait, "' not found.", call. = FALSE)
+    stop("Trait '", trait_name, "' not found.", call. = FALSE)
   }
 
   if (is.null(source_column) || !nzchar(source_column)) {
@@ -103,23 +103,23 @@ add_trait_covariate <- function(pop,
   existing <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT COUNT(*) AS n FROM trait_effects ",
-           "WHERE trait_name = '", trait,
+           "WHERE trait_name = '", trait_name,
            "' AND effect_name = '", effect_name, "'")
   )$n
   if (existing > 0 && !overwrite) {
-    stop("Effect '", effect_name, "' for trait '", trait,
+    stop("Effect '", effect_name, "' for trait '", trait_name,
          "' already exists. Use overwrite = TRUE.", call. = FALSE)
   }
   if (existing > 0 && overwrite) {
     DBI::dbExecute(
       pop$db_conn,
-      paste0("DELETE FROM trait_effects WHERE trait_name = '", trait,
+      paste0("DELETE FROM trait_effects WHERE trait_name = '", trait_name,
              "' AND effect_name = '", effect_name, "'")
     )
   }
 
   row <- tibble::tibble(
-    trait_name    = trait,
+    trait_name    = trait_name,
     effect_name   = effect_name,
     effect_class  = effect_class,
     source_column = source_column,
@@ -131,6 +131,6 @@ add_trait_covariate <- function(pop,
   DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)
 
   message("Added ", effect_class, " effect '", effect_name,
-          "' to trait '", trait, "'.")
+          "' to trait '", trait_name, "'.")
   invisible(pop)
 }

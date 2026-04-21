@@ -1,3 +1,21 @@
+# tidybreed 0.3.0 (2026-04-21)
+
+## New Functions
+
+* `add_genotypes(pop, chip_name)` — marks a filtered subset of animals as
+  genotyped on a named SNP chip by writing a `has_<chip_name>` BOOLEAN column
+  to `ind_meta`. Follows the same `filter()` -> action pipe pattern as
+  `add_phenotype()`. Operation is additive: animals already marked TRUE remain
+  TRUE across multiple calls. Chip must exist in `genome_meta` (via
+  `define_chip()`) before calling.
+* `extract_genotypes(pop, chip_name)` — returns a tibble of genotypes
+  (0/1/2 encoding) for animals marked as genotyped, restricted to chip loci.
+  The returned set is the intersection of animals with `has_<chip_name> == TRUE`,
+  any pending `filter()` predicates, and loci with `is_<chip_name> == TRUE`.
+  Intended for use immediately before GBLUP/GWAS evaluation.
+
+---
+
 # tidybreed 0.2.2 (2026-04-20)
 
 ## Performance
