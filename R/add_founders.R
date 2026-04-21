@@ -201,52 +201,35 @@ add_founders <- function(pop, n_males, n_females, line_name) {
   # 6. Create genome_haplotype data
   # ============================================================================
 
-  # Build haplotype data frame (2 rows per individual)
-  hap_list <- vector("list", n_founders)
+  # Interleave paternal/maternal row indices: [pat1, mat1, pat2, mat2, ...]
+  row_idx <- c(rbind(hap_indices[, 1], hap_indices[, 2]))
+  hap_matrix <- hap_data_matrix[row_idx, , drop = FALSE]
+  storage.mode(hap_matrix) <- "integer"
 
-  for (i in 1:n_founders) {
-    # Get the two haplotype indices for this individual
-    hap_idx_1 <- hap_indices[i, 1]
-    hap_idx_2 <- hap_indices[i, 2]
-
-    # Create 2-row data frame for this individual
-    hap_list[[i]] <- tibble::tibble(
-      id_ind = rep(ind_ids[i], 2),
-      parent_origin = c(1L, 2L)
-    )
-
-    # Add locus columns
-    for (j in 1:n_loci) {
-      locus_name <- paste0("locus_", j)
-      hap_list[[i]][[locus_name]] <- as.integer(c(
-        hap_data_matrix[hap_idx_1, j],
-        hap_data_matrix[hap_idx_2, j]
-      ))
-    }
-  }
-
-  # Combine all individuals into single data frame
-  genome_haplotype_df <- dplyr::bind_rows(hap_list)
+  genome_haplotype_df <- cbind(
+    data.frame(
+      id_ind        = rep(ind_ids, each = 2),
+      parent_origin = rep(c(1L, 2L), times = n_founders),
+      stringsAsFactors = FALSE
+    ),
+    as.data.frame(hap_matrix)
+  )
+  colnames(genome_haplotype_df)[3:(2 + n_loci)] <- locus_cols
 
   # ============================================================================
   # 7. Create genome_genotype data
   # ============================================================================
 
-  # Build genotype data frame (1 row per individual)
-  geno_df <- tibble::tibble(id_ind = ind_ids)
+  # Vectorized matrix addition: sum paternal + maternal haplotype per locus
+  geno_matrix <- hap_data_matrix[hap_indices[, 1], , drop = FALSE] +
+                 hap_data_matrix[hap_indices[, 2], , drop = FALSE]
+  storage.mode(geno_matrix) <- "integer"
 
-  for (j in 1:n_loci) {
-    locus_name <- paste0("locus_", j)
-
-    # Extract the two haplotypes for this locus across all individuals
-    hap1_vals <- hap_data_matrix[hap_indices[, 1], j]
-    hap2_vals <- hap_data_matrix[hap_indices[, 2], j]
-
-    # Sum to get genotype (0, 1, or 2)
-    geno_df[[locus_name]] <- as.integer(hap1_vals + hap2_vals)
-  }
-
-  genome_genotype_df <- geno_df
+  genome_genotype_df <- cbind(
+    data.frame(id_ind = ind_ids, stringsAsFactors = FALSE),
+    as.data.frame(geno_matrix)
+  )
+  colnames(genome_genotype_df)[2:(1 + n_loci)] <- locus_cols
 
   # ============================================================================
   # 8. Write data to database
@@ -261,11 +244,15 @@ add_founders <- function(pop, n_males, n_females, line_name) {
     pop$tables <- DBI::dbListTables(pop$db_conn)
   }
 
-  # Append to genome_haplotype
-  DBI::dbWriteTable(pop$db_conn, "genome_haplotype", genome_haplotype_df, append = TRUE)
+  # Append to genome_haplotype via register+INSERT (faster than dbWriteTable for wide frames)
+  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", genome_haplotype_df)
+  DBI::dbExecute(pop$db_conn, "INSERT INTO genome_haplotype SELECT * FROM __tmp_hap")
+  duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
 
   # Append to genome_genotype
-  DBI::dbWriteTable(pop$db_conn, "genome_genotype", genome_genotype_df, append = TRUE)
+  duckdb::duckdb_register(pop$db_conn, "__tmp_geno", genome_genotype_df)
+  DBI::dbExecute(pop$db_conn, "INSERT INTO genome_genotype SELECT * FROM __tmp_geno")
+  duckdb::duckdb_unregister(pop$db_conn, "__tmp_geno")
 
   # ============================================================================
   # 9. Update and return

@@ -1,3 +1,15 @@
+# tidybreed 0.2.2 (2026-04-20)
+
+## Performance
+
+- `add_founders()`: eliminated nested R loop (O(n_founders × n_loci) iterations)
+  that caused multi-minute runtimes for large genomes. Haplotype and genotype
+  frames are now built via vectorized matrix indexing and addition in C, reducing
+  frame construction from minutes to ~0.18 s regardless of genome size. Also
+  switched genome table writes to `duckdb_register` + `INSERT SELECT` for a
+  further ~2× speedup on the DB write step. Typical runtimes: 0.38 s (1k loci)
+  → 2.7 s (5k loci) → 8 s (10k loci) for 215 founders.
+
 # tidybreed 0.2.1 (2026-04-20)
 
 ## API
