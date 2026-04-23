@@ -10,7 +10,7 @@ make_pheno_pop <- function(pop_name = "ph", n_ind = 200, n_loci = 400) {
   )
   pop <- add_founders(pop, n_males = n_ind / 2, n_females = n_ind / 2,
                       line_name = "A")
-  pop <- mutate_ind_meta(pop, gen = 0L)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop
 }
 
@@ -22,8 +22,8 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
   pop <- pop |>
     add_trait("ADG", target_add_var = 0.25, residual_var = 0.75, mean = 10) |>
     define_qtl("ADG", n = 80, method = "random") |>
-    set_qtl_effects("ADG", seed = 1) |>
-    add_phenotype("ADG")
+    set_qtl_effects("ADG", seed = 1)
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 200)
@@ -37,7 +37,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
 })
 
 
-test_that("filter.tidybreed_pop() restricts phenotyped subset", {
+test_that("get_table() |> filter() restricts phenotyped subset", {
   pop <- make_pheno_pop("ph_filter")
 
   pop <- pop |>
@@ -46,6 +46,7 @@ test_that("filter.tidybreed_pop() restricts phenotyped subset", {
     set_qtl_effects("ADG")
 
   pop <- pop |>
+    get_table("ind_meta") |>
     dplyr::filter(sex == "F") |>
     add_phenotype("ADG")
 
@@ -54,9 +55,6 @@ test_that("filter.tidybreed_pop() restricts phenotyped subset", {
   # All phenotyped individuals should be female
   ind <- dplyr::collect(get_table(pop, "ind_meta"))
   expect_true(all(ind$sex[match(ph$id_ind, ind$id_ind)] == "F"))
-
-  # pending_filter should be empty after consumption
-  expect_equal(length(pop$pending_filter), 0)
 
   close_pop(pop)
 })
@@ -79,8 +77,8 @@ test_that("binary trait respects prevalence approximately", {
     add_trait("mort", trait_type = "binary", prevalence = 0.1,
               target_add_var = 1, residual_var = 1) |>
     define_qtl("mort", n = 50) |>
-    set_qtl_effects("mort") |>
-    add_phenotype("mort")
+    set_qtl_effects("mort")
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("mort")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   rate <- mean(ph$value)
@@ -100,8 +98,8 @@ test_that("count trait clips to min/max", {
               min_value = 0, max_value = 20,
               target_add_var = 4, residual_var = 8, mean = 10) |>
     define_qtl("litter", n = 60) |>
-    set_qtl_effects("litter") |>
-    add_phenotype("litter")
+    set_qtl_effects("litter")
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("litter")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_true(all(ph$value >= 0))
@@ -124,7 +122,8 @@ test_that("user_values override bypasses the model", {
   custom <- stats::setNames(seq_along(ids) * 1.0, ids)
 
   pop <- pop |>
-    dplyr::filter(id_ind %in% !!ids) |>
+    get_table("ind_meta") |>
+    dplyr::filter(.data$id_ind %in% !!ids) |>
     add_phenotype("ADG", user_values = list(ADG = custom))
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
@@ -149,8 +148,8 @@ test_that("fixed-effect covariate shifts phenotype by level", {
     set_qtl_effects("ADG") |>
     add_trait_covariate("ADG", "sex",
                         effect_class = "fixed", source_column = "sex",
-                        levels = c(M = 10, F = -10)) |>
-    add_phenotype("ADG")
+                        levels = c(M = 10, F = -10))
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   ind <- dplyr::collect(get_table(pop, "ind_meta"))

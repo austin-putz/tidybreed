@@ -3,15 +3,17 @@
 #' @description
 #' Returns a tibble of genotypes (0/1/2 encoding) for animals that have been
 #' marked as genotyped via [add_genotypes()], restricted to loci on the named
-#' chip. Follows the same `filter()` -> action pipe pattern as [add_phenotype()]:
-#' pipe through `dplyr::filter()` to further restrict which animals are included.
+#' chip. Pipe a `tidybreed_table` (from [get_table()] and optionally
+#' [filter()]) as the first argument to restrict which animals are included.
 #'
 #' The returned set is the **intersection** of:
 #' * Animals with `has_<chip_name> == TRUE` in `ind_meta`
 #' * Animals matching any pending `filter()` predicates
 #' * Loci with `is_<chip_name> == TRUE` in `genome_meta`
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
+#'   through [filter()]). The table must contain an `id_ind` column when a
+#'   filter is applied.
 #' @param chip_name Character. Name of a chip previously defined via
 #'   [define_chip()] and applied to animals via [add_genotypes()].
 #' @param col_name Character. Name of the BOOLEAN column in `ind_meta` that
@@ -24,19 +26,21 @@
 #' @examples
 #' \dontrun{
 #' # All genotyped animals on the 50k chip
-#' geno <- extract_genotypes(pop, "50k")
+#' geno <- pop |> get_table("ind_meta") |> extract_genotypes("50k")
 #'
 #' # Only females genotyped on the HD chip
 #' geno <- pop |>
+#'   get_table("ind_meta") |>
 #'   dplyr::filter(sex == "F") |>
 #'   extract_genotypes("HD")
 #' }
 #' @export
-extract_genotypes <- function(pop,
+extract_genotypes <- function(tbl,
                              chip_name,
                              col_name = paste0("has_", chip_name)) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
   stopifnot(is.character(chip_name), length(chip_name) == 1L, nzchar(chip_name))
   validate_sql_identifier(col_name, what = "col_name")
@@ -52,9 +56,17 @@ extract_genotypes <- function(pop,
          "Call add_genotypes('", chip_name, "') first.", call. = FALSE)
   }
 
-  resolved   <- resolve_pending_filter(pop)
-  pop        <- resolved$pop
-  subset_ids <- resolved$ids
+  if (length(tbl$pending_filter) == 0) {
+    subset_ids <- NULL
+  } else {
+    collected <- dplyr::collect(tbl)
+    if (!"id_ind" %in% names(collected)) {
+      stop("Filtered table '", tbl$table_name,
+           "' must contain 'id_ind' to subset individuals for genotype extraction.",
+           call. = FALSE)
+    }
+    subset_ids <- unique(collected[["id_ind"]])
+  }
 
   # Resolve genotyped animal IDs, intersected with any pending filter
   if (is.null(subset_ids)) {

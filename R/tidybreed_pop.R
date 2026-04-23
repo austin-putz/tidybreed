@@ -16,8 +16,7 @@ new_tidybreed_pop <- function(db_conn,
                                pop_name,
                                db_path,
                                tables = character(),
-                               metadata = list(),
-                               pending_filter = list()) {
+                               metadata = list()) {
 
   stopifnot(inherits(db_conn, "duckdb_connection"))
   stopifnot(is.character(pop_name))
@@ -29,8 +28,7 @@ new_tidybreed_pop <- function(db_conn,
       pop_name = pop_name,
       db_path = db_path,
       tables = tables,
-      metadata = metadata,
-      pending_filter = pending_filter
+      metadata = metadata
     ),
     class = c("tidybreed_pop", "list")
   )
@@ -112,33 +110,39 @@ print.tidybreed_pop <- function(x, ...) {
     cat("Traits:", n_traits, "\n")
   }
 
-  # Show pending filter if set
-  if (length(x$pending_filter) > 0) {
-    exprs <- vapply(x$pending_filter, rlang::as_label, character(1))
-    cat("Pending filter:", paste(exprs, collapse = " & "), "\n")
-  }
-
   invisible(x)
 }
 
 
-#' Get table from tidybreed population
+#' Get a table reference from a tidybreed population
 #'
 #' @description
-#' Retrieve a table from the population database as a lazy dplyr tibble.
-#' This allows for efficient querying without loading the entire table into memory.
+#' Returns a `tidybreed_table` object that can be piped into [filter()] and
+#' [mutate_table()], or collected with [dplyr::collect()].  All existing
+#' `get_table(pop, x) |> dplyr::filter(...) |> dplyr::collect()` patterns
+#' continue to work unchanged.
 #'
-#' @param pop A tidybreed_pop object
-#' @param table_name Name of the table to retrieve
+#' @param pop A `tidybreed_pop` object.
+#' @param table_name Name of the table to retrieve.
 #'
-#' @return A lazy tibble (tbl_duckdb_connection)
+#' @return A `tidybreed_table` object.
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' pop <- initialize_genome(pop_name = "A", n_loci = 100, n_chr = 2)
-#' genome <- get_table(pop, "genome_meta")
-#' genome %>% dplyr::filter(chr == 1)
+#'
+#' # Read-only query (backward compatible)
+#' get_table(pop, "genome_meta") |> dplyr::collect()
+#'
+#' # Mutate all rows
+#' pop <- pop |> get_table("ind_meta") |> mutate_table(gen = 1L)
+#'
+#' # Mutate a filtered subset
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   filter(sex == "M") |>
+#'   mutate_table(gen = 2L)
 #' }
 get_table <- function(pop, table_name) {
 
@@ -146,13 +150,13 @@ get_table <- function(pop, table_name) {
 
   if (!table_name %in% pop$tables) {
     stop(
-      "Table '", table_name, "' not found. ",
+      "Table '", table_name, "' does not exist in this population. ",
       "Available tables: ", paste(pop$tables, collapse = ", "),
       call. = FALSE
     )
   }
 
-  dplyr::tbl(pop$db_conn, table_name)
+  new_tidybreed_table(pop, table_name)
 }
 
 
@@ -166,70 +170,3 @@ close_pop <- function(pop) {
   invisible(NULL)
 }
 
-
-#' Stash a dplyr filter predicate on a tidybreed population
-#'
-#' @description
-#' S3 method for [dplyr::filter()] on `tidybreed_pop` objects. Captures the
-#' predicate expressions and stores them on the population in `$pending_filter`,
-#' to be applied by the next consuming operation (currently [add_phenotype()]
-#' and [add_tbv()]). Multiple `filter()` calls stack with AND semantics.
-#'
-#' Non-consuming operations ignore the stashed filter. If an operation that
-#' does not consume the filter runs while one is set, the filter remains on
-#' the object and will be applied by the next consumer.
-#'
-#' @param .data A `tidybreed_pop` object.
-#' @param ... Unquoted predicate expressions evaluated against `ind_meta`.
-#' @param .preserve Present for S3 signature compatibility; not used.
-#'
-#' @return The `tidybreed_pop` object with the expressions appended to
-#'   `$pending_filter`.
-#'
-#' @examples
-#' \dontrun{
-#' pop |>
-#'   dplyr::filter(sex == "F", gen == 1L) |>
-#'   add_phenotype("ADG")
-#' }
-#' @export
-filter.tidybreed_pop <- function(.data, ..., .preserve = FALSE) {
-  new_quosures <- rlang::enquos(...)
-  .data$pending_filter <- c(.data$pending_filter, new_quosures)
-  .data
-}
-
-
-#' Resolve and clear pending filter on a population
-#'
-#' @description
-#' Applies the stacked predicates in `pop$pending_filter` to `ind_meta`, pulls
-#' the matching `id_ind` values, and returns the ids together with a copy of
-#' `pop` with the pending filter cleared. Used internally by [add_phenotype()]
-#' and [add_tbv()].
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @return A list with components `ids` (character vector of matching `id_ind`)
-#'   and `pop` (the population with `pending_filter` cleared). If no filter is
-#'   set, `ids` is `NULL` and `pop` is returned unchanged.
-#' @keywords internal
-resolve_pending_filter <- function(pop) {
-
-  if (length(pop$pending_filter) == 0) {
-    return(list(ids = NULL, pop = pop))
-  }
-
-  if (!"ind_meta" %in% pop$tables) {
-    stop(
-      "Pending filter cannot be applied: ind_meta does not exist yet.",
-      call. = FALSE
-    )
-  }
-
-  filtered <- dplyr::tbl(pop$db_conn, "ind_meta")
-  filtered <- dplyr::filter(filtered, !!!pop$pending_filter)
-  ids <- dplyr::pull(dplyr::collect(dplyr::select(filtered, "id_ind")), "id_ind")
-
-  pop$pending_filter <- list()
-  list(ids = ids, pop = pop)
-}

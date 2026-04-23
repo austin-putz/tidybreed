@@ -15,8 +15,10 @@ and mating cycles.
    resumable runs and sharing
 3. **Lazy evaluation** — use `dplyr::tbl()` / `get_table()` and filter before
    `collect()`-ing into R
-4. **Pipe-friendly** — every exported function accepts a `tidybreed_pop` and
-   returns a `tidybreed_pop`
+4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
+   return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tbv`,
+   `add_genotypes`, `extract_genotypes`) accept a `tidybreed_table` from
+   `get_table()` and return `tidybreed_pop`
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
    columns are inferred via `infer_duckdb_type()`
 
@@ -165,7 +167,8 @@ True breeding values (simulation ground truth). Populated by
 ### `ind_ebv`
 
 Estimated breeding values from external BLUP / GBLUP runs. Composite key
-`(id_ind, trait_name, model)`. Populated by `add_ebv()`.
+`(id_ind, trait_name, model)`. Will be populated by a future `add_ebv()`
+replacement (current version removed).
 
 | Column     | Type    | Notes                          |
 |------------|---------|--------------------------------|
@@ -199,20 +202,28 @@ each), and `genome_genotype` (1 row each). ID format: `{line_name}-{n}`.
 
 Key params: `n_males`, `n_females`, `line_name`, `allele_freq`
 
-### `mutate_ind_meta()`
+### `mutate_table()`
 
-`R/mutate_ind_meta.R`
+`R/mutate_table.R`
 
-Adds or updates user columns in `ind_meta`. Scalar values are broadcast to all
-rows; vectors assign per-individual. Type is inferred via
-`infer_duckdb_type()`. Reserved columns are blocked.
+Generic replacement for the removed `mutate_ind_meta()` / `mutate_genome_meta()`
+functions. Adds or updates columns in **any** database table. Chain after
+`get_table()` (and optionally `filter()`) then call `mutate_table(col = value)`.
+Scalar values are broadcast to all (or filtered) rows; vectors must match the
+effective row count. Type is inferred via `infer_duckdb_type()`. Reserved
+columns are blocked via `TABLE_RESERVED_COLS` in `R/sql_utils.R`. Returns `pop`
+invisibly.
 
-### `mutate_genome_meta()`
+```r
+# All rows
+pop <- pop |> get_table("ind_meta") |> mutate_table(gen = 1L)
 
-`R/mutate_genome_meta.R`
-
-Same pattern as `mutate_ind_meta()` but targets `genome_meta`. Used internally
-by `define_chip()` to write chip membership columns.
+# Filtered rows (unmatched rows get NULL for new columns)
+pop <- pop |>
+  get_table("ind_meta") |>
+  filter(sex == "M") |>
+  mutate_table(gen = 2L)
+```
 
 ### `define_chip()`
 
@@ -228,22 +239,37 @@ Convenience wrapper. Marks loci as members of a named chip by writing a
 - `locus_ids` — integer vector of specific locus IDs
 - `locus_names` — character vector of specific locus names
 
-### `get_table()` / `close_pop()` / `print.tidybreed_pop()` / `filter.tidybreed_pop()`
+### `get_table()` / `close_pop()` / `print.tidybreed_pop()`
 
 `R/tidybreed_pop.R`
 
-`get_table(pop, "table_name")` returns a lazy `dplyr` tibble (`tbl()`).
-`close_pop()` safely closes the DuckDB connection.
+`get_table(pop, "table_name")` returns a `tidybreed_table` S3 object that
+carries the pop reference, table name, lazy dplyr tbl, and pending filter.
+Supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, `count()`,
+and `mutate_table()`. `close_pop()` safely closes the DuckDB connection.
 
-`filter.tidybreed_pop()` is an S3 method: it stashes dplyr predicates on the
-pop object (`pop$pending_filter`) for the next `add_phenotype()` /
-`add_tbv()` call to consume. Multiple `filter()` calls stack with AND
-semantics. Non-consuming operations leave the filter intact.
+**Subset selection for action functions** (`add_phenotype`, `add_tbv`,
+`add_genotypes`, `extract_genotypes`) requires `get_table()` as the first step.
+`filter()` is called on the `tidybreed_table`, not on the pop directly.
+The unique `id_ind` values from the collected filtered table are used as the
+candidate set. Any table that has an `id_ind` column can be used (e.g.
+`ind_meta`, `ind_phenotype`, `genome_haplotype`, `genome_genotype`).
 
 ```r
+# All individuals
+pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+# Filtered by ind_meta
 pop |>
+  get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
   add_phenotype("ADG")
+
+# Pre-select top performers from a prior phenotype
+pop |>
+  get_table("ind_phenotype") |>
+  dplyr::filter(value > 500) |>
+  add_phenotype("ADG2")
 ```
 
 ### `add_trait()` / `define_qtl()` / `set_qtl_effects()` / `set_qtl_effects_multi()`
@@ -270,19 +296,21 @@ pop |>
   (`levels = c(M = 30, F = 0)`) or random (`variance`, `distribution`)
   effects on any `ind_meta` column.
 
-### `add_phenotype()` / `add_tbv()` / `add_ebv()`
+### `add_phenotype()` / `add_tbv()`
 
-`R/add_phenotype.R`, `R/add_tbv.R`, `R/add_ebv.R`
+`R/add_phenotype.R`, `R/add_tbv.R`
 
-- `add_phenotype()` — the workhorse. Resolves the pending filter, intersects
-  with `expressed_sex`, computes TBV (genotype × effects, or haplotype dose
-  for imprinted traits), adds fixed/random covariate contributions, samples
-  residuals (joint `MVN(0, R)` when multiple traits share the subset and
-  `R` is stored; otherwise independent). Converts liability to phenotype
-  per `trait_type`. Writes `ind_phenotype` rows and updates `ind_tbv`.
+Both functions accept a `tidybreed_table` (from `get_table()` + optional
+`filter()`) as their first argument and return `tidybreed_pop`.
+
+- `add_phenotype()` — the workhorse. Extracts unique `id_ind` from the
+  filtered table, intersects with `expressed_sex`, computes TBV
+  (genotype × effects, or haplotype dose for imprinted traits), adds
+  fixed/random covariate contributions, samples residuals (joint `MVN(0, R)`
+  when multiple traits share the subset and `R` is stored; otherwise
+  independent). Converts liability to phenotype per `trait_type`. Writes
+  `ind_phenotype` rows and updates `ind_tbv`.
 - `add_tbv()` — TBV-only; no phenotype records.
-- `add_ebv()` — ingest external BLUP/GBLUP values into `ind_ebv`, tagged
-  with a `model` label so multiple runs can coexist.
 
 ### `add_trait_simple()`
 

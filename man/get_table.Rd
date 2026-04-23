@@ -2,26 +2,38 @@
 % Please edit documentation in R/tidybreed_pop.R
 \name{get_table}
 \alias{get_table}
-\title{Get table from tidybreed population}
+\title{Get a table reference from a tidybreed population}
 \usage{
 get_table(pop, table_name)
 }
 \arguments{
-\item{pop}{A tidybreed_pop object}
+\item{pop}{A \code{tidybreed_pop} object.}
 
-\item{table_name}{Name of the table to retrieve}
+\item{table_name}{Name of the table to retrieve.}
 }
 \value{
-A lazy tibble (tbl_duckdb_connection)
+A \code{tidybreed_table} object.
 }
 \description{
-Retrieve a table from the population database as a lazy dplyr tibble.
-This allows for efficient querying without loading the entire table into memory.
+Returns a \code{tidybreed_table} object that can be piped into \code{\link[=filter]{filter()}} and
+\code{\link[=mutate_table]{mutate_table()}}, or collected with \code{\link[dplyr:compute]{dplyr::collect()}}.  All existing
+\code{get_table(pop, x) |> dplyr::filter(...) |> dplyr::collect()} patterns
+continue to work unchanged.
 }
 \examples{
 \dontrun{
 pop <- initialize_genome(pop_name = "A", n_loci = 100, n_chr = 2)
-genome <- get_table(pop, "genome_meta")
-genome \%>\% dplyr::filter(chr == 1)
+
+# Read-only query (backward compatible)
+get_table(pop, "genome_meta") |> dplyr::collect()
+
+# Mutate all rows
+pop <- pop |> get_table("ind_meta") |> mutate_table(gen = 1L)
+
+# Mutate a filtered subset
+pop <- pop |>
+  get_table("ind_meta") |>
+  filter(sex == "M") |>
+  mutate_table(gen = 2L)
 }
 }

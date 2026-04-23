@@ -129,8 +129,8 @@ define_qtl <- function(pop,
             " loci (by locus names)")
   }
 
-  args <- setNames(list(qtl_indicator), col_name)
-  result <- do.call(mutate_genome_meta, c(list(pop = pop), args))
+  args   <- setNames(list(qtl_indicator), col_name)
+  result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
 
   invisible(result)
 }

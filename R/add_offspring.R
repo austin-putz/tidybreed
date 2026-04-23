@@ -155,7 +155,8 @@ add_offspring <- function(pop, matings) {
   extra_cols <- setdiff(names(matings), required_cols)
 
   for (col in extra_cols) {
-    validate_field_name(col, existing_cols = character(0))
+    validate_sql_identifier(col, what = "column name",
+                           reserved = TABLE_RESERVED_COLS[["ind_meta"]])
   }
 
   # ============================================================================
@@ -203,7 +204,7 @@ add_offspring <- function(pop, matings) {
   locus_cols <- paste0("locus_", seq_len(n_loci))
   chr_len_Mb <- pop$metadata$chr_len_Mb
 
-  genome_meta_df <- get_table(pop, "genome_meta") |>
+  genome_meta_df <- dplyr::tbl(pop$db_conn, "genome_meta") |>
     dplyr::select(locus_id, chr, pos_Mb) |>
     dplyr::arrange(locus_id) |>
     dplyr::collect()

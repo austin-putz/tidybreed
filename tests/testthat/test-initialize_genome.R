@@ -153,7 +153,7 @@ test_that("get_table returns lazy tibble", {
 
   genome <- get_table(pop, "genome_meta")
 
-  expect_s3_class(genome, "tbl_duckdb_connection")
+  expect_s3_class(genome, "tidybreed_table")
 
   # Test that dplyr verbs work
   chr1_loci <- genome %>%

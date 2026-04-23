@@ -102,8 +102,8 @@ set_qtl_effects <- function(pop,
   full_effects <- rep(NA_real_, nrow(genome))
   full_effects[qtl_tf] <- qtl_effects
 
-  args <- setNames(list(full_effects), paste0("add_", trait_name))
-  result <- do.call(mutate_genome_meta, c(list(pop = pop), args))
+  args   <- setNames(list(full_effects), paste0("add_", trait_name))
+  result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
 
   message("Set additive effects for ", n_qtl, " QTL on trait '", trait_name, "'.")
   invisible(result)
@@ -268,7 +268,7 @@ set_qtl_effects_multi <- function(pop,
   # Write one column per trait
   for (t in trait_names) {
     args <- setNames(list(effects_mat[, t]), paste0("add_", t))
-    pop <- do.call(mutate_genome_meta, c(list(pop = pop), args))
+    pop  <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
   }
 
   message("Set correlated additive effects for traits: ",

@@ -248,11 +248,8 @@ define_chip <- function(pop,
   # 4. Create column using mutate_genome_meta()
   # ============================================================================
 
-  # Create named list for mutate_genome_meta
-  args <- setNames(list(chip_indicator), col_name)
-
-  # Call mutate_genome_meta with the chip indicator
-  result <- do.call(mutate_genome_meta, c(list(pop = pop), args))
+  args   <- setNames(list(chip_indicator), col_name)
+  result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
 
   # Return modified pop object
   invisible(result)

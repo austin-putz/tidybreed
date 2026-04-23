@@ -403,7 +403,7 @@ test_that("add_founders errors if n_males or n_females invalid", {
 })
 
 
-test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
+test_that("integration: initialize_genome -> add_founders -> mutate_table", {
   # Full pipeline
   pop <- initialize_genome(
     pop_name = "test",
@@ -414,7 +414,8 @@ test_that("integration: initialize_genome -> add_founders -> mutate_ind_meta", {
     db_path = ":memory:"
   ) %>%
     add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
-    mutate_ind_meta(
+    get_table("ind_meta") %>%
+    mutate_table(
       gen = 0,
       farm = "FarmA",
       date_birth = as.Date("2024-01-01")

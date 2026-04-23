@@ -1,3 +1,29 @@
+# tidybreed 0.4.3 (2026-04-23)
+
+## Internal / Cleanup
+
+* Action functions (`add_phenotype()`, `add_tbv()`, `add_genotypes()`,
+  `extract_genotypes()`) fully migrated to the `tidybreed_table`-first calling
+  convention announced in 0.4.1. Removed the internal `resolve_pending_filter()`
+  helper; each function now collects and extracts `id_ind` directly from the
+  `tidybreed_table`.
+
+* `define_chip()` and `define_qtl()` now call `mutate_table()` directly instead
+  of relying on the removed `mutate_genome_meta()`.
+
+* `add_offspring()` now uses `validate_sql_identifier()` for extra column
+  validation, consistent with the rest of the package.
+
+* Source files for deleted functions (`R/mutate_genome_meta.R`,
+  `R/mutate_ind_meta.R`, `R/add_ebv.R`) and their associated man pages and
+  tests are now physically removed from the repository.
+
+* Expanded roxygen documentation: new `man/` pages for many exported and
+  internal functions, and updated `get_table()` / `infer_duckdb_type()` docs.
+
+* Test suite updated throughout to use the new `get_table() |> filter() |>
+  action()` pattern.
+
 # tidybreed 0.4.2 (2026-04-23)
 
 ## New Features

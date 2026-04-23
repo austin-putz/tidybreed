@@ -24,9 +24,9 @@
 #' * `"binary"`: 0/1 via quantile threshold at `1 - prevalence`.
 #' * `"categorical"`: integer level via `thresholds` cutpoints.
 #'
-#' **Subset selection**: if [`filter()`][filter.tidybreed_pop] has stashed a
-#' predicate on `pop`, that determines the candidate individuals; otherwise
-#' all rows in `ind_meta` are candidates. The candidate set is then
+#' **Subset selection**: pipe a `tidybreed_table` (from [get_table()] and
+#' optionally [filter()]) as the first argument. The unique `id_ind` values in
+#' the collected table are the candidate individuals. The candidate set is then
 #' intersected with `trait_meta$expressed_sex` (e.g. `"F"`-only traits skip
 #' males).
 #'
@@ -37,7 +37,9 @@
 #' * `user_residual`: supply a numeric vector (or named list for multi-trait)
 #'   to override the residual draw.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
+#'   through [filter()]). The table must contain an `id_ind` column; unique
+#'   values in that column determine which individuals are phenotyped.
 #' @param trait Character vector of trait name(s).
 #' @param env Optional environment label stored with each record.
 #' @param rep Integer. Repetition / measurement number stored with each
@@ -51,24 +53,30 @@
 #'   directly (but TBVs are still computed and stored).
 #' @param seed Optional integer for reproducibility.
 #'
-#' @return The modified `tidybreed_pop` (invisibly) with `pending_filter`
-#'   cleared.
+#' @return The modified `tidybreed_pop` (invisibly).
 #'
 #' @seealso [add_trait()], [define_qtl()], [set_qtl_effects()],
 #'   [set_residual_cov()], [add_trait_covariate()], [add_tbv()]
 #'
 #' @examples
 #' \dontrun{
+#' # All individuals
+#' pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+#'
+#' # Filtered subset
 #' pop <- pop |>
+#'   get_table("ind_meta") |>
 #'   dplyr::filter(sex == "F", gen == 1L) |>
 #'   add_phenotype("ADG")
 #'
+#' # Pre-select by phenotype record value from another table
 #' pop <- pop |>
-#'   dplyr::filter(gen == 1L) |>
-#'   add_phenotype(c("ADG", "BW"))   # joint MVN residuals if R is stored
+#'   get_table("ind_phenotype") |>
+#'   dplyr::filter(value > 500) |>
+#'   add_phenotype("ADG2")
 #' }
 #' @export
-add_phenotype <- function(pop,
+add_phenotype <- function(tbl,
                           trait,
                           env           = NA_character_,
                           rep           = 1L,
@@ -77,17 +85,26 @@ add_phenotype <- function(pop,
                           user_values   = NULL,
                           seed          = NULL) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
   stopifnot(is.character(trait), length(trait) >= 1)
   lapply(trait, validate_sql_identifier, what = "trait name")
 
   if (!is.null(seed)) set.seed(seed)
 
-  # 1. Resolve the pending filter (if any)
-  resolved <- resolve_pending_filter(pop)
-  pop <- resolved$pop
-  subset_ids <- resolved$ids
+  # 1. Resolve subset: collect filtered table and extract unique id_ind
+  if (length(tbl$pending_filter) == 0) {
+    subset_ids <- NULL
+  } else {
+    collected <- dplyr::collect(tbl)
+    if (!"id_ind" %in% names(collected)) {
+      stop("Filtered table '", tbl$table_name,
+           "' must contain 'id_ind' to subset individuals for phenotyping.",
+           call. = FALSE)
+    }
+    subset_ids <- unique(collected[["id_ind"]])
+  }
 
   # 2. Pull candidate ind_meta rows (push filter down when possible)
   if (!is.null(subset_ids)) {

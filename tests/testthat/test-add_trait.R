@@ -9,7 +9,7 @@ make_tiny_pop <- function(pop_name = "t") {
     fixed_allele_freq = 0.5
   )
   pop <- add_founders(pop, n_males = 25, n_females = 25, line_name = "A")
-  pop <- mutate_ind_meta(pop, gen = 0L)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop
 }
 

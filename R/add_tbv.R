@@ -12,39 +12,49 @@
 #' where `dose_i` is the 0/1/2 genotype for non-imprinted traits, or the 0/1
 #' haplotype dose from the relevant parent for imprinted traits.
 #'
-#' The subset is taken from [filter.tidybreed_pop()] stashed predicates or
-#' defaults to all individuals in `ind_meta`. The `expressed_sex` rule from
+#' Pipe a `tidybreed_table` (from [get_table()] and optionally [filter()]) as
+#' the first argument to select individuals. The `expressed_sex` rule from
 #' `trait_meta` is applied on top.
 #'
 #' Useful for tracking genetic trend across generations without collecting
 #' phenotypes.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
+#'   through [filter()]). The table must contain an `id_ind` column.
 #' @param trait Character vector of trait name(s).
 #' @param date_calc Date stored in `ind_tbv.date_calc`.
 #'
-#' @return The modified `tidybreed_pop` (invisibly) with `pending_filter`
-#'   cleared.
+#' @return The modified `tidybreed_pop` (invisibly).
 #'
 #' @seealso [add_phenotype()]
 #'
 #' @examples
 #' \dontrun{
 #' pop |>
+#'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 2L) |>
 #'   add_tbv(c("ADG", "BW"))
 #' }
 #' @export
-add_tbv <- function(pop, trait, date_calc = Sys.Date()) {
+add_tbv <- function(tbl, trait, date_calc = Sys.Date()) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
   stopifnot(is.character(trait), length(trait) >= 1)
   lapply(trait, validate_sql_identifier, what = "trait name")
 
-  resolved <- resolve_pending_filter(pop)
-  pop <- resolved$pop
-  subset_ids <- resolved$ids
+  if (length(tbl$pending_filter) == 0) {
+    subset_ids <- NULL
+  } else {
+    collected <- dplyr::collect(tbl)
+    if (!"id_ind" %in% names(collected)) {
+      stop("Filtered table '", tbl$table_name,
+           "' must contain 'id_ind' to subset individuals for TBV computation.",
+           call. = FALSE)
+    }
+    subset_ids <- unique(collected[["id_ind"]])
+  }
 
   ind_meta_subset <- if (is.null(subset_ids)) {
     dplyr::collect(get_table(pop, "ind_meta"))

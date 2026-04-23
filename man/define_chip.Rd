@@ -96,7 +96,7 @@ Four selection methods are supported:
 
 \strong{Column naming:}
 \itemize{
-\item Default column name is \verb{is_\{chip_name\}} (e.g., "50k" → "is_50k")
+\item Default column name is \verb{is_\{name\}} (e.g., "50k" → "is_50k")
 \item Can override with \code{col_name} parameter for custom naming
 \item Column contains logical TRUE/FALSE values
 }
