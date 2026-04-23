@@ -253,6 +253,31 @@ slice_sample.tidybreed_table <- function(.data, ...) {
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+#' Count non-NULL values in a filtered set of rows
+#'
+#' Used by [mutate_table()] to report how many existing values will be
+#' replaced vs. filled in before executing an UPDATE.
+#'
+#' @param conn DuckDB connection
+#' @param table_name Target table name
+#' @param field_name Column to inspect
+#' @param pk_col Primary key column name
+#' @param filter_ids Vector of PK values identifying the affected rows
+#' @keywords internal
+count_nonnull_in_filter <- function(conn, table_name, field_name, pk_col, filter_ids) {
+  filter_df <- data.frame(pk = filter_ids, stringsAsFactors = FALSE)
+  names(filter_df) <- pk_col
+  DBI::dbWriteTable(conn, "_tb_cnt_nn", filter_df, overwrite = TRUE)
+  n <- DBI::dbGetQuery(conn, paste0(
+    "SELECT COUNT(*) AS n FROM ", table_name, " AS t ",
+    "INNER JOIN _tb_cnt_nn AS f ON t.", pk_col, " = f.", pk_col,
+    " WHERE t.", field_name, " IS NOT NULL"
+  ))$n
+  DBI::dbExecute(conn, "DROP TABLE _tb_cnt_nn")
+  n
+}
+
+
 #' Return primary key values in canonical row order
 #'
 #' For `ind_meta`, order is ROWID (insertion order).
@@ -485,7 +510,8 @@ mutate_table <- function(tbl_obj, ...) {
     }
 
     is_new_col <- !field_name %in% existing_cols
-    n_existing <- 0L
+    n_replaced <- 0L
+    n_filled   <- 0L
 
     if (is_new_col) {
       DBI::dbExecute(pop$db_conn, paste0(
@@ -493,11 +519,20 @@ mutate_table <- function(tbl_obj, ...) {
       ))
       existing_cols <- c(existing_cols, field_name)
     } else {
-      n_existing <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT COUNT(*) AS n FROM ", table_name,
-               " WHERE ", field_name, " IS NOT NULL")
-      )$n
+      # Count non-NULL rows among the affected rows BEFORE updating so we can
+      # report exactly what changed (replacements vs. NULL fills).
+      if (has_filter) {
+        n_replaced <- count_nonnull_in_filter(
+          pop$db_conn, table_name, field_name, pk_col, filter_ids
+        )
+      } else {
+        n_replaced <- DBI::dbGetQuery(
+          pop$db_conn,
+          paste0("SELECT COUNT(*) AS n FROM ", table_name,
+                 " WHERE ", field_name, " IS NOT NULL")
+        )$n
+      }
+      n_filled <- n_effective - n_replaced
     }
 
     if (is_vector) {
@@ -524,17 +559,26 @@ mutate_table <- function(tbl_obj, ...) {
         )
       }
     } else {
-      if (has_filter) {
-        message(
-          "Updated ", n_effective, " of ", n_total, " rows in `", table_name, "`"
-        )
+      scope_str <- if (has_filter) {
+        paste0(" in `", table_name, "` [", n_effective, " of ", n_total, " rows]")
       } else {
-        extra <- if (n_existing > 0) {
-          paste0(" (", n_existing, " row",
-                 if (n_existing != 1) "s" else "",
-                 " had existing values)")
-        } else ""
-        message("Updated ", n_total, " rows in `", table_name, "`", extra)
+        paste0(" in `", table_name, "` [", n_total,
+               " row", if (n_total != 1) "s" else "", "]")
+      }
+      if (n_replaced > 0) {
+        warning(
+          "'", field_name, "': replaced ", n_replaced, " existing value",
+          if (n_replaced != 1) "s" else "",
+          scope_str,
+          call. = FALSE
+        )
+      }
+      if (n_filled > 0) {
+        message(
+          "'", field_name, "': filled ", n_filled, " NULL row",
+          if (n_filled != 1) "s" else "",
+          scope_str
+        )
       }
     }
   }
