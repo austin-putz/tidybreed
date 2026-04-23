@@ -7,10 +7,10 @@
 #'
 #' **Model** (per trait, on the liability / continuous scale):
 #' \preformatted{
-#'   y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+#'   y_i = target_add_mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
 #' }
 #'
-#' * `mean` comes from `trait_meta`.
+#' * `target_add_mean` comes from `trait_meta`.
 #' * Fixed and random shifts come from `trait_effects` rows.
 #' * `TBV_i` = sum over QTL of `add_{trait}` * genotype dose (or haplotype
 #'   dose for imprinted traits).
@@ -172,13 +172,23 @@ add_phenotype <- function(tbl,
     a <- genome[[paste0("add_", t)]]
     a[is.na(a)] <- 0
 
+    p_base_col <- paste0("base_allele_freq_", t)
+    p_base <- if (p_base_col %in% names(genome)) {
+      pv <- as.numeric(genome[[p_base_col]])
+      pv[is.na(pv)] <- 0
+      pv
+    } else {
+      rep(0, length(a))
+    }
+
     if (m$expressed_parent == "both") {
       rows_idx <- match(ids_t, rownames(geno_mat_full))
-      tbv <- as.numeric(geno_mat_full[rows_idx, , drop = FALSE] %*% a)
+      tbv <- as.numeric(geno_mat_full[rows_idx, , drop = FALSE] %*% a) -
+             2 * sum(p_base * a)
     } else {
       parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
       hap_mat <- get_haplotype_matrix(pop, parent_origin, ids_t)
-      tbv <- as.numeric(hap_mat %*% a)
+      tbv <- as.numeric(hap_mat %*% a) - sum(p_base * a)
     }
     tbv_by_trait[[t]] <- stats::setNames(tbv, ids_t)
 
@@ -241,7 +251,7 @@ add_phenotype <- function(tbl,
     }
 
     tbv <- tbv_by_trait[[t]]
-    liability <- m$mean + covariate_contrib + as.numeric(tbv) + resid
+    liability <- m$target_add_mean + covariate_contrib + as.numeric(tbv) + resid
 
     value <- switch(
       m$trait_type,

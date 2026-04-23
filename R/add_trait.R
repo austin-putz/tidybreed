@@ -31,8 +31,9 @@
 #' @param expressed_parent Character. Parent-of-origin expression:
 #'   `"both"`, `"parent_1"` (paternal), `"parent_2"` (maternal). Imprinted
 #'   traits use only the haplotype from the specified parent.
-#' @param mean Numeric. Overall mean / intercept on the continuous (or
-#'   liability) scale.
+#' @param target_add_mean Numeric. Target mean additive genetic value for the
+#'   base population. Used as the intercept in the phenotype model. Defaults to
+#'   0 so that `E[TBV] = 0` when TBV is centered on base allele frequencies.
 #' @param target_add_var Numeric. Target additive-genetic variance used by
 #'   [set_qtl_effects()] to rescale sampled effects.
 #' @param residual_var Numeric. Residual variance used by [add_phenotype()].
@@ -60,7 +61,7 @@
 #'     trait_name     = "ADG",
 #'     trait_type     = "continuous",
 #'     units          = "g/day",
-#'     mean           = 850,
+#'     target_add_mean = 0,
 #'     target_add_var = 0.25,
 #'     residual_var   = 0.75
 #'   )
@@ -77,7 +78,7 @@ add_trait <- function(pop,
                                             "offspring_mean"),
                       expressed_sex    = c("both", "M", "F"),
                       expressed_parent = c("both", "parent_1", "parent_2"),
-                      mean             = 0,
+                      target_add_mean  = 0,
                       target_add_var   = 1,
                       residual_var     = 1,
                       min_value        = NA_real_,
@@ -157,7 +158,7 @@ add_trait <- function(pop,
     recorded_on      = recorded_on,
     expressed_sex    = expressed_sex,
     expressed_parent = expressed_parent,
-    mean             = as.numeric(mean),
+    target_add_mean  = as.numeric(target_add_mean),
     target_add_var   = as.numeric(target_add_var),
     residual_var     = as.numeric(residual_var),
     min_value        = as.numeric(min_value),
@@ -205,7 +206,7 @@ ensure_trait_tables <- function(pop) {
         recorded_on      VARCHAR,
         expressed_sex    VARCHAR,
         expressed_parent VARCHAR,
-        mean             DOUBLE,
+        target_add_mean  DOUBLE,
         target_add_var   DOUBLE,
         residual_var     DOUBLE,
         min_value        DOUBLE,

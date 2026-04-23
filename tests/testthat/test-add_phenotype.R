@@ -20,7 +20,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
   pop <- make_pheno_pop("ph_cont")
 
   pop <- pop |>
-    add_trait("ADG", target_add_var = 0.25, residual_var = 0.75, mean = 10) |>
+    add_trait("ADG", target_add_var = 0.25, residual_var = 0.75, target_add_mean = 10) |>
     define_qtl("ADG", n = 80, method = "random") |>
     set_qtl_effects("ADG", seed = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
@@ -96,7 +96,7 @@ test_that("count trait clips to min/max", {
   pop <- pop |>
     add_trait("litter", trait_type = "count",
               min_value = 0, max_value = 20,
-              target_add_var = 4, residual_var = 8, mean = 10) |>
+              target_add_var = 4, residual_var = 8, target_add_mean = 10) |>
     define_qtl("litter", n = 60) |>
     set_qtl_effects("litter")
   pop <- pop |> get_table("ind_meta") |> add_phenotype("litter")
@@ -143,7 +143,7 @@ test_that("fixed-effect covariate shifts phenotype by level", {
   pop <- make_pheno_pop("ph_covariate", n_ind = 400)
 
   pop <- pop |>
-    add_trait("ADG", target_add_var = 0.01, residual_var = 0.01, mean = 0) |>
+    add_trait("ADG", target_add_var = 0.01, residual_var = 0.01) |>
     define_qtl("ADG", n = 20) |>
     set_qtl_effects("ADG") |>
     add_trait_covariate("ADG", "sex",

@@ -1,3 +1,38 @@
+# tidybreed 0.5.0 (2026-04-23)
+
+## Breaking Changes
+
+* `add_trait()`: parameter `mean` renamed to `target_add_mean`. The column in
+  `trait_meta` is also renamed. Existing serialized databases with the old
+  column name will not load correctly — re-initialize when upgrading.
+
+* `set_qtl_effects()` and `set_qtl_effects_multi()`: first argument renamed from
+  `pop` to `x` and now accepts either a `tidybreed_pop` or a `tidybreed_table`
+  (for `base = "current_pop"` to specify which individuals define the base).
+
+## New Features
+
+* `set_qtl_effects()` / `set_qtl_effects_multi()`: new `base` parameter
+  (`"founder_haplotypes"` default, or `"current_pop"`). Controls which allele
+  frequencies are used for effect scaling and TBV centering.
+
+* Effect scaling now uses the **Falconer formula**
+  (`V_A = Σ 2·p·(1−p)·α²`) instead of the realized `var(G %*% alpha)`. This
+  gives a theoretically grounded `target_add_var` guarantee rather than an
+  empirical one.
+
+* `set_qtl_effects()` writes a `base_allele_freq_{trait}` column to
+  `genome_meta` recording which allele frequencies were used. This column is
+  read by `add_tbv()` and `add_phenotype()` to center TBVs:
+  `TBV_i = (G_i − 2·p_base) · α`, ensuring `E[TBV] ≈ 0` for the base
+  population.
+
+* `base = "founder_haplotypes"` computes allele frequencies from the actual
+  rows in the `founder_haplotypes` table (the pool used to sample founders),
+  not from the stored theoretical `founder_allele_freq` column.
+
+---
+
 # tidybreed 0.4.3 (2026-04-23)
 
 ## Internal / Cleanup

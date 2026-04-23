@@ -18,12 +18,12 @@ test_that("add_trait() creates the trait tables and inserts the row", {
   pop <- make_tiny_pop("trait_basic")
 
   pop <- add_trait(pop,
-                   trait_name     = "ADG",
-                   units          = "g/day",
-                   trait_type     = "continuous",
-                   target_add_var = 0.25,
-                   residual_var   = 0.75,
-                   mean           = 850)
+                   trait_name      = "ADG",
+                   units           = "g/day",
+                   trait_type      = "continuous",
+                   target_add_var  = 0.25,
+                   residual_var    = 0.75,
+                   target_add_mean = 850)
 
   tables <- DBI::dbListTables(pop$db_conn)
   for (tbl in c("trait_meta", "trait_effects", "trait_residual_cov",
@@ -37,7 +37,7 @@ test_that("add_trait() creates the trait tables and inserts the row", {
   expect_equal(row$trait_type, "continuous")
   expect_equal(row$target_add_var, 0.25)
   expect_equal(row$residual_var, 0.75)
-  expect_equal(row$mean, 850)
+  expect_equal(row$target_add_mean, 850)
 
   close_pop(pop)
 })

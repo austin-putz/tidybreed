@@ -15,8 +15,8 @@
 #' @param scale_to_target Logical. Passed to [set_qtl_effects()].
 #' @param seed Optional integer for reproducibility.
 #' @param ... Additional arguments forwarded to [add_trait()] (e.g.
-#'   `trait_type`, `target_add_var`, `residual_var`, `mean`, `prevalence`,
-#'   `expressed_sex`).
+#'   `trait_type`, `target_add_var`, `residual_var`, `target_add_mean`,
+#'   `prevalence`, `expressed_sex`).
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -29,7 +29,7 @@
 #'     n_qtl               = 100,
 #'     target_add_var      = 0.25,
 #'     residual_var        = 0.75,
-#'     mean                = 850,
+#'     target_add_mean     = 850,
 #'     qtl_method          = "chromosome_even",
 #'     effect_distribution = "normal"
 #'   )

@@ -1,26 +1,41 @@
 #' Sample or assign additive QTL effects for a trait
 #'
 #' @description
-#' Writes the `add_{trait}` column in `genome_meta`, giving the additive
-#' substitution effect for each locus (with `NA` at non-QTL loci). Two modes:
+#' Writes the `add_{trait}` and `base_allele_freq_{trait}` columns in
+#' `genome_meta`. Two modes:
 #'
 #' * **Manual**: pass `effects`, a numeric vector of length equal to the
 #'   number of QTL for this trait (loci where `is_QTL_{trait}` is `TRUE`), in
 #'   ascending `locus_id` order.
 #' * **Sampled**: draw effects from `distribution` (`"normal"` or
-#'   `"gamma"`). If `scale_to_target = TRUE`, effects are then rescaled so
-#'   that the realised `var(X %*% a)` across the currently genotyped
-#'   individuals matches the trait's `target_add_var`.
+#'   `"gamma"`). If `scale_to_target = TRUE`, effects are rescaled using the
+#'   Falconer formula so that the expected additive variance in the base
+#'   population equals `trait_meta$target_add_var`.
+#'
+#' The `base` argument controls which allele frequencies are used for effect
+#' scaling and TBV centering:
+#'
+#' * `"founder_haplotypes"` (default) — uses `founder_allele_freq` from
+#'   `genome_meta` (requires `initialize_genome()` was called with
+#'   `n_haplotypes`).
+#' * `"current_pop"` — computes allele frequencies from the current
+#'   `genome_haplotype` table. Pass a filtered `tidybreed_table` as the first
+#'   argument to restrict which individuals define the base population.
 #'
 #' Requires [define_qtl()] has been called for `trait`.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param x A `tidybreed_pop` object, or a `tidybreed_table` (from
+#'   [get_table()] plus optional [filter()]) when `base = "current_pop"` to
+#'   specify which individuals define the base allele frequencies.
 #' @param trait_name Character. Name of an existing trait.
 #' @param effects Optional numeric vector of length `n_qtl` (manual mode).
 #' @param distribution Character. `"normal"` (default) or `"gamma"`, used
 #'   when `effects` is `NULL`.
-#' @param scale_to_target Logical. If `TRUE`, rescale sampled effects so the
-#'   realised additive variance on current genotyped individuals equals
+#' @param base Character. `"founder_haplotypes"` (default) or `"current_pop"`.
+#'   Determines which allele frequencies are used for Falconer variance scaling
+#'   and TBV centering.
+#' @param scale_to_target Logical. If `TRUE`, rescale sampled effects using the
+#'   Falconer formula so the expected additive variance equals
 #'   `trait_meta$target_add_var`.
 #' @param seed Optional integer. Passed to [set.seed()] for reproducibility.
 #'
@@ -30,23 +45,41 @@
 #'
 #' @examples
 #' \dontrun{
+#' # Default: scale using founder haplotype allele frequencies
 #' pop <- pop |>
 #'   add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
 #'   define_qtl("ADG", n = 100) |>
 #'   set_qtl_effects("ADG", distribution = "normal")
+#'
+#' # current_pop: use only generation-0 animals to define base frequencies
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   dplyr::filter(gen == 0L) |>
+#'   set_qtl_effects("ADG", base = "current_pop", distribution = "normal")
 #' }
 #' @export
-set_qtl_effects <- function(pop,
+set_qtl_effects <- function(x,
                             trait_name,
                             effects         = NULL,
                             distribution    = c("normal", "gamma"),
+                            base            = c("founder_haplotypes", "current_pop"),
                             scale_to_target = TRUE,
                             seed            = NULL) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  if (inherits(x, "tidybreed_table")) {
+    pop      <- x$pop
+    base_ids <- unique(dplyr::collect(x$tbl)[["id_ind"]])
+  } else if (inherits(x, "tidybreed_pop")) {
+    pop      <- x
+    base_ids <- NULL
+  } else {
+    stop("x must be a tidybreed_pop or tidybreed_table.", call. = FALSE)
+  }
+
   validate_tidybreed_pop(pop)
   validate_sql_identifier(trait_name, what = "trait name")
   distribution <- match.arg(distribution)
+  base         <- match.arg(base)
 
   if (!is.null(seed)) set.seed(seed)
 
@@ -76,6 +109,9 @@ set_qtl_effects <- function(pop,
     stop("No QTL defined for trait '", trait_name, "'.", call. = FALSE)
   }
 
+  # Compute base allele frequencies (always needed for TBV centering)
+  p_base <- compute_base_allele_freq(pop, base, base_ids)
+
   if (!is.null(effects)) {
     if (!is.numeric(effects)) {
       stop("`effects` must be numeric.", call. = FALSE)
@@ -93,19 +129,21 @@ set_qtl_effects <- function(pop,
                  sample(c(-1, 1), n_qtl, replace = TRUE)
     )
     if (scale_to_target) {
-      qtl_effects <- rescale_effects_to_target(
-        pop, trait_name, qtl_tf, qtl_effects, target_add_var
-      )
+      qtl_effects <- rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
     }
   }
 
   full_effects <- rep(NA_real_, nrow(genome))
   full_effects[qtl_tf] <- qtl_effects
 
-  args   <- setNames(list(full_effects), paste0("add_", trait_name))
+  args <- c(
+    setNames(list(full_effects), paste0("add_", trait_name)),
+    setNames(list(p_base),       paste0("base_allele_freq_", trait_name))
+  )
   result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
 
-  message("Set additive effects for ", n_qtl, " QTL on trait '", trait_name, "'.")
+  message("Set additive effects for ", n_qtl, " QTL on trait '", trait_name,
+          "' (base: ", base, ").")
   invisible(result)
 }
 
@@ -125,19 +163,22 @@ set_qtl_effects <- function(pop,
 #'   using `MASS::mvrnorm`; loci that are not QTL for a particular trait have
 #'   their effect set to `NA` for that trait.
 #'
-#' If `scale_to_target = TRUE`, each trait's vector of effects is then
-#'   rescaled independently so the realised `var(X %*% a_k)` matches its
-#'   `target_add_var` — this slightly shifts the realised off-diagonal of
-#'   `G` but matches conventional simulation practice.
+#' If `scale_to_target = TRUE`, each trait's effects are rescaled independently
+#' using the Falconer formula so the expected additive variance in the base
+#' population matches its `target_add_var`. See [set_qtl_effects()] for details
+#' on the `base` argument.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param x A `tidybreed_pop` object, or a `tidybreed_table` when
+#'   `base = "current_pop"` to specify which individuals define the base allele
+#'   frequencies.
 #' @param trait_names Character vector of trait names (length >= 2). All must
 #'   exist in `trait_meta` and have `is_QTL_{trait_name}` already defined.
 #' @param G Numeric matrix of additive-genetic (co)variances. Must be square
 #'   with side length `length(trait_names)` and symmetric positive semi-definite.
 #' @param method Character. `"shared"` (default) or `"union"`.
+#' @param base Character. `"founder_haplotypes"` (default) or `"current_pop"`.
 #' @param scale_to_target Logical. Rescale each trait's effects to its
-#'   `target_add_var`.
+#'   `target_add_var` using the Falconer formula.
 #' @param seed Optional integer for reproducibility.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
@@ -153,15 +194,26 @@ set_qtl_effects <- function(pop,
 #'   set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
 #' }
 #' @export
-set_qtl_effects_multi <- function(pop,
+set_qtl_effects_multi <- function(x,
                                   trait_names,
                                   G,
                                   method          = c("shared", "union"),
+                                  base            = c("founder_haplotypes", "current_pop"),
                                   scale_to_target = TRUE,
                                   seed            = NULL) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  if (inherits(x, "tidybreed_table")) {
+    pop      <- x$pop
+    base_ids <- unique(dplyr::collect(x$tbl)[["id_ind"]])
+  } else if (inherits(x, "tidybreed_pop")) {
+    pop      <- x
+    base_ids <- NULL
+  } else {
+    stop("x must be a tidybreed_pop or tidybreed_table.", call. = FALSE)
+  }
+
   validate_tidybreed_pop(pop)
+  base <- match.arg(base)
   stopifnot(is.character(trait_names), length(trait_names) >= 2)
   lapply(trait_names, validate_sql_identifier, what = "trait name")
   method <- match.arg(method)
@@ -249,26 +301,30 @@ set_qtl_effects_multi <- function(pop,
     effects_mat[any_qtl, ] <- draws
   }
 
-  # Rescale per-trait to hit target_add_var (treating NAs as 0 for the calc)
+  # Compute base allele frequencies (always needed for TBV centering)
+  p_base <- compute_base_allele_freq(pop, base, base_ids)
+
+  # Rescale per-trait using Falconer formula
   if (scale_to_target) {
-    geno_mat <- get_genotype_matrix(pop)
     for (k in seq_along(trait_names)) {
-      t <- trait_names[k]
-      a <- effects_mat[, t]
-      a_filled <- ifelse(is.na(a), 0, a)
-      bv <- as.numeric(geno_mat %*% a_filled)
-      realised <- stats::var(bv)
-      if (realised > 0 && is.finite(realised)) {
-        scale <- sqrt(target_var[[t]] / realised)
-        effects_mat[, t] <- a * scale
+      t      <- trait_names[k]
+      qtl_tf_k <- qtl_tf_mat[, t]
+      a_qtl  <- effects_mat[qtl_tf_k, t]
+      if (any(!is.na(a_qtl))) {
+        effects_mat[qtl_tf_k, t] <- rescale_effects_to_target(
+          qtl_tf_k, a_qtl, target_var[[t]], p_base
+        )
       }
     }
   }
 
-  # Write one column per trait
+  # Write one column per trait plus base allele frequencies
   for (t in trait_names) {
-    args <- setNames(list(effects_mat[, t]), paste0("add_", t))
-    pop  <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
+    args <- c(
+      setNames(list(effects_mat[, t]), paste0("add_", t)),
+      setNames(list(p_base),           paste0("base_allele_freq_", t))
+    )
+    pop <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
   }
 
   message("Set correlated additive effects for traits: ",
@@ -277,30 +333,74 @@ set_qtl_effects_multi <- function(pop,
 }
 
 
-#' Rescale an effect vector to hit a target additive variance
+#' Rescale QTL effects to hit a target additive variance using Falconer formula
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param trait Trait name (unused except for messaging).
 #' @param qtl_tf Logical mask of QTL loci, length `n_loci`.
 #' @param qtl_effects Numeric effects at QTL loci, length `sum(qtl_tf)`.
 #' @param target_add_var Target additive variance.
+#' @param p_base Numeric vector of base allele frequencies, length `n_loci`.
 #' @return Rescaled `qtl_effects` vector.
 #' @keywords internal
-rescale_effects_to_target <- function(pop, trait, qtl_tf, qtl_effects,
-                                      target_add_var) {
-
-  geno_mat <- get_genotype_matrix(pop)
-  full_a <- rep(0, ncol(geno_mat))
-  full_a[qtl_tf] <- qtl_effects
-  bv <- as.numeric(geno_mat %*% full_a)
-  realised <- stats::var(bv)
-  if (realised <= 0 || !is.finite(realised)) {
-    warning("Realised additive variance is zero; cannot rescale. ",
-            "Effects returned unchanged.", call. = FALSE)
+rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var, p_base) {
+  p_qtl <- p_base[qtl_tf]
+  V_A   <- sum(2 * p_qtl * (1 - p_qtl) * qtl_effects^2)
+  if (V_A <= 0 || !is.finite(V_A)) {
+    warning("Falconer V_A is zero or infinite; effects returned unchanged.", call. = FALSE)
     return(qtl_effects)
   }
-  scale <- sqrt(target_add_var / realised)
-  qtl_effects * scale
+  qtl_effects * sqrt(target_add_var / V_A)
+}
+
+
+#' Compute per-locus allele frequencies from the base population
+#'
+#' @param pop A `tidybreed_pop` object.
+#' @param base Character. `"founder_haplotypes"` or `"current_pop"`.
+#' @param base_ids Optional character vector of `id_ind` for `"current_pop"`.
+#' @return Numeric vector of allele frequencies, length `n_loci`, in
+#'   `locus_id` order.
+#' @keywords internal
+compute_base_allele_freq <- function(pop, base, base_ids = NULL) {
+  if (base == "founder_haplotypes") {
+    if (!"founder_haplotypes" %in% pop$tables) {
+      stop(
+        "founder_haplotypes table not found. ",
+        "Did you call initialize_genome() with n_haplotypes? ",
+        "Use base = 'current_pop' instead.",
+        call. = FALSE
+      )
+    }
+    df <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM founder_haplotypes")
+    if (nrow(df) == 0) {
+      stop("founder_haplotypes table is empty.", call. = FALSE)
+    }
+    locus_cols  <- setdiff(names(df), "hap_id")
+    locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
+    hap_mat     <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
+    return(colMeans(hap_mat))
+  }
+
+  # current_pop: compute from genome_haplotype rows
+  if (!"genome_haplotype" %in% pop$tables) {
+    stop("genome_haplotype table does not exist.", call. = FALSE)
+  }
+  if (is.null(base_ids)) {
+    df <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_haplotype")
+  } else {
+    if (length(base_ids) == 0) stop("base_ids is empty.", call. = FALSE)
+    ids_sql <- paste0("'", base_ids, "'", collapse = ", ")
+    df <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT * FROM genome_haplotype WHERE id_ind IN (", ids_sql, ")")
+    )
+  }
+  if (nrow(df) == 0) {
+    stop("No haplotype rows found for the base population.", call. = FALSE)
+  }
+  locus_cols  <- setdiff(names(df), c("id_ind", "parent_origin"))
+  locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
+  hap_mat     <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
+  colMeans(hap_mat)
 }
 
 

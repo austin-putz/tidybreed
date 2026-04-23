@@ -37,6 +37,73 @@ test_that("set_qtl_effects() rescales to target_add_var within tolerance", {
 })
 
 
+test_that("TBV mean is approximately 0 for founder population", {
+  set.seed(7)
+  pop <- make_effects_pop("eff_mean", n_ind = 500, n_loci = 500)
+
+  pop <- add_trait(pop, "ADG", target_add_var = 100, residual_var = 100,
+                   target_add_mean = 0)
+  pop <- define_qtl(pop, "ADG", n = 200, method = "random")
+  pop <- set_qtl_effects(pop, "ADG", distribution = "normal",
+                         base = "founder_haplotypes", seed = 3)
+
+  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+
+  tbv_df <- dplyr::collect(get_table(pop, "ind_tbv"))
+  expect_equal(nrow(tbv_df), 500)
+  # mean TBV should be close to 0 (within ~2 SE = 2*sqrt(100/500) ≈ 0.9)
+  expect_equal(mean(tbv_df$tbv), 0, tolerance = 2.0)
+  # var TBV should be close to target_add_var = 100
+  expect_equal(var(tbv_df$tbv), 100, tolerance = 15)
+
+  close_pop(pop)
+})
+
+
+test_that("base_allele_freq_{trait} column is written to genome_meta", {
+  pop <- make_effects_pop("eff_base_col")
+
+  pop <- add_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_qtl(pop, "ADG", n = 50, method = "random")
+  pop <- set_qtl_effects(pop, "ADG", distribution = "normal")
+
+  genome <- dplyr::collect(get_table(pop, "genome_meta"))
+  expect_true("base_allele_freq_ADG" %in% names(genome))
+  # all values should be between 0 and 1
+  freqs <- genome$base_allele_freq_ADG
+  expect_true(all(freqs >= 0 & freqs <= 1))
+
+  close_pop(pop)
+})
+
+
+test_that("base = 'current_pop' via tidybreed_table pipe works", {
+  set.seed(17)
+  pop <- make_effects_pop("eff_currpop", n_ind = 200, n_loci = 300)
+
+  pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
+  pop <- add_trait(pop, "ADG", target_add_var = 50, residual_var = 50)
+  pop <- define_qtl(pop, "ADG", n = 100, method = "random")
+
+  # Pass tidybreed_table as first arg with base = "current_pop"
+  pop <- pop |>
+    get_table("ind_meta") |>
+    dplyr::filter(gen == 0L) |>
+    set_qtl_effects("ADG", base = "current_pop", distribution = "normal", seed = 5)
+
+  genome <- dplyr::collect(get_table(pop, "genome_meta"))
+  expect_true("add_ADG" %in% names(genome))
+  expect_true("base_allele_freq_ADG" %in% names(genome))
+
+  # TBV mean should be ≈ 0
+  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  tbv_df <- dplyr::collect(get_table(pop, "ind_tbv"))
+  expect_equal(mean(tbv_df$tbv), 0, tolerance = 3.0)
+
+  close_pop(pop)
+})
+
+
 test_that("set_qtl_effects() accepts manual effects", {
   pop <- make_effects_pop("eff_manual")
   pop <- add_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
