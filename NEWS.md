@@ -1,3 +1,83 @@
+# tidybreed 0.4.2 (2026-04-23)
+
+## New Features
+
+* `get_table()` chains now support the full `slice_*` family: `slice_max()`,
+  `slice_min()`, `slice_head()`, `slice_tail()`, and `slice_sample()`.
+  These can be used directly on a `tidybreed_table` before passing to action
+  functions such as `add_phenotype()`.
+
+# tidybreed 0.4.1 (2026-04-23)
+
+## Breaking Changes
+
+* `filter()` can no longer be called directly on a `tidybreed_pop` object.
+  You must now call `get_table()` first to identify which table to filter.
+  This applies to `add_phenotype()`, `add_tbv()`, `add_genotypes()`, and
+  `extract_genotypes()`.
+  ```r
+  # Old (no longer works):
+  pop |> dplyr::filter(sex == "F") |> add_phenotype("ADG")
+
+  # New (required):
+  pop |> get_table("ind_meta") |> dplyr::filter(sex == "F") |> add_phenotype("ADG")
+
+  # Any table with id_ind now works:
+  pop |> get_table("ind_phenotype") |> dplyr::filter(value > 500) |> add_phenotype("ADG2")
+  ```
+
+* `add_phenotype()`, `add_tbv()`, `add_genotypes()`, and `extract_genotypes()`
+  now require a `tidybreed_table` as the first argument (from `get_table()`),
+  not a `tidybreed_pop`.
+
+* `add_ebv()` has been removed. A proper evaluation runner will replace it in
+  a future version.
+
+# tidybreed 0.4.0 (2026-04-23)
+
+## Breaking Changes
+
+* `mutate_ind_meta()` and `mutate_genome_meta()` have been **removed**. Use the
+  new generic `mutate_table()` instead:
+  ```r
+  # Old:
+  pop <- mutate_ind_meta(pop, gen = 1L)
+  # New:
+  pop <- pop |> get_table("ind_meta") |> mutate_table(gen = 1L)
+  ```
+
+## New Functions
+
+* `mutate_table(tbl_obj, ...)` — generic column add/update for any table.
+  Chain after `get_table()` (and optionally `filter()`) to add new columns or
+  update existing ones. Returns `pop` invisibly. Supports scalar and vector
+  values, type inference, reserved-column blocking, and informative messages.
+  ```r
+  # All rows:
+  pop <- pop |> get_table("ind_meta") |> mutate_table(gen = 1L)
+
+  # Filtered rows only (females get NULL for a new column):
+  pop <- pop |>
+    get_table("ind_meta") |>
+    filter(sex == "M") |>
+    mutate_table(gen = 2L)
+  ```
+
+## Changes
+
+* `get_table()` now returns a `tidybreed_table` S3 object instead of a raw
+  `tbl_duckdb_connection`. Backward-compatible via `collect.tidybreed_table`,
+  `filter.tidybreed_table`, `select.tidybreed_table`, `arrange.tidybreed_table`,
+  `pull.tidybreed_table`, and `count.tidybreed_table` S3 methods — all existing
+  `get_table(...) |> dplyr::filter(...) |> dplyr::collect()` patterns continue
+  to work unchanged.
+* `infer_duckdb_type()` moved to `R/sql_utils.R` and is now a shared internal
+  utility available to all mutation helpers.
+* `define_chip()`, `define_qtl()`, `set_qtl_effects()`, and
+  `set_qtl_effects_multi()` updated to call `mutate_table()` internally.
+
+---
+
 # tidybreed 0.3.0 (2026-04-21)
 
 ## New Functions
