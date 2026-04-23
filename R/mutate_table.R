@@ -98,6 +98,7 @@ filter.tidybreed_table <- function(.data, ..., .preserve = FALSE) {
 #' @param x A `tidybreed_table` object.
 #' @param ... Passed to [dplyr::collect()].
 #' @return A tibble with the (filtered) table contents.
+#' @importFrom dplyr collect
 #' @export
 collect.tidybreed_table <- function(x, ...) {
   dplyr::collect(x$tbl, ...)
@@ -127,6 +128,7 @@ select.tidybreed_table <- function(.data, ...) {
 #' @param .data A `tidybreed_table` object.
 #' @param ... Ordering expressions.
 #' @return A `tidybreed_table` with the ordering applied.
+#' @importFrom dplyr arrange
 #' @export
 arrange.tidybreed_table <- function(.data, ...) {
   .data$tbl <- dplyr::arrange(.data$tbl, ...)
@@ -143,6 +145,7 @@ arrange.tidybreed_table <- function(.data, ...) {
 #' @param name Optional column to use as names.
 #' @param ... Passed to [dplyr::pull()].
 #' @return A vector.
+#' @importFrom dplyr pull
 #' @export
 pull.tidybreed_table <- function(.data, var = -1, name = NULL, ...) {
   dplyr::pull(.data$tbl, {{ var }}, ...)
@@ -159,6 +162,7 @@ pull.tidybreed_table <- function(.data, var = -1, name = NULL, ...) {
 #' @param sort Logical; sort by descending count?
 #' @param name Name for the count column.
 #' @return A lazy tibble.
+#' @importFrom dplyr count
 #' @export
 count.tidybreed_table <- function(x, ..., wt = NULL, sort = FALSE, name = "n") {
   dplyr::count(x$tbl, ..., sort = sort, name = name)
