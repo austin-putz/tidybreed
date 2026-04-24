@@ -44,7 +44,7 @@
 #'     distribution = "normal", variance = 0.5)
 #' }
 #' @export
-add_trait_covariate <- function(pop,
+add_trait_covariate <- function(pop,  # nolint: object_name_linter
                                 trait_name,
                                 effect_name,
                                 effect_class  = c("fixed", "random"),
@@ -55,6 +55,13 @@ add_trait_covariate <- function(pop,
                                 value         = NA_real_,
                                 overwrite     = FALSE) {
 
+  .Deprecated(
+    msg = paste0(
+      "add_trait_covariate() is deprecated. ",
+      "Use add_effect_fixed_class(), add_effect_fixed_cov(), or ",
+      "add_effect_random() instead."
+    )
+  )
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
   validate_sql_identifier(trait_name, what = "trait name")
@@ -123,9 +130,12 @@ add_trait_covariate <- function(pop,
     effect_name   = effect_name,
     effect_class  = effect_class,
     source_column = source_column,
+    source_table  = "ind_meta",
     distribution  = if (effect_class == "random") distribution else NA_character_,
     variance      = as.numeric(variance),
     levels_json   = levels_json,
+    slope         = NA_real_,
+    center        = NA_real_,
     value         = as.numeric(value)
   )
   DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)

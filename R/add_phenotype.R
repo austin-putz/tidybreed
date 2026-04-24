@@ -208,6 +208,117 @@ add_phenotype <- function(tbl,
     return(invisible(pop))
   }
 
+  # 7.5. Pre-draw correlated random effects (joint MVN) for effects that have
+  #      a covariance matrix stored in trait_random_effect_cov.  The draws are
+  #      written to trait_random_effects so that compute_covariate_contribution()
+  #      finds them already there and reuses rather than re-sampling.
+  if ("trait_random_effect_cov" %in% pop$tables && length(trait) >= 2) {
+    traits_sql <- paste0("'", trait, "'", collapse = ", ")
+    cov_effects <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT DISTINCT effect_name FROM trait_random_effect_cov ",
+             "WHERE trait_1 IN (", traits_sql, ") ",
+             "AND trait_2 IN (", traits_sql, ")")
+    )$effect_name
+
+    for (eff in cov_effects) {
+      # Which of the requested traits have this effect AND have covariance rows?
+      eff_traits_q <- DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT DISTINCT trait_1 AS t FROM trait_random_effect_cov ",
+               "WHERE effect_name = '", eff, "' ",
+               "AND trait_1 IN (", traits_sql, ") ",
+               "AND trait_2 IN (", traits_sql, ")")
+      )$t
+      eff_traits <- intersect(trait, eff_traits_q)
+      if (length(eff_traits) < 2) next
+
+      R_eff <- load_random_effect_cov(pop, eff, eff_traits)
+      if (is.null(R_eff)) next
+
+      # Gather all unique levels across all trait subsets for this effect
+      eff_rows <- DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT trait_name, source_column, source_table ",
+               "FROM trait_effects WHERE effect_name = '", eff, "' ",
+               "AND trait_name IN (", traits_sql, ")")
+      )
+
+      all_levels <- character(0)
+      for (et in eff_traits) {
+        er <- eff_rows[eff_rows$trait_name == et, , drop = FALSE]
+        if (nrow(er) == 0) next
+        src_tbl <- if (is.na(er$source_table[1]) ||
+                       !nzchar(er$source_table[1])) "ind_meta" else er$source_table[1]
+        src_col <- er$source_column[1]
+        ids_t   <- subset_by_trait[[et]]$id_ind
+        if (length(ids_t) == 0) next
+        if (src_tbl == "ind_meta") {
+          grp_vals <- subset_by_trait[[et]][[src_col]]
+        } else {
+          ids_sql_et <- paste0("'", ids_t, "'", collapse = ", ")
+          grp_df <- DBI::dbGetQuery(
+            pop$db_conn,
+            paste0("SELECT ", src_col, " FROM ", src_tbl,
+                   " WHERE id_ind IN (", ids_sql_et, ")")
+          )
+          grp_vals <- grp_df[[src_col]]
+        }
+        all_levels <- union(all_levels,
+                            unique(as.character(grp_vals[!is.na(grp_vals)])))
+      }
+      if (length(all_levels) == 0) next
+
+      # Find levels that are new (missing) for any trait
+      new_levels <- character(0)
+      for (et in eff_traits) {
+        existing_lvls <- DBI::dbGetQuery(
+          pop$db_conn,
+          paste0("SELECT level FROM trait_random_effects ",
+                 "WHERE trait_name = '", et, "' AND effect_name = '", eff, "'")
+        )$level
+        new_levels <- union(new_levels, setdiff(all_levels, existing_lvls))
+      }
+      if (length(new_levels) == 0) next
+
+      # Draw correlated values for new levels
+      if (!requireNamespace("MASS", quietly = TRUE)) {
+        stop("Package 'MASS' is required for correlated random effect sampling.",
+             call. = FALSE)
+      }
+      draws_mat <- MASS::mvrnorm(
+        n     = length(new_levels),
+        mu    = rep(0, length(eff_traits)),
+        Sigma = R_eff
+      )
+      if (!is.matrix(draws_mat)) {
+        draws_mat <- matrix(draws_mat, nrow = 1)
+      }
+      colnames(draws_mat) <- eff_traits
+      rownames(draws_mat) <- new_levels
+
+      # Upsert into trait_random_effects per trait
+      for (et in eff_traits) {
+        existing_lvls <- DBI::dbGetQuery(
+          pop$db_conn,
+          paste0("SELECT level FROM trait_random_effects ",
+                 "WHERE trait_name = '", et, "' AND effect_name = '", eff, "'")
+        )$level
+        new_for_trait <- setdiff(new_levels, existing_lvls)
+        if (length(new_for_trait) == 0) next
+        new_df <- tibble::tibble(
+          trait_name   = et,
+          effect_name  = eff,
+          level        = new_for_trait,
+          draw_value   = draws_mat[new_for_trait, et],
+          date_sampled = as.Date(date_measured)
+        )
+        DBI::dbWriteTable(pop$db_conn, "trait_random_effects", new_df,
+                          append = TRUE)
+      }
+    }
+  }
+
   # 8. Joint residuals if all traits share the same subset + R is stored
   joint_resid <- NULL
   if (length(trait) >= 2 && is.null(user_residual)) {

@@ -136,55 +136,137 @@ clip_count <- function(x, min_value = NA_real_, max_value = NA_real_) {
 #'
 #' @param pop A `tidybreed_pop` object (connection used for queries).
 #' @param trait Trait name.
-#' @param ind_meta_df Data frame containing at least `id_ind` and any columns
-#'   referenced by trait_effects rows for this trait.
-#' @return Numeric vector of length `nrow(ind_meta_df)` giving the summed
+#' @param subset_df Data frame: the per-trait subset of `ind_meta` (already
+#'   sex-filtered). Must contain `id_ind` and any `ind_meta` columns referenced
+#'   by effects. Effects from other tables are fetched from the DB directly.
+#' @return Numeric vector of length `nrow(subset_df)` giving the summed
 #'   covariate contribution per individual.
 #' @keywords internal
-compute_covariate_contribution <- function(pop, trait, ind_meta_df) {
+compute_covariate_contribution <- function(pop, trait, subset_df) {
 
   effects <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT * FROM trait_effects WHERE trait_name = '", trait, "'")
   )
-  n_ind <- nrow(ind_meta_df)
+  n_ind <- nrow(subset_df)
   if (nrow(effects) == 0) return(rep(0, n_ind))
 
-  total <- rep(0, n_ind)
+  ids_t   <- subset_df$id_ind
+  ids_sql <- paste0("'", ids_t, "'", collapse = ", ")
+  total   <- rep(0, n_ind)
+
   for (i in seq_len(nrow(effects))) {
     e <- effects[i, ]
-    if (!e$source_column %in% names(ind_meta_df)) {
-      warning("Covariate '", e$effect_name, "' references missing column '",
-              e$source_column, "' in ind_meta; skipping.", call. = FALSE)
-      next
+
+    # Resolve source table (NA or empty means ind_meta for old rows)
+    src_tbl <- if (is.na(e$source_table) || !nzchar(e$source_table)) {
+      "ind_meta"
+    } else {
+      e$source_table
     }
-    group <- ind_meta_df[[e$source_column]]
-    if (e$effect_class == "fixed") {
+
+    # Fetch source data frame (use subset_df for ind_meta; query DB otherwise)
+    if (src_tbl == "ind_meta") {
+      src_df <- subset_df
+    } else {
+      if (!src_tbl %in% DBI::dbListTables(pop$db_conn)) {
+        stop("Effect '", e$effect_name, "': source table '", src_tbl,
+             "' does not exist in the database.", call. = FALSE)
+      }
+      src_df <- DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT * FROM ", src_tbl, " WHERE id_ind IN (", ids_sql, ")")
+      )
+      if (any(duplicated(src_df$id_ind))) {
+        stop("Effect '", e$effect_name, "': source table '", src_tbl,
+             "' has duplicate id_ind rows for the current subset. ",
+             "Each individual must appear at most once.", call. = FALSE)
+      }
+      src_df <- src_df[match(ids_t, src_df$id_ind), , drop = FALSE]
+    }
+
+    if (!e$source_column %in% names(src_df)) {
+      stop("Effect '", e$effect_name, "': column '", e$source_column,
+           "' not found in table '", src_tbl, "'.", call. = FALSE)
+    }
+
+    group <- src_df[[e$source_column]]
+    ec    <- e$effect_class
+
+    if (ec %in% c("fixed", "fixed_class")) {
+      # Discrete fixed effect — error on unknown level
       level_map <- decode_levels_json(e$levels_json)
       shifts <- unname(level_map[as.character(group)])
-      shifts[is.na(shifts)] <- 0
+      missing_lvls <- unique(as.character(group[is.na(shifts)]))
+      if (length(missing_lvls) > 0) {
+        stop("Effect '", e$effect_name, "': the following levels in column '",
+             e$source_column, "' have no shift defined: ",
+             paste(missing_lvls, collapse = ", "),
+             ". Update add_effect_fixed_class() to include all levels.",
+             call. = FALSE)
+      }
       total <- total + shifts
-    } else {  # random
-      unique_levels <- unique(group[!is.na(group)])
-      draws <- switch(
-        e$distribution,
-        normal  = stats::rnorm(length(unique_levels),
-                               sd = sqrt(e$variance)),
-        gamma   = stats::rgamma(length(unique_levels),
-                                shape = 1, rate = 1 / sqrt(e$variance)),
-        uniform = stats::runif(length(unique_levels),
-                               min = -sqrt(3 * e$variance),
-                               max =  sqrt(3 * e$variance)),
-        stats::rnorm(length(unique_levels), sd = sqrt(e$variance))
+
+    } else if (ec == "fixed_cov") {
+      # Continuous covariate
+      vals       <- as.numeric(src_df[[e$source_column]])
+      center_val <- if (is.na(e$center)) 0 else e$center
+      slope_val  <- if (is.na(e$slope))  0 else e$slope
+      total <- total + slope_val * (vals - center_val)
+
+    } else {
+      # Random effect — store/reuse draws in trait_random_effects
+      unique_lvls <- unique(as.character(group[!is.na(group)]))
+
+      existing_draws <- DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT level, draw_value FROM trait_random_effects ",
+               "WHERE trait_name = '", trait,
+               "' AND effect_name = '", e$effect_name, "'")
       )
-      level_draw <- stats::setNames(draws, as.character(unique_levels))
-      per_ind <- unname(level_draw[as.character(group)])
+      existing_map <- if (nrow(existing_draws) > 0) {
+        stats::setNames(existing_draws$draw_value, existing_draws$level)
+      } else {
+        stats::setNames(numeric(0), character(0))
+      }
+
+      new_lvls <- setdiff(unique_lvls, names(existing_map))
+      if (length(new_lvls) > 0) {
+        new_draws <- switch(
+          e$distribution %||% "normal",
+          normal  = stats::rnorm(length(new_lvls), sd = sqrt(e$variance)),
+          gamma   = stats::rgamma(length(new_lvls), shape = 1,
+                                  rate = 1 / sqrt(e$variance)),
+          uniform = stats::runif(length(new_lvls),
+                                 min = -sqrt(3 * e$variance),
+                                 max =  sqrt(3 * e$variance)),
+          stats::rnorm(length(new_lvls), sd = sqrt(e$variance))
+        )
+        new_df <- tibble::tibble(
+          trait_name   = trait,
+          effect_name  = e$effect_name,
+          level        = new_lvls,
+          draw_value   = new_draws,
+          date_sampled = as.Date(Sys.Date())
+        )
+        DBI::dbWriteTable(pop$db_conn, "trait_random_effects", new_df,
+                          append = TRUE)
+        existing_map <- c(existing_map,
+                          stats::setNames(new_draws, new_lvls))
+      }
+
+      per_ind <- unname(existing_map[as.character(group)])
       per_ind[is.na(per_ind)] <- 0
       total <- total + per_ind
     }
   }
   total
 }
+
+
+#' Null-coalescing operator for internal use
+#' @keywords internal
+`%||%` <- function(x, y) if (is.null(x) || (length(x) == 1 && is.na(x))) y else x
 
 
 #' Load the residual covariance matrix for a set of traits
@@ -205,6 +287,33 @@ load_residual_cov <- function(pop, traits) {
            paste0("'", traits, "'", collapse = ", "), ") ",
            "AND trait_2 IN (",
            paste0("'", traits, "'", collapse = ", "), ")")
+  )
+  if (nrow(rows) == 0) return(NULL)
+  for (i in seq_len(nrow(rows))) {
+    R[rows$trait_1[i], rows$trait_2[i]] <- rows$cov[i]
+  }
+  if (any(is.na(R))) return(NULL)
+  R
+}
+
+
+#' Load the random-effect covariance matrix for a named effect across traits
+#'
+#' @param pop A `tidybreed_pop` object.
+#' @param effect_name Character. The shared effect name.
+#' @param traits Character vector of trait names.
+#' @return Numeric matrix named by `traits`, or `NULL` if any entry is missing.
+#' @keywords internal
+load_random_effect_cov <- function(pop, effect_name, traits) {
+  if (!"trait_random_effect_cov" %in% pop$tables) return(NULL)
+  n <- length(traits)
+  R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(traits, traits))
+  rows <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT trait_1, trait_2, cov FROM trait_random_effect_cov ",
+           "WHERE effect_name = '", effect_name, "' ",
+           "AND trait_1 IN (", paste0("'", traits, "'", collapse = ", "), ") ",
+           "AND trait_2 IN (", paste0("'", traits, "'", collapse = ", "), ")")
   )
   if (nrow(rows) == 0) return(NULL)
   for (i in seq_len(nrow(rows))) {

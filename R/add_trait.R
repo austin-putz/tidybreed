@@ -223,9 +223,12 @@ ensure_trait_tables <- function(pop) {
         effect_name   VARCHAR,
         effect_class  VARCHAR,
         source_column VARCHAR,
+        source_table  VARCHAR,
         distribution  VARCHAR,
         variance      DOUBLE,
         levels_json   VARCHAR,
+        slope         DOUBLE,
+        center        DOUBLE,
         value         DOUBLE,
         PRIMARY KEY (trait_name, effect_name)
       )
@@ -236,6 +239,25 @@ ensure_trait_tables <- function(pop) {
         trait_2 VARCHAR,
         cov     DOUBLE,
         PRIMARY KEY (trait_1, trait_2)
+      )
+    ",
+    trait_random_effects = "
+      CREATE TABLE trait_random_effects (
+        trait_name   VARCHAR,
+        effect_name  VARCHAR,
+        level        VARCHAR,
+        draw_value   DOUBLE,
+        date_sampled DATE,
+        PRIMARY KEY (trait_name, effect_name, level)
+      )
+    ",
+    trait_random_effect_cov = "
+      CREATE TABLE trait_random_effect_cov (
+        effect_name VARCHAR,
+        trait_1     VARCHAR,
+        trait_2     VARCHAR,
+        cov         DOUBLE,
+        PRIMARY KEY (effect_name, trait_1, trait_2)
       )
     ",
     ind_phenotype = "
@@ -275,6 +297,18 @@ ensure_trait_tables <- function(pop) {
   for (tbl in names(ddl)) {
     if (!tbl %in% existing) {
       DBI::dbExecute(pop$db_conn, ddl[[tbl]])
+    }
+  }
+
+  # Migrate trait_effects: add new columns if the table already existed
+  if ("trait_effects" %in% existing) {
+    te_cols <- DBI::dbListFields(pop$db_conn, "trait_effects")
+    for (new_col in c("source_table VARCHAR", "slope DOUBLE", "center DOUBLE")) {
+      col_name <- strsplit(new_col, " ")[[1]][1]
+      if (!col_name %in% te_cols) {
+        DBI::dbExecute(pop$db_conn,
+          paste0("ALTER TABLE trait_effects ADD COLUMN ", new_col))
+      }
     }
   }
 

@@ -1,3 +1,54 @@
+# tidybreed 0.6.0 (2026-04-23)
+
+## New Features
+
+* **`add_effect_int(pop, trait_name, mean)`** — sets the intercept
+  (`target_add_mean`) for a trait; convenience alternative to setting it at
+  `add_trait()` time.
+
+* **`add_effect_fixed_class(pop, trait_name, effect_name, source_column, levels, source_table, overwrite)`**
+  — discrete fixed effect. Maps levels of a grouping column to numeric shifts.
+  Errors (not silent 0) at phenotyping time if an individual's level is not in
+  `levels`. Replaces the `effect_class = "fixed"` path of `add_trait_covariate()`.
+
+* **`add_effect_fixed_cov(pop, trait_name, effect_name, source_column, slope, center, source_table, overwrite)`**
+  — continuous covariate regression term. Contribution = `slope * (x - center)`.
+  When `center = NULL` the mean of `source_column` is computed from the current
+  `source_table` and stored for reproducibility.
+
+* **`add_effect_random(pop, trait_name, effect_name, source_column, variance, distribution, source_table, overwrite)`**
+  — random group effect. Drawn values are now persisted in a new
+  `trait_random_effects` table so the same group receives the same shift on
+  repeated calls to `add_phenotype()`, without requiring a fixed `seed`.
+
+* **`set_random_effect_cov(pop, effect_name, traits, R, tol, overwrite)`** —
+  stores a covariance matrix enabling joint MVN draws of a named random effect
+  across multiple traits. Analogous to `set_residual_cov()`.
+
+* All `add_effect_*()` functions accept a `source_table` parameter (default
+  `"ind_meta"`). Any database table with an `id_ind` column can serve as the
+  source for effect levels, enabling future repeated-measures and multi-table
+  workflows.
+
+## Schema Changes
+
+* `trait_effects` gains three nullable columns: `source_table VARCHAR`,
+  `slope DOUBLE`, `center DOUBLE`. Existing rows (written by
+  `add_trait_covariate()`) are backward-compatible — `source_table` defaults to
+  `"ind_meta"` when `NULL`.
+
+* Two new tables: `trait_random_effects` (stores drawn group-level random effect
+  values) and `trait_random_effect_cov` (covariance structure for correlated
+  random effects across traits).
+
+## Deprecations
+
+* `add_trait_covariate()` now emits a deprecation warning. It continues to work
+  for backward compatibility but users should migrate to `add_effect_fixed_class()`
+  or `add_effect_random()`.
+
+---
+
 # tidybreed 0.5.0 (2026-04-23)
 
 ## Breaking Changes
