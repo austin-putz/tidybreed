@@ -49,10 +49,10 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 
 \strong{Model} (per trait, on the liability / continuous scale):
 \preformatted{
-  y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+  y_i = target_add_mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
 }
 \itemize{
-\item \code{mean} comes from \code{trait_meta}.
+\item \code{target_add_mean} comes from \code{trait_meta}.
 \item Fixed and random shifts come from \code{trait_effects} rows.
 \item \code{TBV_i} = sum over QTL of \verb{add_\{trait\}} * genotype dose (or haplotype
 dose for imprinted traits).

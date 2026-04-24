@@ -14,7 +14,7 @@ add_trait(
   recorded_on = c("self", "dam", "sire", "offspring_mean"),
   expressed_sex = c("both", "M", "F"),
   expressed_parent = c("both", "parent_1", "parent_2"),
-  mean = 0,
+  target_add_mean = 0,
   target_add_var = 1,
   residual_var = 1,
   min_value = NA_real_,
@@ -53,8 +53,9 @@ for this trait (e.g. test-day yield).}
 \code{"both"}, \code{"parent_1"} (paternal), \code{"parent_2"} (maternal). Imprinted
 traits use only the haplotype from the specified parent.}
 
-\item{mean}{Numeric. Overall mean / intercept on the continuous (or
-liability) scale.}
+\item{target_add_mean}{Numeric. Target mean additive genetic value for the
+base population. Used as the intercept in the phenotype model. Defaults to
+0 so that \code{E[TBV] = 0} when TBV is centered on base allele frequencies.}
 
 \item{target_add_var}{Numeric. Target additive-genetic variance used by
 \code{\link[=set_qtl_effects]{set_qtl_effects()}} to rescale sampled effects.}
@@ -102,7 +103,7 @@ pop <- pop |>
     trait_name     = "ADG",
     trait_type     = "continuous",
     units          = "g/day",
-    mean           = 850,
+    target_add_mean = 0,
     target_add_var = 0.25,
     residual_var   = 0.75
   )

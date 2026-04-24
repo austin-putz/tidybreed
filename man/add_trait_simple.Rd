@@ -32,8 +32,8 @@ add_trait_simple(
 \item{seed}{Optional integer for reproducibility.}
 
 \item{...}{Additional arguments forwarded to \code{\link[=add_trait]{add_trait()}} (e.g.
-\code{trait_type}, \code{target_add_var}, \code{residual_var}, \code{mean}, \code{prevalence},
-\code{expressed_sex}).}
+\code{trait_type}, \code{target_add_var}, \code{residual_var}, \code{target_add_mean},
+\code{prevalence}, \code{expressed_sex}).}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -53,7 +53,7 @@ pop <- pop |>
     n_qtl               = 100,
     target_add_var      = 0.25,
     residual_var        = 0.75,
-    mean                = 850,
+    target_add_mean     = 850,
     qtl_method          = "chromosome_even",
     effect_distribution = "normal"
   )

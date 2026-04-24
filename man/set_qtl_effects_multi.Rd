@@ -5,16 +5,19 @@
 \title{Sample correlated additive QTL effects across multiple traits}
 \usage{
 set_qtl_effects_multi(
-  pop,
+  x,
   trait_names,
   G,
   method = c("shared", "union"),
+  base = c("founder_haplotypes", "current_pop"),
   scale_to_target = TRUE,
   seed = NULL
 )
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
+\item{x}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} when
+\code{base = "current_pop"} to specify which individuals define the base allele
+frequencies.}
 
 \item{trait_names}{Character vector of trait names (length >= 2). All must
 exist in \code{trait_meta} and have \verb{is_QTL_\{trait_name\}} already defined.}
@@ -24,8 +27,10 @@ with side length \code{length(trait_names)} and symmetric positive semi-definite
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}.}
 
+\item{base}{Character. \code{"founder_haplotypes"} (default) or \code{"current_pop"}.}
+
 \item{scale_to_target}{Logical. Rescale each trait's effects to its
-\code{target_add_var}.}
+\code{target_add_var} using the Falconer formula.}
 
 \item{seed}{Optional integer for reproducibility.}
 }
@@ -46,10 +51,10 @@ using \code{MASS::mvrnorm}; loci that are not QTL for a particular trait have
 their effect set to \code{NA} for that trait.
 }
 
-If \code{scale_to_target = TRUE}, each trait's vector of effects is then
-rescaled independently so the realised \code{var(X \%*\% a_k)} matches its
-\code{target_add_var} — this slightly shifts the realised off-diagonal of
-\code{G} but matches conventional simulation practice.
+If \code{scale_to_target = TRUE}, each trait's effects are rescaled independently
+using the Falconer formula so the expected additive variance in the base
+population matches its \code{target_add_var}. See \code{\link[=set_qtl_effects]{set_qtl_effects()}} for details
+on the \code{base} argument.
 }
 \examples{
 \dontrun{

@@ -2,25 +2,23 @@
 % Please edit documentation in R/set_qtl_effects.R
 \name{rescale_effects_to_target}
 \alias{rescale_effects_to_target}
-\title{Rescale an effect vector to hit a target additive variance}
+\title{Rescale QTL effects to hit a target additive variance using Falconer formula}
 \usage{
-rescale_effects_to_target(pop, trait, qtl_tf, qtl_effects, target_add_var)
+rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
-
-\item{trait}{Trait name (unused except for messaging).}
-
 \item{qtl_tf}{Logical mask of QTL loci, length \code{n_loci}.}
 
 \item{qtl_effects}{Numeric effects at QTL loci, length \code{sum(qtl_tf)}.}
 
 \item{target_add_var}{Target additive variance.}
+
+\item{p_base}{Numeric vector of base allele frequencies, length \code{n_loci}.}
 }
 \value{
 Rescaled \code{qtl_effects} vector.
 }
 \description{
-Rescale an effect vector to hit a target additive variance
+Rescale QTL effects to hit a target additive variance using Falconer formula
 }
 \keyword{internal}
