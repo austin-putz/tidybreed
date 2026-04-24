@@ -7,6 +7,7 @@
 #'
 #' @keywords internal
 #' @name sql_utils
+NULL
 
 
 #' DuckDB reserved keywords that must not be used as user identifiers.
