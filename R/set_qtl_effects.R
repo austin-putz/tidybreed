@@ -90,15 +90,13 @@ set_qtl_effects <- function(x,
          "', ...) first.", call. = FALSE)
   }
 
-  trait_row <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT target_add_var FROM trait_meta WHERE trait_name = '",
-           trait_name, "'")
-  )
-  if (nrow(trait_row) == 0) {
+  if (!DBI::dbExistsTable(pop$db_conn, "trait_meta") ||
+      nrow(DBI::dbGetQuery(pop$db_conn,
+        paste0("SELECT 1 FROM trait_meta WHERE trait_name = '",
+               trait_name, "'"))) == 0) {
     stop("Trait '", trait_name, "' not found in trait_meta.", call. = FALSE)
   }
-  target_add_var <- trait_row$target_add_var
+  target_add_var <- get_effect_var(pop, "gen_add", trait_name)
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   qtl_tf <- as.logical(genome[[qtl_col]])
@@ -129,6 +127,12 @@ set_qtl_effects <- function(x,
                  sample(c(-1, 1), n_qtl, replace = TRUE)
     )
     if (scale_to_target) {
+      if (is.na(target_add_var)) {
+        stop("No additive genetic variance stored for trait '", trait_name, "'. ",
+             "Call add_effect_cov_matrix(pop, 'gen_add', ...) or ",
+             "add_trait(pop, '", trait_name, "', target_add_var = ...) first.",
+             call. = FALSE)
+      }
       qtl_effects <- rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
     }
   }
@@ -173,8 +177,11 @@ set_qtl_effects <- function(x,
 #'   frequencies.
 #' @param trait_names Character vector of trait names (length >= 2). All must
 #'   exist in `trait_meta` and have `is_QTL_{trait_name}` already defined.
-#' @param G Numeric matrix of additive-genetic (co)variances. Must be square
-#'   with side length `length(trait_names)` and symmetric positive semi-definite.
+#' @param G Optional numeric matrix of additive-genetic (co)variances. Must be
+#'   square with side length `length(trait_names)` and symmetric. When supplied,
+#'   stored to `trait_effect_cov` under `"gen_add"` before use. When `NULL`,
+#'   read from `trait_effect_cov` (requires a prior call to
+#'   [add_effect_cov_matrix()] with `effect_name = "gen_add"`).
 #' @param method Character. `"shared"` (default) or `"union"`.
 #' @param base Character. `"founder_haplotypes"` (default) or `"current_pop"`.
 #' @param scale_to_target Logical. Rescale each trait's effects to its
@@ -185,18 +192,25 @@ set_qtl_effects <- function(x,
 #'
 #' @examples
 #' \dontrun{
-#' G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2)
+#' G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
+#'             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
+#' # Option A: pass G explicitly (also stores it for later use)
 #' pop <- pop |>
-#'   add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
-#'   add_trait("BW",  target_add_var = 0.30, residual_var = 0.70) |>
 #'   define_qtl("ADG", n = 200) |>
 #'   define_qtl("BW",  n = 200) |>
 #'   set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
+#'
+#' # Option B: store G first, then omit it
+#' pop <- pop |>
+#'   add_effect_cov_matrix("gen_add", G) |>
+#'   define_qtl("ADG", n = 200) |>
+#'   define_qtl("BW",  n = 200) |>
+#'   set_qtl_effects_multi(trait_names = c("ADG", "BW"))
 #' }
 #' @export
 set_qtl_effects_multi <- function(x,
                                   trait_names,
-                                  G,
+                                  G               = NULL,
                                   method          = c("shared", "union"),
                                   base            = c("founder_haplotypes", "current_pop"),
                                   scale_to_target = TRUE,
@@ -223,12 +237,28 @@ set_qtl_effects_multi <- function(x,
          "Install with install.packages('MASS').", call. = FALSE)
   }
 
-  if (!is.matrix(G) || nrow(G) != length(trait_names) || ncol(G) != length(trait_names)) {
-    stop("`G` must be a square matrix with side = length(trait_names).",
-         call. = FALSE)
-  }
-  if (!isSymmetric(unname(G))) {
-    stop("`G` must be symmetric.", call. = FALSE)
+  # Resolve G: if not supplied, read from trait_effect_cov
+  if (!is.null(G)) {
+    if (!is.matrix(G) || nrow(G) != length(trait_names) || ncol(G) != length(trait_names)) {
+      stop("`G` must be a square matrix with side = length(trait_names).",
+           call. = FALSE)
+    }
+    if (!isSymmetric(unname(G))) {
+      stop("`G` must be symmetric.", call. = FALSE)
+    }
+    # Store G so it's available for future calls and target_var lookup
+    g_named <- G
+    dimnames(g_named) <- list(trait_names, trait_names)
+    pop <- add_effect_cov_matrix(pop, "gen_add", g_named)
+  } else {
+    G_stored <- load_effect_cov(pop, "gen_add", trait_names)
+    if (is.null(G_stored)) {
+      stop("No 'gen_add' covariance matrix found for traits: ",
+           paste(trait_names, collapse = ", "),
+           ". Call add_effect_cov_matrix(pop, 'gen_add', G) first or pass G directly.",
+           call. = FALSE)
+    }
+    G <- G_stored
   }
 
   if (!is.null(seed)) set.seed(seed)
@@ -236,10 +266,10 @@ set_qtl_effects_multi <- function(x,
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   n_loci <- nrow(genome)
 
-  # Validate trait_names and QTL columns
+  # Validate trait_names exist in trait_meta
   trait_meta_rows <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_name, target_add_var FROM trait_meta WHERE trait_name IN (",
+    paste0("SELECT trait_name FROM trait_meta WHERE trait_name IN (",
            paste0("'", trait_names, "'", collapse = ", "), ")")
   )
   missing_traits <- setdiff(trait_names, trait_meta_rows$trait_name)
@@ -247,8 +277,12 @@ set_qtl_effects_multi <- function(x,
     stop("Traits not found in trait_meta: ",
          paste(missing_traits, collapse = ", "), call. = FALSE)
   }
+
+  # target_add_var per trait comes from trait_effect_cov (gen_add diagonal)
   target_var <- stats::setNames(
-    trait_meta_rows$target_add_var[match(trait_names, trait_meta_rows$trait_name)],
+    vapply(trait_names,
+           function(t) get_effect_var(pop, "gen_add", t),
+           numeric(1)),
     trait_names
   )
 
@@ -306,6 +340,13 @@ set_qtl_effects_multi <- function(x,
 
   # Rescale per-trait using Falconer formula
   if (scale_to_target) {
+    na_targets <- trait_names[is.na(target_var)]
+    if (length(na_targets) > 0) {
+      stop("No additive genetic variance stored for trait(s): ",
+           paste(na_targets, collapse = ", "),
+           ". Supply `G` or call add_effect_cov_matrix(pop, 'gen_add', ...) first.",
+           call. = FALSE)
+    }
     for (k in seq_along(trait_names)) {
       t      <- trait_names[k]
       qtl_tf_k <- qtl_tf_mat[, t]

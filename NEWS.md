@@ -1,3 +1,54 @@
+# tidybreed 0.7.0 (2026-04-24)
+
+## Breaking Changes
+
+* **`add_effect_cov_matrix(pop, effect_name, cov_matrix, trait_names, tol)`** —
+  new unified function for storing variance/covariance matrices. Use
+  `effect_name = "gen_add"` for additive genetic (co)variances and
+  `effect_name = "residual"` for residual (co)variances. Any named random effect
+  (e.g. `"litter"`, `"dam"`) is also supported. Replaces `set_residual_cov()` and
+  `set_random_effect_cov()`.
+
+* **`set_residual_cov()` removed** — use
+  `add_effect_cov_matrix(pop, "residual", R)` instead.
+
+* **`set_random_effect_cov()` removed** — use
+  `add_effect_cov_matrix(pop, effect_name, R)` instead.
+
+* **`trait_meta` columns removed**: `target_add_var` and `residual_var` are no
+  longer stored in `trait_meta`. Supply them via `add_trait(target_add_var = ...)` /
+  `add_trait(residual_var = ...)` (values are written to `trait_effect_cov`) or
+  call `add_effect_cov_matrix()` directly.
+
+* **`trait_effects` column removed**: `variance` column removed from
+  `trait_effects`. Random effect variances are now stored exclusively in
+  `trait_effect_cov`.
+
+* **`set_qtl_effects_multi()` — `G` parameter is now optional** (default `NULL`).
+  If omitted, the additive genetic covariance matrix is read from
+  `trait_effect_cov` (stored via `add_effect_cov_matrix("gen_add", ...)`).
+
+* **`add_effect_random()` — `variance` parameter is now optional** (default
+  `NULL`). If a diagonal entry for `(effect_name, trait_name)` already exists in
+  `trait_effect_cov`, it is used automatically. Only required when no stored
+  value exists.
+
+## New Tables
+
+* **`trait_effect_cov`** — unified variance/covariance table replacing
+  `trait_residual_cov` and `trait_random_effect_cov`. Schema:
+  `(effect_name VARCHAR, trait_1 VARCHAR, trait_2 VARCHAR, cov DOUBLE)`.
+  Both `(i,j)` and `(j,i)` pairs stored for symmetric lookup.
+
+## Bug Fixes / Internal Changes
+
+* All writes to `trait_effect_cov` use `DBI::dbExecute()` with raw SQL instead
+  of `DBI::dbWriteTable()` to avoid consuming R's RNG state (DuckDB's
+  `dbWriteTable` internally touches the RNG, which would shift simulation
+  reproducibility).
+
+---
+
 # tidybreed 0.6.0 (2026-04-23)
 
 ## New Features

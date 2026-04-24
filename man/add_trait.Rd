@@ -15,8 +15,8 @@ add_trait(
   expressed_sex = c("both", "M", "F"),
   expressed_parent = c("both", "parent_1", "parent_2"),
   target_add_mean = 0,
-  target_add_var = 1,
-  residual_var = 1,
+  target_add_var = NULL,
+  residual_var = NULL,
   min_value = NA_real_,
   max_value = NA_real_,
   prevalence = NA_real_,
@@ -57,10 +57,15 @@ traits use only the haplotype from the specified parent.}
 base population. Used as the intercept in the phenotype model. Defaults to
 0 so that \code{E[TBV] = 0} when TBV is centered on base allele frequencies.}
 
-\item{target_add_var}{Numeric. Target additive-genetic variance used by
-\code{\link[=set_qtl_effects]{set_qtl_effects()}} to rescale sampled effects.}
+\item{target_add_var}{Numeric. Target additive-genetic variance. When
+provided, written to \code{trait_effect_cov} as a diagonal entry under
+\code{effect_name = "gen_add"}. Used by \code{\link[=set_qtl_effects]{set_qtl_effects()}} to rescale effects.
+If already set via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, leave \code{NULL}.}
 
-\item{residual_var}{Numeric. Residual variance used by \code{\link[=add_phenotype]{add_phenotype()}}.}
+\item{residual_var}{Numeric. Residual variance. When provided, written to
+\code{trait_effect_cov} under \code{effect_name = "residual"}. Used by
+\code{\link[=add_phenotype]{add_phenotype()}}. If already set via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, leave
+\code{NULL}.}
 
 \item{min_value, max_value}{Numeric. Clipping bounds for count traits. \code{NA}
 means no limit.}
@@ -77,7 +82,7 @@ cutpoints separating ordered levels. Stored as a comma-separated string.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a trait with the same name already
 exists, replace its \code{trait_meta} row. Associated rows in \code{trait_effects}
-and \code{trait_residual_cov} are cleared for that trait.}
+are cleared for that trait.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly). Assign the result back.
@@ -92,9 +97,11 @@ trait type (continuous / count / binary / categorical), expression rules
 steps handled by \code{\link[=define_qtl]{define_qtl()}} and \code{\link[=set_qtl_effects]{set_qtl_effects()}}. For the common
 one-off case, use \code{\link[=add_trait_simple]{add_trait_simple()}} which chains all three together.
 
-On first call, creates the six trait-layer tables (\code{trait_meta},
-\code{trait_effects}, \code{trait_residual_cov}, \code{ind_phenotype}, \code{ind_tbv},
-\code{ind_ebv}).
+On first call, creates the trait-layer tables (\code{trait_meta}, \code{trait_effects},
+\code{trait_random_effects}, \code{ind_phenotype}, \code{ind_tbv}, \code{ind_ebv}).
+Variance and covariance data is stored in the separate \code{trait_effect_cov}
+table (created on first call to \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}} or when
+\code{target_add_var} / \code{residual_var} are supplied here).
 }
 \examples{
 \dontrun{

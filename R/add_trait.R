@@ -10,9 +10,11 @@
 #' steps handled by [define_qtl()] and [set_qtl_effects()]. For the common
 #' one-off case, use [add_trait_simple()] which chains all three together.
 #'
-#' On first call, creates the six trait-layer tables (`trait_meta`,
-#' `trait_effects`, `trait_residual_cov`, `ind_phenotype`, `ind_tbv`,
-#' `ind_ebv`).
+#' On first call, creates the trait-layer tables (`trait_meta`, `trait_effects`,
+#' `trait_random_effects`, `ind_phenotype`, `ind_tbv`, `ind_ebv`).
+#' Variance and covariance data is stored in the separate `trait_effect_cov`
+#' table (created on first call to [add_effect_cov_matrix()] or when
+#' `target_add_var` / `residual_var` are supplied here).
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Trait name; used as the primary key and as the
@@ -34,9 +36,14 @@
 #' @param target_add_mean Numeric. Target mean additive genetic value for the
 #'   base population. Used as the intercept in the phenotype model. Defaults to
 #'   0 so that `E[TBV] = 0` when TBV is centered on base allele frequencies.
-#' @param target_add_var Numeric. Target additive-genetic variance used by
-#'   [set_qtl_effects()] to rescale sampled effects.
-#' @param residual_var Numeric. Residual variance used by [add_phenotype()].
+#' @param target_add_var Numeric. Target additive-genetic variance. When
+#'   provided, written to `trait_effect_cov` as a diagonal entry under
+#'   `effect_name = "gen_add"`. Used by [set_qtl_effects()] to rescale effects.
+#'   If already set via [add_effect_cov_matrix()], leave `NULL`.
+#' @param residual_var Numeric. Residual variance. When provided, written to
+#'   `trait_effect_cov` under `effect_name = "residual"`. Used by
+#'   [add_phenotype()]. If already set via [add_effect_cov_matrix()], leave
+#'   `NULL`.
 #' @param min_value,max_value Numeric. Clipping bounds for count traits. `NA`
 #'   means no limit.
 #' @param prevalence Numeric between 0 and 1. For binary traits, the fraction
@@ -47,7 +54,7 @@
 #' @param economic_value Numeric. Economic value per unit of the trait.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
 #'   exists, replace its `trait_meta` row. Associated rows in `trait_effects`
-#'   and `trait_residual_cov` are cleared for that trait.
+#'   are cleared for that trait.
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
@@ -79,8 +86,8 @@ add_trait <- function(pop,
                       expressed_sex    = c("both", "M", "F"),
                       expressed_parent = c("both", "parent_1", "parent_2"),
                       target_add_mean  = 0,
-                      target_add_var   = 1,
-                      residual_var     = 1,
+                      target_add_var   = NULL,
+                      residual_var     = NULL,
                       min_value        = NA_real_,
                       max_value        = NA_real_,
                       prevalence       = NA_real_,
@@ -138,15 +145,29 @@ add_trait <- function(pop,
       paste0("DELETE FROM trait_meta WHERE trait_name = '", trait_name, "'"))
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM trait_effects WHERE trait_name = '", trait_name, "'"))
-    DBI::dbExecute(pop$db_conn,
-      paste0("DELETE FROM trait_residual_cov WHERE trait_1 = '", trait_name,
-             "' OR trait_2 = '", trait_name, "'"))
   }
 
   thresholds_str <- if (all(is.na(thresholds))) {
     NA_character_
   } else {
     paste(thresholds, collapse = ",")
+  }
+
+  if (!is.null(target_add_var)) {
+    if (!is.numeric(target_add_var) || length(target_add_var) != 1 ||
+        is.na(target_add_var) || target_add_var < 0) {
+      stop("`target_add_var` must be a non-negative number.", call. = FALSE)
+    }
+    pop <- write_effect_cov_diagonal(pop, "gen_add", trait_name,
+                                     as.numeric(target_add_var))
+  }
+  if (!is.null(residual_var)) {
+    if (!is.numeric(residual_var) || length(residual_var) != 1 ||
+        is.na(residual_var) || residual_var < 0) {
+      stop("`residual_var` must be a non-negative number.", call. = FALSE)
+    }
+    pop <- write_effect_cov_diagonal(pop, "residual", trait_name,
+                                     as.numeric(residual_var))
   }
 
   row <- tibble::tibble(
@@ -159,8 +180,6 @@ add_trait <- function(pop,
     expressed_sex    = expressed_sex,
     expressed_parent = expressed_parent,
     target_add_mean  = as.numeric(target_add_mean),
-    target_add_var   = as.numeric(target_add_var),
-    residual_var     = as.numeric(residual_var),
     min_value        = as.numeric(min_value),
     max_value        = as.numeric(max_value),
     prevalence       = as.numeric(prevalence),
@@ -171,11 +190,7 @@ add_trait <- function(pop,
 
   DBI::dbWriteTable(pop$db_conn, "trait_meta", row, append = TRUE)
 
-  message(
-    "Added trait '", trait_name, "' (type: ", trait_type,
-    ", target_add_var: ", target_add_var,
-    ", residual_var: ", residual_var, ")"
-  )
+  message("Added trait '", trait_name, "' (type: ", trait_type, ").")
 
   invisible(pop)
 }
@@ -184,9 +199,10 @@ add_trait <- function(pop,
 #' Ensure the trait-layer tables exist in the database
 #'
 #' @description
-#' Creates `trait_meta`, `trait_effects`, `trait_residual_cov`,
+#' Creates `trait_meta`, `trait_effects`, `trait_random_effects`,
 #' `ind_phenotype`, `ind_tbv`, and `ind_ebv` if they are not already present.
-#' Idempotent: safe to call multiple times.
+#' Idempotent: safe to call multiple times. Variance/covariance data lives in
+#' `trait_effect_cov`, created lazily by [add_effect_cov_matrix()].
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @return The `tidybreed_pop` object with `$tables` updated.
@@ -207,8 +223,6 @@ ensure_trait_tables <- function(pop) {
         expressed_sex    VARCHAR,
         expressed_parent VARCHAR,
         target_add_mean  DOUBLE,
-        target_add_var   DOUBLE,
-        residual_var     DOUBLE,
         min_value        DOUBLE,
         max_value        DOUBLE,
         prevalence       DOUBLE,
@@ -225,20 +239,11 @@ ensure_trait_tables <- function(pop) {
         source_column VARCHAR,
         source_table  VARCHAR,
         distribution  VARCHAR,
-        variance      DOUBLE,
         levels_json   VARCHAR,
         slope         DOUBLE,
         center        DOUBLE,
         value         DOUBLE,
         PRIMARY KEY (trait_name, effect_name)
-      )
-    ",
-    trait_residual_cov = "
-      CREATE TABLE trait_residual_cov (
-        trait_1 VARCHAR,
-        trait_2 VARCHAR,
-        cov     DOUBLE,
-        PRIMARY KEY (trait_1, trait_2)
       )
     ",
     trait_random_effects = "
@@ -249,15 +254,6 @@ ensure_trait_tables <- function(pop) {
         draw_value   DOUBLE,
         date_sampled DATE,
         PRIMARY KEY (trait_name, effect_name, level)
-      )
-    ",
-    trait_random_effect_cov = "
-      CREATE TABLE trait_random_effect_cov (
-        effect_name VARCHAR,
-        trait_1     VARCHAR,
-        trait_2     VARCHAR,
-        cov         DOUBLE,
-        PRIMARY KEY (effect_name, trait_1, trait_2)
       )
     ",
     ind_phenotype = "

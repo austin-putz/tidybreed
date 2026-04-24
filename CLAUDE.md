@@ -102,8 +102,6 @@ One row per trait. Populated by `add_trait()`.
 | expressed_sex      | VARCHAR | `"both"` / `"M"` / `"F"` for sex-limited traits               |
 | expressed_parent   | VARCHAR | `"both"` / `"parent_1"` / `"parent_2"` for imprinting         |
 | mean               | DOUBLE  | Overall mean / intercept on liability scale                   |
-| target_add_var     | DOUBLE  | Target σ²_A (used by `set_qtl_effects()` rescaling)           |
-| residual_var       | DOUBLE  | Residual σ²_e                                                 |
 | min_value          | DOUBLE  | For count traits; clip (NA = no limit)                        |
 | max_value          | DOUBLE  | For count traits; clip                                        |
 | prevalence         | DOUBLE  | For binary traits                                             |
@@ -120,23 +118,32 @@ random effects). One row per (trait × effect).
 |---------------|---------|----------------------------------------------------------|
 | trait_name    | VARCHAR |                                                          |
 | effect_name   | VARCHAR | e.g. "sex", "gen", "litter"                              |
-| effect_class  | VARCHAR | `"fixed"` or `"random"`                                  |
-| source_column | VARCHAR | Column in `ind_meta` used as grouping variable           |
+| effect_class  | VARCHAR | `"fixed_class"`, `"fixed_cov"`, or `"random"`            |
+| source_column | VARCHAR | Column in source table used as grouping variable         |
+| source_table  | VARCHAR | Table containing `source_column` (default `"ind_meta"`)  |
 | distribution  | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
-| variance      | DOUBLE  | For random effects                                       |
-| levels_json   | VARCHAR | For fixed effects: JSON-like `{"M":30,"F":0}`            |
+| levels_json   | VARCHAR | For fixed_class effects: JSON `{"M":30,"F":0}`           |
+| slope         | DOUBLE  | For fixed_cov effects: regression coefficient            |
+| center        | DOUBLE  | For fixed_cov effects: centering value                   |
 | value         | DOUBLE  | Rarely used scalar                                       |
 
-### `trait_residual_cov`
+### `trait_effect_cov`
 
-Residual covariance `R` across traits. One row per (trait_1, trait_2) pair
-including the diagonal.
+Unified variance/covariance table for all random effects (additive genetic,
+residual, and named random effects). One row per (effect_name, trait_1, trait_2).
+Both `(i,j)` and `(j,i)` pairs stored. Populated by `add_effect_cov_matrix()`,
+`add_trait()`, and `add_effect_random()`.
 
-| Column  | Type    |
-|---------|---------|
-| trait_1 | VARCHAR |
-| trait_2 | VARCHAR |
-| cov     | DOUBLE  |
+Reserved `effect_name` values: `"gen_add"` (additive genetic G matrix),
+`"residual"` (residual R matrix). Any other name maps to a user-defined random
+effect matching `effect_name` in `trait_effects`.
+
+| Column      | Type    | Notes                                              |
+|-------------|---------|----------------------------------------------------|
+| effect_name | VARCHAR | `"gen_add"`, `"residual"`, or random effect name   |
+| trait_1     | VARCHAR | Primary key with effect_name + trait_2             |
+| trait_2     | VARCHAR |                                                    |
+| cov         | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
 
 ### `ind_phenotype`
 
@@ -276,25 +283,37 @@ pop |>
 
 `R/add_trait.R`, `R/define_qtl.R`, `R/set_qtl_effects.R`
 
-- `add_trait()` — one row in `trait_meta`. Creates the six trait tables on
-  first call.
+- `add_trait()` — one row in `trait_meta`. Creates trait tables on first call.
+  `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
+  `trait_meta`).
 - `define_qtl()` — mirror of `define_chip()` for QTL. Writes
   `is_QTL_{trait}` BOOLEAN. Reuses all `chip_helpers.R` selection methods.
 - `set_qtl_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
-  (normal/gamma) with optional rescale to `target_add_var`.
+  (normal/gamma) with optional rescale. Reads `target_add_var` from
+  `trait_effect_cov` (`effect_name = "gen_add"`).
 - `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
-  multiple traits via `MASS::mvrnorm`. `method = "shared"` (pleiotropy) or
-  `"union"`.
+  multiple traits via `MASS::mvrnorm`. `G = NULL` reads from `trait_effect_cov`.
+  `method = "shared"` (pleiotropy) or `"union"`.
 
-### `set_residual_cov()` / `add_trait_covariate()`
+### `add_effect_cov_matrix()` / `add_effect_random()` / `add_effect_fixed_class()` / `add_effect_fixed_cov()` / `add_effect_int()`
 
-`R/set_residual_cov.R`, `R/add_trait_covariate.R`
+`R/add_effect_cov_matrix.R`, `R/add_effect_random.R`, `R/add_effect_fixed_class.R`, `R/add_effect_fixed_cov.R`, `R/add_effect_int.R`
 
-- `set_residual_cov()` — stores `R` across traits in `trait_residual_cov`;
-  diagonal must match `trait_meta$residual_var`.
-- `add_trait_covariate()` — appends rows to `trait_effects` for fixed
-  (`levels = c(M = 30, F = 0)`) or random (`variance`, `distribution`)
-  effects on any `ind_meta` column.
+- `add_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
+  point for all variance/covariance data**. Stores symmetric matrix in
+  `trait_effect_cov`. Use `effect_name = "gen_add"` or `"residual"` for
+  reserved effects. Can be called before `add_trait()` or `add_effect_random()`.
+- `add_effect_random()` — `variance` optional if already in `trait_effect_cov`.
+- `add_effect_fixed_class()` — discrete level → shift mapping.
+- `add_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
+- `add_effect_int()` — sets intercept (`target_add_mean`) for a trait.
+
+### `add_trait_covariate()` *(deprecated)*
+
+`R/add_trait_covariate.R`
+
+- Deprecated since v0.6.0. Use `add_effect_fixed_class()`, `add_effect_fixed_cov()`,
+  or `add_effect_random()` instead.
 
 ### `add_phenotype()` / `add_tbv()`
 

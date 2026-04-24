@@ -232,15 +232,23 @@ compute_covariate_contribution <- function(pop, trait, subset_df) {
 
       new_lvls <- setdiff(unique_lvls, names(existing_map))
       if (length(new_lvls) > 0) {
+        effect_var <- get_effect_var(pop, e$effect_name, trait)
+        if (is.na(effect_var)) {
+          stop("No variance stored for random effect '", e$effect_name,
+               "' / trait '", trait, "'. ",
+               "Call add_effect_cov_matrix(pop, '", e$effect_name,
+               "', ...) or add_effect_random(..., variance = ...) first.",
+               call. = FALSE)
+        }
         new_draws <- switch(
           e$distribution %||% "normal",
-          normal  = stats::rnorm(length(new_lvls), sd = sqrt(e$variance)),
+          normal  = stats::rnorm(length(new_lvls), sd = sqrt(effect_var)),
           gamma   = stats::rgamma(length(new_lvls), shape = 1,
-                                  rate = 1 / sqrt(e$variance)),
+                                  rate = 1 / sqrt(effect_var)),
           uniform = stats::runif(length(new_lvls),
-                                 min = -sqrt(3 * e$variance),
-                                 max =  sqrt(3 * e$variance)),
-          stats::rnorm(length(new_lvls), sd = sqrt(e$variance))
+                                 min = -sqrt(3 * effect_var),
+                                 max =  sqrt(3 * effect_var)),
+          stats::rnorm(length(new_lvls), sd = sqrt(effect_var))
         )
         new_df <- tibble::tibble(
           trait_name   = trait,
@@ -267,61 +275,6 @@ compute_covariate_contribution <- function(pop, trait, subset_df) {
 #' Null-coalescing operator for internal use
 #' @keywords internal
 `%||%` <- function(x, y) if (is.null(x) || (length(x) == 1 && is.na(x))) y else x
-
-
-#' Load the residual covariance matrix for a set of traits
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param traits Character vector of trait names.
-#' @return Numeric matrix with rows/columns named by `traits`, or `NULL` if
-#'   not all pairs are present in `trait_residual_cov`.
-#' @keywords internal
-load_residual_cov <- function(pop, traits) {
-  if (!"trait_residual_cov" %in% pop$tables) return(NULL)
-  n <- length(traits)
-  R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(traits, traits))
-  rows <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT trait_1, trait_2, cov FROM trait_residual_cov ",
-           "WHERE trait_1 IN (",
-           paste0("'", traits, "'", collapse = ", "), ") ",
-           "AND trait_2 IN (",
-           paste0("'", traits, "'", collapse = ", "), ")")
-  )
-  if (nrow(rows) == 0) return(NULL)
-  for (i in seq_len(nrow(rows))) {
-    R[rows$trait_1[i], rows$trait_2[i]] <- rows$cov[i]
-  }
-  if (any(is.na(R))) return(NULL)
-  R
-}
-
-
-#' Load the random-effect covariance matrix for a named effect across traits
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param effect_name Character. The shared effect name.
-#' @param traits Character vector of trait names.
-#' @return Numeric matrix named by `traits`, or `NULL` if any entry is missing.
-#' @keywords internal
-load_random_effect_cov <- function(pop, effect_name, traits) {
-  if (!"trait_random_effect_cov" %in% pop$tables) return(NULL)
-  n <- length(traits)
-  R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(traits, traits))
-  rows <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT trait_1, trait_2, cov FROM trait_random_effect_cov ",
-           "WHERE effect_name = '", effect_name, "' ",
-           "AND trait_1 IN (", paste0("'", traits, "'", collapse = ", "), ") ",
-           "AND trait_2 IN (", paste0("'", traits, "'", collapse = ", "), ")")
-  )
-  if (nrow(rows) == 0) return(NULL)
-  for (i in seq_len(nrow(rows))) {
-    R[rows$trait_1[i], rows$trait_2[i]] <- rows$cov[i]
-  }
-  if (any(is.na(R))) return(NULL)
-  R
-}
 
 
 #' Generate per-trait next-record IDs for ind_phenotype

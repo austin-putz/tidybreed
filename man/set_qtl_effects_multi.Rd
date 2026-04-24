@@ -7,7 +7,7 @@
 set_qtl_effects_multi(
   x,
   trait_names,
-  G,
+  G = NULL,
   method = c("shared", "union"),
   base = c("founder_haplotypes", "current_pop"),
   scale_to_target = TRUE,
@@ -22,8 +22,11 @@ frequencies.}
 \item{trait_names}{Character vector of trait names (length >= 2). All must
 exist in \code{trait_meta} and have \verb{is_QTL_\{trait_name\}} already defined.}
 
-\item{G}{Numeric matrix of additive-genetic (co)variances. Must be square
-with side length \code{length(trait_names)} and symmetric positive semi-definite.}
+\item{G}{Optional numeric matrix of additive-genetic (co)variances. Must be
+square with side length \code{length(trait_names)} and symmetric. When supplied,
+stored to \code{trait_effect_cov} under \code{"gen_add"} before use. When \code{NULL},
+read from \code{trait_effect_cov} (requires a prior call to
+\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}} with \code{effect_name = "gen_add"}).}
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}.}
 
@@ -58,12 +61,19 @@ on the \code{base} argument.
 }
 \examples{
 \dontrun{
-G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2)
+G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
+            dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
+# Option A: pass G explicitly (also stores it for later use)
 pop <- pop |>
-  add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
-  add_trait("BW",  target_add_var = 0.30, residual_var = 0.70) |>
   define_qtl("ADG", n = 200) |>
   define_qtl("BW",  n = 200) |>
   set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
+
+# Option B: store G first, then omit it
+pop <- pop |>
+  add_effect_cov_matrix("gen_add", G) |>
+  define_qtl("ADG", n = 200) |>
+  define_qtl("BW",  n = 200) |>
+  set_qtl_effects_multi(trait_names = c("ADG", "BW"))
 }
 }

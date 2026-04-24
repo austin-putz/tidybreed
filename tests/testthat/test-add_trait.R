@@ -26,7 +26,7 @@ test_that("add_trait() creates the trait tables and inserts the row", {
                    target_add_mean = 850)
 
   tables <- DBI::dbListTables(pop$db_conn)
-  for (tbl in c("trait_meta", "trait_effects", "trait_residual_cov",
+  for (tbl in c("trait_meta", "trait_effects", "trait_effect_cov",
                 "ind_phenotype", "ind_tbv", "ind_ebv")) {
     expect_true(tbl %in% tables)
   }
@@ -35,9 +35,11 @@ test_that("add_trait() creates the trait tables and inserts the row", {
     "SELECT * FROM trait_meta WHERE trait_name = 'ADG'")
   expect_equal(nrow(row), 1)
   expect_equal(row$trait_type, "continuous")
-  expect_equal(row$target_add_var, 0.25)
-  expect_equal(row$residual_var, 0.75)
   expect_equal(row$target_add_mean, 850)
+
+  # Variances are stored in trait_effect_cov
+  expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.25)
+  expect_equal(get_effect_var(pop, "residual", "ADG"), 0.75)
 
   close_pop(pop)
 })
@@ -49,13 +51,11 @@ test_that("add_trait() refuses duplicate names without overwrite", {
 
   expect_error(add_trait(pop, "ADG"), "already exists")
 
-  # overwrite = TRUE replaces the row
+  # overwrite = TRUE replaces the row; variances update in trait_effect_cov
   pop <- add_trait(pop, "ADG", target_add_var = 0.1, residual_var = 0.9,
                    overwrite = TRUE)
-  row <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT target_add_var, residual_var FROM trait_meta WHERE trait_name='ADG'")
-  expect_equal(row$target_add_var, 0.1)
-  expect_equal(row$residual_var, 0.9)
+  expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.1)
+  expect_equal(get_effect_var(pop, "residual", "ADG"), 0.9)
 
   close_pop(pop)
 })

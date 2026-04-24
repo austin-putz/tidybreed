@@ -57,7 +57,7 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 \item \code{TBV_i} = sum over QTL of \verb{add_\{trait\}} * genotype dose (or haplotype
 dose for imprinted traits).
 \item \code{e_i} is residual: drawn from \code{MVN(0, R)} across traits when a residual
-covariance matrix is stored (see \code{\link[=set_residual_cov]{set_residual_cov()}}) and multiple
+covariance matrix is stored (see \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}) and multiple
 traits share the same subset; otherwise drawn independently.
 }
 
@@ -104,5 +104,5 @@ pop <- pop |>
 }
 \seealso{
 \code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}},
-\code{\link[=set_residual_cov]{set_residual_cov()}}, \code{\link[=add_trait_covariate]{add_trait_covariate()}}, \code{\link[=add_tbv]{add_tbv()}}
+\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, \code{\link[=add_trait_covariate]{add_trait_covariate()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

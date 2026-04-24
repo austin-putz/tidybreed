@@ -15,7 +15,7 @@
 #' * `TBV_i` = sum over QTL of `add_{trait}` * genotype dose (or haplotype
 #'   dose for imprinted traits).
 #' * `e_i` is residual: drawn from `MVN(0, R)` across traits when a residual
-#'   covariance matrix is stored (see [set_residual_cov()]) and multiple
+#'   covariance matrix is stored (see [add_effect_cov_matrix()]) and multiple
 #'   traits share the same subset; otherwise drawn independently.
 #'
 #' Trait-type specific output:
@@ -56,7 +56,7 @@
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
 #' @seealso [add_trait()], [define_qtl()], [set_qtl_effects()],
-#'   [set_residual_cov()], [add_trait_covariate()], [add_tbv()]
+#'   [add_effect_cov_matrix()], [add_trait_covariate()], [add_tbv()]
 #'
 #' @examples
 #' \dontrun{
@@ -209,23 +209,22 @@ add_phenotype <- function(tbl,
   }
 
   # 7.5. Pre-draw correlated random effects (joint MVN) for effects that have
-  #      a covariance matrix stored in trait_random_effect_cov.  The draws are
-  #      written to trait_random_effects so that compute_covariate_contribution()
-  #      finds them already there and reuses rather than re-sampling.
-  if ("trait_random_effect_cov" %in% pop$tables && length(trait) >= 2) {
+  #      a covariance matrix stored in trait_effect_cov. The draws are written
+  #      to trait_random_effects so compute_covariate_contribution() reuses them.
+  if ("trait_effect_cov" %in% pop$tables && length(trait) >= 2) {
     traits_sql <- paste0("'", trait, "'", collapse = ", ")
     cov_effects <- DBI::dbGetQuery(
       pop$db_conn,
-      paste0("SELECT DISTINCT effect_name FROM trait_random_effect_cov ",
-             "WHERE trait_1 IN (", traits_sql, ") ",
+      paste0("SELECT DISTINCT effect_name FROM trait_effect_cov ",
+             "WHERE effect_name NOT IN ('gen_add', 'residual') ",
+             "AND trait_1 IN (", traits_sql, ") ",
              "AND trait_2 IN (", traits_sql, ")")
     )$effect_name
 
     for (eff in cov_effects) {
-      # Which of the requested traits have this effect AND have covariance rows?
       eff_traits_q <- DBI::dbGetQuery(
         pop$db_conn,
-        paste0("SELECT DISTINCT trait_1 AS t FROM trait_random_effect_cov ",
+        paste0("SELECT DISTINCT trait_1 AS t FROM trait_effect_cov ",
                "WHERE effect_name = '", eff, "' ",
                "AND trait_1 IN (", traits_sql, ") ",
                "AND trait_2 IN (", traits_sql, ")")
@@ -233,7 +232,7 @@ add_phenotype <- function(tbl,
       eff_traits <- intersect(trait, eff_traits_q)
       if (length(eff_traits) < 2) next
 
-      R_eff <- load_random_effect_cov(pop, eff, eff_traits)
+      R_eff <- load_effect_cov(pop, eff, eff_traits)
       if (is.null(R_eff)) next
 
       # Gather all unique levels across all trait subsets for this effect
@@ -325,10 +324,15 @@ add_phenotype <- function(tbl,
     subset_ids_list <- lapply(subset_by_trait, function(df) sort(df$id_ind))
     all_equal <- length(unique(subset_ids_list)) == 1
     if (all_equal) {
-      R_mat <- load_residual_cov(pop, trait)
+      R_mat <- load_effect_cov(pop, "residual", trait)
       if (!is.null(R_mat)) {
         n_common <- length(subset_ids_list[[1]])
-        var_vec <- stats::setNames(meta_rows$residual_var, meta_rows$trait_name)
+        var_vec <- stats::setNames(
+          vapply(meta_rows$trait_name,
+                 function(t) get_effect_var(pop, "residual", t),
+                 numeric(1)),
+          meta_rows$trait_name
+        )
         draws <- sample_residuals(n_common, var_vec, R = R_mat)
         rownames(draws) <- subset_ids_list[[1]]
         joint_resid <- draws
@@ -358,7 +362,14 @@ add_phenotype <- function(tbl,
     } else if (!is.null(joint_resid)) {
       resid <- joint_resid[ids_t, t]
     } else {
-      resid <- stats::rnorm(n_ind, sd = sqrt(m$residual_var))
+      resid_var <- get_effect_var(pop, "residual", t)
+      if (is.na(resid_var)) {
+        stop("No residual variance found for trait '", t, "'. ",
+             "Specify via add_effect_cov_matrix(pop, 'residual', ...) or ",
+             "add_trait(pop, '", t, "', residual_var = ...).",
+             call. = FALSE)
+      }
+      resid <- stats::rnorm(n_ind, sd = sqrt(resid_var))
     }
 
     tbv <- tbv_by_trait[[t]]

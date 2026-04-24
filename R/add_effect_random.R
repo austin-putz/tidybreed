@@ -8,8 +8,8 @@
 #' requiring a fixed `seed`.
 #'
 #' To correlate this effect across multiple traits (e.g. the same herd affects
-#' both ADG and BW), call [set_random_effect_cov()] after adding the effect to
-#' each trait.
+#' both ADG and BW), call [add_effect_cov_matrix()] with the appropriate
+#' `effect_name` — either before or after this call.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Name of an existing trait.
@@ -17,6 +17,8 @@
 #' @param source_column Character. Column in `source_table` whose distinct
 #'   values define the groups (e.g. `"herd_id"`, `"litter"`).
 #' @param variance Numeric. Variance of the random effect distribution.
+#'   Optional if a variance has already been stored via [add_effect_cov_matrix()]
+#'   for this `effect_name` and `trait_name`. Required otherwise.
 #' @param distribution Character. Sampling distribution: `"normal"` (default),
 #'   `"gamma"`, or `"uniform"`.
 #' @param source_table Character. Database table that contains `source_column`.
@@ -25,7 +27,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [set_random_effect_cov()], [add_effect_fixed_class()],
+#' @seealso [add_effect_cov_matrix()], [add_effect_fixed_class()],
 #'   [add_effect_fixed_cov()], [add_phenotype()]
 #'
 #' @examples
@@ -40,7 +42,7 @@ add_effect_random <- function(pop,
                               trait_name,
                               effect_name,
                               source_column,
-                              variance,
+                              variance     = NULL,
                               distribution = c("normal", "gamma", "uniform"),
                               source_table = "ind_meta",
                               overwrite    = FALSE) {
@@ -53,8 +55,23 @@ add_effect_random <- function(pop,
   stopifnot(is.character(source_table), nzchar(source_table))
   distribution <- match.arg(distribution)
 
-  if (is.na(variance) || !is.numeric(variance) || variance < 0) {
-    stop("`variance` must be a non-negative number.", call. = FALSE)
+  # Resolve variance: check trait_effect_cov first, then fall back to argument
+  stored_var <- get_effect_var(pop, effect_name, trait_name)
+  if (!is.na(stored_var)) {
+    variance <- stored_var
+  } else {
+    if (is.null(variance)) {
+      stop("No variance found in trait_effect_cov for effect '", effect_name,
+           "' / trait '", trait_name, "'. ",
+           "Either call add_effect_cov_matrix() first or supply `variance`.",
+           call. = FALSE)
+    }
+    if (!is.numeric(variance) || length(variance) != 1 ||
+        is.na(variance) || variance < 0) {
+      stop("`variance` must be a non-negative number.", call. = FALSE)
+    }
+    pop <- write_effect_cov_diagonal(pop, effect_name, trait_name,
+                                     as.numeric(variance))
   }
 
   if (!"trait_effects" %in% pop$tables) {
@@ -71,7 +88,6 @@ add_effect_random <- function(pop,
     source_column = source_column,
     source_table  = source_table,
     distribution  = distribution,
-    variance      = as.numeric(variance),
     levels_json   = NA_character_,
     slope         = NA_real_,
     center        = NA_real_,

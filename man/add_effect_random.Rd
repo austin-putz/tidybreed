@@ -9,7 +9,7 @@ add_effect_random(
   trait_name,
   effect_name,
   source_column,
-  variance,
+  variance = NULL,
   distribution = c("normal", "gamma", "uniform"),
   source_table = "ind_meta",
   overwrite = FALSE
@@ -25,7 +25,9 @@ add_effect_random(
 \item{source_column}{Character. Column in \code{source_table} whose distinct
 values define the groups (e.g. \code{"herd_id"}, \code{"litter"}).}
 
-\item{variance}{Numeric. Variance of the random effect distribution.}
+\item{variance}{Numeric. Variance of the random effect distribution.
+Optional if a variance has already been stored via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}
+for this \code{effect_name} and \code{trait_name}. Required otherwise.}
 
 \item{distribution}{Character. Sampling distribution: \code{"normal"} (default),
 \code{"gamma"}, or \code{"uniform"}.}
@@ -46,8 +48,8 @@ so they are reproducible across repeated calls to \code{\link[=add_phenotype]{ad
 requiring a fixed \code{seed}.
 
 To correlate this effect across multiple traits (e.g. the same herd affects
-both ADG and BW), call \code{\link[=set_random_effect_cov]{set_random_effect_cov()}} after adding the effect to
-each trait.
+both ADG and BW), call \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}} with the appropriate
+\code{effect_name} — either before or after this call.
 }
 \examples{
 \dontrun{
@@ -58,6 +60,6 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=set_random_effect_cov]{set_random_effect_cov()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
+\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
 \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}}, \code{\link[=add_phenotype]{add_phenotype()}}
 }

@@ -104,6 +104,7 @@ add_trait_covariate <- function(pop,  # nolint: object_name_linter
       stop("Random effects require a non-negative `variance`.", call. = FALSE)
     }
     levels_json <- NA_character_
+    pop <- write_effect_cov_diagonal(pop, effect_name, trait_name, as.numeric(variance))
   }
 
   # Handle existing row
@@ -125,20 +126,21 @@ add_trait_covariate <- function(pop,  # nolint: object_name_linter
     )
   }
 
-  row <- tibble::tibble(
-    trait_name    = trait_name,
-    effect_name   = effect_name,
-    effect_class  = effect_class,
-    source_column = source_column,
-    source_table  = "ind_meta",
-    distribution  = if (effect_class == "random") distribution else NA_character_,
-    variance      = as.numeric(variance),
-    levels_json   = levels_json,
-    slope         = NA_real_,
-    center        = NA_real_,
-    value         = as.numeric(value)
+  DBI::dbExecute(
+    pop$db_conn,
+    paste0(
+      "INSERT INTO trait_effects ",
+      "(trait_name, effect_name, effect_class, source_column, source_table, ",
+      "distribution, levels_json, slope, center, value) VALUES (",
+      "'", trait_name, "', '", effect_name, "', '", effect_class, "', ",
+      "'", source_column, "', 'ind_meta', ",
+      if (effect_class == "random") paste0("'", distribution, "'") else "NULL", ", ",
+      if (is.na(levels_json)) "NULL" else paste0("'", levels_json, "'"), ", ",
+      "NULL, NULL, ",
+      if (is.na(value)) "NULL" else as.numeric(value),
+      ")"
+    )
   )
-  DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)
 
   message("Added ", effect_class, " effect '", effect_name,
           "' to trait '", trait_name, "'.")
