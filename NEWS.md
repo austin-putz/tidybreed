@@ -1,3 +1,11 @@
+# tidybreed 0.7.1 (2026-04-24)
+
+## Bug Fixes
+
+* `add_tbv()` now checks for existing TBV records before computing. Individuals
+  that already have a TBV for a requested trait are skipped with an informative
+  message rather than silently overwritten.
+
 # tidybreed 0.7.0 (2026-04-24)
 
 ## Breaking Changes
