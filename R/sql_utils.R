@@ -68,8 +68,9 @@ validate_sql_identifier <- function(name, what = "identifier",
 #'
 #' @keywords internal
 TABLE_RESERVED_COLS <- list(
-  ind_meta    = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
-  genome_meta = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb")
+  ind_meta      = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
+  genome_meta   = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
+  ind_phenotype = c("id_record", "id_ind", "trait_name", "value", "pheno_number")
 )
 
 
@@ -77,8 +78,9 @@ TABLE_RESERVED_COLS <- list(
 #'
 #' @keywords internal
 TABLE_PRIMARY_KEYS <- list(
-  ind_meta    = "id_ind",
-  genome_meta = "locus_id"
+  ind_meta      = "id_ind",
+  genome_meta   = "locus_id",
+  ind_phenotype = "id_record"
 )
 
 

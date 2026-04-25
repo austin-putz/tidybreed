@@ -41,10 +41,6 @@
 #'   through [filter()]). The table must contain an `id_ind` column; unique
 #'   values in that column determine which individuals are phenotyped.
 #' @param trait Character vector of trait name(s).
-#' @param env Optional environment label stored with each record.
-#' @param rep Integer. Repetition / measurement number stored with each
-#'   record. Use for repeated-measures traits.
-#' @param date_measured Date written to each record.
 #' @param user_residual Optional override for residual draws. Numeric vector
 #'   of length `n_subset` for single trait, or a named list keyed by trait
 #'   for multi-trait.
@@ -78,9 +74,6 @@
 #' @export
 add_phenotype <- function(tbl,
                           trait,
-                          env           = NA_character_,
-                          rep           = 1L,
-                          date_measured = Sys.Date(),
                           user_residual = NULL,
                           user_values   = NULL,
                           seed          = NULL) {
@@ -196,15 +189,14 @@ add_phenotype <- function(tbl,
       id_ind     = ids_t,
       trait_name = t,
       tbv        = tbv,
-      date_calc  = as.Date(date_measured)
+      date_calc  = Sys.Date()
     )
     upsert_ind_tbv(pop, tbv_df)
   }
 
   # 7. If user_values supplied, short-circuit the model
   if (!is.null(user_values)) {
-    write_user_phenotype_values(pop, trait, subset_by_trait, user_values,
-                                env, rep, date_measured)
+    write_user_phenotype_values(pop, trait, subset_by_trait, user_values)
     return(invisible(pop))
   }
 
@@ -310,7 +302,7 @@ add_phenotype <- function(tbl,
           effect_name  = eff,
           level        = new_for_trait,
           draw_value   = draws_mat[new_for_trait, et],
-          date_sampled = as.Date(date_measured)
+          date_sampled = Sys.Date()
         )
         DBI::dbWriteTable(pop$db_conn, "trait_random_effects", new_df,
                           append = TRUE)
@@ -387,13 +379,11 @@ add_phenotype <- function(tbl,
     )
 
     records <- tibble::tibble(
-      id_record     = next_record_ids(pop, t, n_ind),
-      id_ind        = ids_t,
-      trait_name    = t,
-      value         = as.numeric(value),
-      env           = as.character(env),
-      rep           = as.integer(rep),
-      date_measured = as.Date(date_measured)
+      id_record    = next_record_ids(pop, t, n_ind),
+      id_ind       = ids_t,
+      trait_name   = t,
+      value        = as.numeric(value),
+      pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
     DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
     message("Wrote ", n_ind, " phenotype records for trait '", t, "'.")
@@ -407,7 +397,7 @@ add_phenotype <- function(tbl,
 #'
 #' @keywords internal
 write_user_phenotype_values <- function(pop, trait, subset_by_trait,
-                                        user_values, env, rep, date_measured) {
+                                        user_values) {
   if (length(trait) == 1 && !is.list(user_values)) {
     user_values <- stats::setNames(list(user_values), trait)
   }
@@ -429,13 +419,11 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
     if (length(vals) == 0) next
 
     records <- tibble::tibble(
-      id_record     = next_record_ids(pop, t, length(vals)),
-      id_ind        = ids_t,
-      trait_name    = t,
-      value         = as.numeric(vals),
-      env           = as.character(env),
-      rep           = as.integer(rep),
-      date_measured = as.Date(date_measured)
+      id_record    = next_record_ids(pop, t, length(vals)),
+      id_ind       = ids_t,
+      trait_name   = t,
+      value        = as.numeric(vals),
+      pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
     DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
     message("Wrote ", nrow(records), " user-supplied phenotype records for '",

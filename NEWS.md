@@ -1,3 +1,24 @@
+# tidybreed 0.7.2 (2026-04-24)
+
+## Breaking Changes
+
+* **`ind_phenotype` schema simplified**: removed `env`, `rep`, and
+  `date_measured` columns. These are replaced by a single `pheno_number
+  INTEGER` column that auto-increments per individual × trait (1 = first
+  record, 2 = second, etc.). Users can add their own columns via
+  `get_table("ind_phenotype") |> mutate_table(...)`.
+
+* **`add_phenotype()` parameters removed**: `env`, `rep`, and `date_measured`
+  arguments have been dropped from the function signature. Remove them from
+  any existing calls.
+
+* **`ind_phenotype` now registered for `mutate_table()`**: primary key
+  (`id_record`) and reserved columns (`id_record`, `id_ind`, `trait_name`,
+  `value`, `pheno_number`) are registered, enabling filtered column additions
+  via `get_table("ind_phenotype") |> filter(...) |> mutate_table(my_col = ...)`.
+
+---
+
 # tidybreed 0.7.1 (2026-04-24)
 
 ## Bug Fixes

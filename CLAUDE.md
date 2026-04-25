@@ -149,15 +149,14 @@ effect matching `effect_name` in `trait_effects`.
 
 Phenotype records in long format. Populated by `add_phenotype()`.
 
-| Column        | Type    | Notes                   |
-|---------------|---------|-------------------------|
-| id_record     | VARCHAR | Auto `{trait}-{n}`      |
-| id_ind        | VARCHAR |                         |
-| trait_name    | VARCHAR |                         |
-| value         | DOUBLE  | Phenotype value         |
-| env           | VARCHAR | Optional                |
-| rep           | INTEGER | Optional                |
-| date_measured | DATE    |                         |
+| Column      | Type    | Notes                                             |
+|-------------|---------|---------------------------------------------------|
+| id_record   | VARCHAR | Auto `{trait}-{n}`                                |
+| id_ind      | VARCHAR |                                                   |
+| trait_name  | VARCHAR |                                                   |
+| value       | DOUBLE  | Phenotype value                                   |
+| pheno_number| INTEGER | 1 = first record for this individual × trait, etc.|
+| *user cols* | any     | Added via `mutate_table()`                        |
 
 ### `ind_tbv`
 

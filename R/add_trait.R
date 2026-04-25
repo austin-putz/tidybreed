@@ -258,13 +258,11 @@ ensure_trait_tables <- function(pop) {
     ",
     ind_phenotype = "
       CREATE TABLE ind_phenotype (
-        id_record     VARCHAR PRIMARY KEY,
-        id_ind        VARCHAR,
-        trait_name    VARCHAR,
-        value         DOUBLE,
-        env           VARCHAR,
-        rep           INTEGER,
-        date_measured DATE
+        id_record    VARCHAR PRIMARY KEY,
+        id_ind       VARCHAR,
+        trait_name   VARCHAR,
+        value        DOUBLE,
+        pheno_number INTEGER
       )
     ",
     ind_tbv = "

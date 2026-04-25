@@ -7,9 +7,6 @@
 add_phenotype(
   tbl,
   trait,
-  env = NA_character_,
-  rep = 1L,
-  date_measured = Sys.Date(),
   user_residual = NULL,
   user_values = NULL,
   seed = NULL
@@ -21,13 +18,6 @@ through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind
 values in that column determine which individuals are phenotyped.}
 
 \item{trait}{Character vector of trait name(s).}
-
-\item{env}{Optional environment label stored with each record.}
-
-\item{rep}{Integer. Repetition / measurement number stored with each
-record. Use for repeated-measures traits.}
-
-\item{date_measured}{Date written to each record.}
 
 \item{user_residual}{Optional override for residual draws. Numeric vector
 of length \code{n_subset} for single trait, or a named list keyed by trait

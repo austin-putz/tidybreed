@@ -277,6 +277,29 @@ compute_covariate_contribution <- function(pop, trait, subset_df) {
 `%||%` <- function(x, y) if (is.null(x) || (length(x) == 1 && is.na(x))) y else x
 
 
+#' Compute the next pheno_number for each individual for a given trait
+#'
+#' @param pop A `tidybreed_pop` object.
+#' @param trait Trait name.
+#' @param ids Character vector of individual IDs (unique within call).
+#' @return Integer vector, same length and order as `ids`.
+#' @keywords internal
+next_pheno_numbers <- function(pop, trait, ids) {
+  if (length(ids) == 0) return(integer(0))
+  ids_df <- data.frame(id_ind = ids, stringsAsFactors = FALSE)
+  DBI::dbWriteTable(pop$db_conn, "_tb_pn_ids", ids_df, overwrite = TRUE)
+  res <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT f.id_ind, COALESCE(MAX(p.pheno_number), 0) + 1 AS next_pn ",
+    "FROM _tb_pn_ids AS f ",
+    "LEFT JOIN ind_phenotype AS p ",
+    "  ON p.id_ind = f.id_ind AND p.trait_name = '", trait, "' ",
+    "GROUP BY f.id_ind"
+  ))
+  DBI::dbExecute(pop$db_conn, "DROP TABLE _tb_pn_ids")
+  as.integer(stats::setNames(res$next_pn, res$id_ind)[ids])
+}
+
+
 #' Generate per-trait next-record IDs for ind_phenotype
 #'
 #' @param pop A `tidybreed_pop` object.
