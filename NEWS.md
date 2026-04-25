@@ -1,3 +1,25 @@
+# tidybreed 0.8.0 (2026-04-24)
+
+## New Features
+
+* **`add_ebv()`** — new function to populate the `ind_ebv` table with estimated
+  breeding values. Two modes:
+  - `software = "blupf90"`: runs `renumf90` + `blupf90+` from PATH. Builds
+    pedigree, data, and (optionally) genotype files automatically from the
+    database. Parameter file (`renum.par`) is auto-generated from `trait_effects`
+    and `trait_effect_cov`. All input/output files are written to a timestamped
+    subfolder of `run_dir` for full reproducibility. Supports BLUP and ssGBLUP
+    (when `chip_name` is supplied). After the run, solutions are parsed and EBVs
+    are stored in `ind_ebv`.
+  - `parent_avg = TRUE`: computes EBVs as the simple average of parent EBVs
+    already in `ind_ebv` for the given `model`. Returns `NA` (with a warning)
+    for animals whose parents lack EBVs.
+* `add_ebv()` accepts a `tidybreed_table` (from `get_table()` + optional
+  `filter()`) as its first argument, following the same calling convention as
+  `add_phenotype()` and `add_tbv()`.
+
+---
+
 # tidybreed 0.7.2 (2026-04-24)
 
 ## Breaking Changes
