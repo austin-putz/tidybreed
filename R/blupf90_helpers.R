@@ -441,7 +441,7 @@ run_blupf90_plus <- function(eval_dir, blupf90_path) {
 #' @keywords internal
 parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
                                      all_ped_ids, model, date_calc) {
-  sols_path <- file.path(eval_dir, "solutions")
+  sols_path <- file.path(eval_dir, "solutions.orig")
   if (!file.exists(sols_path))
     stop("Solutions file not found: ", sols_path, call. = FALSE)
 
@@ -457,6 +457,7 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
     stop("Solutions file has ", ncol(sols), " columns; expected 5 (with OPTION origID).",
          call. = FALSE)
   colnames(sols)[1:5] <- c("trait_num", "effect_num", "level", "orig_id", "solution")
+  sols$orig_id <- as.character(sols$orig_id)
 
   # Filter to animal effect rows that match pedigree IDs
   anim_rows <- sols[sols$effect_num == animal_effect_num &

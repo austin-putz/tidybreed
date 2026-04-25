@@ -1,3 +1,22 @@
+# tidybreed 0.8.2 (2026-04-24)
+
+## Bug Fixes
+
+* **`add_ebv()` / `parse_blupf90_solutions()`**: fixed two bugs when reading
+  back blupf90+ solutions with `OPTION origID` active:
+  - The parser was looking for a file named `solutions`, but blupf90+ writes
+    `solutions.orig` when `OPTION origID` is present. The file path is now
+    correct.
+  - `original_id` values that look numeric (e.g. `10`, `20`) were parsed as
+    integers by `read.table`, causing the `%in% all_ped_ids` comparison against
+    a character vector to silently return zero matches. The column is now
+    coerced to character immediately after parsing.
+* Added `tests/testthat/test-parse_blupf90_solutions.R` covering: correct
+  parsing of the aligned/header format, numeric-looking IDs, missing-file
+  error, and no-match warning.
+
+---
+
 # tidybreed 0.8.1 (2026-04-24)
 
 ## Bug Fixes
