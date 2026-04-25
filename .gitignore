@@ -8,3 +8,7 @@ PACKAGE_OUTLINE.md
 .claude/*
 memory/
 PHENOTYPING_PLAN.md
+
+# BLUPF90 example/scratch files
+*.par
+*.orig
