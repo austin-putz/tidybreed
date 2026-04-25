@@ -270,9 +270,9 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
   # Build EFFECT blocks
   effect_blocks <- character(0)
 
-  # mu: always effect 1 (column 1, all traits, cross)
+  # mu: always effect 1 (column 1, all traits, covariate — always 1)
   mu_cols_str  <- paste(rep(1L, n_traits), collapse = " ")
-  effect_blocks <- c(effect_blocks, "EFFECT", paste0(mu_cols_str, " cross"))
+  effect_blocks <- c(effect_blocks, "EFFECT", paste0(mu_cols_str, " cov"))
 
   # Fixed effects
   if (n_fixed_effs > 0) {
@@ -289,8 +289,10 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
     }
   }
 
-  # RANDOM animal block
+  # RANDOM animal block — must be preceded by its own EFFECT block (column 2 = id_ind)
+  id_cols_str  <- paste(rep(col_map[["id_ind"]], n_traits), collapse = " ")
   random_block <- c(
+    "EFFECT", paste0(id_cols_str, " cross alpha"),
     "RANDOM", "animal",
     "FILE",   "pedigree.txt",
     "SKIP_HEADER", "1",

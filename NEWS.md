@@ -1,3 +1,23 @@
+# tidybreed 0.8.1 (2026-04-24)
+
+## Bug Fixes
+
+* **`add_ebv()` / `write_renum_par()`**: fixed three errors in the generated
+  `renum.par` parameter file for BLUPF90:
+  - The intercept (mu) effect was declared as `cross` (class variable) instead
+    of `cov` (covariate). The mu column is always 1 for every row, so it must
+    be `cov`.
+  - The animal random effect was missing its own `EFFECT` block before `RANDOM
+    animal`. Without it, `renumf90` was associating the last fixed-effect
+    `EFFECT` block (e.g. sex at column 3) with the animal random effect,
+    assigning the wrong column number instead of column 2 (`id_ind`).
+  - As a consequence of the missing animal `EFFECT` block, the fixed-effect
+    column for sex was not written correctly. With the animal `EFFECT` block
+    restored at column 2, the sex `EFFECT` block at column 3 now lands
+    correctly.
+
+---
+
 # tidybreed 0.8.0 (2026-04-24)
 
 ## New Features
