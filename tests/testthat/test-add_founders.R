@@ -487,3 +487,87 @@ test_that("add_founders handles large lines efficiently", {
 
   close_pop(pop)
 })
+
+
+# ─── ... forwarding tests ────────────────────────────────────────────────────
+
+make_pop_for_extra <- function() {
+  initialize_genome(pop_name = "t", n_loci = 20, n_chr = 1,
+                    chr_len_Mb = 10, n_haplotypes = 20, db_path = ":memory:")
+}
+
+test_that("add_founders() accepts scalar ... fields and writes them to ind_meta", {
+  pop <- make_pop_for_extra()
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A",
+                      gen = 0L, farm = "Iowa")
+
+  result <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(nrow(result), 10L)
+  expect_true("gen"  %in% names(result))
+  expect_true("farm" %in% names(result))
+  expect_true(all(result$gen  == 0L))
+  expect_true(all(result$farm == "Iowa"))
+
+  close_pop(pop)
+})
+
+test_that("add_founders() ... uses correct DuckDB type from R type", {
+  pop <- make_pop_for_extra()
+  pop <- add_founders(pop, n_males = 3, n_females = 3, line_name = "A",
+                      gen_int = 1L, gen_dbl = 1.0, flag = TRUE)
+
+  col_types <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = 'ind_meta'
+     AND column_name IN ('gen_int', 'gen_dbl', 'flag')")
+  types <- setNames(col_types$data_type, col_types$column_name)
+
+  expect_equal(types[["gen_int"]], "INTEGER")
+  expect_equal(types[["gen_dbl"]], "DOUBLE")
+  expect_equal(types[["flag"]],    "BOOLEAN")
+
+  close_pop(pop)
+})
+
+test_that("add_founders() ... accepts a vector of correct length", {
+  pop <- make_pop_for_extra()
+  scores <- c(1L, 2L, 3L, 4L, 5L)
+  pop <- add_founders(pop, n_males = 5, n_females = 0, line_name = "A",
+                      rank = scores)
+
+  result <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(result$rank, scores)
+
+  close_pop(pop)
+})
+
+test_that("add_founders() ... errors for vector of wrong length", {
+  pop <- make_pop_for_extra()
+  expect_error(
+    add_founders(pop, n_males = 5, n_females = 5, line_name = "A",
+                 rank = c(1L, 2L, 3L)),
+    "must equal the number of rows"
+  )
+  close_pop(pop)
+})
+
+test_that("add_founders() ... blocks reserved column names", {
+  pop <- make_pop_for_extra()
+  expect_error(
+    add_founders(pop, n_males = 3, n_females = 3, line_name = "A", sex = "X"),
+    "reserved"
+  )
+  close_pop(pop)
+})
+
+test_that("add_founders() ... preserves values across two cohort calls", {
+  pop <- make_pop_for_extra()
+  pop <- add_founders(pop, n_males = 3, n_females = 3, line_name = "A", gen = 0L)
+  pop <- add_founders(pop, n_males = 2, n_females = 2, line_name = "B", gen = 1L)
+
+  result <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(sum(result$gen == 0L), 6L)
+  expect_equal(sum(result$gen == 1L), 4L)
+
+  close_pop(pop)
+})

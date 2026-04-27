@@ -68,9 +68,19 @@ validate_sql_identifier <- function(name, what = "identifier",
 #'
 #' @keywords internal
 TABLE_RESERVED_COLS <- list(
-  ind_meta      = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
-  genome_meta   = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
-  ind_phenotype = c("id_record", "id_ind", "trait_name", "value", "pheno_number")
+  ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
+  genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
+  ind_phenotype    = c("id_record", "id_ind", "trait_name", "value", "pheno_number"),
+  ind_tbv          = c("id_ind", "trait_name", "tbv", "date_calc"),
+  ind_ebv          = c("id_ind", "trait_name", "model", "ebv", "acc", "se", "date_calc"),
+  trait_meta       = c("trait_name", "description", "units", "trait_type", "repeatable",
+                       "recorded_on", "expressed_sex", "expressed_parent", "target_add_mean",
+                       "min_value", "max_value", "prevalence", "thresholds",
+                       "index_weight", "economic_value"),
+  trait_effects    = c("trait_name", "effect_name", "effect_class", "source_column",
+                       "source_table", "distribution", "levels_json", "slope",
+                       "center", "value"),
+  trait_effect_cov = c("effect_name", "trait_1", "trait_2", "cov")
 )
 
 
@@ -80,7 +90,8 @@ TABLE_RESERVED_COLS <- list(
 TABLE_PRIMARY_KEYS <- list(
   ind_meta      = "id_ind",
   genome_meta   = "locus_id",
-  ind_phenotype = "id_record"
+  ind_phenotype = "id_record",
+  trait_meta    = "trait_name"
 )
 
 
@@ -124,6 +135,62 @@ infer_duckdb_type <- function(value) {
     "Supported types: logical, integer, numeric, Date, POSIXct, character",
     call. = FALSE
   )
+}
+
+
+#' Validate, type-infer, and expand extra user columns for pre-insert attachment
+#'
+#' Called by `add_founders()`, `add_offspring()`, `add_phenotype()`,
+#' `add_tbv()`, and `add_ebv()` to process the `...` (extra field) arguments
+#' before they are attached to an insertion data frame.
+#'
+#' Scalars are broadcast to `n_rows`. Vectors must already have length `n_rows`.
+#' Any column that does not yet exist in the target table is added via
+#' `ALTER TABLE ADD COLUMN` before the caller writes the data frame.
+#'
+#' @param extra_cols Named list of values (captured from `list(...)`).
+#' @param n_rows Integer. Number of rows in the insertion data frame.
+#' @param table_name Character. Target table name.
+#' @param conn DuckDB connection.
+#' @return Named list of expanded value vectors, one per field.
+#' @keywords internal
+prepare_extra_cols <- function(extra_cols, n_rows, table_name, conn) {
+  if (length(extra_cols) == 0) return(list())
+
+  reserved      <- TABLE_RESERVED_COLS[[table_name]]
+  if (is.null(reserved)) reserved <- character(0)
+  existing_cols <- DBI::dbListFields(conn, table_name)
+
+  result <- list()
+  for (field_name in names(extra_cols)) {
+    value <- extra_cols[[field_name]]
+
+    validate_sql_identifier(field_name, what = "field name", reserved = reserved)
+
+    db_type <- infer_duckdb_type(value)
+
+    if (length(value) == 1L) {
+      value <- rep(value, n_rows)
+    } else if (length(value) != n_rows) {
+      stop(
+        "Vector length (", length(value), ") for field '", field_name,
+        "' must equal the number of rows being inserted (", n_rows, ").",
+        call. = FALSE
+      )
+    }
+
+    if (!field_name %in% existing_cols) {
+      DBI::dbExecute(conn, paste0(
+        "ALTER TABLE ", table_name, " ADD COLUMN ", field_name, " ", db_type
+      ))
+      existing_cols <- c(existing_cols, field_name)
+      message("Added new column '", field_name, "' (", db_type,
+              ") to `", table_name, "`")
+    }
+
+    result[[field_name]] <- value
+  }
+  result
 }
 
 

@@ -161,3 +161,40 @@ test_that("fixed-effect covariate shifts phenotype by level", {
 
   close_pop(pop)
 })
+
+
+# ─── ... forwarding tests ────────────────────────────────────────────────────
+
+make_pheno_pop_with_trait <- function() {
+  set.seed(42)
+  pop <- make_pheno_pop("ph_extra", n_ind = 20, n_loci = 100)
+  pop |>
+    add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
+    define_qtl("ADG", n = 20, method = "random") |>
+    set_qtl_effects("ADG", seed = 1)
+}
+
+test_that("add_phenotype() accepts scalar ... fields and writes to ind_phenotype", {
+  pop <- make_pheno_pop_with_trait()
+
+  pop <- pop |>
+    get_table("ind_meta") |>
+    add_phenotype("ADG", test_env = "barn_A")
+
+  result <- get_table(pop, "ind_phenotype") |> dplyr::collect()
+  expect_true("test_env" %in% names(result))
+  expect_true(all(result$test_env == "barn_A"))
+
+  close_pop(pop)
+})
+
+test_that("add_phenotype() ... errors for non-scalar value", {
+  pop <- make_pheno_pop_with_trait()
+
+  expect_error(
+    pop |> get_table("ind_meta") |> add_phenotype("ADG", test_env = c("a", "b")),
+    "scalar"
+  )
+
+  close_pop(pop)
+})

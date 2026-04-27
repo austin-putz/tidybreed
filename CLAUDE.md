@@ -74,7 +74,8 @@ is cheap and recomputation during mating is expensive.
 
 ### `ind_meta`
 
-Individual-level metadata. Created by `add_founders()`.
+Individual-level metadata. Created empty by `initialize_genome()`; rows
+populated by `add_founders()` and `add_offspring()`.
 
 | Column      | Type    | Notes                          |
 |-------------|---------|--------------------------------|
@@ -83,7 +84,7 @@ Individual-level metadata. Created by `add_founders()`.
 | id_parent_2 | VARCHAR | NA for founders                |
 | line        | VARCHAR | Genetic line name              |
 | sex         | VARCHAR | "M" or "F"                     |
-| *user cols* | any     | Added via `mutate_ind_meta()`  |
+| *user cols* | any     | Added via `mutate_table()` or `...` in `add_founders()` |
 
 **Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line`, `sex`
 
@@ -156,7 +157,7 @@ Phenotype records in long format. Populated by `add_phenotype()`.
 | trait_name  | VARCHAR |                                                   |
 | value       | DOUBLE  | Phenotype value                                   |
 | pheno_number| INTEGER | 1 = first record for this individual × trait, etc.|
-| *user cols* | any     | Added via `mutate_table()`                        |
+| *user cols* | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
 
 ### `ind_tbv`
 
@@ -192,9 +193,18 @@ replacement (current version removed).
 
 `R/initialize_genome.R`
 
-Creates the DuckDB file (or in-memory DB) and populates three tables:
-`genome_meta`, `genome_haplotype` (empty), `genome_genotype` (empty).
-Returns a `tidybreed_pop` S3 object.
+Creates the DuckDB file (or in-memory DB) and populates **all** core tables
+eagerly, including genome tables and all individual/trait tables:
+
+- Genome: `genome_meta`, `genome_haplotype` (empty), `genome_genotype` (empty)
+- Optionally: `founder_haplotypes` (if `n_haplotypes` provided)
+- Individual/trait (all empty): `ind_meta`, `ind_phenotype`, `ind_tbv`,
+  `ind_ebv`, `trait_meta`, `trait_effects`, `trait_effect_cov`,
+  `trait_random_effects`
+
+All tables are registered in `pop$tables` immediately. Users can call
+`get_table()` and `mutate_table()` on any table right after init, before any
+data is inserted.
 
 Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
 
@@ -203,22 +213,89 @@ Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
 `R/add_founders.R`
 
 Samples haplotypes for each founder individual using per-locus allele
-frequencies. Populates `ind_meta` (core 5 cols), `genome_haplotype` (2 rows
-each), and `genome_genotype` (1 row each). ID format: `{line_name}-{n}`.
+frequencies. Appends rows to `ind_meta` (core 5 cols), `genome_haplotype`
+(2 rows each), and `genome_genotype` (1 row each). ID format: `{line_name}-{n}`.
 
-Key params: `n_males`, `n_females`, `line_name`, `allele_freq`
+Accepts `...` for custom `ind_meta` columns written atomically with the new
+rows (see **Custom field forwarding** below).
+
+Key params: `n_males`, `n_females`, `line_name`, then `...` for custom fields.
+
+### Custom field forwarding in `add_*` functions
+
+`add_founders()`, `add_phenotype()`, `add_tbv()`, and `add_ebv()` all accept
+`...` for optional custom columns written to the target table at the same time
+the new rows are inserted. This avoids a redundant second `mutate_table()` step.
+
+```r
+# Single call — gen and farm written with the founders
+pop <- pop |>
+  add_founders(n_males = 10, n_females = 100, line_name = "A",
+               gen = 0L, farm = "Iowa")
+
+# add_phenotype: scalar only (broadcast to all phenotype records)
+pop <- pop |>
+  get_table("ind_meta") |>
+  add_phenotype("ADG", test_env = "barn_A")
+```
+
+**Argument disambiguation**: R's standard matching routes explicit formal params
+(`n_males`, `n_females`, `line_name`, etc.) to their positions; anything else
+falls into `...` and is treated as a custom column. Reserved column names
+(`id_ind`, `sex`, `line`, etc.) are blocked with an error.
+
+**Type safety** — column types are inferred from the R value via
+`infer_duckdb_type()`. Use R's type suffixes to get the right DuckDB type:
+
+| R value | DuckDB type |
+|---------|-------------|
+| `0L`, `NA_integer_` | `INTEGER` |
+| `0`, `0.0`, `NA_real_` | `DOUBLE` |
+| `TRUE`/`FALSE`, `NA` (bare) | `BOOLEAN` |
+| `"text"`, `NA_character_` | `VARCHAR` |
+| `as.Date(...)` | `DATE` |
+| `Sys.time()`, `as.POSIXct(...)` | `TIMESTAMP` |
+
+Common pitfall: `gen = 0` gives DOUBLE, not INTEGER. Use `gen = 0L`.
+
+**Pre-declaring a column schema** before data exists (typed-NA workflow):
+
+```r
+# 1. After initialize_genome(), declare column types on the empty table
+pop <- pop |>
+  get_table("ind_meta") |>
+  mutate_table(gen = NA_integer_, farm = NA_character_)
+
+# 2. add_founders fills values in; types already match
+pop <- pop |>
+  add_founders(n_males = 10, n_females = 100, line_name = "A",
+               gen = 0L, farm = "Iowa")
+```
+
+The shared internal helper `prepare_extra_cols()` in `R/sql_utils.R` handles
+validation, type inference, ALTER TABLE, and scalar broadcast for all `add_*`
+functions.
+
+**Scalar vs. vector**:
+- `add_founders()` / `add_offspring()`: scalars broadcast; vectors must have
+  length `n_males + n_females` (or `n_offspring`).
+- `add_phenotype()` / `add_tbv()` / `add_ebv()`: scalar only (row count per
+  trait varies). Use `mutate_table()` afterwards for per-record vectors.
 
 ### `mutate_table()`
 
 `R/mutate_table.R`
 
-Generic replacement for the removed `mutate_ind_meta()` / `mutate_genome_meta()`
-functions. Adds or updates columns in **any** database table. Chain after
+Generic function. Adds or updates columns in **any** database table. Chain after
 `get_table()` (and optionally `filter()`) then call `mutate_table(col = value)`.
 Scalar values are broadcast to all (or filtered) rows; vectors must match the
 effective row count. Type is inferred via `infer_duckdb_type()`. Reserved
 columns are blocked via `TABLE_RESERVED_COLS` in `R/sql_utils.R`. Returns `pop`
 invisibly.
+
+When called on an **empty table**, `mutate_table()` still creates the column
+schema via `ALTER TABLE ADD COLUMN` (no rows are updated). This is the mechanism
+for pre-declaring typed column schemas before data arrives.
 
 ```r
 # All rows
@@ -229,6 +306,11 @@ pop <- pop |>
   get_table("ind_meta") |>
   filter(sex == "M") |>
   mutate_table(gen = 2L)
+
+# Pre-declare schema on empty table
+pop <- pop |>
+  get_table("ind_ebv") |>
+  mutate_table(model_version = NA_character_)
 ```
 
 ### `define_chip()`
@@ -282,7 +364,8 @@ pop |>
 
 `R/add_trait.R`, `R/define_qtl.R`, `R/set_qtl_effects.R`
 
-- `add_trait()` — one row in `trait_meta`. Creates trait tables on first call.
+- `add_trait()` — one row in `trait_meta`. (Trait tables are created by
+  `initialize_genome()`, not on first `add_trait()` call.)
   `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
   `trait_meta`).
 - `define_qtl()` — mirror of `define_chip()` for QTL. Writes
@@ -344,7 +427,6 @@ Convenience wrapper that chains `add_trait()` → `define_qtl()` →
 - `select_parents()` — selection index or truncation selection
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
-- `mutate_ind_phenotype()` — user columns on `ind_phenotype`
 - Dominance and epistasis effects (currently only additive)
 
 ## Versioning Policy

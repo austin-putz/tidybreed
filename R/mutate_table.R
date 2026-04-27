@@ -458,7 +458,24 @@ mutate_table <- function(tbl_obj, ...) {
   )$n
 
   if (n_total == 0) {
-    warning("'", table_name, "' table is empty. No values to update.", call. = FALSE)
+    # Table is empty — still create any new columns (schema-only ALTER TABLE).
+    # This supports pre-declaring typed column schemas before data arrives, e.g.:
+    #   pop |> get_table("ind_meta") |> mutate_table(gen = NA_integer_)
+    for (field_name in names(field_values)) {
+      value <- field_values[[field_name]]
+      validate_sql_identifier(field_name, what = "field name", reserved = reserved)
+      if (!field_name %in% existing_cols) {
+        db_type <- infer_duckdb_type(value)
+        DBI::dbExecute(pop$db_conn, paste0(
+          "ALTER TABLE ", table_name, " ADD COLUMN ", field_name, " ", db_type
+        ))
+        message("Added new column '", field_name, "' (", db_type, ") to `",
+                table_name, "` (table is currently empty)")
+      } else {
+        message("Column '", field_name, "' already exists in `", table_name,
+                "` (table is currently empty; no rows updated)")
+      }
+    }
     return(invisible(pop))
   }
 

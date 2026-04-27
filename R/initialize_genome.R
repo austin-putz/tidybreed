@@ -227,8 +227,33 @@ initialize_genome <- function(pop_name,
     paste0("CREATE TABLE genome_genotype (", geno_schema, ")")
   )
 
+  # Eagerly create all core individual/trait tables (empty).
+  # This lets users call get_table() and mutate_table() on any table
+  # immediately after initialize_genome(), before any data is added.
+
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE ind_meta (
+      id_ind      VARCHAR PRIMARY KEY,
+      id_parent_1 VARCHAR,
+      id_parent_2 VARCHAR,
+      line        VARCHAR,
+      sex         VARCHAR
+    )
+  ")
+
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE trait_effect_cov (
+      effect_name VARCHAR,
+      trait_1     VARCHAR,
+      trait_2     VARCHAR,
+      cov         DOUBLE,
+      PRIMARY KEY (effect_name, trait_1, trait_2)
+    )
+  ")
+
   # Generate founder haplotypes if requested
-  tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype")
+  tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype",
+                      "ind_meta", "trait_effect_cov")
   founder_metadata <- list()
 
   if (!is.null(n_haplotypes)) {
@@ -304,6 +329,10 @@ initialize_genome <- function(pop_name,
   )
 
   validate_tidybreed_pop(pop)
+
+  # Create remaining core tables (trait_meta, trait_effects, trait_random_effects,
+  # ind_phenotype, ind_tbv, ind_ebv) and register them in pop$tables.
+  pop <- ensure_trait_tables(pop)
 
   message("Initialized population '", pop_name, "' with ", n_loci, " loci across ", n_chr, " chromosomes")
   if (!is.null(n_haplotypes)) {

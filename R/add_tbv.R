@@ -36,13 +36,24 @@
 #'   add_tbv(c("ADG", "BW"))
 #' }
 #' @export
-add_tbv <- function(tbl, trait, date_calc = Sys.Date()) {
+add_tbv <- function(tbl, trait, date_calc = Sys.Date(), ...) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
   stopifnot(is.character(trait), length(trait) >= 1)
   lapply(trait, validate_sql_identifier, what = "trait name")
+
+  extra_cols <- list(...)
+  if (length(extra_cols) > 0) {
+    for (nm in names(extra_cols)) {
+      if (length(extra_cols[[nm]]) != 1L) {
+        stop("Custom field '", nm, "' in add_tbv() must be a scalar ",
+             "(broadcast to all records). Supply per-record vectors with ",
+             "mutate_table() after the call.", call. = FALSE)
+      }
+    }
+  }
 
   if (length(tbl$pending_filter) == 0) {
     subset_ids <- NULL
@@ -141,6 +152,11 @@ add_tbv <- function(tbl, trait, date_calc = Sys.Date()) {
       tbv        = tbv,
       date_calc  = as.Date(date_calc)
     )
+    if (length(extra_cols) > 0) {
+      prepped <- prepare_extra_cols(extra_cols, nrow(tbv_df), "ind_tbv",
+                                   pop$db_conn)
+      for (nm in names(prepped)) tbv_df[[nm]] <- prepped[[nm]]
+    }
     upsert_ind_tbv(pop, tbv_df)
     message("Computed TBV for ", length(ids_t), " individuals on trait '",
             t, "'.")

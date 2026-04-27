@@ -151,16 +151,21 @@ test_that("mutate_table() returns pop invisibly", {
 })
 
 
-test_that("mutate_table() warns and returns early for empty table", {
+test_that("mutate_table() creates column schema on empty table without warning", {
   pop <- initialize_genome(pop_name = "t", n_loci = 5, n_chr = 1,
                            chr_len_Mb = 10, db_path = ":memory:")
-  DBI::dbExecute(pop$db_conn,
-    "CREATE TABLE ind_meta (id_ind VARCHAR, sex VARCHAR)")
-  pop$tables <- c(pop$tables, "ind_meta")
-  expect_warning(
-    get_table(pop, "ind_meta") |> mutate_table(gen = 1L),
+  # ind_meta is empty immediately after initialize_genome()
+  expect_message(
+    get_table(pop, "ind_meta") |> mutate_table(gen = NA_integer_),
     "empty"
   )
+  cols <- DBI::dbListFields(pop$db_conn, "ind_meta")
+  expect_true("gen" %in% cols)
+  # Column type should be INTEGER (DuckDB stores as INTEGER)
+  col_types <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT data_type FROM information_schema.columns
+     WHERE table_name = 'ind_meta' AND column_name = 'gen'")
+  expect_equal(col_types$data_type, "INTEGER")
   close_pop(pop)
 })
 

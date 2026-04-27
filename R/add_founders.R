@@ -13,6 +13,12 @@
 #' @param n_females Integer. Number of female founders to create
 #' @param line_name Character. Line identifier used for individual IDs.
 #'   IDs are formatted as `"{line_name}-{number}"` (e.g., "A-1", "A-2")
+#' @param ... Optional named arguments for custom `ind_meta` columns, e.g.
+#'   `gen = 0L`, `farm = "Iowa"`. Scalar values are broadcast to all new
+#'   founders; vectors must have length `n_males + n_females`. Column types
+#'   are inferred from the R type: use `0L` for INTEGER, `0` for DOUBLE,
+#'   `"text"` for VARCHAR, `TRUE`/`FALSE` for BOOLEAN. Reserved column names
+#'   (`id_ind`, `sex`, `line`, etc.) are blocked.
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'   **Important:** Assign the result back to update your object: `pop <- add_founders(pop, ...)`
@@ -69,7 +75,7 @@
 #' # View founders
 #' get_table(pop, "ind_meta") %>% collect()
 #' }
-add_founders <- function(pop, n_males, n_females, line_name) {
+add_founders <- function(pop, n_males, n_females, line_name, ...) {
 
   # ============================================================================
   # 1. Validate inputs
@@ -141,28 +147,12 @@ add_founders <- function(pop, n_males, n_females, line_name) {
   # 3. Determine ID sequence
   # ============================================================================
 
-  # Check if ind_meta already exists
-  ind_meta_exists <- "ind_meta" %in% DBI::dbListTables(pop$db_conn)
-
-  # Determine starting ID number for this line
-  if (ind_meta_exists) {
-    # Query max ID number for this line
-    max_num_query <- paste0(
-      "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('-' IN id_ind) + 1) AS INTEGER)) as max_num ",
-      "FROM ind_meta ",
-      "WHERE id_ind LIKE '", line_name, "-%'"
-    )
-
-    max_num_result <- DBI::dbGetQuery(pop$db_conn, max_num_query)
-
-    if (is.na(max_num_result$max_num)) {
-      start_id <- 1
-    } else {
-      start_id <- max_num_result$max_num + 1
-    }
-  } else {
-    start_id <- 1
-  }
+  # ind_meta always exists (created by initialize_genome()); query current max.
+  max_num_result <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('-' IN id_ind) + 1) AS INTEGER)) as max_num ",
+    "FROM ind_meta WHERE id_ind LIKE '", line_name, "-%'"
+  ))
+  start_id <- if (is.na(max_num_result$max_num)) 1L else as.integer(max_num_result$max_num) + 1L
 
   # ============================================================================
   # 4. Sample haplotypes
@@ -196,6 +186,13 @@ add_founders <- function(pop, n_males, n_females, line_name) {
     line = line_name,
     sex = sex_vector
   )
+
+  # Attach any user-supplied custom columns from ...
+  extra_cols <- list(...)
+  if (length(extra_cols) > 0) {
+    prepped <- prepare_extra_cols(extra_cols, n_founders, "ind_meta", pop$db_conn)
+    for (nm in names(prepped)) ind_meta_df[[nm]] <- prepped[[nm]]
+  }
 
   # ============================================================================
   # 6. Create genome_haplotype data
@@ -235,14 +232,8 @@ add_founders <- function(pop, n_males, n_females, line_name) {
   # 8. Write data to database
   # ============================================================================
 
-  # Write ind_meta table
-  if (ind_meta_exists) {
-    DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
-  } else {
-    DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, overwrite = FALSE)
-    # Refresh tables list from database to keep in sync
-    pop$tables <- DBI::dbListTables(pop$db_conn)
-  }
+  # Write ind_meta table (always append; table was created by initialize_genome())
+  DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
 
   # Append to genome_haplotype via register+INSERT (faster than dbWriteTable for wide frames)
   duckdb::duckdb_register(pop$db_conn, "__tmp_hap", genome_haplotype_df)

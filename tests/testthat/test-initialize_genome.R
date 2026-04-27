@@ -294,3 +294,61 @@ test_that("initialize_genome works without founder haplotypes", {
   close_pop(pop)
   unlink(temp_db)
 })
+
+
+test_that("initialize_genome() eagerly creates all core tables", {
+  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
+                           chr_len_Mb = 10, db_path = ":memory:")
+
+  core_tables <- c("ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
+                   "trait_meta", "trait_effects", "trait_effect_cov",
+                   "trait_random_effects")
+  for (tbl in core_tables) {
+    expect_true(tbl %in% pop$tables,
+                info = paste("Table", tbl, "should exist after initialize_genome()"))
+    expect_true(DBI::dbExistsTable(pop$db_conn, tbl),
+                info = paste("Table", tbl, "should be in DuckDB"))
+  }
+
+  close_pop(pop)
+})
+
+
+test_that("get_table() works on all core tables immediately after initialize_genome()", {
+  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
+                           chr_len_Mb = 10, db_path = ":memory:")
+
+  for (tbl in c("ind_meta", "ind_ebv", "ind_phenotype", "ind_tbv", "trait_meta")) {
+    result <- get_table(pop, tbl) |> dplyr::collect()
+    expect_true(is.data.frame(result))
+    expect_equal(nrow(result), 0L)
+  }
+
+  close_pop(pop)
+})
+
+
+test_that("mutate_table() pre-declares typed columns on empty ind_meta", {
+  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
+                           chr_len_Mb = 10, n_haplotypes = 10,
+                           db_path = ":memory:")
+
+  pop <- pop |>
+    get_table("ind_meta") |>
+    mutate_table(gen = NA_integer_, farm = NA_character_)
+
+  cols <- DBI::dbListFields(pop$db_conn, "ind_meta")
+  expect_true("gen" %in% cols)
+  expect_true("farm" %in% cols)
+
+  pop <- pop |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 0L, farm = "Iowa")
+
+  result <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(nrow(result), 10L)
+  expect_true(all(result$gen == 0L))
+  expect_true(all(result$farm == "Iowa"))
+  expect_type(result$gen, "integer")
+
+  close_pop(pop)
+})

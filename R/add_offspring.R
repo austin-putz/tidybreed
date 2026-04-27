@@ -167,10 +167,9 @@ add_offspring <- function(pop, matings) {
   missing_tables <- setdiff(needed_tables, pop$tables)
 
   if (length(missing_tables) > 0) {
-    extra_hint <- if ("ind_meta" %in% missing_tables) " Call add_founders() first." else ""
     stop(
-      "Required table(s) not found: ", paste(missing_tables, collapse = ", "), ".",
-      extra_hint,
+      "Required table(s) not found: ", paste(missing_tables, collapse = ", "), ". ",
+      "Ensure the population was created with initialize_genome().",
       call. = FALSE
     )
   }
@@ -323,20 +322,13 @@ add_offspring <- function(pop, matings) {
   )
 
   if (length(extra_cols) > 0) {
-    existing_ind_meta_cols <- DBI::dbListFields(pop$db_conn, "ind_meta")
-
-    for (col in extra_cols) {
-      col_val <- matings[[col]]
-      db_type <- infer_duckdb_type(col_val)
-
-      if (!col %in% existing_ind_meta_cols) {
-        DBI::dbExecute(pop$db_conn, paste0(
-          "ALTER TABLE ind_meta ADD COLUMN ", col, " ", db_type
-        ))
-      }
-
-      ind_meta_new[[col]] <- col_val
-    }
+    # Build a named list of per-offspring values from matings columns
+    extra_list <- stats::setNames(
+      lapply(extra_cols, function(col) matings[[col]]),
+      extra_cols
+    )
+    prepped <- prepare_extra_cols(extra_list, n_offspring, "ind_meta", pop$db_conn)
+    for (nm in names(prepped)) ind_meta_new[[nm]] <- prepped[[nm]]
   }
 
   # ============================================================================

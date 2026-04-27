@@ -77,7 +77,8 @@ add_ebv <- function(tbl,
                     run_dir        = ".",
                     eval_id        = NULL,
                     estimate_var   = FALSE,
-                    update_covars  = FALSE) {
+                    update_covars  = FALSE,
+                    ...) {
 
   # ---- Input validation ----
   stopifnot(inherits(tbl, "tidybreed_table"))
@@ -87,6 +88,17 @@ add_ebv <- function(tbl,
   stopifnot(is.character(trait), length(trait) >= 1)
   lapply(trait, validate_sql_identifier, what = "trait name")
   validate_sql_identifier(model, what = "model label")
+
+  extra_cols <- list(...)
+  if (length(extra_cols) > 0) {
+    for (nm in names(extra_cols)) {
+      if (length(extra_cols[[nm]]) != 1L) {
+        stop("Custom field '", nm, "' in add_ebv() must be a scalar ",
+             "(broadcast to all records). Supply per-record vectors with ",
+             "mutate_table() after the call.", call. = FALSE)
+      }
+    }
+  }
 
   use_blupf90    <- identical(software, "blupf90")
   use_parent_avg <- isTRUE(parent_avg)
@@ -152,6 +164,11 @@ add_ebv <- function(tbl,
 
   # ---- Upsert into ind_ebv ----
   if (!is.null(ebv_df) && nrow(ebv_df) > 0) {
+    if (length(extra_cols) > 0) {
+      prepped <- prepare_extra_cols(extra_cols, nrow(ebv_df), "ind_ebv",
+                                   pop$db_conn)
+      for (nm in names(prepped)) ebv_df[[nm]] <- prepped[[nm]]
+    }
     upsert_ind_ebv(pop, ebv_df)
     n_written <- sum(!is.na(ebv_df$ebv))
     message("Stored ", nrow(ebv_df), " EBV record(s) in ind_ebv",

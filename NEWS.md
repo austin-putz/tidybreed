@@ -1,3 +1,48 @@
+# tidybreed 0.9.0 (2026-04-27)
+
+## New Features
+
+* **Eager table initialization**: `initialize_genome()` now creates all core
+  database tables upfront (`ind_meta`, `ind_phenotype`, `ind_tbv`, `ind_ebv`,
+  `trait_meta`, `trait_effects`, `trait_effect_cov`, `trait_random_effects`).
+  Users can call `get_table()` and `mutate_table()` on any table immediately
+  after `initialize_genome()`, before any data has been added.
+
+* **Custom field forwarding in `add_*` functions**: `add_founders()`,
+  `add_phenotype()`, `add_tbv()`, and `add_ebv()` now accept `...` for custom
+  column values that are written atomically with the new rows. Column types are
+  inferred from the R type (`0L` → INTEGER, `0` → DOUBLE, `"text"` → VARCHAR,
+  `TRUE` → BOOLEAN). Scalars are broadcast; vectors must match the inserted
+  row count. Reserved column names are blocked.
+
+  ```r
+  # Founders with custom columns in a single call
+  pop <- pop |>
+    add_founders(n_males = 10, n_females = 100, line_name = "A",
+                 gen = 0L, farm = "Iowa")
+  ```
+
+* **`mutate_table()` on empty tables**: calling `mutate_table()` on an empty
+  table now creates the column schema (via `ALTER TABLE ADD COLUMN`) instead
+  of warning and returning early. This enables pre-declaring typed column
+  schemas using typed NAs before any rows exist:
+
+  ```r
+  pop <- pop |>
+    get_table("ind_meta") |>
+    mutate_table(gen = NA_integer_, farm = NA_character_)
+  ```
+
+* **`prepare_extra_cols()` internal helper** (in `R/sql_utils.R`): shared
+  validation + type-inference + ALTER TABLE logic used by all `add_*`
+  functions with `...` support.
+
+* **`TABLE_RESERVED_COLS`** and **`TABLE_PRIMARY_KEYS`** in `R/sql_utils.R`
+  expanded to cover `ind_tbv`, `ind_ebv`, `trait_meta`, `trait_effects`, and
+  `trait_effect_cov`.
+
+---
+
 # tidybreed 0.8.2 (2026-04-24)
 
 ## Bug Fixes

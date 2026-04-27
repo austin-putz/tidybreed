@@ -76,13 +76,25 @@ add_phenotype <- function(tbl,
                           trait,
                           user_residual = NULL,
                           user_values   = NULL,
-                          seed          = NULL) {
+                          seed          = NULL,
+                          ...) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
   stopifnot(is.character(trait), length(trait) >= 1)
   lapply(trait, validate_sql_identifier, what = "trait name")
+
+  extra_cols <- list(...)
+  if (length(extra_cols) > 0) {
+    for (nm in names(extra_cols)) {
+      if (length(extra_cols[[nm]]) != 1L) {
+        stop("Custom field '", nm, "' in add_phenotype() must be a scalar ",
+             "(broadcast to all records). Supply per-record vectors with ",
+             "mutate_table() after the call.", call. = FALSE)
+      }
+    }
+  }
 
   if (!is.null(seed)) set.seed(seed)
 
@@ -196,7 +208,7 @@ add_phenotype <- function(tbl,
 
   # 7. If user_values supplied, short-circuit the model
   if (!is.null(user_values)) {
-    write_user_phenotype_values(pop, trait, subset_by_trait, user_values)
+    write_user_phenotype_values(pop, trait, subset_by_trait, user_values, extra_cols)
     return(invisible(pop))
   }
 
@@ -385,6 +397,11 @@ add_phenotype <- function(tbl,
       value        = as.numeric(value),
       pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
+    if (length(extra_cols) > 0) {
+      prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
+                                   pop$db_conn)
+      for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
+    }
     DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
     message("Wrote ", n_ind, " phenotype records for trait '", t, "'.")
   }
@@ -397,7 +414,7 @@ add_phenotype <- function(tbl,
 #'
 #' @keywords internal
 write_user_phenotype_values <- function(pop, trait, subset_by_trait,
-                                        user_values) {
+                                        user_values, extra_cols = list()) {
   if (length(trait) == 1 && !is.list(user_values)) {
     user_values <- stats::setNames(list(user_values), trait)
   }
@@ -425,6 +442,11 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
       value        = as.numeric(vals),
       pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
+    if (length(extra_cols) > 0) {
+      prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
+                                   pop$db_conn)
+      for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
+    }
     DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
     message("Wrote ", nrow(records), " user-supplied phenotype records for '",
             t, "'.")
