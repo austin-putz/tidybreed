@@ -1,3 +1,12 @@
+# tidybreed 0.9.1 (2026-04-28)
+
+## Internal
+
+* `genome_haplotype` and `genome_genotype` locus columns now use `UTINYINT`
+  instead of `INTEGER`, reducing per-locus memory from 4 bytes to 1 byte (4×
+  reduction). `UTINYINT` range (0–255) covers biallelic haplotypes (0/1),
+  diploid genotypes (0/1/2), and polyploid up to 8n or 16n.
+
 # tidybreed 0.9.0 (2026-04-27)
 
 ## New Features

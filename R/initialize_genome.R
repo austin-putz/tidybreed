@@ -207,7 +207,7 @@ initialize_genome <- function(pop_name,
   hap_schema <- paste(
     "id_ind VARCHAR,",
     "parent_origin INTEGER,",
-    paste(hap_cols, "INTEGER", collapse = ", ")
+    paste(hap_cols, "UTINYINT", collapse = ", ")
   )
 
   DBI::dbExecute(
@@ -219,7 +219,7 @@ initialize_genome <- function(pop_name,
   # Structure: id_ind, then one column per locus with genotype (0/1/2)
   geno_schema <- paste(
     "id_ind VARCHAR,",
-    paste(hap_cols, "INTEGER", collapse = ", ")
+    paste(hap_cols, "UTINYINT", collapse = ", ")
   )
 
   DBI::dbExecute(
