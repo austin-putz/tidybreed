@@ -16,7 +16,8 @@ add_ebv(
   run_dir = ".",
   eval_id = NULL,
   estimate_var = FALSE,
-  update_covars = FALSE
+  update_covars = FALSE,
+  ...
 )
 }
 \arguments{

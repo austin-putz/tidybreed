@@ -4,7 +4,7 @@
 \alias{mutate_table}
 \title{Add or modify columns in any population database table}
 \usage{
-mutate_table(tbl_obj, ...)
+mutate_table(tbl_obj, ..., .set_default = FALSE)
 }
 \arguments{
 \item{tbl_obj}{A \code{tidybreed_table} object returned by \code{\link[=get_table]{get_table()}}.}
@@ -12,6 +12,14 @@ mutate_table(tbl_obj, ...)
 \item{...}{Named arguments of the form \code{column_name = value}. \code{value} can
 be a scalar (applied to all affected rows) or a vector whose length equals
 the number of affected rows.}
+
+\item{.set_default}{Logical; if \code{TRUE}, creates new columns with a SQL
+DEFAULT constraint set to the provided value. The DEFAULT applies to future
+INSERT operations (e.g., from \code{\link[=add_founders]{add_founders()}}, \code{\link[=add_phenotype]{add_phenotype()}}) when
+the column is not explicitly specified in \code{...}. Only valid for scalar
+values (length 1); an error is raised if used with vectors. Has no effect
+on columns that already exist (DuckDB does not support modifying existing
+column defaults). Default: \code{FALSE}.}
 }
 \value{
 The parent \code{tidybreed_pop} object (invisibly).
@@ -47,4 +55,51 @@ insertion order (\code{ROWID} for \code{ind_meta}, \code{locus_id} order for
 \strong{Filtering}: when a \code{\link[=filter]{filter()}} is applied upstream, only the matching
 rows are updated. New columns created in this context will be \code{NULL} for
 all non-matching rows.
+
+\strong{Default constraints}: When \code{.set_default = TRUE}, new columns are created
+with a SQL DEFAULT constraint. This means future INSERT operations from
+\code{\link[=add_founders]{add_founders()}}, \code{\link[=add_phenotype]{add_phenotype()}}, or other \verb{add_*()} functions will
+automatically use the default value when the column is not explicitly
+provided in \code{...}.
+
+For populated tables, existing rows are still updated via the standard UPDATE
+mechanism; the DEFAULT only affects subsequent INSERT operations. For empty
+tables (e.g., right after \code{\link[=initialize_genome]{initialize_genome()}}), the DEFAULT is set at the
+schema level with no data operations.
+
+Note: DEFAULT constraints can only be added when creating new columns. If a
+column already exists, \code{.set_default} is ignored (but the UPDATE proceeds
+normally).
+}
+\examples{
+\dontrun{
+# Pre-declare schema with defaults before adding data
+pop <- initialize_genome(
+  pop_name = "sim",
+  n_loci = 100,
+  n_chr = 5,
+  chr_len_Mb = 50,
+  n_haplotypes = 100
+)
+
+# Set defaults for generation tracking and active status
+pop <- pop |>
+  get_table("ind_meta") |>
+  mutate_table(gen = 0L, active = TRUE, .set_default = TRUE)
+
+# Future founders automatically get gen = 0L and active = TRUE
+pop <- pop |>
+  add_founders(n_males = 10, n_females = 100, line_name = "A")
+
+# Check: all have defaults
+pop |> get_table("ind_meta") |> collect()
+
+# Override defaults by providing explicit values
+pop <- pop |>
+  add_founders(n_males = 5, n_females = 50, line_name = "B", gen = 1L)
+
+# Line B: gen = 1L (explicit), active = TRUE (default)
+pop |> get_table("ind_meta") |> dplyr::filter(line == "B") |> collect()
+}
+
 }

@@ -405,6 +405,13 @@ mutate_table_vector <- function(conn, table_name, field_name,
 #' @param ... Named arguments of the form `column_name = value`. `value` can
 #'   be a scalar (applied to all affected rows) or a vector whose length equals
 #'   the number of affected rows.
+#' @param .set_default Logical; if `TRUE`, creates new columns with a SQL
+#'   DEFAULT constraint set to the provided value. The DEFAULT applies to future
+#'   INSERT operations (e.g., from [add_founders()], [add_phenotype()]) when
+#'   the column is not explicitly specified in `...`. Only valid for scalar
+#'   values (length 1); an error is raised if used with vectors. Has no effect
+#'   on columns that already exist (DuckDB does not support modifying existing
+#'   column defaults). Default: `FALSE`.
 #'
 #' @return The parent `tidybreed_pop` object (invisibly).
 #'
@@ -423,8 +430,54 @@ mutate_table_vector <- function(conn, table_name, field_name,
 #' rows are updated. New columns created in this context will be `NULL` for
 #' all non-matching rows.
 #'
+#' **Default constraints**: When `.set_default = TRUE`, new columns are created
+#' with a SQL DEFAULT constraint. This means future INSERT operations from
+#' [add_founders()], [add_phenotype()], or other `add_*()` functions will
+#' automatically use the default value when the column is not explicitly
+#' provided in `...`.
+#'
+#' For populated tables, existing rows are still updated via the standard UPDATE
+#' mechanism; the DEFAULT only affects subsequent INSERT operations. For empty
+#' tables (e.g., right after [initialize_genome()]), the DEFAULT is set at the
+#' schema level with no data operations.
+#'
+#' Note: DEFAULT constraints can only be added when creating new columns. If a
+#' column already exists, `.set_default` is ignored (but the UPDATE proceeds
+#' normally).
+#'
+#' @examples
+#' \dontrun{
+#' # Pre-declare schema with defaults before adding data
+#' pop <- initialize_genome(
+#'   pop_name = "sim",
+#'   n_loci = 100,
+#'   n_chr = 5,
+#'   chr_len_Mb = 50,
+#'   n_haplotypes = 100
+#' )
+#'
+#' # Set defaults for generation tracking and active status
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   mutate_table(gen = 0L, active = TRUE, .set_default = TRUE)
+#'
+#' # Future founders automatically get gen = 0L and active = TRUE
+#' pop <- pop |>
+#'   add_founders(n_males = 10, n_females = 100, line_name = "A")
+#'
+#' # Check: all have defaults
+#' pop |> get_table("ind_meta") |> collect()
+#'
+#' # Override defaults by providing explicit values
+#' pop <- pop |>
+#'   add_founders(n_males = 5, n_females = 50, line_name = "B", gen = 1L)
+#'
+#' # Line B: gen = 1L (explicit), active = TRUE (default)
+#' pop |> get_table("ind_meta") |> dplyr::filter(line == "B") |> collect()
+#' }
+#'
 #' @export
-mutate_table <- function(tbl_obj, ...) {
+mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
 
   if (!inherits(tbl_obj, "tidybreed_table")) {
     stop(
@@ -439,10 +492,27 @@ mutate_table <- function(tbl_obj, ...) {
 
   validate_tidybreed_pop(pop)
 
-  field_values <- list(...)
+  # Extract field values, excluding .set_default if it was passed in ...
+  all_args <- list(...)
+  if (".set_default" %in% names(all_args)) {
+    .set_default <- all_args[[".set_default"]]
+    field_values <- all_args[names(all_args) != ".set_default"]
+  } else {
+    field_values <- all_args
+  }
+
   if (length(field_values) == 0) {
     warning("No fields specified. Returning population unchanged.", call. = FALSE)
     return(invisible(pop))
+  }
+
+  # Validate .set_default parameter
+  if (!is.null(.set_default)) {
+    stopifnot(
+      is.logical(.set_default),
+      length(.set_default) == 1,
+      !is.na(.set_default)
+    )
   }
 
   existing_cols <- DBI::dbListFields(pop$db_conn, table_name)
@@ -466,11 +536,22 @@ mutate_table <- function(tbl_obj, ...) {
       validate_sql_identifier(field_name, what = "field name", reserved = reserved)
       if (!field_name %in% existing_cols) {
         db_type <- infer_duckdb_type(value)
-        DBI::dbExecute(pop$db_conn, paste0(
+
+        # Build ALTER TABLE with optional DEFAULT
+        alter_sql <- paste0(
           "ALTER TABLE ", table_name, " ADD COLUMN ", field_name, " ", db_type
-        ))
+        )
+        if (!is.null(.set_default) && .set_default) {
+          sql_value <- format_sql_value(value, db_type)
+          alter_sql <- paste0(alter_sql, " DEFAULT ", sql_value)
+        }
+
+        DBI::dbExecute(pop$db_conn, alter_sql)
+
+        # Message with DEFAULT indicator
+        default_msg <- if (!is.null(.set_default) && .set_default) " with DEFAULT" else ""
         message("Added new column '", field_name, "' (", db_type, ") to `",
-                table_name, "` (table is currently empty)")
+                table_name, "` (table is currently empty)", default_msg)
       } else {
         message("Column '", field_name, "' already exists in `", table_name,
                 "` (table is currently empty; no rows updated)")
@@ -514,6 +595,14 @@ mutate_table <- function(tbl_obj, ...) {
     if (length(value) == 1) {
       is_vector <- FALSE
     } else {
+      # Block .set_default with vectors
+      if (!is.null(.set_default) && .set_default) {
+        stop(
+          "Cannot use .set_default = TRUE with vector values for field '",
+          field_name, "'. DEFAULT constraints require scalar values.",
+          call. = FALSE
+        )
+      }
       if (length(value) != n_effective) {
         stop(
           "Vector length (", length(value), ") for field '", field_name,
@@ -531,9 +620,16 @@ mutate_table <- function(tbl_obj, ...) {
     n_filled   <- 0L
 
     if (is_new_col) {
-      DBI::dbExecute(pop$db_conn, paste0(
+      # Build ALTER TABLE with optional DEFAULT
+      alter_sql <- paste0(
         "ALTER TABLE ", table_name, " ADD COLUMN ", field_name, " ", db_type
-      ))
+      )
+      if (!is.null(.set_default) && .set_default) {
+        sql_value <- format_sql_value(value, db_type)
+        alter_sql <- paste0(alter_sql, " DEFAULT ", sql_value)
+      }
+
+      DBI::dbExecute(pop$db_conn, alter_sql)
       existing_cols <- c(existing_cols, field_name)
     } else {
       # Count non-NULL rows among the affected rows BEFORE updating so we can
@@ -562,16 +658,19 @@ mutate_table <- function(tbl_obj, ...) {
 
     # Emit informational message
     if (is_new_col) {
+      default_msg <- if (!is.null(.set_default) && .set_default) " with DEFAULT" else ""
       if (has_filter) {
         n_null <- n_total - n_effective
         message(
-          "Added new column '", field_name, "' (", db_type, ") to `", table_name, "`; ",
+          "Added new column '", field_name, "' (", db_type, ") to `", table_name, "`",
+          default_msg, "; ",
           n_effective, " row", if (n_effective != 1) "s" else "", " set, ",
           n_null, " row", if (n_null != 1) "s" else "", " NULL"
         )
       } else {
         message(
-          "Added new column '", field_name, "' (", db_type, ") to `", table_name, "`; ",
+          "Added new column '", field_name, "' (", db_type, ") to `", table_name, "`",
+          default_msg, "; ",
           n_total, " row", if (n_total != 1) "s" else "", " set"
         )
       }

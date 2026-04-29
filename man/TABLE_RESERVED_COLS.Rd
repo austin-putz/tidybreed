@@ -5,7 +5,7 @@
 \alias{TABLE_RESERVED_COLS}
 \title{Reserved columns per table (cannot be modified by the user)}
 \format{
-An object of class \code{list} of length 3.
+An object of class \code{list} of length 8.
 }
 \usage{
 TABLE_RESERVED_COLS

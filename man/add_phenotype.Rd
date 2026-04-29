@@ -9,7 +9,8 @@ add_phenotype(
   trait,
   user_residual = NULL,
   user_values = NULL,
-  seed = NULL
+  seed = NULL,
+  ...
 )
 }
 \arguments{

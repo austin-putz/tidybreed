@@ -4,7 +4,13 @@
 \alias{write_user_phenotype_values}
 \title{Write user-supplied phenotype values verbatim}
 \usage{
-write_user_phenotype_values(pop, trait, subset_by_trait, user_values)
+write_user_phenotype_values(
+  pop,
+  trait,
+  subset_by_trait,
+  user_values,
+  extra_cols = list()
+)
 }
 \description{
 Write user-supplied phenotype values verbatim

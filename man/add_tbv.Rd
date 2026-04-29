@@ -4,7 +4,7 @@
 \alias{add_tbv}
 \title{Compute and store true breeding values without writing phenotypes}
 \usage{
-add_tbv(tbl, trait, date_calc = Sys.Date())
+add_tbv(tbl, trait, date_calc = Sys.Date(), ...)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped

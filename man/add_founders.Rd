@@ -4,7 +4,7 @@
 \alias{add_founders}
 \title{Add founder individuals to population}
 \usage{
-add_founders(pop, n_males, n_females, line_name)
+add_founders(pop, n_males, n_females, line_name, ...)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object}
@@ -15,6 +15,13 @@ add_founders(pop, n_males, n_females, line_name)
 
 \item{line_name}{Character. Line identifier used for individual IDs.
 IDs are formatted as \code{"{line_name}-{number}"} (e.g., "A-1", "A-2")}
+
+\item{...}{Optional named arguments for custom \code{ind_meta} columns, e.g.
+\code{gen = 0L}, \code{farm = "Iowa"}. Scalar values are broadcast to all new
+founders; vectors must have length \code{n_males + n_females}. Column types
+are inferred from the R type: use \code{0L} for INTEGER, \code{0} for DOUBLE,
+\code{"text"} for VARCHAR, \code{TRUE}/\code{FALSE} for BOOLEAN. Reserved column names
+(\code{id_ind}, \code{sex}, \code{line}, etc.) are blocked.}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).

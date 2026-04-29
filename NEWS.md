@@ -1,3 +1,14 @@
+# tidybreed 0.9.4 (2026-04-29)
+
+## New features
+
+* `mutate_table()` gains `.set_default` parameter to create SQL DEFAULT
+  constraints on new columns. When `.set_default = TRUE`, future INSERT
+  operations from `add_founders()`, `add_phenotype()`, and other `add_*()`
+  functions automatically use the default value when the column is not
+  explicitly specified. This enables easy schema pre-declaration and
+  consistent metadata across individuals.
+
 # tidybreed 0.9.2 (2026-04-29)
 
 ## Documentation
