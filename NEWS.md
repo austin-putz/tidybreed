@@ -1,3 +1,11 @@
+# tidybreed 0.9.2 (2026-04-29)
+
+## Documentation
+
+* Added `vignettes/tidybreed-introduction.Rmd` — a placeholder introduction
+  vignette directing users to the QMD-based quick-start in `vignettes/qmd/`
+  until the package reaches v1.0.0.
+
 # tidybreed 0.9.1 (2026-04-28)
 
 ## Internal

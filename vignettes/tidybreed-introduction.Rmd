@@ -1,0 +1,55 @@
+---
+title: "Introduction to tidybreed"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to tidybreed}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## Overview
+
+`tidybreed` simulates animal and plant breeding programs using a pipe-friendly
+API backed by a file-based DuckDB database.
+
+## Installation
+
+Eventually, I will try to push the package to CRAN, however, right now the
+package is only available via GitHub, see below. 
+
+```{r install_cran, eval=FALSE}
+# install.packages("tidybreed")
+```
+
+I highly suggest using the `pak` package to download `tidybreed` from GitHub. 
+
+```{r install_github, eval=FALSE}
+# install pak package
+install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
+
+# loadd pak
+library(pak)
+
+# install this package
+pak::pak("austin-putz/tidybreed")
+``` 
+
+
+## Basic usage
+
+First, make sure to load `tidybreed`. 
+
+```{r load_tidybreed, eval=FALSE}
+library(tidybreed)
+```
+
+Users should refer to the `/vignettes/qmd/` folder and open the HTML file
+to learn this package right now. Later I will build this official `.Rmd` file
+for users once I hit version `1.0.0` and get something official. 
+
+
+
