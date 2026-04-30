@@ -263,9 +263,9 @@ You can choose how to install `tidybreed` with the following T/F options.
 
 ```{r}
 # set install options for tidybreed
-install_via_devtools <- TRUE     # install from local directory with 'devtools'
+install_via_devtools <- FALSE     # install from local directory with 'devtools'
 devtools_load_all    <- FALSE    # will use `install()` instead, need library() after
-install_via_github   <- FALSE    # install from GitHub using 'pak' package
+install_via_github   <- TRUE    # install from GitHub using 'pak' package
 ```
 
 ### Via GitHub using `pak`
@@ -470,6 +470,21 @@ pop %>%
   )
 ```
 
+We can initialize as above with just the type and using missing value (NULL or NA)
+as a default. 
+
+What if we want a default value like `FALSE` instead of just missing?
+
+We can use the `.set_default` option in `mutate_table()` for users. 
+
+```{r}
+pop %>%
+  get_table("ind_meta") %>%
+  mutate_table(
+    active = FALSE,
+    .set_default = TRUE
+  )
+```
 
 <br>
 
@@ -511,6 +526,8 @@ Only **5 default columns/fields** in `ind_meta` created by `add_founders()`:
 4. `line`
 5. `sex`
 
+This is the only basic data a simulation package needs (in my opinion). 
+
 You could argue `line` and possibly `sex` is not needed. I might agree but here
 we are...
 
@@ -531,10 +548,13 @@ pop %>%
   print(n=10)
 ```
 
-This is the only basic data a simulation package needs (in my opinion). 
+Notice we gave values for `gen`, `farm`, and `date_birth` otherwise they would
+have been `NA` in R and `NULL` in DuckDB SQL. 
 
 > NOTE: You can remove the `print()` function and it will print slightly differently
 
+We can also initialize a new column and assign it a value for all individuals. 
+The type will be inferred with the first non-missing value. 
 
 ```{r}
 # add custom data to database table "ind_meta" using helper function
@@ -604,6 +624,9 @@ If you want to pull and manipulate data from a table such as `ind_meta` you
 must pull it into R memory with `collect()`, this allows users to
 continue to summarize with `dplyr` such as `group_by()`, `filter()`, `select()`,
 `summarise()` and so on... 
+
+Users now no longer need to worry about what may or may not be returned or 
+stored for them. 
 
 ```{r}
 #------------------------------------------------------------------------------#
