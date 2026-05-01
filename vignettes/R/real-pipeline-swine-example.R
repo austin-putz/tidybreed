@@ -58,13 +58,17 @@ pop %>%
     # here we need to identify which generation they were phenotyped
   )
 
+pop %>% get_table("ind_phenotype")
+
 # add 'rep' to 'ind_tbv'
 pop %>%
   get_table("ind_tbv") %>%
   mutate_table(
-    rep = NA_integer_,          # add rep
-    .set_default = TRUE         # if TRUE, sets default of given value
+    rep = NA_integer_          # add rep
+    #.set_default = TRUE         # if TRUE, sets default of given value
   )
+
+pop %>% get_table("ind_tbv")
 
 # add 'rep' to 'ind_ebv'
 pop %>%
@@ -74,6 +78,8 @@ pop %>%
     rep = NA_integer_,          # add rep
     .set_default = TRUE         # if TRUE, sets default of given value
   )
+
+pop %>% get_table("ind_ebv")
 
 #------------------------------------------------------------------------------#
 # Add Founders
@@ -178,6 +184,8 @@ pop <- pop %>%
   filter(rep == repl) %>%
   add_tbv("ADG", rep = repl)
 
+pop %>% get_table("ind_tbv")
+
 # add overall mean for ADG
 pop %>%
   add_effect_int(
@@ -194,6 +202,8 @@ pop %>%
     rep = repl,                 # set rep number
     gen_pheno = 0L              # founder gen
   )  
+
+pop %>% get_table("ind_phenotype")
 
 #------------------------------------------------------------#
 # Trait: BF
@@ -238,6 +248,9 @@ pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
   filter(rep == repl) %>%
   add_tbv("BF", rep = repl)
+
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "ADG")
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
 
 # add overall mean for ADG
 pop %>%

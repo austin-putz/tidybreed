@@ -455,19 +455,32 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
 }
 
 
-#' Upsert TBV rows (delete existing by id_ind + trait, then insert)
+#' Upsert TBV rows — column-named INSERT with ON CONFLICT DO UPDATE SET
+#'
+#' Only the columns present in tbv_df are updated on conflict; all other
+#' columns (user-defined extras like 'rep') are left untouched in existing rows.
 #'
 #' @keywords internal
 upsert_ind_tbv <- function(pop, tbv_df) {
   if (nrow(tbv_df) == 0) return(invisible(NULL))
-  trait <- unique(tbv_df$trait_name)
-  stopifnot(length(trait) == 1)
-  ids_sql <- paste0("'", tbv_df$id_ind, "'", collapse = ", ")
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("DELETE FROM ind_tbv WHERE trait_name = '", trait,
-           "' AND id_ind IN (", ids_sql, ")")
+
+  tmp <- paste0("_tbv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
+  duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(tbv_df))
+  on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
+
+  cols        <- names(tbv_df)
+  key_cols    <- c("id_ind", "trait_name")
+  update_cols <- setdiff(cols, key_cols)
+
+  col_list   <- paste(cols, collapse = ", ")
+  update_set <- paste(
+    paste0(update_cols, " = EXCLUDED.", update_cols),
+    collapse = ", "
   )
-  DBI::dbWriteTable(pop$db_conn, "ind_tbv", tbv_df, append = TRUE)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_tbv (", col_list, ") ",
+    "SELECT ", col_list, " FROM ", tmp, " ",
+    "ON CONFLICT (id_ind, trait_name) DO UPDATE SET ", update_set
+  ))
   invisible(NULL)
 }

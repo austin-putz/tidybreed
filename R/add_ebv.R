@@ -372,16 +372,24 @@ ebv_blupf90 <- function(pop, subset_ids, trait, model, date_calc,
 
 upsert_ind_ebv <- function(pop, ebv_df) {
   if (nrow(ebv_df) == 0) return(invisible(NULL))
-  models <- unique(ebv_df$model)
-  traits <- unique(ebv_df$trait_name)
-  ids    <- unique(ebv_df$id_ind)
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("DELETE FROM ind_ebv ",
-           "WHERE model IN (", paste0("'", models, "'", collapse = ", "), ") ",
-           "AND trait_name IN (", paste0("'", traits, "'", collapse = ", "), ") ",
-           "AND id_ind IN (", paste0("'", ids, "'", collapse = ", "), ")")
+
+  tmp <- paste0("_ebv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
+  duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(ebv_df))
+  on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
+
+  cols        <- names(ebv_df)
+  key_cols    <- c("id_ind", "trait_name", "model")
+  update_cols <- setdiff(cols, key_cols)
+
+  col_list   <- paste(cols, collapse = ", ")
+  update_set <- paste(
+    paste0(update_cols, " = EXCLUDED.", update_cols),
+    collapse = ", "
   )
-  DBI::dbWriteTable(pop$db_conn, "ind_ebv", as.data.frame(ebv_df), append = TRUE)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (", col_list, ") ",
+    "SELECT ", col_list, " FROM ", tmp, " ",
+    "ON CONFLICT (id_ind, trait_name, model) DO UPDATE SET ", update_set
+  ))
   invisible(NULL)
 }

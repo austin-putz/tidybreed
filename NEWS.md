@@ -1,3 +1,16 @@
+# tidybreed 0.9.6 (2026-05-01)
+
+## Bug fixes
+
+* `upsert_ind_tbv()` / `upsert_ind_ebv()`: replaced the DELETE + `dbWriteTable`
+  pattern with a DuckDB-native `INSERT … ON CONFLICT DO UPDATE SET` UPSERT.
+  Previously, calling `add_tbv()` (or `add_phenotype()`) after a prior
+  `add_tbv()` that had written user-defined extra columns (e.g. `rep`) would
+  silently reset those columns to `NULL` in existing rows for other traits or
+  on re-runs without the extra-column argument. The new UPSERT only updates
+  columns that are explicitly present in the incoming data frame, leaving all
+  other columns in existing rows untouched.
+
 # tidybreed 0.9.5 (2026-05-01)
 
 ## Bug fixes
