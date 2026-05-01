@@ -1,9 +1,16 @@
+#------------------------------------------------------------------------------#
+# Load Packages
+#------------------------------------------------------------------------------#
 
 library(yaml)
 library(tidybreed)
 library(tidyverse)
 
-n_reps <- 5
+#------------------------------------------------------------------------------#
+# Set Input Options
+#------------------------------------------------------------------------------#
+
+n_reps <- 1
 n_gens <- 10
 
 #------------------------------------------------------------------------------#
@@ -24,27 +31,55 @@ pop <- initialize_genome(
 # Add custom fields!
 #------------------------------------------------------------------------------#
 
-# create THREE (3) new CUSTOM Columns/Fields
+# create 2 custom fields for simulation pipeline
 pop %>% 
   get_table("ind_meta") %>%
   mutate_table(
-    rep = NA_integer_,    # replication number as 'integer'
-    gen = NA_integer_     # generation number as 'integer'
+    rep      = NA_integer_,    # rep (replication) number as 'integer'
+    gen_born = NA_integer_     # gen (generation) number as 'integer'
   )
 
 # add 'active' field, default to FALSE
 pop %>%
   get_table("ind_meta") %>%
   mutate_table(
-    active = TRUE,
-    .set_default = TRUE
+    active = TRUE,          # this is the default value (no rows yet)
+    .set_default = TRUE     # if TRUE, sets default of given value
+    # here so when animals are born they are "active" by default, later culled
+  )
+
+# add 'rep' + 'gen_pheno' field to 'ind_phenotype'
+pop %>%
+  get_table("ind_phenotype") %>%
+  mutate_table(
+    rep = NA_integer_,          # add rep to phenotypes
+    gen_pheno = NA_integer_,    # this is the default value (no rows yet)
+    .set_default = TRUE         # if TRUE, sets default of given value
+    # here we need to identify which generation they were phenotyped
+  )
+
+# add 'rep' to 'ind_tbv'
+pop %>%
+  get_table("ind_tbv") %>%
+  mutate_table(
+    rep = NA_integer_,          # add rep
+    .set_default = TRUE         # if TRUE, sets default of given value
+  )
+
+# add 'rep' to 'ind_ebv'
+pop %>%
+  get_table("ind_ebv") %>%
+  mutate_table(
+    gen_eval = NA_integer_,     # add gen of evaluation
+    rep = NA_integer_,          # add rep
+    .set_default = TRUE         # if TRUE, sets default of given value
   )
 
 #------------------------------------------------------------------------------#
 # Add Founders
 #------------------------------------------------------------------------------#
 
-#for (repl in 1:n_reps){
+for (repl in 1:n_reps){
 
 # add founders
 pop <- pop %>%
@@ -52,8 +87,8 @@ pop <- pop %>%
     n_males   = 50,      # sample male founders
     n_females = 100,     # sample female founders
     line_name = "Libra", # name this population
-    rep = 1L,          # USER DEFINED - replicate
-    gen = 0L             # USER DEFINED - generation
+    rep = repl,          # USER DEFINED - replicate
+    gen_born = 0L        # USER DEFINED - generation
   )
 
 #------------------------------------------------------------------------------#
@@ -89,15 +124,15 @@ mat.res.vars <- matrix(c(8.10,   10.00,  0.65,
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   add_effect_cov_matrix(
-    effect_name = "gen_add",
-    cov_matrix  = mat.add.gen.vars
+    effect_name = "gen_add",          # fixed term for additive genetic (co)variance matrix
+    cov_matrix  = mat.add.gen.vars    # name of matrix with row/col names
   )
 
 # add this residual covariance matrix to a table with function
 pop <- pop %>%
   add_effect_cov_matrix(
-    effect_name = "residual",
-    cov_matrix  = mat.res.vars
+    effect_name = "residual",      # fixed term for residual (co)variance matrix
+    cov_matrix  = mat.res.vars     # name for matrix with row/col names
   )
 
 #------------------------------------------------------------#
@@ -140,7 +175,8 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  add_tbv("ADG")
+  filter(rep == repl) %>%
+  add_tbv("ADG", rep = repl)
 
 # add overall mean for ADG
 pop %>%
@@ -152,8 +188,11 @@ pop %>%
 # test `add_phenotype()` function
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
+  filter(rep == repl) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait = "ADG"              # trait name
+    trait = "ADG",              # trait name
+    rep = repl,                 # set rep number
+    gen_pheno = 0L              # founder gen
   )  
 
 #------------------------------------------------------------#
@@ -197,7 +236,8 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  add_tbv("BF")
+  filter(rep == repl) %>%
+  add_tbv("BF", rep = repl)
 
 # add overall mean for ADG
 pop %>%
@@ -209,8 +249,11 @@ pop %>%
 # test `add_phenotype()` function
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
+  filter(rep == repl) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait = "BF"              # trait name
+    trait = "BF",              # trait name
+    rep = repl,                 # add rep
+    gen_pheno = 0L              # founder generation
   )
 
 #------------------------------------------------------------#
@@ -254,7 +297,8 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  add_tbv("NW")
+  filter(rep == repl) %>%
+  add_tbv("NW", rep = repl)
 
 # add overall mean for ADG
 pop %>%
@@ -266,36 +310,34 @@ pop %>%
 # test `add_phenotype()` function
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
-  filter(sex == "F") %>%        # only females get NW phenotype
+  filter(rep == repl, sex == "F") %>%        # only females get NW phenotype
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait = "NW"                # trait name
+    trait = "NW",                # trait name
+    rep = repl,                 # add rep number
+    gen_pheno = 0L              # founder gen
   )
 
 #------------------------------------------------------------------------------#
 # Run EBVs
 #------------------------------------------------------------------------------#
 
-# first add gen as field in 'ind_ebv'
-pop <- pop %>%
-  get_table("ind_ebv") %>%
-  mutate_table(
-    gen = NA_integer_
-  )
-
 # run EBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_ebv("ADG", software="blupf90", model="blup", gen=0L)
+  filter(rep == repl) %>%
+  add_ebv("ADG", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
 # run EBV for BF
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_ebv("BF", software="blupf90", model="blup", gen=0L)
+  filter(rep == repl) %>%
+  add_ebv("BF", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
 # run EBV for NW
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_ebv("NW", software="blupf90", model="blup", gen=0L)
+  filter(rep == repl) %>%
+  add_ebv("NW", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
 #------------------------------------------------------------------------------#
 # Checks
@@ -309,7 +351,7 @@ pop <- pop %>%
 pop %>%
   get_table("ind_tbv") %>%
   collect() %>%
-  group_by(trait_name) %>%
+  group_by(rep, trait_name) %>%
   summarise(
     MeanTBV = mean(tbv)
   ) %>%
@@ -323,7 +365,7 @@ pop %>%
 pop %>%
   get_table("ind_ebv") %>%
   collect() %>%
-  group_by(trait_name) %>%
+  group_by(rep, trait_name) %>%
   summarise(
     MeanEBV = mean(ebv)
   ) %>%
@@ -337,7 +379,7 @@ pop %>%
 pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
-  group_by(trait_name) %>%
+  group_by(rep, trait_name) %>%
   summarise(
     MeanP = mean(value)
   ) %>%
@@ -355,13 +397,13 @@ for (genl in 1L:n_gens){
   # subset male candidates
   male_candidates <- pop %>%
     get_table("ind_meta") %>%
-    filter(sex == "M", active==TRUE) %>%
+    filter(rep == repl, sex == "M", active==TRUE) %>%
     pull(id_ind)
   
   # subset female candidates
   female_candidates <- pop %>%
     get_table("ind_meta") %>%
-    filter(sex == "F", active==TRUE) %>%
+    filter(rep == repl, sex == "F", active==TRUE) %>%
     pull(id_ind)
   
   #---------------- SELECT CANDIDATES ----------------#
@@ -371,8 +413,9 @@ for (genl in 1L:n_gens){
     get_table("ind_ebv") %>%
     filter(
       trait_name=="ADG", 
-      gen == genl - 1L,
-      id_ind %in% male_candidates
+      gen_eval == genl - 1L,
+      id_ind %in% male_candidates,
+      rep == repl
     ) %>%
     slice_max(ebv, n=5) %>%
     pull(id_ind)
@@ -382,8 +425,9 @@ for (genl in 1L:n_gens){
     get_table("ind_ebv") %>%
     filter(
       trait_name=="ADG", 
-      gen == genl - 1L,
-      id_ind %in% female_candidates
+      gen_eval == genl - 1L,
+      id_ind %in% female_candidates,
+      rep == repl
     ) %>%
     slice_max(ebv, n=30) %>%
     pull(id_ind)
@@ -393,6 +437,7 @@ for (genl in 1L:n_gens){
   # RESET ALL to ACTIVE=FALSE
   pop <- pop %>%
     get_table("ind_meta") %>%
+    filter(rep == repl) %>%
     mutate_table(
       active = FALSE
     )
@@ -401,6 +446,7 @@ for (genl in 1L:n_gens){
   pop <- pop %>%
     get_table("ind_meta") %>%
     filter(
+      rep == repl, 
       id_ind %in% c(males_selected, females_selected)
     ) %>%
     mutate_table(
@@ -412,32 +458,40 @@ for (genl in 1L:n_gens){
   # phenotype selected dams first
   pop %>%
     get_table("ind_meta") %>%
-    filter(id_ind %in% females_selected) %>%
+    filter(rep == repl, id_ind %in% females_selected) %>%
     add_phenotype(
       "NW",
-      gen = genl
+      rep = repl,          # add rep number
+      gen_pheno = genl     # add generation phenotyped as current gen
     )
   
   # extract NW phenotype to produce offspring numbers correctly
   data.nw <- pop %>%
     get_table("ind_phenotype") %>%
     filter(
+      rep == repl, 
       trait_name == "NW",
       id_ind %in% females_selected,
-      gen == genl
+      gen_pheno == genl        # filter to current gen as that's what we set above
     ) %>%
     collect() %>%
     select(id_ind, value)
   
   #---------------- PRODUCE PROGENY ----------------#
   
+  # HOW:
+  # boars: select males randomly like pooled semen I guess (possible but wouldn't know pedigree)
+  # gilts/sows: fill number of rows based on NW phenotype just sampled (rows will vary by chance)
+  # sex: randomly assign 50/50
+  
   # use new phenotype to build mating plan
   data.new.matings <- tibble(
     id_parent_1 = sample(males_selected, size=sum(data.nw$value), replace=TRUE),
     id_parent_2 = rep(c(data.nw$id_ind), time=data.nw$value),
-    line = "Libra",
-    sex = sample(c("M", "F"), size=sum(data.nw$value), replace=TRUE, prob=c(0.5, 0.5)),
-    gen = genl
+    line     = "Libra",
+    sex      = sample(c("M", "F"), size=sum(data.nw$value), replace=TRUE, prob=c(0.5, 0.5)),
+    rep      = repl,
+    gen_born = genl
   )
   
   # add new offspring based on tibble mating plan (1 row per offspring)
@@ -451,7 +505,7 @@ for (genl in 1L:n_gens){
   # all Males get a genotype for 9k
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(sex=="M") %>%            # MALES ONLY
+    filter(rep == repl, sex=="M") %>%            # MALES ONLY
     add_genotypes(chip_name="9k")
   
   #---------------- ADD PHENOTYPES ----------------#
@@ -459,41 +513,51 @@ for (genl in 1L:n_gens){
   # all offspring get a genotype for 9k
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(gen == genl) %>%             # Current Gen phenotyped only!
-    add_phenotype(c("ADG", "BF"))
+    filter(rep == repl, gen_born == genl) %>%             # Current Gen phenotyped only!
+    add_phenotype(
+      c("ADG", "BF"),
+      rep = repl, 
+      gen_pheno = genl
+    )
   
   #---------------- RUN BLUPF90 ----------------#
   
   # run EBV for ADG
   pop <- pop %>%
     get_table("ind_meta") %>%
-    add_ebv("ADG", software="blupf90", model="blup", gen=genl)
+    filter(rep == repl) %>%
+    add_ebv("ADG", software="blupf90", model="blup", gen_eval=genl, rep = repl)
   
   # run EBV for BF
   pop <- pop %>%
     get_table("ind_meta") %>%
-    add_ebv("BF", software="blupf90", model="blup", gen=genl)
+    filter(rep == repl) %>%
+    add_ebv("BF", software="blupf90", model="blup", gen_eval=genl, rep = repl)
   
   # run EBV for NW
   pop <- pop %>%
     get_table("ind_meta") %>%
-    add_ebv("NW", software="blupf90", model="blup", gen=genl)
+    filter(rep == repl) %>%
+    add_ebv("NW", software="blupf90", model="blup", gen_eval=genl, rep = repl)
   
   #---------------- RUN OVERLAP GENERATION ----------------#
   
   # Offspring already ACTIVE=TRUE by default now, no need to set
   
 } # END GENERATION LOOP
-#} # END REPLICATE LOOP
 
-
-
-
-
-
+# make sure all animals have TBVs for later
 pop %>%
   get_table("ind_meta") %>%
-  add_tbv(c("ADG", "BF", "NW"))
+  filter(rep == repl) %>%
+  add_tbv(c("ADG", "BF", "NW"), rep = repl)
+
+} # END REPLICATE LOOP
+
+
+
+
+
 
 
 
@@ -517,7 +581,7 @@ data.ind <- pop %>%
 
 data.ebv <- pop %>%
   get_table("ind_ebv") %>%
-  filter(gen == genl) %>%
+  filter(gen_eval == genl) %>%
   collect()
 
 # join ind data to EBV data

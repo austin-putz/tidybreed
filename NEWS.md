@@ -1,3 +1,12 @@
+# tidybreed 0.9.5 (2026-05-01)
+
+## Bug fixes
+
+* `add_tbv()`: removed the `existing_ids` skip guard that prevented re-computing
+  TBVs for individuals already in `ind_tbv`. The guard was redundant with the
+  DELETE + INSERT logic inside `upsert_ind_tbv()` and blocked custom column
+  updates (e.g. `rep`) when looping over replicates.
+
 # tidybreed 0.9.4 (2026-04-29)
 
 ## New features

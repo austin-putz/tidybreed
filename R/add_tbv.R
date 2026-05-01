@@ -112,18 +112,6 @@ add_tbv <- function(tbl, trait, date_calc = Sys.Date(), ...) {
     }
     if (length(ids_t) == 0) next
 
-    existing_ids <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT id_ind FROM ind_tbv WHERE trait_name = '", t,
-             "' AND id_ind IN (", paste0("'", ids_t, "'", collapse = ", "), ")")
-    )$id_ind
-    if (length(existing_ids) > 0) {
-      message(length(existing_ids), " individual(s) already have a TBV for '",
-              t, "' and will be skipped.")
-      ids_t <- setdiff(ids_t, existing_ids)
-    }
-    if (length(ids_t) == 0) next
-
     a <- genome[[paste0("add_", t)]]
     a[is.na(a)] <- 0
 
