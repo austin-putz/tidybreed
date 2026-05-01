@@ -4,10 +4,13 @@
 .Ruserdata
 *.Rproj
 inst/doc
-PACKAGE_OUTLINE.md
 .claude/*
 memory/
+
+# markdowns
+PACKAGE_OUTLINE.md
 PHENOTYPING_PLAN.md
+YAML_PLAN.md
 
 # BLUPF90 example/scratch files
 *.par
@@ -17,3 +20,5 @@ PHENOTYPING_PLAN.md
 vignettes/qmd/*.duckdb
 vignettes/qmd/*.duckdb.wal
 vignettes/qmd/eval_blup_*/
+vignettes/R/*.png
+

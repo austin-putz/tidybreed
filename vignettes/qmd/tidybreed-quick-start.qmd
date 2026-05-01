@@ -247,8 +247,18 @@ to keep memory low.
 
 
 
+```{r}
+# basic options
 
+# tibble columns printed
+options(
+  tibble.width = 20,
+  tibble.print_max = 15,
+  tibble.print_min = 10
+)
+```
 
+<br>
 
 ## Install `tidybreed`
 
@@ -259,83 +269,109 @@ There are 2 ways:
   - `install()` - will 'install' the package and render markdowns for docs, etc
 - Via **GitHub** using the `pak` package
 
-You can choose how to install `tidybreed` with the following T/F options. 
+You can choose how to install `tidybreed` with the following T/F options:
 
 ```{r}
 # set install options for tidybreed
-install_via_devtools <- FALSE     # install from local directory with 'devtools'
-devtools_load_all    <- FALSE    # will use `install()` instead, need library() after
-install_via_github   <- TRUE    # install from GitHub using 'pak' package
+install_local  <- TRUE   # install from local directory with `pak`
+install_github <- FALSE  # install from GitHub using 'pak' package
+
+# path to tidybreed code for devtools
+# SET TO YOUR LOCAL DIRECTORY!!! (defaults back to github if not found!!!)
+path_tidybreed <- "/Users/austinputz/Claude/tidybreed/"
+```
+
+```{r}
+# check options
+if (all(install_local, install_github)){
+  stop("Select either a local directory or GitHub for install please")
+} else if (any(install_local, install_github) == FALSE){
+  stop("Select either a local directory or GitHub for install please")
+}
+
+# check for path, if not found, fall back to GitHub download/install
+if(dir.exists(path_tidybreed)){
+  message("PATH to tidybreed package exists")
+} else {
+  warning("Didn't find your tidybreed directory, will pass to GitHub instead for install...\n")
+  # fall back to GitHub if directory not found
+  install_github <- TRUE
+}
+```
+
+### Use `pak` either way
+
+`pak` is now the recommended standard for installing packages from anywhere
+(local, GitHub, CRAN), developed by Posit/RStudio. 
+
+```{r}
+# call pak, install if needed
+if ("pak" %in% installed.packages()){
+  message("pak package installed, calling library(pak) now:\n")
+  library(pak)
+} else {
+  warning("pak package not installed, need to install from CRAN...")
+  install.packages("pak")   # install from CRAN
+  library(pak)
+}
 ```
 
 ### Via GitHub using `pak`
 
-You can find [tidybreed here](https://github.com/austin-putz/tidybreed). 
+Find [tidybreed on GitHub](https://github.com/austin-putz/tidybreed). 
 
 Install `tidybreed` via `pak` from **GitHub**: 
 
 ```{r}
 # if not installed or updated from GitHub
-if (install_via_github == TRUE){
+if (install_github == TRUE){
   
-  cat("Installing from GitHub this time.\n\n")
-  
-  # call pak, install if needed
-  if ("pak" %in% installed.packages()){
-    library(pak)
-  } else {
-    install.packages("pak")   # install from CRAN
-    library(pak)
-  }
+  message("Installing from GitHub, check PATH if wanted local install above\n")
   
   # install tidybreed from GitHub with pak package
   pak::pak("austin-putz/tidybreed", upgrade = TRUE)
+  
   # load tidybreed
   library(tidybreed)
+  
 } else {
-  cat("Will skip installing from GitHub this time.\n\n")
+  warning("Will install from local directory, make sure it's up to date!")
 }
 ```
 
-### Via `devtools`
+### Via local directory with `pak`
 
-Install `tidybreed` via `devtools` if you have a local directory (such as
-a clone from GitHub maybe)
+Install `tidybreed` via `pak` if you have a local directory, such as
+a clone from GitHub maybe
+
+
+Could use `devtools` with:
+
+- use `load_all()` for quick loading
+- use `install()` + `library()` for "full install/build"
 
 ```{r}
 # load the current version (test new functionality before commit to GitHub)
-if (install_via_devtools == TRUE){
+if (install_local == TRUE){
   
-  # path to tidybreed code for devtools
-  path_tidybreed <- "/Users/austinputz/Claude/tidybreed/"   # set to your directory
+  # install tidybreed locally
+  pak::pak(path_tidybreed, upgrade = TRUE)
   
-  # call devtools, install if needed
-  if ("devtools" %in% installed.packages()){
-    library(devtools)
-  } else {
-    install.packages("devtools")   # install from CRAN
-    library(devtools)
-  }
-  
-  if (devtools_load_all==TRUE){
-    # use load_all() from devtools package
-    devtools::load_all(path_tidybreed)
-  } else {
-    devtools::install(path_tidybreed)
-    library(tidybreed)
-  }
 }
 ```
 
 
 ### Other packages
 
-Load any other packages you want here
+Load any other packages you want here, probably recommend `tidyverse` at
+minimum, but avoid too many if they could conflict with `tidybreed`. 
 
 ```{r}
 # load other libraries
 library(tidyverse)
 ```
+
+### CRITICAL - CHECK VERSIONS
 
 Important to see what versions you are running to help the package author(s)
 and to see if you are behind a version from GitHub. 
@@ -362,14 +398,15 @@ The most important first step is to design the genome as this is typically
 The other core design is to use databases so it needs to initialize a few
 core tables used throughout this package. 
 
-Notes:
+**Important Notes:**
 
 **LOCI:** You are only designing the number of loci for the genome that can be 
-utilized later as QTL or SNP Markers. There is no need to assign which are 
-SNP or QTL because all haplotypes will need to be created through 
-recombination anyway. Later, we can specify and detail a locus as a SNP or QTL. 
+utilized later as QTL or (SNP) Markers. There is no need to assign which are 
+SNP or QTL because 'full' haplotypes will need to be created through 
+gametes/recombination anyway. Later, we can specify and detail a locus as a SNP 
+or QTL and assign effects. 
 
-> NOTE: As of 2026-04-24 and version 0.6.0, I simply generate random 0/1 haplotypes per locus sampling from a uniform distribution or whatever you choose in the arguments available. Before launching v1.0.0 I will have the functionality to generate LD from MACS or through random selection over many generations with recombination and mutation. 
+> NOTE: As of 2026-04-30 and version 0.9.4, I simply generate random 0/1 haplotypes per locus sampling from a uniform distribution or whatever you choose in the arguments available. Before launching v1.0.0 I will have the functionality to generate LD from MACS or through random selection over many generations with recombination and mutation. 
 
 **New Function:** `initialize_genome()` will build a genome for this population
 based on the number of loci, chromosomes, and length of each chromosome in Mb.
@@ -1329,12 +1366,19 @@ To **add offspring/progeny**, you simply provide a `tibble` with the following *
 3. `sex` - sex (values "M" or "F" right now but will add castrates later!)
 4. `line` - line name
 
-Then you can add any **OPTIONAL** columns you wish:
+Then the user can add any **OPTIONAL columns** you wish such as:
 
-- `gen` - added above
-- `rep` - added above
-- `date_birth` - added above
-- `farm` - added above
+- `gen` - User added above
+- `rep` - User added above
+- `date_birth` - User added above
+- `farm` - User added above
+
+These will by default be entered as `NA` or `NULL`, however the user can use the
+`.set_default = TRUE` argument when initializing the column and give the 
+default value to the column name at that time such as 
+`active = FALSE, .set_default = TRUE` to create a field/column called`active` 
+inside whatever table you passed to `mutate_table()` with a default to `FALSE`
+so if the user doesn't give the value, it defaults to `FALSE` 
 
 ```{r}
 #------------------------------------------------------------------------------#
@@ -1517,7 +1561,7 @@ pop %>%
   get_table("ind_ebv")
 ```
 
-Calculate EBVs by just using the parent average
+Calculate EBVs by just using the **parent average**
 
 ```{r}
 # use parent average for 2nd generation animals
@@ -1531,7 +1575,7 @@ pop <- pop %>%
   )
 ```
 
-Extract 2nd generation anaimals IDs:
+Extract 2nd generation animals IDs:
 
 ```{r}
 # pull 2nd gen animals IDs
@@ -1645,7 +1689,7 @@ tables directly and didn't have to use `sample()` on a vector.
 new_prog_2 <- tibble(
   id_parent_1 = rep(males_selected, 5),         # repeat sel sires every other offspring
   id_parent_2 = rep(females_selected, each=5),  # female has "litter" of 5 offspring each
-  sex = "M",                                    # only produce males
+  sex  = "M",                                   # only produce males
   line = "A"                                    # all line "A"
 )
 
