@@ -26,12 +26,12 @@
 #'   filtered). Must be the `ind_ebv` table.
 #' @param index_name Character scalar. Name of the index to compute; must
 #'   already exist in `index_meta` (created via [define_index()]).
-#' @param replace_index Logical. If `TRUE`, all existing `ind_index` rows for
+#' @param overwrite_index Logical. If `TRUE`, all existing `ind_index` rows for
 #'   this `index_name` are deleted before inserting; new rows receive
 #'   `index_number = 1`. Default `FALSE`.
 #' @param delete_all Logical. If `TRUE`, **all** rows in `ind_index` are deleted
 #'   before inserting; new rows receive `index_number = 1`. Takes precedence
-#'   over `replace_index`. Default `FALSE`.
+#'   over `overwrite_index`. Default `FALSE`.
 #' @param ... Optional extra columns to add to `ind_index`. Scalar values only
 #'   (broadcast to all inserted rows). Types are inferred via
 #'   [infer_duckdb_type()].
@@ -57,13 +57,13 @@
 #' pop <- pop |>
 #'   get_table("ind_ebv") |>
 #'   dplyr::filter(model == "blup_v2", eval_number == 1L) |>
-#'   add_index("terminal", replace_index = TRUE)
+#'   add_index("terminal", overwrite_index = TRUE)
 #' }
 #' @export
 add_index <- function(tbl,
                       index_name,
-                      replace_index = FALSE,
-                      delete_all    = FALSE,
+                      overwrite_index = FALSE,
+                      delete_all      = FALSE,
                       ...) {
 
   # ---- Input validation ----
@@ -83,7 +83,7 @@ add_index <- function(tbl,
   stopifnot(is.character(index_name), length(index_name) == 1)
   validate_sql_identifier(index_name, what = "index name")
 
-  stopifnot(is.logical(replace_index), length(replace_index) == 1)
+  stopifnot(is.logical(overwrite_index), length(overwrite_index) == 1)
   stopifnot(is.logical(delete_all), length(delete_all) == 1)
 
   extra_cols <- list(...)
@@ -223,7 +223,7 @@ add_index <- function(tbl,
     DBI::dbExecute(conn, "DELETE FROM ind_index")
     new_index_num <- rep(1L, n_ind)
 
-  } else if (replace_index) {
+  } else if (overwrite_index) {
     DBI::dbExecute(
       conn,
       paste0("DELETE FROM ind_index WHERE index_name = '",

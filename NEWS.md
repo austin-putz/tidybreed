@@ -1,3 +1,14 @@
+# tidybreed 0.11.2 (2026-05-02)
+
+## Bug fixes
+
+* `add_index()`: renamed `replace_index` parameter to `overwrite_index` to
+  prevent R's partial argument matching from silently consuming user-defined
+  extra column values named `rep`. Previously, passing `rep = 1L` as a custom
+  column would be matched to `replace_index` (since `"rep"` is a unique prefix
+  of `"replace_index"`), causing a `stopifnot(is.logical(...))` error. Now
+  consistent with `overwrite_trait` in `add_ebv()`.
+
 # tidybreed 0.11.1 (2026-05-02)
 
 ## Bug fixes

@@ -226,7 +226,7 @@ test_that("add_index() increments index_number on successive runs", {
 })
 
 
-test_that("add_index() replace_index = TRUE resets to index_number 1", {
+test_that("add_index() overwrite_index = TRUE resets to index_number 1", {
   pop <- make_index_pop("ai_replace")
   on.exit(close_pop(pop))
 
@@ -236,7 +236,7 @@ test_that("add_index() replace_index = TRUE resets to index_number 1", {
     pop <- pop |> get_table("ind_ebv") |> add_index("terminal")
     pop <- pop |> get_table("ind_ebv") |> add_index("terminal")
     pop <- pop |> get_table("ind_ebv") |>
-      add_index("terminal", replace_index = TRUE)
+      add_index("terminal", overwrite_index = TRUE)
   })
 
   nums <- DBI::dbGetQuery(pop$db_conn,
