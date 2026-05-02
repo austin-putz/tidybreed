@@ -1,3 +1,17 @@
+# tidybreed 0.11.3 (2026-05-02)
+
+## Bug fixes
+
+* `add_index()`: replaced `stats::reshape()` + `sub()` rename with a direct
+  matrix-based EBV pivot. `stats::reshape()` behaves differently on tibbles
+  (returned by `dplyr::collect()` in the filter branch) vs plain data frames
+  (returned by `DBI::dbGetQuery()` in the no-filter branch), causing column
+  name mangling that made `wide[[tr]]` return `NULL` and threw
+  `vapply … values must be length 1, but FUN(X[[1]]) result is length 0`.
+  The fix builds an `n_ind × n_traits` matrix using direct row lookup and
+  `match()`, then computes index values via `%*%`. No behaviour change for the
+  no-filter path; the filter path now works correctly for any number of traits.
+
 # tidybreed 0.11.2 (2026-05-02)
 
 ## Bug fixes

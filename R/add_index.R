@@ -200,21 +200,17 @@ add_index <- function(tbl,
   }
 
   # ---- Pivot wide and compute index ----
-  wide <- stats::reshape(
-    ebv_df,
-    idvar     = "id_ind",
-    timevar   = "trait_name",
-    direction = "wide",
-    v.names   = "ebv"
-  )
-  # reshape() names columns as "ebv.trait_name" — fix to just "trait_name"
-  names(wide) <- sub("^ebv\\.", "", names(wide))
+  individuals_sorted <- sort(individuals)
 
-  index_values <- vapply(seq_len(nrow(wide)), function(i) {
-    sum(vapply(index_traits, function(tr) {
-      index_wts[tr] * wide[[tr]][i]
-    }, numeric(1)))
-  }, numeric(1))
+  # Build n_ind × n_traits EBV matrix via direct lookup — avoids stats::reshape()
+  # which behaves differently on tibbles (from dplyr::collect) vs plain data.frames,
+  # causing column name mangling that makes wide[[tr]] return NULL.
+  ebv_mat <- vapply(index_traits, function(tr) {
+    tr_rows <- ebv_df[ebv_df$trait_name == tr, , drop = FALSE]
+    tr_rows$ebv[match(individuals_sorted, tr_rows$id_ind)]
+  }, numeric(length(individuals_sorted)))
+
+  index_values <- as.numeric(ebv_mat %*% index_wts[index_traits])
 
   # ---- Determine index_number ----
   conn <- pop$db_conn
@@ -242,7 +238,7 @@ add_index <- function(tbl,
       )
     )
     max_map <- setNames(max_df$max_num, max_df$id_ind)
-    new_index_num <- vapply(wide$id_ind, function(id) {
+    new_index_num <- vapply(individuals_sorted, function(id) {
       prev <- max_map[id]
       if (is.na(prev)) 1L else as.integer(prev) + 1L
     }, integer(1))
@@ -250,7 +246,7 @@ add_index <- function(tbl,
 
   # ---- Build insertion data frame ----
   result_df <- data.frame(
-    id_ind       = wide$id_ind,
+    id_ind       = individuals_sorted,
     index_name   = index_name,
     index_number = new_index_num,
     index_value  = index_values,
