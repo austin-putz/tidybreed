@@ -200,8 +200,7 @@ add_phenotype <- function(tbl,
     tbv_df <- tibble::tibble(
       id_ind     = ids_t,
       trait_name = t,
-      tbv        = tbv,
-      date_calc  = Sys.Date()
+      tbv        = tbv
     )
     upsert_ind_tbv(pop, tbv_df)
   }

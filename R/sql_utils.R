@@ -71,8 +71,8 @@ TABLE_RESERVED_COLS <- list(
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
   ind_phenotype    = c("id_record", "id_ind", "trait_name", "value", "pheno_number"),
-  ind_tbv          = c("id_ind", "trait_name", "tbv", "date_calc"),
-  ind_ebv          = c("id_ind", "trait_name", "model", "ebv", "acc", "se", "date_calc"),
+  ind_tbv          = c("id_ind", "trait_name", "tbv"),
+  ind_ebv          = c("id_ind", "trait_name", "model", "ebv", "acc", "se", "eval_number"),
   trait_meta       = c("trait_name", "description", "units", "trait_type", "repeatable",
                        "recorded_on", "expressed_sex", "expressed_parent", "target_add_mean",
                        "min_value", "max_value", "prevalence", "thresholds",
@@ -80,7 +80,9 @@ TABLE_RESERVED_COLS <- list(
   trait_effects    = c("trait_name", "effect_name", "effect_class", "source_column",
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value"),
-  trait_effect_cov = c("effect_name", "trait_1", "trait_2", "cov")
+  trait_effect_cov = c("effect_name", "trait_1", "trait_2", "cov"),
+  index_meta       = c("index_name", "trait_name", "index_wt"),
+  ind_index        = c("id_ind", "index_name", "index_number", "index_value")
 )
 
 

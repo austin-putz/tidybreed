@@ -10,7 +10,7 @@ library(tidyverse)
 # Set Input Options
 #------------------------------------------------------------------------------#
 
-n_reps <- 1
+n_reps <- 3
 n_gens <- 10
 
 #------------------------------------------------------------------------------#
@@ -269,6 +269,9 @@ pop %>%
     gen_pheno = 0L              # founder generation
   )
 
+pop %>% get_table("ind_phenotype") %>% filter(trait_name == "ADG")
+pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF")
+
 #------------------------------------------------------------#
 # Trait: NW
 #------------------------------------------------------------#
@@ -313,6 +316,8 @@ pop <- pop %>%
   filter(rep == repl) %>%
   add_tbv("NW", rep = repl)
 
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
+
 # add overall mean for ADG
 pop %>%
   add_effect_int(
@@ -329,6 +334,8 @@ pop %>%
     rep = repl,                 # add rep number
     gen_pheno = 0L              # founder gen
   )
+
+pop %>% get_table("ind_phenotype") %>% filter(trait_name == "NW")
 
 #------------------------------------------------------------------------------#
 # Run EBVs
@@ -366,7 +373,8 @@ pop %>%
   collect() %>%
   group_by(rep, trait_name) %>%
   summarise(
-    MeanTBV = mean(tbv)
+    MeanTBV = mean(tbv),
+    .groups = "drop_last"
   ) %>%
   print(n=10)
 
@@ -380,7 +388,8 @@ pop %>%
   collect() %>%
   group_by(rep, trait_name) %>%
   summarise(
-    MeanEBV = mean(ebv)
+    MeanEBV = mean(ebv),
+    .groups = "drop_last"
   ) %>%
   print(n=10)
 
@@ -394,7 +403,8 @@ pop %>%
   collect() %>%
   group_by(rep, trait_name) %>%
   summarise(
-    MeanP = mean(value)
+    MeanP = mean(value),
+    .groups = "drop_last"
   ) %>%
   print(n=10)
 
@@ -403,7 +413,7 @@ pop %>%
 # Run by generation
 #------------------------------------------------------------------------------#
 
-for (genl in 1L:n_gens){
+for (genl in 1:n_gens){
   
   #---------------- SUBSET CANDIDATES ----------------#
   
@@ -430,7 +440,7 @@ for (genl in 1L:n_gens){
       id_ind %in% male_candidates,
       rep == repl
     ) %>%
-    slice_max(ebv, n=5) %>%
+    slice_max(ebv, n=3) %>%
     pull(id_ind)
   
   # select females
@@ -442,7 +452,7 @@ for (genl in 1L:n_gens){
       id_ind %in% female_candidates,
       rep == repl
     ) %>%
-    slice_max(ebv, n=30) %>%
+    slice_max(ebv, n=15) %>%
     pull(id_ind)
   
   #---------------- RESET ACTIVES ----------------#
@@ -584,30 +594,44 @@ pop %>%
 #------------------------------------------------------------------------------#
 
 #------------------------------------------------------------#
-# EBVs
+# Combine Individual + EBV + TBV data into 1 tibble
 #------------------------------------------------------------#
 
+# extract individual data
 data.ind <- pop %>%
   get_table("ind_meta") %>%
-  collect() %>%
-  rename(gen_born = gen)
+  collect()
 
+# extract EBV data (only use last generation EBVs)
 data.ebv <- pop %>%
   get_table("ind_ebv") %>%
   filter(gen_eval == genl) %>%
   collect()
 
+# pull TBVs
+data.tbv <- pop %>%
+  get_table("ind_tbv") %>%
+  collect()
+
 # join ind data to EBV data
 data.tbv.ebv <- left_join(data.ebv, data.ind)
 
+# join TBV to EBV tibble
+data.tbv.ebv <- left_join(data.tbv.ebv, data.tbv)
+
+#------------------------------------------------------------#
+# EBVs
+#------------------------------------------------------------#
+
 # plot EBV Trends
 data.tbv.ebv %>%
-  group_by(gen_born, trait_name) %>%
+  group_by(rep, gen_born, trait_name) %>%
   summarise(
     MeanEBV = mean(ebv),
     .groups = "drop_last"
   ) %>%
-ggplot(., aes(x=gen_born, y=MeanEBV)) +
+ggplot(., aes(x=gen_born, y=MeanEBV, color=trait_name, shape=as.factor(rep), group=rep)) +
+  geom_line() +
   geom_point() +
   facet_wrap(~trait_name) +
   labs(
@@ -621,22 +645,15 @@ ggplot(., aes(x=gen_born, y=MeanEBV)) +
 # TBVs
 #------------------------------------------------------------#
 
-# pull TBVs
-data.tbv <- pop %>%
-  get_table("ind_tbv") %>%
-  collect()
-
-# join TBV to EBV tibble
-data.tbv.ebv <- left_join(data.tbv.ebv, data.tbv)
-
-# plot TBV trends
+# plot EBV Trends
 data.tbv.ebv %>%
-  group_by(gen_born, trait_name) %>%
+  group_by(rep, gen_born, trait_name) %>%
   summarise(
     MeanTBV = mean(tbv),
     .groups = "drop_last"
   ) %>%
-ggplot(., aes(x=gen_born, y=MeanTBV)) +
+ggplot(., aes(x=gen_born, y=MeanTBV, color=trait_name, shape=as.factor(rep), group=rep)) +
+  geom_line() +
   geom_point() +
   facet_wrap(~trait_name) +
   labs(
@@ -646,11 +663,21 @@ ggplot(., aes(x=gen_born, y=MeanTBV)) +
     caption = "Swine Breeding Program - 10 generations"
   )
 
+
+
+#------------------------------------------------------------------------------#
+# Ribbins
+#------------------------------------------------------------------------------#
+
 # data.tbv.ebv %>%
 # ggplot(., aes(x = gen_born, y = ebv)) +
 #   geom_ribbon(aes(ymin = min_val, ymax = max_val), alpha = 0.3) +
 #   geom_line(aes(y = mean_val)) +
 #   facet_wrap(~trait_name)
+
+#------------------------------------------------------------#
+# EBVs
+#------------------------------------------------------------#
 
 # plot EBVs
 data.tbv.ebv %>%
@@ -658,7 +685,7 @@ ggplot(., aes(x = gen_born, y = ebv)) +
   stat_summary(fun.min = min, fun.max = max,
                geom = "ribbon", alpha = 0.2, fill = "steelblue") +
   stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
+               geom = "ribbon", alpha = 0.5, fill = "steelblue") +
   stat_summary(fun = mean, geom = "line", color = "steelblue", linewidth = 1) +
   facet_wrap(~ trait_name, scales = "free_y") +
   labs(
@@ -668,13 +695,17 @@ ggplot(., aes(x = gen_born, y = ebv)) +
     caption = "Swine Breeding Program - 10 Gens"
   )
 
+#------------------------------------------------------------#
+# TBVs
+#------------------------------------------------------------#
+
 # plot TBVs
 data.tbv.ebv %>%
 ggplot(., aes(x = gen_born, y = tbv)) +
   stat_summary(fun.min = min, fun.max = max,
                geom = "ribbon", alpha = 0.2, fill = "steelblue") +
   stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
+               geom = "ribbon", alpha = 0.5, fill = "steelblue") +
   stat_summary(fun = mean, geom = "line", color = "steelblue", linewidth = 1) +
   facet_wrap(~ trait_name, scales = "free_y") +
   labs(
@@ -683,6 +714,10 @@ ggplot(., aes(x = gen_born, y = tbv)) +
     y = "True Breeding Values (TBVs)",
     caption = "Swine Breeding Program - 10 Gens"
   )
+
+#------------------------------------------------------------#
+# EBVs + TBVs
+#------------------------------------------------------------#
 
 # plot TBVs
 data.tbv.ebv %>%
@@ -696,8 +731,8 @@ ggplot(., aes(x = gen_born, y = value, fill=name, color=name)) +
                geom = "ribbon", alpha = 0.5) +
   stat_summary(fun = mean, geom = "line", linewidth = 1, alpha=0.7) +
   facet_wrap(~ trait_name, scales = "free_y", ncol=3) +
-  scale_fill_manual("Value", values = c("steelblue3", "grey50")) +
-  scale_color_manual("Value", values = c("steelblue3", "grey50")) +
+  scale_fill_manual("Value", values = c("steelblue3", "grey50"), labels = c("EBV", "TBV")) +
+  scale_color_manual("Value", values = c("steelblue3", "grey50"), labels = c("EBV", "TBV")) +
   scale_x_discrete(limits = factor(0:10)) +
   labs(
     title = "EBVs and TBVs over Time",
@@ -706,63 +741,96 @@ ggplot(., aes(x = gen_born, y = value, fill=name, color=name)) +
     caption = "Swine Breeding Program - 10 Gens"
   )
 
-# pop %>%
-#   get_table("ind_phenotype") %>%
-#   collect() %>%
-#   count(trait_name, gen) %>%
-# ggplot(., aes(x=gen, y=n, fill=trait_name)) +
-#   geom_col() +
-#   facet_wrap(~trait_name)
-
-# ADG EBV
-data.tbv.ebv %>%
-  filter(trait_name=="ADG") %>%
-ggplot(., aes(x = gen_born, y = ebv)) +
-  stat_summary(fun.min = min, fun.max = max,      # shaded = full range
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl,               # darker band = ±1 SD
-               fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line",          # line = mean
-               color = "steelblue", linewidth = 1)
-
-# ADG TBV
-data.tbv.ebv %>%
-  filter(trait_name=="ADG") %>%
-ggplot(., aes(x = gen_born, y = tbv)) +
-  stat_summary(fun.min = min, fun.max = max,      # shaded = full range
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl,               # darker band = ±1 SD
-               fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line",          # line = mean
-               color = "steelblue", linewidth = 1)
 
 
-# ADG EBV
-data.tbv.ebv %>%
-  filter(trait_name=="NW") %>%
-ggplot(., aes(x = gen_born, y = ebv)) +
-  stat_summary(fun.min = min, fun.max = max,      # shaded = full range
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl,               # darker band = ±1 SD
-               fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line",          # line = mean
-               color = "steelblue", linewidth = 1)
 
-# ADG TBV
-data.tbv.ebv %>%
-  filter(trait_name=="NW") %>%
-ggplot(., aes(x = gen_born, y = tbv)) +
-  stat_summary(fun.min = min, fun.max = max,      # shaded = full range
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl,               # darker band = ±1 SD
-               fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.3, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line",          # line = mean
-               color = "steelblue", linewidth = 1)
+
+#------------------------------------------------------------------------------#
+# Summary of Data
+#------------------------------------------------------------------------------#
+
+#------------------------------------------------------------#
+# Animals - Rep + Gen
+#------------------------------------------------------------#
+
+# count by rep and gen
+pop %>%
+  get_table("ind_meta") %>%
+  collect() %>%
+ggplot(., aes(x=as.factor(gen_born), fill=as.factor(rep))) +
+  geom_bar(position="dodge") +
+  scale_x_discrete(limits = factor(0:10)) +
+  scale_fill_manual("Replicate", 
+      values=c("dodgerblue3", "cadetblue3", "mediumorchid2")) +
+  labs(
+    title = "Count Animal Records by Rep + Generation",
+    x = "Generation Born",
+    y = "Count",
+    caption = "Swine Breeding Program - 10 Gens"
+  )
+
+#------------------------------------------------------------#
+# Phenotypes - Rep + Gen
+#------------------------------------------------------------#
+
+# count by rep and gen
+pop %>%
+  get_table("ind_phenotype") %>%
+  collect() %>%
+ggplot(., aes(x=as.factor(gen_pheno), fill=as.factor(rep))) +
+  geom_bar(position="dodge") +
+  facet_wrap(~trait_name) +
+  scale_x_discrete(limits = factor(0:10)) +
+  scale_fill_manual("Replicate", 
+      values=c("dodgerblue3", "cadetblue3", "mediumorchid2")) +
+  labs(
+    title = "Count Animal Records by Rep + Generation",
+    x = "Generation Born",
+    y = "Count",
+    caption = "Swine Breeding Program - 10 Gens"
+  )
+
+#------------------------------------------------------------#
+# TBV - Rep + Gen
+#------------------------------------------------------------#
+
+# count by rep and gen
+pop %>%
+  get_table("ind_tbv") %>%
+  collect() %>%
+  left_join(., data.ind) %>%
+  group_by(rep, gen_born, trait_name) %>%
+  summarise(
+    MinTBV = min(tbv),
+    Q1TBV = quantile(tbv, prob=0.25),
+    Q2TBV = quantile(tbv, prob=0.50),
+    Q3TBV = quantile(tbv, prob=0.75),
+    MaxTBV = max(tbv),
+    .groups = "drop_last"
+  ) %>%
+  mutate(
+    gen_born = as.factor(gen_born),
+    rep = as.factor(rep)
+  ) %>% 
+ggplot(aes(x=gen_born, fill=rep, color=rep, group=rep)) +
+  geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), alpha=0.15) +
+  geom_ribbon(aes(ymin=Q1TBV, ymax=Q3TBV), alpha=0.40) +
+  geom_line(aes(y=Q2TBV)) +
+  facet_wrap(~ trait_name, scale="free_y") +
+  scale_color_manual("Replicate", 
+      values=c("dodgerblue3", "cadetblue3", "mediumorchid2")) +
+  scale_fill_manual("Replicate", 
+      values=c("dodgerblue3", "cadetblue3", "mediumorchid2")) +
+  labs(
+    title = "TBV Trends By Trait and Rep"
+  )
+
+
+
+
+
+
 
 # close pop object for database
-#close_pop(pop)
+close_pop(pop)
 

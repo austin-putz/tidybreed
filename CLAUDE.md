@@ -169,23 +169,21 @@ True breeding values (simulation ground truth). Populated by
 | id_ind     | VARCHAR |
 | trait_name | VARCHAR |
 | tbv        | DOUBLE  |
-| date_calc  | DATE    |
 
 ### `ind_ebv`
 
 Estimated breeding values from external BLUP / GBLUP runs. Composite key
-`(id_ind, trait_name, model)`. Will be populated by a future `add_ebv()`
-replacement (current version removed).
+`(id_ind, trait_name, model, eval_number)`. Populated by `add_ebv()`.
 
-| Column     | Type    | Notes                          |
-|------------|---------|--------------------------------|
-| id_ind     | VARCHAR |                                |
-| trait_name | VARCHAR |                                |
-| model      | VARCHAR | User label, e.g. "ssGBLUP_v1"  |
-| ebv        | DOUBLE  |                                |
-| acc        | DOUBLE  | Optional accuracy              |
-| se         | DOUBLE  | Optional standard error        |
-| date_calc  | DATE    |                                |
+| Column      | Type    | Notes                                                   |
+|-------------|---------|--------------------------------------------------------------|
+| id_ind      | VARCHAR |                                                              |
+| trait_name  | VARCHAR |                                                              |
+| model       | VARCHAR | User label, e.g. "ssGBLUP_v1"                               |
+| ebv         | DOUBLE  |                                                              |
+| acc         | DOUBLE  | Optional accuracy                                            |
+| se          | DOUBLE  | Optional standard error                                      |
+| eval_number | INTEGER | Auto-incrementing counter per trait (global across models); 1 = first evaluation |
 
 ## Implemented Functions (Phase 1 Complete)
 

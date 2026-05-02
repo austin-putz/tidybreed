@@ -436,11 +436,11 @@ run_blupf90_plus <- function(eval_dir, blupf90_path) {
 #' @param all_ped_ids character vector of all pedigree animal IDs (used to
 #'   distinguish animal solutions from other random effect solutions)
 #' @param model character model label
-#' @param date_calc Date
-#' @return tibble: id_ind, trait_name, model, ebv, acc, se, date_calc
+#' @param eval_nums named integer vector of eval_number per trait name
+#' @return tibble: id_ind, trait_name, model, ebv, acc, se, eval_number
 #' @keywords internal
 parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
-                                     all_ped_ids, model, date_calc) {
+                                     all_ped_ids, model, eval_nums) {
   sols_path <- file.path(eval_dir, "solutions.orig")
   if (!file.exists(sols_path))
     stop("Solutions file not found: ", sols_path, call. = FALSE)
@@ -468,26 +468,26 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
             "Check that OPTION origID is active and the solutions file is correct.",
             call. = FALSE)
     return(tibble::tibble(
-      id_ind     = character(),
-      trait_name = character(),
-      model      = character(),
-      ebv        = numeric(),
-      acc        = numeric(),
-      se         = numeric(),
-      date_calc  = as.Date(character())
+      id_ind      = character(),
+      trait_name  = character(),
+      model       = character(),
+      ebv         = numeric(),
+      acc         = numeric(),
+      se          = numeric(),
+      eval_number = integer()
     ))
   }
 
   anim_rows$trait_name <- trait[as.integer(anim_rows$trait_num)]
 
   result <- tibble::tibble(
-    id_ind     = anim_rows$orig_id,
-    trait_name = anim_rows$trait_name,
-    model      = model,
-    ebv        = as.numeric(anim_rows$solution),
-    acc        = NA_real_,
-    se         = NA_real_,
-    date_calc  = as.Date(date_calc)
+    id_ind      = anim_rows$orig_id,
+    trait_name  = anim_rows$trait_name,
+    model       = model,
+    ebv         = as.numeric(anim_rows$solution),
+    acc         = NA_real_,
+    se          = NA_real_,
+    eval_number = as.integer(eval_nums[anim_rows$trait_name])
   )
 
   # Summary message

@@ -19,17 +19,17 @@ test_that("parse_blupf90_solutions reads solutions.orig with header and alignmen
     animal_effect_num = 2L,
     all_ped_ids       = c("A-1", "A-2", "A-3"),
     model             = "test_model",
-    date_calc         = as.Date("2026-01-01")
+    eval_nums         = c(ADG = 1L)
   )
 
   expect_s3_class(result, "tbl_df")
   expect_equal(nrow(result), 3L)
-  expect_equal(result$id_ind,     c("A-1", "A-2", "A-3"))
-  expect_equal(result$trait_name, rep("ADG", 3))
-  expect_equal(result$model,      rep("test_model", 3))
-  expect_equal(result$ebv,        c(1.23456789, -0.98765432, 0.00000000),
+  expect_equal(result$id_ind,      c("A-1", "A-2", "A-3"))
+  expect_equal(result$trait_name,  rep("ADG", 3))
+  expect_equal(result$model,       rep("test_model", 3))
+  expect_equal(result$ebv,         c(1.23456789, -0.98765432, 0.00000000),
                tolerance = 1e-6)
-  expect_equal(result$date_calc,  rep(as.Date("2026-01-01"), 3))
+  expect_equal(result$eval_number, rep(1L, 3))
 })
 
 test_that("parse_blupf90_solutions handles numeric-looking original IDs", {
@@ -49,7 +49,7 @@ test_that("parse_blupf90_solutions handles numeric-looking original IDs", {
     animal_effect_num = 2L,
     all_ped_ids       = c("10", "20"),
     model             = "m1",
-    date_calc         = as.Date("2026-01-01")
+    eval_nums         = c(BW = 1L)
   )
 
   expect_equal(nrow(result), 2L)
@@ -63,7 +63,7 @@ test_that("parse_blupf90_solutions errors when solutions.orig is missing", {
   on.exit(unlink(tmp, recursive = TRUE))
 
   expect_error(
-    tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, character(), "m", Sys.Date()),
+    tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, character(), "m", c(ADG = 1L)),
     "solutions\\.orig"
   )
 })
@@ -79,7 +79,7 @@ test_that("parse_blupf90_solutions returns empty tibble when no IDs match", {
   ), file.path(tmp, "solutions.orig"))
 
   expect_warning(
-    result <- tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, c("B-999"), "m", Sys.Date()),
+    result <- tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, c("B-999"), "m", c(ADG = 1L)),
     "No animal EBVs matched"
   )
   expect_equal(nrow(result), 0L)

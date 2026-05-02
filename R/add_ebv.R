@@ -24,7 +24,12 @@
 #'   with `software`.
 #' @param model Character. Label stored in `ind_ebv$model`. Must be a valid
 #'   SQL identifier.  Default `"model_1"`.
-#' @param date_calc Date. Stored in `ind_ebv$date_calc`. Default `Sys.Date()`.
+#' @param replace_trait Logical. If `TRUE`, all existing `ind_ebv` rows for
+#'   the traits being added are deleted before inserting; new rows receive
+#'   `eval_number = 1`. Default `FALSE`.
+#' @param delete_all Logical. If `TRUE`, **all** rows in `ind_ebv` are deleted
+#'   before inserting; new rows receive `eval_number = 1`. Takes precedence
+#'   over `replace_trait`. Default `FALSE`.
 #' @param n_gen_pedigree Integer. Generations to trace back from the filtered
 #'   candidates when building the pedigree file. Default `2`.
 #' @param chip_name Character or `NULL`. Name of a SNP chip defined via
@@ -40,9 +45,10 @@
 #' @param update_covars Logical. If `estimate_var = TRUE`, write estimated
 #'   variance components back to `trait_effect_cov`. Default `FALSE`.
 #'
-#' @return The modified `tidybreed_pop` (invisibly). EBVs are written to the
-#'   `ind_ebv` table (existing rows for the same `model` + `trait` +
-#'   `id_ind` combination are replaced).
+#' @return The modified `tidybreed_pop` (invisibly). EBVs are appended to
+#'   `ind_ebv` with an auto-incrementing `eval_number` per trait. Use
+#'   `replace_trait = TRUE` or `delete_all = TRUE` to clear previous records
+#'   instead of accumulating them.
 #'
 #' @seealso [get_table()], [add_phenotype()], [define_chip()],
 #'   [add_effect_cov_matrix()]
@@ -71,7 +77,8 @@ add_ebv <- function(tbl,
                     software       = NULL,
                     parent_avg     = FALSE,
                     model          = "model_1",
-                    date_calc      = Sys.Date(),
+                    replace_trait  = FALSE,
+                    delete_all     = FALSE,
                     n_gen_pedigree = 2L,
                     chip_name      = NULL,
                     run_dir        = ".",
@@ -149,11 +156,30 @@ add_ebv <- function(tbl,
     return(invisible(pop))
   }
 
+  # ---- Compute eval_number per trait and optionally delete old rows ----
+  if (isTRUE(delete_all)) {
+    DBI::dbExecute(pop$db_conn, "DELETE FROM ind_ebv")
+    eval_nums <- stats::setNames(rep(1L, length(trait)), trait)
+  } else if (isTRUE(replace_trait)) {
+    trait_sql <- paste0("'", trait, "'", collapse = ", ")
+    DBI::dbExecute(pop$db_conn,
+      paste0("DELETE FROM ind_ebv WHERE trait_name IN (", trait_sql, ")"))
+    eval_nums <- stats::setNames(rep(1L, length(trait)), trait)
+  } else {
+    eval_nums <- stats::setNames(integer(length(trait)), trait)
+    for (t in trait) {
+      res <- DBI::dbGetQuery(pop$db_conn,
+        paste0("SELECT COALESCE(MAX(eval_number), 0) + 1 AS next_eval ",
+               "FROM ind_ebv WHERE trait_name = '", t, "'"))
+      eval_nums[[t]] <- as.integer(res$next_eval)
+    }
+  }
+
   # ---- Route to mode ----
   if (use_parent_avg) {
-    ebv_df <- ebv_parent_avg(pop, subset_ids, trait, model, date_calc)
+    ebv_df <- ebv_parent_avg(pop, subset_ids, trait, model, eval_nums)
   } else {
-    ebv_df <- ebv_blupf90(pop, subset_ids, trait, model, date_calc,
+    ebv_df <- ebv_blupf90(pop, subset_ids, trait, model, eval_nums,
                           n_gen_pedigree = as.integer(n_gen_pedigree),
                           chip_name      = chip_name,
                           run_dir        = run_dir,
@@ -185,7 +211,7 @@ add_ebv <- function(tbl,
 # Parent average
 # ---------------------------------------------------------------------------
 
-ebv_parent_avg <- function(pop, subset_ids, trait, model, date_calc) {
+ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
   id_in    <- paste0("'", subset_ids, "'", collapse = ", ")
   cand_meta <- DBI::dbGetQuery(
     pop$db_conn,
@@ -197,25 +223,54 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, date_calc) {
   parent_ids <- parent_ids[!is.na(parent_ids)]
 
   if (length(parent_ids) > 0) {
-    pid_in     <- paste0("'", parent_ids, "'", collapse = ", ")
+    pid_in   <- paste0("'", parent_ids, "'", collapse = ", ")
+    trait_in <- paste0("'", trait, "'", collapse = ", ")
+    # Get latest EBV per parent per (trait, model); flag if multiple evals exist
     parent_ebv <- DBI::dbGetQuery(
       pop$db_conn,
-      paste0("SELECT id_ind, trait_name, ebv FROM ind_ebv ",
-             "WHERE model = '", model, "' ",
-             "AND trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
-             "AND id_ind IN (", pid_in, ")")
+      paste0(
+        "SELECT e.id_ind, e.trait_name, e.ebv, agg.max_eval, agg.n_evals ",
+        "FROM ind_ebv e ",
+        "JOIN ( ",
+        "  SELECT id_ind, trait_name, ",
+        "         MAX(eval_number) AS max_eval, ",
+        "         COUNT(DISTINCT eval_number) AS n_evals ",
+        "  FROM ind_ebv ",
+        "  WHERE model = '", model, "' ",
+        "  AND trait_name IN (", trait_in, ") ",
+        "  AND id_ind IN (", pid_in, ") ",
+        "  GROUP BY id_ind, trait_name ",
+        ") agg ON e.id_ind = agg.id_ind ",
+        "      AND e.trait_name = agg.trait_name ",
+        "      AND e.eval_number = agg.max_eval ",
+        "WHERE e.model = '", model, "'"
+      )
     )
+    # Warn per trait if any parent has multiple evaluations
+    if (nrow(parent_ebv) > 0) {
+      multi <- unique(parent_ebv$trait_name[parent_ebv$n_evals > 1])
+      for (t in multi) {
+        max_ev <- max(parent_ebv$max_eval[parent_ebv$trait_name == t], na.rm = TRUE)
+        warning(
+          "Parent EBVs for trait '", t, "': multiple evaluations found. ",
+          "Using the latest (eval_number = ", max_ev, ").",
+          call. = FALSE
+        )
+      }
+    }
   } else {
     warning("No parents found for the candidate animals. All EBVs will be NA.",
             call. = FALSE)
     parent_ebv <- data.frame(id_ind = character(), trait_name = character(),
-                             ebv = numeric(), stringsAsFactors = FALSE)
+                             ebv = numeric(), max_eval = integer(),
+                             n_evals = integer(), stringsAsFactors = FALSE)
   }
 
   n  <- length(subset_ids) * length(trait)
-  id_out    <- character(n)
-  trait_out <- character(n)
-  ebv_out   <- numeric(n)
+  id_out      <- character(n)
+  trait_out   <- character(n)
+  ebv_out     <- numeric(n)
+  eval_out    <- integer(n)
   k <- 1L
 
   for (id in subset_ids) {
@@ -246,18 +301,19 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, date_calc) {
       id_out[k]    <- id
       trait_out[k] <- t
       ebv_out[k]   <- pa_val
+      eval_out[k]  <- eval_nums[[t]]
       k <- k + 1L
     }
   }
 
   tibble::tibble(
-    id_ind     = id_out,
-    trait_name = trait_out,
-    model      = model,
-    ebv        = ebv_out,
-    acc        = NA_real_,
-    se         = NA_real_,
-    date_calc  = as.Date(date_calc)
+    id_ind      = id_out,
+    trait_name  = trait_out,
+    model       = model,
+    ebv         = ebv_out,
+    acc         = NA_real_,
+    se          = NA_real_,
+    eval_number = eval_out
   )
 }
 
@@ -266,7 +322,7 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, date_calc) {
 # BLUPF90 path
 # ---------------------------------------------------------------------------
 
-ebv_blupf90 <- function(pop, subset_ids, trait, model, date_calc,
+ebv_blupf90 <- function(pop, subset_ids, trait, model, eval_nums,
                          n_gen_pedigree, chip_name, run_dir, eval_id,
                          estimate_var, update_covars) {
 
@@ -355,7 +411,7 @@ ebv_blupf90 <- function(pop, subset_ids, trait, model, date_calc,
     animal_effect_num = animal_effect_num,
     all_ped_ids       = all_ped_ids,
     model             = model,
-    date_calc         = date_calc
+    eval_nums         = eval_nums
   )
 
   # Optional VCE writeback
@@ -378,7 +434,7 @@ upsert_ind_ebv <- function(pop, ebv_df) {
   on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
 
   cols        <- names(ebv_df)
-  key_cols    <- c("id_ind", "trait_name", "model")
+  key_cols    <- c("id_ind", "trait_name", "model", "eval_number")
   update_cols <- setdiff(cols, key_cols)
 
   col_list   <- paste(cols, collapse = ", ")
@@ -389,7 +445,7 @@ upsert_ind_ebv <- function(pop, ebv_df) {
   DBI::dbExecute(pop$db_conn, paste0(
     "INSERT INTO ind_ebv (", col_list, ") ",
     "SELECT ", col_list, " FROM ", tmp, " ",
-    "ON CONFLICT (id_ind, trait_name, model) DO UPDATE SET ", update_set
+    "ON CONFLICT (id_ind, trait_name, model, eval_number) DO UPDATE SET ", update_set
   ))
   invisible(NULL)
 }

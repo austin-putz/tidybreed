@@ -270,20 +270,36 @@ ensure_trait_tables <- function(pop) {
         id_ind     VARCHAR,
         trait_name VARCHAR,
         tbv        DOUBLE,
-        date_calc  DATE,
         PRIMARY KEY (id_ind, trait_name)
       )
     ",
     ind_ebv = "
       CREATE TABLE ind_ebv (
-        id_ind     VARCHAR,
+        id_ind      VARCHAR,
+        trait_name  VARCHAR,
+        model       VARCHAR,
+        ebv         DOUBLE,
+        acc         DOUBLE,
+        se          DOUBLE,
+        eval_number INTEGER,
+        PRIMARY KEY (id_ind, trait_name, model, eval_number)
+      )
+    ",
+    index_meta = "
+      CREATE TABLE index_meta (
+        index_name VARCHAR,
         trait_name VARCHAR,
-        model      VARCHAR,
-        ebv        DOUBLE,
-        acc        DOUBLE,
-        se         DOUBLE,
-        date_calc  DATE,
-        PRIMARY KEY (id_ind, trait_name, model)
+        index_wt   DOUBLE,
+        PRIMARY KEY (index_name, trait_name)
+      )
+    ",
+    ind_index = "
+      CREATE TABLE ind_index (
+        id_ind       VARCHAR,
+        index_name   VARCHAR,
+        index_number INTEGER,
+        index_value  DOUBLE,
+        PRIMARY KEY (id_ind, index_name, index_number)
       )
     "
   )
@@ -292,6 +308,23 @@ ensure_trait_tables <- function(pop) {
     if (!tbl %in% existing) {
       DBI::dbExecute(pop$db_conn, ddl[[tbl]])
     }
+  }
+
+  # Migrate ind_tbv: drop date_calc if present (no longer used)
+  if ("ind_tbv" %in% existing) {
+    tbv_cols <- DBI::dbListFields(pop$db_conn, "ind_tbv")
+    if ("date_calc" %in% tbv_cols)
+      DBI::dbExecute(pop$db_conn, "ALTER TABLE ind_tbv DROP COLUMN date_calc")
+  }
+
+  # Migrate ind_ebv: drop date_calc, add eval_number if needed
+  if ("ind_ebv" %in% existing) {
+    ebv_cols <- DBI::dbListFields(pop$db_conn, "ind_ebv")
+    if ("date_calc" %in% ebv_cols)
+      DBI::dbExecute(pop$db_conn, "ALTER TABLE ind_ebv DROP COLUMN date_calc")
+    if (!"eval_number" %in% ebv_cols)
+      DBI::dbExecute(pop$db_conn,
+        "ALTER TABLE ind_ebv ADD COLUMN eval_number INTEGER DEFAULT 1")
   }
 
   # Migrate trait_effects: add new columns if the table already existed

@@ -22,7 +22,6 @@
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [filter()]). The table must contain an `id_ind` column.
 #' @param trait Character vector of trait name(s).
-#' @param date_calc Date stored in `ind_tbv.date_calc`.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -36,7 +35,7 @@
 #'   add_tbv(c("ADG", "BW"))
 #' }
 #' @export
-add_tbv <- function(tbl, trait, date_calc = Sys.Date(), ...) {
+add_tbv <- function(tbl, trait, ...) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
@@ -137,8 +136,7 @@ add_tbv <- function(tbl, trait, date_calc = Sys.Date(), ...) {
     tbv_df <- tibble::tibble(
       id_ind     = ids_t,
       trait_name = t,
-      tbv        = tbv,
-      date_calc  = as.Date(date_calc)
+      tbv        = tbv
     )
     if (length(extra_cols) > 0) {
       prepped <- prepare_extra_cols(extra_cols, nrow(tbv_df), "ind_tbv",

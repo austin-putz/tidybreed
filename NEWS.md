@@ -1,3 +1,69 @@
+# tidybreed 0.11.0 (2026-05-01)
+
+## New features
+
+* New `define_index(pop, index_name, trait_names, index_wts, ...)` registers a
+  named selection index in the new `index_meta` table. Not all population traits
+  need to be indexed — specify only the traits with non-zero economic weights.
+  Supports extra user-defined columns via `...` (same pattern as other
+  `add_*()` / `define_*()` functions). Re-calling with the same
+  `(index_name, trait_name)` updates the weights in place (upsert).
+
+* New `add_index(tbl, index_name, replace_index = FALSE, delete_all = FALSE, ...)`
+  computes a selection index by multiplying EBVs by the weights defined in
+  `define_index()` and appends results to the new `ind_index` table. Requires
+  piping through `get_table("ind_ebv")` (the only `add_*()` function that takes
+  `ind_ebv` as its starting table, not `ind_meta`). Each run increments an
+  `index_number` column per individual, mirroring `ind_ebv`'s `eval_number`
+  pattern. `replace_index = TRUE` clears prior runs for the named index;
+  `delete_all = TRUE` clears the entire `ind_index` table. Issues a warning when
+  no filter is applied (auto-selects the latest `eval_number` per individual per
+  trait). Errors immediately if any individual is missing an EBV for any required
+  index trait.
+
+* Two new database tables created by `initialize_genome()`:
+  - `index_meta (index_name, trait_name, index_wt)` — index definitions; supports
+    user-defined extra columns via `define_index(...)`
+  - `ind_index (id_ind, index_name, index_number, index_value)` — computed index
+    values; supports user-defined extra columns via `add_index(...)`
+
+# tidybreed 0.10.0 (2026-05-01)
+
+## Breaking changes
+
+* `ind_tbv` no longer has a `date_calc` column. The column was removed from the
+  schema, the `add_tbv()` function signature (`date_calc` parameter dropped),
+  and the internal `add_phenotype()` TBV write path. Users who need a date can
+  add a custom column via `mutate_table()`.
+
+* `ind_ebv` no longer has a `date_calc` column. The `add_ebv()` `date_calc`
+  parameter has been removed. The `parse_blupf90_solutions()` internal function
+  no longer accepts `date_calc`; its last argument is now `eval_nums` (named
+  integer vector).
+
+* `ind_ebv` primary key changed from `(id_ind, trait_name, model)` to
+  `(id_ind, trait_name, model, eval_number)`. Existing databases are
+  automatically migrated: `date_calc` is dropped and `eval_number INTEGER` is
+  added (defaulting to 1 for any pre-existing rows).
+
+## New features
+
+* `ind_ebv` gains an `eval_number INTEGER` column. Each call to `add_ebv()` for
+  a given trait increments the counter by 1 (global per `trait_name`, across
+  all models). The latest evaluation can be found with
+  `ORDER BY eval_number DESC LIMIT 1`.
+
+* `add_ebv()` gains two new logical parameters:
+  - `replace_trait = TRUE` — deletes all `ind_ebv` rows for the traits being
+    added before inserting; new rows receive `eval_number = 1`.
+  - `delete_all = TRUE` — deletes **all** rows in `ind_ebv` before inserting;
+    new rows receive `eval_number = 1`. Takes precedence over `replace_trait`.
+
+* `add_ebv(..., parent_avg = TRUE)` now queries parent EBVs using
+  `MAX(eval_number)` per parent per `(trait_name, model)`. A warning is printed
+  when any parent has more than one evaluation for a given trait, noting which
+  `eval_number` is used.
+
 # tidybreed 0.9.6 (2026-05-01)
 
 ## Bug fixes
