@@ -1,3 +1,14 @@
+# tidybreed 0.11.1 (2026-05-02)
+
+## Bug fixes
+
+* `add_ebv()`: renamed `replace_trait` parameter to `overwrite_trait` to
+  prevent R's partial argument matching from silently consuming user-defined
+  extra column values named `rep`. Previously, passing `rep = 1L` as a custom
+  column would be matched to `replace_trait` (since `"rep"` is a unique prefix
+  of `"replace_trait"`), causing the value to never reach `...` and leaving the
+  `rep` column at its declared default (`NA`).
+
 # tidybreed 0.11.0 (2026-05-01)
 
 ## New features

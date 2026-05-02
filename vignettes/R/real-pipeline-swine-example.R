@@ -81,11 +81,15 @@ pop %>%
 
 pop %>% get_table("ind_ebv")
 
+pop %>% get_table("ind_index")
+pop %>% get_table("index_meta")
+
 #------------------------------------------------------------------------------#
 # Add Founders
 #------------------------------------------------------------------------------#
 
-for (repl in 1:n_reps){
+#for (repl in 1:n_reps){
+repl = 1
 
 # add founders
 pop <- pop %>%
@@ -140,6 +144,19 @@ pop <- pop %>%
     effect_name = "residual",      # fixed term for residual (co)variance matrix
     cov_matrix  = mat.res.vars     # name for matrix with row/col names
   )
+
+#------------------------------------------------------------#
+# Index
+#------------------------------------------------------------#
+
+pop %>%
+  define_index(
+    index_name = "maternal",
+    trait_names = c("NW", "ADG", "BF"),
+    index_wts = c(93, 1.5, -30)
+  )
+
+pop %>% get_table("index_meta")
 
 #------------------------------------------------------------#
 # Trait: ADG
@@ -347,17 +364,30 @@ pop <- pop %>%
   filter(rep == repl) %>%
   add_ebv("ADG", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
+pop %>% get_table("ind_ebv") %>% filter(trait_name == "ADG")
+
 # run EBV for BF
 pop <- pop %>%
   get_table("ind_meta") %>%
   filter(rep == repl) %>%
   add_ebv("BF", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
+pop %>% get_table("ind_ebv") %>% filter(trait_name == "BF")
+
 # run EBV for NW
 pop <- pop %>%
   get_table("ind_meta") %>%
   filter(rep == repl) %>%
   add_ebv("NW", software="blupf90", model="blup", gen_eval=0L, rep = repl)
+
+#------------------------------------------------------------------------------#
+# Run Index
+#------------------------------------------------------------------------------#
+
+# run index calculation
+pop %>%
+  get_table("ind_ebv") %>%    # must pass 'ind_ebv' because it contains the EBVs needed
+  add_index("maternal")       # just give the index name and it will grab weights
 
 #------------------------------------------------------------------------------#
 # Checks

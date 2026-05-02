@@ -24,12 +24,12 @@
 #'   with `software`.
 #' @param model Character. Label stored in `ind_ebv$model`. Must be a valid
 #'   SQL identifier.  Default `"model_1"`.
-#' @param replace_trait Logical. If `TRUE`, all existing `ind_ebv` rows for
+#' @param overwrite_trait Logical. If `TRUE`, all existing `ind_ebv` rows for
 #'   the traits being added are deleted before inserting; new rows receive
 #'   `eval_number = 1`. Default `FALSE`.
 #' @param delete_all Logical. If `TRUE`, **all** rows in `ind_ebv` are deleted
 #'   before inserting; new rows receive `eval_number = 1`. Takes precedence
-#'   over `replace_trait`. Default `FALSE`.
+#'   over `overwrite_trait`. Default `FALSE`.
 #' @param n_gen_pedigree Integer. Generations to trace back from the filtered
 #'   candidates when building the pedigree file. Default `2`.
 #' @param chip_name Character or `NULL`. Name of a SNP chip defined via
@@ -47,7 +47,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly). EBVs are appended to
 #'   `ind_ebv` with an auto-incrementing `eval_number` per trait. Use
-#'   `replace_trait = TRUE` or `delete_all = TRUE` to clear previous records
+#'   `overwrite_trait = TRUE` or `delete_all = TRUE` to clear previous records
 #'   instead of accumulating them.
 #'
 #' @seealso [get_table()], [add_phenotype()], [define_chip()],
@@ -77,7 +77,7 @@ add_ebv <- function(tbl,
                     software       = NULL,
                     parent_avg     = FALSE,
                     model          = "model_1",
-                    replace_trait  = FALSE,
+                    overwrite_trait = FALSE,
                     delete_all     = FALSE,
                     n_gen_pedigree = 2L,
                     chip_name      = NULL,
@@ -160,7 +160,7 @@ add_ebv <- function(tbl,
   if (isTRUE(delete_all)) {
     DBI::dbExecute(pop$db_conn, "DELETE FROM ind_ebv")
     eval_nums <- stats::setNames(rep(1L, length(trait)), trait)
-  } else if (isTRUE(replace_trait)) {
+  } else if (isTRUE(overwrite_trait)) {
     trait_sql <- paste0("'", trait, "'", collapse = ", ")
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM ind_ebv WHERE trait_name IN (", trait_sql, ")"))
