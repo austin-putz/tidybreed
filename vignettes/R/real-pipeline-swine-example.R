@@ -81,15 +81,27 @@ pop %>%
 
 pop %>% get_table("ind_ebv")
 
+
+# add 'rep' to 'ind_ebv'
+pop %>%
+  get_table("ind_index") %>%
+  mutate_table(
+    gen_eval = NA_integer_,     # add gen of evaluation
+    rep = NA_integer_           # add rep
+  )
+
 pop %>% get_table("ind_index")
+
 pop %>% get_table("index_meta")
 
 #------------------------------------------------------------------------------#
 # Add Founders
 #------------------------------------------------------------------------------#
 
-#for (repl in 1:n_reps){
-repl = 1
+for (repl in 1:n_reps){
+#repl = 1
+  
+warning("\n ----------    REPLICATE: ", repl, "    --------------------\n")
 
 # add founders
 pop <- pop %>%
@@ -98,12 +110,15 @@ pop <- pop %>%
     n_females = 100,     # sample female founders
     line_name = "Libra", # name this population
     rep = repl,          # USER DEFINED - replicate
-    gen_born = 0L        # USER DEFINED - generation
+    gen_born = 0L,        # USER DEFINED - generation
+    active = TRUE
   )
 
 #------------------------------------------------------------------------------#
 # Add SNP Chip
 #------------------------------------------------------------------------------#
+
+warning("Add 9k Chip")
 
 # add 9k SNP Chip
 pop %>%
@@ -116,6 +131,8 @@ pop %>%
 #------------------------------------------------------------------------------#
 # Add Traits
 #------------------------------------------------------------------------------#
+
+warning("Add cov matrices")
 
 # additive genetic (CO)VARIANCES
 mat.add.gen.vars <- matrix(c(0.90,    3.07,  0.21,
@@ -149,6 +166,9 @@ pop <- pop %>%
 # Index
 #------------------------------------------------------------#
 
+warning("Define index")
+
+# add generic terminal index
 pop %>%
   define_index(
     index_name = "maternal",
@@ -156,11 +176,14 @@ pop %>%
     index_wts = c(93, 1.5, -30)
   )
 
+# print table with index values
 pop %>% get_table("index_meta")
 
 #------------------------------------------------------------#
 # Trait: ADG
 #------------------------------------------------------------#
+
+warning("Define ADG")
 
 # add ADG as a trait
 pop <- pop %>%
@@ -225,6 +248,8 @@ pop %>% get_table("ind_phenotype")
 #------------------------------------------------------------#
 # Trait: BF
 #------------------------------------------------------------#
+
+warning("Define BF")
 
 # add ADG as a trait
 pop <- pop %>%
@@ -293,6 +318,8 @@ pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF")
 # Trait: NW
 #------------------------------------------------------------#
 
+warning("Define NW")
+
 # add ADG as a trait
 pop <- pop %>%
   add_trait(
@@ -358,13 +385,16 @@ pop %>% get_table("ind_phenotype") %>% filter(trait_name == "NW")
 # Run EBVs
 #------------------------------------------------------------------------------#
 
+warning("Run founder EBVs")
+
 # run EBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>%
   filter(rep == repl) %>%
   add_ebv("ADG", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
-pop %>% get_table("ind_ebv") %>% filter(trait_name == "ADG")
+pop %>% get_table("ind_ebv") %>%
+  filter(trait_name == "ADG", rep == repl)
 
 # run EBV for BF
 pop <- pop %>%
@@ -372,7 +402,8 @@ pop <- pop %>%
   filter(rep == repl) %>%
   add_ebv("BF", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
-pop %>% get_table("ind_ebv") %>% filter(trait_name == "BF")
+pop %>% get_table("ind_ebv") %>%
+  filter(trait_name == "BF", rep == repl)
 
 # run EBV for NW
 pop <- pop %>%
@@ -380,18 +411,39 @@ pop <- pop %>%
   filter(rep == repl) %>%
   add_ebv("NW", software="blupf90", model="blup", gen_eval=0L, rep = repl)
 
+pop %>% get_table("ind_ebv") %>%
+  filter(trait_name == "NW", rep == repl)
+
 #------------------------------------------------------------------------------#
 # Run Index
 #------------------------------------------------------------------------------#
 
+warning("Calculate founder Indexes")
+
 # run index calculation
 pop %>%
   get_table("ind_ebv") %>%    # must pass 'ind_ebv' because it contains the EBVs needed
-  add_index("maternal")       # just give the index name and it will grab weights
+  filter(rep == repl, gen_eval == 0L) %>%
+  add_index(
+    "maternal",          # just give the index name and it will grab weights
+    gen_eval = 0L,
+    rep = repl
+  )
+
+pop %>% get_table("ind_index") %>%
+  filter(index_name == "maternal", rep == repl)
+
+pop %>% get_table("ind_index") %>%
+  filter(index_name == "maternal", rep == repl) %>%
+  collect() %>%
+  count()
+
 
 #------------------------------------------------------------------------------#
 # Checks
 #------------------------------------------------------------------------------#
+
+warning("Calculate Means in Founder Generation")
 
 #------------------------------------------------------------#
 # True Breeding Values
@@ -443,10 +495,16 @@ pop %>%
 # Run by generation
 #------------------------------------------------------------------------------#
 
+warning("Begin Generation Loop")
+
 for (genl in 1:n_gens){
-  
+    
+  warning("\n ----------    GEN: ", genl, "    --------------------\n")
+
   #---------------- SUBSET CANDIDATES ----------------#
-  
+    
+  warning("Select Candidates")
+
   # subset male candidates
   male_candidates <- pop %>%
     get_table("ind_meta") %>%
@@ -459,34 +517,66 @@ for (genl in 1:n_gens){
     filter(rep == repl, sex == "F", active==TRUE) %>%
     pull(id_ind)
   
-  #---------------- SELECT CANDIDATES ----------------#
+  #---------------- SELECT PARENTS ----------------#
+    
+  warning("Select Parents")
+
+  #---------- SELECT ON INDEX
   
   # select males
   males_selected <- pop %>%
-    get_table("ind_ebv") %>%
+    get_table("ind_index") %>%
     filter(
-      trait_name=="ADG", 
-      gen_eval == genl - 1L,
+      index_name=="maternal",
       id_ind %in% male_candidates,
+      gen_eval == genl - 1L,
       rep == repl
     ) %>%
-    slice_max(ebv, n=3) %>%
+    slice_max(index_value, n=3) %>%
     pull(id_ind)
-  
+
   # select females
   females_selected <- pop %>%
-    get_table("ind_ebv") %>%
+    get_table("ind_index") %>%
     filter(
-      trait_name=="ADG", 
-      gen_eval == genl - 1L,
+      index_name=="maternal",
       id_ind %in% female_candidates,
+      gen_eval == genl - 1L,
       rep == repl
     ) %>%
-    slice_max(ebv, n=15) %>%
+    slice_max(index_value, n=15) %>%
     pull(id_ind)
   
-  #---------------- RESET ACTIVES ----------------#
+  #---------- SELECT ON ADG
   
+  # # select males
+  # males_selected <- pop %>%
+  #   get_table("ind_ebv") %>%
+  #   filter(
+  #     trait_name=="ADG", 
+  #     gen_eval == genl - 1L,
+  #     id_ind %in% male_candidates,
+  #     rep == repl
+  #   ) %>%
+  #   slice_max(ebv, n=3) %>%
+  #   pull(id_ind)
+  # 
+  # # select females
+  # females_selected <- pop %>%
+  #   get_table("ind_ebv") %>%
+  #   filter(
+  #     trait_name=="ADG", 
+  #     gen_eval == genl - 1L,
+  #     id_ind %in% female_candidates,
+  #     rep == repl
+  #   ) %>%
+  #   slice_max(ebv, n=15) %>%
+  #   pull(id_ind)
+  
+  #---------------- RESET ACTIVES ----------------#
+    
+  warning("Reset Actives")
+
   # RESET ALL to ACTIVE=FALSE
   pop <- pop %>%
     get_table("ind_meta") %>%
@@ -507,7 +597,9 @@ for (genl in 1:n_gens){
     )
   
   #---------------- SAMPLE NW PHENOTYPE ON DAMS ----------------#
-  
+    
+  warning("Sample NW phenotype on selected dams")
+
   # phenotype selected dams first
   pop %>%
     get_table("ind_meta") %>%
@@ -517,6 +609,8 @@ for (genl in 1:n_gens){
       rep = repl,          # add rep number
       gen_pheno = genl     # add generation phenotyped as current gen
     )
+    
+  warning("Extract NW phenotype")
   
   # extract NW phenotype to produce offspring numbers correctly
   data.nw <- pop %>%
@@ -531,6 +625,8 @@ for (genl in 1:n_gens){
     select(id_ind, value)
   
   #---------------- PRODUCE PROGENY ----------------#
+    
+  warning("Build progeny matrix")
   
   # HOW:
   # boars: select males randomly like pooled semen I guess (possible but wouldn't know pedigree)
@@ -546,6 +642,8 @@ for (genl in 1:n_gens){
     rep      = repl,
     gen_born = genl
   )
+    
+  warning("add offspring")
   
   # add new offspring based on tibble mating plan (1 row per offspring)
   pop %>%
@@ -554,6 +652,8 @@ for (genl in 1:n_gens){
     )
   
   #---------------- ADD GENOTYPES ----------------#
+    
+  warning("add genotypes")
   
   # all Males get a genotype for 9k
   pop <- pop %>%
@@ -562,6 +662,8 @@ for (genl in 1:n_gens){
     add_genotypes(chip_name="9k")
   
   #---------------- ADD PHENOTYPES ----------------#
+    
+  warning("add phenotypes for ADG + BF")
   
   # all offspring get a genotype for 9k
   pop <- pop %>%
@@ -574,6 +676,8 @@ for (genl in 1:n_gens){
     )
   
   #---------------- RUN BLUPF90 ----------------#
+    
+  warning("run single-trait BLUPF90")
   
   # run EBV for ADG
   pop <- pop %>%
@@ -592,13 +696,31 @@ for (genl in 1:n_gens){
     get_table("ind_meta") %>%
     filter(rep == repl) %>%
     add_ebv("NW", software="blupf90", model="blup", gen_eval=genl, rep = repl)
+
+  #---------------- CALC INDEX ----------------#
+    
+  warning("calculate index")
+  
+  pop <- pop %>%
+    get_table("ind_ebv") %>%
+    filter(
+      gen_eval == genl,
+      rep == repl
+    ) %>%
+    add_index(
+      "maternal",
+      gen_eval = genl, 
+      rep = repl
+    )
   
   #---------------- RUN OVERLAP GENERATION ----------------#
   
   # Offspring already ACTIVE=TRUE by default now, no need to set
   
 } # END GENERATION LOOP
-
+    
+warning("end gen loop, add all TBVs if needed")
+  
 # make sure all animals have TBVs for later
 pop %>%
   get_table("ind_meta") %>%
@@ -606,6 +728,8 @@ pop %>%
   add_tbv(c("ADG", "BF", "NW"), rep = repl)
 
 } # END REPLICATE LOOP
+
+
 
 
 
@@ -837,13 +961,14 @@ pop %>%
     Q3TBV = quantile(tbv, prob=0.75),
     MaxTBV = max(tbv),
     .groups = "drop_last"
-  ) %>%
+  ) %>% 
   mutate(
     gen_born = as.factor(gen_born),
     rep = as.factor(rep)
   ) %>% 
 ggplot(aes(x=gen_born, fill=rep, color=rep, group=rep)) +
-  geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), alpha=0.15) +
+  geom_hline(aes(yintercept = 0), color="red3", linewidth=0.75) +
+  geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), alpha=0.05) +
   geom_ribbon(aes(ymin=Q1TBV, ymax=Q3TBV), alpha=0.40) +
   geom_line(aes(y=Q2TBV)) +
   facet_wrap(~ trait_name, scale="free_y") +
@@ -852,7 +977,11 @@ ggplot(aes(x=gen_born, fill=rep, color=rep, group=rep)) +
   scale_fill_manual("Replicate", 
       values=c("dodgerblue3", "cadetblue3", "mediumorchid2")) +
   labs(
-    title = "TBV Trends By Trait and Rep"
+    title = "TBV Trends By Trait and Rep",
+    subtitle = "Median Trend + middle 50 percentile + min/max",
+    x = "Generation Born",
+    y = "TBV (by rep)",
+    caption = "Swine Breeding Program - 10 Gens"
   )
 
 
