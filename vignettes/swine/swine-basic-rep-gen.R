@@ -2,7 +2,10 @@
 # Load Packages
 #------------------------------------------------------------------------------#
 
-library(yaml)
+install.packages("pak")
+library(pak)
+pak::pak("austin-putz/tidybreed")
+
 library(tidybreed)
 library(tidyverse)
 
