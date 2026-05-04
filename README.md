@@ -9,10 +9,12 @@ and is queried lazily via `dplyr`.
 
 ## Design
 
-- [R](https://www.r-project.org)  :arrow_right:  R is a standard for most scientists, allows easy design of custom breeding programs
-- **Modern Database**  :arrow_right:  [DuckDB](https://duckdb.org) for efficient storage on disk, unlimited manipulation for users custom programs
-- Pipe everything  :arrow_right:  Animals, plants, insects, etc all need 'selected' for phenotyping, genotyping, evaluations, mating, selection, etc. 
-- Design flexible base layer  :arrow_right:  build helper functions later on top (allows flexible programs using the base layer)
+| Main | :arrow_right: | Reason or Description |
+| ---- | ------------- | --------------------- |
+| [R](https://www.r-project.org) | :arrow_right: | R is a standard for most scientists, allows easy design of custom (flexible) breeding programs
+| **Modern Database**  | :arrow_right: | [DuckDB](https://duckdb.org) for efficient storage on disk, unlimited manipulation for users custom programs, nothing can store data like a database
+| Pipe everything      | :arrow_right: | Animals, plants, insects, etc all need 'selected' for phenotyping, genotyping, evaluations, mating, selection, etc. Use `tidyverse` language to add what you want for each individual you need
+| Flexible Base        | :arrow_right: | build helper functions later on top (allows flexible programs using the base layer)
 
 ## Installation
 
