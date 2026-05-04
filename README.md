@@ -14,11 +14,11 @@ and is queried lazily via `dplyr`.
 | [R](https://www.r-project.org) | :arrow_right: | R is a standard for most scientists, allows easy design of custom (flexible) breeding programs
 | **Modern Database**  | :arrow_right: | [DuckDB](https://duckdb.org) for efficient storage on disk, unlimited manipulation for users custom programs, nothing can store data like a database
 | Pipe everything      | :arrow_right: | Animals, plants, insects, etc all need 'selected' for phenotyping, genotyping, evaluations, mating, selection, etc. Use `tidyverse` language to add what you want for each individual you need
-| Flexible Base        | :arrow_right: | build helper functions later on top (allows flexible programs using the base layer)
+| Flexible Base        | :arrow_right: | Users should be able to add everything custom for their breeding program using a `mutate_table()` function, then I can provide "helper functions" later on top (should allow maximum features before the author has time to add a helper function)
 
 ## Installation
 
-Install [pak](https://pak.r-lib.org/) from the Posit Package Manager, then install tidybreed from GitHub:
+Install [pak](https://pak.r-lib.org/) from the Posit Package Manager, then install `tidybreed` from [GitHub](https://github.com/austin-putz/tidybreed/):
 
 This is the new `repos` that is recommended by Posit. 
 
@@ -29,34 +29,36 @@ install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
 # laod pak
 library(pak)
 
-# install this package
+# install the tidybreed package
 pak::pak("austin-putz/tidybreed")
 
 # load tidybreed
 library(tidybreed)
 ```
 
-Pay attention to the `version` of the package as it may change rapidly pre-version `1.0.0`
+Pay attention to the `version` of the package as it may change rapidly pre-version `1.0.0`, you were warned... 
 
 > DISCLAIMER: Pre `v1.0.0` packages are considered in 'beta' testing and subject to make many breaking changes
 
 ## Core Concept
 
-Every function in tidybreed accepts and returns a `tidybreed_pop` object — a thin wrapper around a 
+Every function in `tidybreed` accepts and returns a `tidybreed_pop` object — a thin wrapper around a 
 DuckDB connection. Chain operations with `|>` (or `%>%`):
 
 ```r
-pop <- initialize_genome(...) |>
-  add_founders(...) |>
-  mutate_table(...) |>
-  define_chip(...)
+pop <- pop(...) |>        # pop contains the DuckDB connection
+  get_table(...) |>       # identify which DB table you want to work with
+  filter(...) |>          # filter out the individuals you want to work on or add to
+  add_phenotype(...)      # use `add_*()` function to add rows to a table (often different table)
 ```
 
-All tables are queryable at any point with `get_table()` and standard `dplyr` verbs.
+All tables are queryable at any point with `get_table()` and standard `dplyr` verbs, however
+you need to use `collect()` before pulling into R memory and returning a `tibble()`. 
 
 Users should be able to add to tables at any time or mutate them. This allows
-immense customizable data for the user and then query based on custom fields for
-instance and go between filtering the individual data and the genome data. 
+**immense customizable data** for the user and then query based on custom fields for
+instance and go between filtering the individual data and the genome data. No
+more endless hack after hack to identify the individuals you want. 
 
 Add phenotypes on 'selected' individuals
 
@@ -67,8 +69,8 @@ pop %>%                               # pop points to the DuckDB connection
   add_phenotype("ADG")                # add phenotypes based on "trait_name" here "Average Daily Gain"
 ```
 
-This allows users to easily add **phenotypes**, **genotypes**, **TBV**, **EBV**, to any custom
-list of individuals. 
+This allows users to easily add **phenotypes**, **genotypes**, **TBV**, **EBV**, **Index**, etc 
+to any custom list of individuals. Making it extremely flexible and powerful. 
 
 Furthermore, users can double query to select animals for mating using this pattern:
 

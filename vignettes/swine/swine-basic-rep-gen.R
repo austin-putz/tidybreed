@@ -970,7 +970,7 @@ pop %>%
     rep = as.factor(rep)
   ) %>% 
 ggplot(aes(x=gen_born, fill=rep, color=rep, group=rep)) +
-  geom_hline(aes(yintercept = 0), color="red3", linewidth=0.75) +
+  geom_hline(aes(yintercept = 0), color="red3", linewidth=0.75, linetype=3) +
   geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), alpha=0.05) +
   geom_ribbon(aes(ymin=Q1TBV, ymax=Q3TBV), alpha=0.40) +
   geom_line(aes(y=Q2TBV)) +
