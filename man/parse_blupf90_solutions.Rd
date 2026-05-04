@@ -10,7 +10,7 @@ parse_blupf90_solutions(
   animal_effect_num,
   all_ped_ids,
   model,
-  date_calc
+  eval_nums
 )
 }
 \arguments{
@@ -25,10 +25,10 @@ distinguish animal solutions from other random effect solutions)}
 
 \item{model}{character model label}
 
-\item{date_calc}{Date}
+\item{eval_nums}{named integer vector of eval_number per trait name}
 }
 \value{
-tibble: id_ind, trait_name, model, ebv, acc, se, date_calc
+tibble: id_ind, trait_name, model, ebv, acc, se, eval_number
 }
 \description{
 With OPTION origID the solutions file has 5 columns:

@@ -1,3 +1,15 @@
+# tidybreed 0.12.0 (2026-05-03)
+
+## New features
+
+* `summary.tidybreed_pop()` — detailed per-table summary with frequency tables
+  for low-cardinality columns, 5-number summaries for numeric columns, date
+  ranges for date/timestamp columns, and safe handling of wide genome tables
+  (locus columns are not SUMMARIZE'd). Dispatches via `summary(pop)`.
+* `print.tidybreed_summary()` — tidyverse-style console display with
+  box-drawing separators and aligned column output. Accepts optional `tables`
+  and `max_values` parameters to control scope and display thresholds.
+
 # tidybreed 0.11.3 (2026-05-02)
 
 ## Bug fixes

@@ -10,7 +10,8 @@ add_ebv(
   software = NULL,
   parent_avg = FALSE,
   model = "model_1",
-  date_calc = Sys.Date(),
+  overwrite_trait = FALSE,
+  delete_all = FALSE,
   n_gen_pedigree = 2L,
   chip_name = NULL,
   run_dir = ".",
@@ -36,7 +37,13 @@ with \code{software}.}
 \item{model}{Character. Label stored in \code{ind_ebv$model}. Must be a valid
 SQL identifier.  Default \code{"model_1"}.}
 
-\item{date_calc}{Date. Stored in \code{ind_ebv$date_calc}. Default \code{Sys.Date()}.}
+\item{overwrite_trait}{Logical. If \code{TRUE}, all existing \code{ind_ebv} rows for
+the traits being added are deleted before inserting; new rows receive
+\code{eval_number = 1}. Default \code{FALSE}.}
+
+\item{delete_all}{Logical. If \code{TRUE}, \strong{all} rows in \code{ind_ebv} are deleted
+before inserting; new rows receive \code{eval_number = 1}. Takes precedence
+over \code{overwrite_trait}. Default \code{FALSE}.}
 
 \item{n_gen_pedigree}{Integer. Generations to trace back from the filtered
 candidates when building the pedigree file. Default \code{2}.}
@@ -59,9 +66,10 @@ estimation (\verb{OPTION method VCE}) instead of BLUP-only. Default \code{FALSE}
 variance components back to \code{trait_effect_cov}. Default \code{FALSE}.}
 }
 \value{
-The modified \code{tidybreed_pop} (invisibly). EBVs are written to the
-\code{ind_ebv} table (existing rows for the same \code{model} + \code{trait} +
-\code{id_ind} combination are replaced).
+The modified \code{tidybreed_pop} (invisibly). EBVs are appended to
+\code{ind_ebv} with an auto-incrementing \code{eval_number} per trait. Use
+\code{overwrite_trait = TRUE} or \code{delete_all = TRUE} to clear previous records
+instead of accumulating them.
 }
 \description{
 Computes EBVs using one of two modes:

@@ -2,11 +2,12 @@
 % Please edit documentation in R/add_phenotype.R
 \name{upsert_ind_tbv}
 \alias{upsert_ind_tbv}
-\title{Upsert TBV rows (delete existing by id_ind + trait, then insert)}
+\title{Upsert TBV rows — column-named INSERT with ON CONFLICT DO UPDATE SET}
 \usage{
 upsert_ind_tbv(pop, tbv_df)
 }
 \description{
-Upsert TBV rows (delete existing by id_ind + trait, then insert)
+Only the columns present in tbv_df are updated on conflict; all other
+columns (user-defined extras like 'rep') are left untouched in existing rows.
 }
 \keyword{internal}

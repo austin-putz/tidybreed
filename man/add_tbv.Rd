@@ -4,15 +4,13 @@
 \alias{add_tbv}
 \title{Compute and store true breeding values without writing phenotypes}
 \usage{
-add_tbv(tbl, trait, date_calc = Sys.Date(), ...)
+add_tbv(tbl, trait, ...)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
 through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column.}
 
 \item{trait}{Character vector of trait name(s).}
-
-\item{date_calc}{Date stored in \code{ind_tbv.date_calc}.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
