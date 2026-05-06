@@ -1,6 +1,6 @@
 ---
 title: "tidybreed Quick Start Guide"
-subtitle: "v0.9.0"
+subtitle: "v0.12.0"
 date: today
 author: "Austin Putz"
 format:
@@ -96,12 +96,15 @@ The following is a *basic* list for a **livestock** breeding program.
    - Genetic gain
    - Inbreeding levels
 
-This leaves us with near infinite combinations in terms of possibilities. Users
-will need a way to build a breeding program with simple stepwise tools designed to do
+This leaves us with nearly *infinite combinations* in terms of possibilities. 
+2^20 is over 1,000,000 possibilities which just scratches the surface of breeding 
+program design. 
+
+Users will need a way to build a breeding program with simple stepwise tools designed to do
 one thing at at time and slowly build up the breeding program. 
 
 Flexibility is needed at every turn including QTL 'architecture' (Dan Gianola
-loves this term), genotyping, traits/phenotypes (very diverse), ways to select/mate,
+loves this term!), genotyping, traits/phenotypes (very diverse), ways to select/mate,
 who gets phenotyped at what time and when evaluations are ran. Hard coding
 anything will be a feeble attempt, functions just need to take what they have
 and produce output. Users can change anything between 2 functions to modify
@@ -111,9 +114,10 @@ Prime **example**: Package doesn't have the correct phenotype for your breeding
 system trait of interest. `tidybreed` says, pull the true breeding value from
 `ind_tbv` (table) and add a residual and do whatever you want to make it the 
 phenotype you want. Push that new phenotype back into the `ind_phenotype` table
-on your own, shhhh `tidybreed` won't even know.. Future functions such as
+on your own, shhhh `tidybreed` won't even know it happened.. Future functions such as
 `add_ebv()` will just pull all those phenotypes and calculate EBVs regardless
-of what you did. Nothing to clash with. 
+of what you did. Nothing to clash with in a web of code design or any concrete
+meta data that will causes errors downstream. 
 
 
 
@@ -150,9 +154,12 @@ The **theory** & **design** is straightforward:
     
 **Drawbacks to `tidybreed`**
 
-- Users may need to learn SQL to perform the most complex operations but not required
-- might be fewer wrapper/helper functions for users with simple breeding programs
-- unlimited ability to add/alter any data the user wants could lead to mistakes/bugs
+- Users may want/need to learn SQL (use `DBI` package) to perform the most complex operations but not required
+- New users might see fewer wrapper/helper functions for users with simple breeding programs
+    - later users will see why `tidyverse` is so verbose and why `tidybreed` copied this core philosophy
+- Unlimited ability to add/alter any data in any table the user wants could lead to mistakes/bugs
+    - **Disclaimer** - this is not the author's problem and no warranty or liability attached to this software
+	- **Use at your own risk**
 
 ### Just one example
 
@@ -248,19 +255,21 @@ to keep memory low.
 
 
 ```{r}
+#| echo: false
+
 # basic options
 
 # tibble columns printed
-options(
-  tibble.width = 20,
-  tibble.print_max = 15,
-  tibble.print_min = 10
-)
+#options(
+#  tibble.width = 20,
+#  tibble.print_max = 15,
+#  tibble.print_min = 10
+#)
 ```
 
 <br>
 
-## Install `tidybreed`
+# Install `tidybreed`
 
 There are 2 ways: 
 
@@ -344,20 +353,25 @@ if (install_github == TRUE){
 Install `tidybreed` via `pak` if you have a local directory, such as
 a clone from GitHub maybe
 
-
 Could use `devtools` with:
 
 - use `load_all()` for quick loading
 - use `install()` + `library()` for "full install/build"
 
+but don't let me micromanage you. 
+
 ```{r}
 # load the current version (test new functionality before commit to GitHub)
 if (install_local == TRUE){
-  
   # install tidybreed locally
   pak::pak(path_tidybreed, upgrade = TRUE)
-  
 }
+```
+
+Make sure to load just in case
+
+```{r}
+library(tidybreed)
 ```
 
 
@@ -386,7 +400,7 @@ sessionInfo()
 
 
 
-
+# Start Breeding Program
 
 <br>
 
@@ -436,13 +450,18 @@ pop <- initialize_genome(
 
 **Created tables:**
 
-OUT OF DATE - as of `v0.9.0` the `initialize_genome()` function "greedily" 
-adds tables. Why? Because I wanted users not to be confused by what function
+**UPDATE** as of `v0.9.0` the `initialize_genome()` function **"greedily"**
+**adds tables**. 
+
+**Why?** Because I wanted users not to be confused by what function
 added the tables and wanted users to be adding columns very early on to 
 be able to add new field values (user defined columns) when they first call
 a function such as `add_ebv()`, this will be very valuable instead of calling
 the same rows twice in a second step that would be error prone for users
 copying and pasting (or changing 1 and not the other, very bad design). 
+
+Now users can examine all important tables and add user defined fields 
+very early in your script. Avoid adding them mid loop. 
 
 - `genome_meta` - stores info per locus (like number/name/chr/position/QTL/SNP/etc)
     -  **1 line per loci**
@@ -453,6 +472,26 @@ copying and pasting (or changing 1 and not the other, very bad design).
 - `genome_genotype` - all loci genotypes for each individual
     - **1 row per individual**
 - `founder_haplotypes` - founder haplotypes (currently randomly generated, **no LD**)
+- `ind_meta` - individual data
+    - **1 line per individual**
+- `trait_effect_cov` - trait (co)variances (matrix in row/col format)
+    - **1 line for each (co)variance** value
+- `trait_meta` - trait info such as name, units, type, sex limited, etc
+    - **1 line per trait**
+- `trait_effects` - fixed effects per trait
+- `trait_random_effects` - random effect per trait
+- `ind_phenotypes` - individual phenotypes per trait
+    - **1 line per phenotype**
+    - therefore 'long' format with traits stacked on top of each other
+- `ind_tbv` - individual true breeding values (TBVs) from additive effects
+- `ind_ebv` - individual estimated breeding values (EBVs)
+    - **1 line per trait, per evaluation run (integer)**
+    - if you run `add_ebv()` twice on the same animals, you will have 2x EBV values / ind
+- `index_meta` - index information (index name, trait name, weight)
+    - **1 line per trait weight per index**
+- `ind_index` - indexes calculated from `add_index()`
+    - **1 line per individual per index calculation**
+    - Increases 'index_number' by 1 each round
 
 You should also notice it created a file called **Test_tidybreed.duckdb** in your
 working directory which is your Duck Database with tables! 
@@ -473,6 +512,10 @@ pop %>%
   get_table("genome_meta")
 ```
 
+I did update how `get_table()` prints to screen vs if you use `print()` but
+I'll let you explore more to decide yourself which you prefer. 
+
+
 
 <br>
 
@@ -487,7 +530,9 @@ Users should define **new columns/fields** early and pass values to those
 new columns in the `add_*()` functions such as `add_founders()` or 
 `add_offspring()`, `add_phenotypes()`, etc. 
 
-**New Function:** Use `mutate_table()` to add your own custom fields/columns to tables
+**New Function:** Use `mutate_table()` to add your own custom fields/columns 
+to any tables. To my knowledge, none of my functions break but I have not 
+explored this extensively so report back asap if they break a function. 
 
 Here we use `mutate_table()` to add/modify ANY column/field you want to the
 `ind_meta` table. This means we can use many other fields to filter/select
@@ -501,9 +546,9 @@ Let's create **3 new custom fields** for the `ind_meta` table as follows:
 pop %>% 
   get_table("ind_meta") %>%
   mutate_table(
-    gen = NA_integer_,           # initialize as 'integer'
-    farm = NA_character_,        # initialize as 'character' (VARCHAR in SQL)
-    date_birth = NA_Date_        # initialize as 'Date' (DATE in SQL)
+    gen = NA_integer_,           # initialize 'generation' as 'integer'
+    farm = NA_character_,        # initialize 'farm' as 'character' (VARCHAR in SQL)
+    date_birth = NA_Date_        # initialize 'birth date' as 'Date' (DATE in SQL)
   )
 ```
 
@@ -594,7 +639,7 @@ We can also initialize a new column and assign it a value for all individuals.
 The type will be inferred with the first non-missing value. 
 
 ```{r}
-# add custom data to database table "ind_meta" using helper function
+# add custom field 'on the fly' (such as replicate)
 pop <- pop %>%
   get_table("ind_meta") %>%   # will pull this table to work on below
   mutate_table(               # will take ANY table from `get_table()`
@@ -602,7 +647,7 @@ pop <- pop %>%
   )
 ```
 
-Now we added **4 new fields/columns** to `ind_meta` and we can view that updated
+Now we added **5 new fields/columns** to `ind_meta` and we can view that updated
 table with the following helper function. 
 
 ```{r}
@@ -616,14 +661,15 @@ be. You can now easily use real dates and timelines for your breeding program
 to answer much more complex questions that is unnatural or forces users to 
 create complex workarounds to answer them. 
 
-Not only can we add columns, but **we can alter any subset** using `filter()`. 
+Not only can we add columns (`mutate` adds columns in `dplyr`), 
+but **we can alter any subset** using `filter()`. 
 
-Here we can simulate "moving" an animal to new farm like a boar stud for 
+Here we can simulate **"moving" an animal** to new farm like a boar stud for 
 all the males. Later, we may want to use this for selecting boars if this is
 a pig breeding scheme. 
 
 ```{r}
-# change the "farm" for all males in the population
+# change the "farm" for all males in the population (going to an AI Stud)
 pop %>%
   get_table("ind_meta") %>%
   filter(sex == "M") %>%      # update only males below
@@ -715,7 +761,8 @@ pop %>%
   filter(sex == "M")
 ```
 
-We will use this `filter()` step later on to "select" animals for phenotyping, genotyping, or
+We will use this `filter()` step later on to "select" animals for 
+phenotyping, genotyping, or
 selection/mating steps (the **"secret sauce"** of `tidybreed`). 
 
 > NOTE: This above is returning a view from your database and not in R memory yet until you `collect()`
@@ -778,7 +825,7 @@ for animals that receive one.
 # look at genome meta data and add SNP chip
 #------------------------------------------------------------------------------#
 
-# sample loci for Low-Density Chip
+# sample user loci for Low-Density Chip
 low_density_snp_chip <- sample(c(rep(TRUE, 30), rep(FALSE,70)), size=100, replace=FALSE)
 
 # define low-density SNP chip directly with logical vector yourself
@@ -790,6 +837,8 @@ pop <- pop %>%
   )
 ```
 
+Now we have to loci for this SNP chip in `genome_meta`
+
 **WARNING:** Be careful! If you name a trait later called "LD" (maybe loin 
 depth), it could overwrite this SNP chip. 
 
@@ -800,8 +849,8 @@ pop %>%
   print()
 ```
 
-Or we can use a **'helper function'** like `define_chip()` and bypass the more
-verbose function above. However, now you rely on authors to place SNP and
+Or we can use a **'helper function'** like `define_chip()` and **bypass the more**
+**verbose function** above. However, now you rely on authors to place SNP and
 the user can lose functionality without a 'base' function. 
 This is why the authors are choosing to
 allow access to base functions that should allow maximal functionality. 
@@ -907,7 +956,7 @@ table.
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   add_effect_cov_matrix(
-    effect_name = "gen_add",
+    effect_name = "gen_add",              # gen_add is a keyword, be careful
     cov_matrix  = mat.add.gen.vars
   )
 ```
@@ -935,7 +984,7 @@ Now add the **residual (co)variance** matrix:
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   add_effect_cov_matrix(
-    effect_name = "residual",
+    effect_name = "residual",        # residual is a keyword, be careful
     cov_matrix  = mat.res.vars
   )
 ```
@@ -974,16 +1023,6 @@ pop <- pop %>%
   )
 ```
 
-**New tables** created in the database: 
-
-- `trait_meta` - **1 row per trait** with info such as name, units, type, repeated or not, etc
-- `trait_effects` - what effects go into calculating the phenotype
-- `trait_random_effects` - random effects for each trait
-- `ind_phenotype` - individual phenotypes stored, 1 row for each phenotype
-- `ind_tbv` - individual True Breeding Values (tbv), should be 1 / ind / trait
-- `ind_ebv` - table to store all or updated EBVs from evaluation software
-
-
 ```{r}
 pop
 ```
@@ -1014,7 +1053,7 @@ pop %>%
     n = 10,                     # set number of QTL for this trait (will set locations)
     method = "random"           # allocate to loci randomly
   ) %>%
-  # set QTL effects
+  # set QTL effects for this trait
   set_qtl_effects(
     trait_name = "ADG",        # trait name
     distribution = "normal",   # distribution of QTL effects
@@ -1048,8 +1087,9 @@ logical vector or filter by `NOT NULL` in **SQL** or `!is.na()` in **R**.
 Now, we can calculate perhaps the most important parameter for simulations, the
 **"True Breeding Value"** (**TBV**) of the individual. 
 
-By default, the philosophy was to not calculate anything that wasn't needed. 
-Think if you are doing a very large simulation, do we often care the difference 
+By default, the philosophy was to **not calculate anything that wasn't needed**.
+
+**Why?** Think if you are doing a very large simulation, do we often care the difference 
 in TBV at generation 2? Often no... We simply need to extract differences at the
 "end" of the simulation or periodically throughout. 
 Therefore by default we can skip adding the TBV for these animals, however
@@ -1409,16 +1449,14 @@ new_prog %>%
   print(n=8)
 ```
 
-**BUT WHY??** - This allows users to do whatever the hell they want! 
+**BUT WHY??** - This allows users **maximum flexibility** as a "base" function
 
 - add litters (dams mated to only 1 sire like in pigs)
 - add families (dams mated to many sires like in fish, outside the body eggs mixed with sperm)
 - add any sex ratio (say you want to simulate 'sexed semen' in beef/dairy/pigs/etc)
 
-Really adds **maximum flexibility** and then the user knows exactly what is happening. 
-
 Feed this new `tibble` into `add_offspring()` (REMEMBER: `add_*()` functions 
-often add rows to tables). This function adds rows to the following tables:
+often **add rows** to tables). This function adds rows to the following tables:
 
 1. `ind_meta` - 1 row per offspring with provided optional columns
 2. `genome_haplotype` - 2 rows per offspring with haplotypes from parents 1 and 2
@@ -1429,7 +1467,7 @@ often add rows to tables). This function adds rows to the following tables:
 # adds rows to "ind_meta", "genome_haplotype" and "genome_genotype"
 pop <- pop %>%
   add_offspring(
-    matings = new_prog       # matings is a tibble with 4 required columns
+    matings = new_prog       # matings is a tibble built above by user
   )
 ```
 
@@ -1474,7 +1512,7 @@ pop %>%
 We can use **BLUPF90** to run evaluations on these animals to calculate **EBVs** 
 (**E**stimated **B**reeding **V**alues). 
 
-First, let's add a custom field to track:
+First, let's add a custom field to track our EBVs!
 
 ```{r}
 pop %>%
@@ -1501,10 +1539,13 @@ pop %>%
   print(n=100)
 ```
 
-**Calculate Accuracy**
+
+
+### Calculate Accuracy
 
 Below is how you could extract EBVs + TBVs and calculate accuracy yourself
-on these traits. 
+on these traits without the need of a package "helper function" that may
+be error prone or limit you later. 
 
 ```{r}
 # add TBV to all animals for both traits
@@ -1519,7 +1560,7 @@ pop <- pop %>%
           software = "blupf90",
           model = "blup")
 
-# pull EBVs table into memory
+# pull all EBVs table into memory
 data.ebvs <- pop %>%
   get_table("ind_ebv") %>%
   collect()
@@ -1547,7 +1588,7 @@ Add offspring to test the "parent average" option in `add_ebv()`:
 new_prog <- new_prog %>%
   mutate(gen = 2L)
 
-# add new generation
+# add new generation of offspring
 pop <- pop %>%
   add_offspring(
     matings = new_prog       # matings is a tibble with 4 required columns
@@ -1610,7 +1651,8 @@ females?
 
 I got you! See below the simple steps: 
 
-**Step 1a:** we simply subset the `ind_meta` table to identify all eligible **males**
+**Step 1a:** we simply subset the `ind_meta` table to identify all 
+eligible **males**
 
 ```{r}
 # extract a vector of IDs
@@ -1625,8 +1667,8 @@ print(male_candidates)
 
 We now have a **list of eligible male candidates to select from**. 
 
-**Step 1b:** we simply subset the `ind_meta` table to identify all eligible **females** the 
-same way
+**Step 1b:** we simply subset the `ind_meta` table to identify all 
+eligible **females** the same way
 
 ```{r}
 # extract a vector of IDs for female candidates
@@ -1746,6 +1788,14 @@ pop %>%
 
 ### Add NW as Reproduction Trait
 
+Funny, enough, a key trait such as "litter size" or "number weaned" in pigs
+can be very difficult for even modern simulation software packages. 
+
+On the surface it appears "easy" but often more difficult on logic because 
+phenotyping happens simultaneously while generating gametes and producing 
+offspring for software packages. We need to separate these steps and make
+the population of offspring contingent on litter size in simulation. 
+
 ```{r}
 #------------------------------------------------------------#
 # Add Trait
@@ -1797,14 +1847,19 @@ pop %>%
   )
 ```
 
+Select some dams (pull IDs):
+
 ```{r}
 selected_dams <- pop %>%
   get_table("ind_meta") %>%
   filter(sex == "F", gen == 2L) %>%
   pull(id_ind)
 
-selected_dams
+# print
+print(selected_dams)
 ```
+
+Add a phenotype for NW:
 
 ```{r}
 pop %>%
@@ -1812,6 +1867,8 @@ pop %>%
   filter(id_ind %in% selected_dams) %>%
   add_phenotype("NW")
 ```
+
+Extract the newn NW phenotype from `ind_phenotype`: 
 
 ```{r}
 # phenotype selected dams first
@@ -1828,7 +1885,10 @@ data.nw <- pop %>%
 data.nw
 ```
 
-Build mating plan based on this new phenotype:
+Build mating plan based on this new phenotype! 
+
+Trick is to use the `time` argument in the `rep()` function, all mated to
+1 male just to show the code here: 
 
 ```{r}
 # use new phenotype to build mating plan
@@ -1852,6 +1912,25 @@ pop %>%
   )
 ```
 
+**On the surface it appears minimal** or you didn't catch how simple/easy
+this was for the user when this was not "programmed" as a functionality 
+by the author of `tidybreed`. 
+
+Since only basic functions were involved, the user simply added what they wanted,
+i.e. a phenotype for litter size, pulled that value, and build a mating plan
+based on it. 
+
+TWO things now happen that makes `tidybreed` great. 
+
+1. Observed litter size is now directly tied to the genetic "NW" trait (number weaned)
+2. Population size naturally increases if selecting for NW in the index or EBV
+
+Again, 2 things that were difficult, impossible, or convoluted to pull off 
+with other software currently available. 
+
+
+
+
 <br>
 
 ## Step 7: Optionally, add genotypes for evaluation ("SNP Chip")
@@ -1865,16 +1944,18 @@ We use **2 simple functions** for genotyping animals.
 
 **Step 1"** Select which animals "have" a genotype:
 
-In simulation getting a genotype doesn't mean anything since they all allready
+In simulation getting a genotype doesn't mean anything since they all already
 exist, just have to identify which animals "have" one and then extract only those 
 loci later. 
+
+Here all males get a high-density SNP chip:
 
 ```{r}
 # all Males get a genotype for "HD"
 pop <- pop %>%
   get_table("ind_meta") %>%
-  filter(sex=="M") %>%
-  add_genotypes(chip_name="HD")
+  filter(sex=="M") %>%               # ONLY males
+  add_genotypes(chip_name="HD")      # add HD chip as logical
 ```
 
 You can now see it added a `has_HD` field in the `ind_meta` table. Of course, 
@@ -1887,13 +1968,13 @@ Also note the default was `FALSE` if the column didn't exist.
 pop %>% get_table("ind_meta") %>% print(n=50)
 ```
 
-Give all females a "LD" chip genotype:
+Give all females an "LD" chip genotype:
 
 ```{r}
 # all Females get a genotype for "LD"
 pop <- pop %>%
   get_table("ind_meta") %>%
-  filter(sex=="F") %>%
+  filter(sex=="F") %>%              # ONLY females
   add_genotypes(chip_name="LD")
 ```
 
@@ -1984,6 +2065,91 @@ pop %>%
 ```
 
 
+
+## Index Selection
+
+One of the last features to add to the core of `tidybreed` was the ability
+to calculate the "index" for individuals, or combining the EBVs weighted by
+trait (how is up to you). 
+
+2 simple functions:
+
+- `define_index()` - to add the index weights into the `index_meta` table
+- `add_index()` function to calculate the current index of individuals from `ind_ebv` into `ind_index` tables given the weights and index name
+
+Let's set our selection index weights! 
+
+```{r}
+# set your custom selection index
+pop %>%
+  define_index(
+    index_name = "maternal_v1",
+    trait_names = c("NW", "ADG", "BF"), 
+    index_wts = c(100, 2, -30)
+  )
+```
+
+Print the `index_meta` table:
+
+```{r}
+pop %>%
+  get_table("index_meta") %>%
+  print(n=3, c=5)
+```
+
+Make sure all traits has an EBV calculated: 
+
+```{r}
+pop %>%
+  get_table("ind_meta") %>%
+  add_ebv(
+    "ADG", software = "blupf90", model = "blup"
+  )
+pop %>%
+  get_table("ind_meta") %>%
+  add_ebv(
+    "BF", software = "blupf90", model = "blup"
+  )
+pop %>%
+  get_table("ind_meta") %>%
+  add_ebv(
+    "NW", software = "blupf90", model = "blup"
+  )
+```
+
+Make sure to pass `ind_ebv` and filter if needed, just provide the `index_name`
+as an argument: 
+
+```{r}
+pop %>%
+  get_table("ind_ebv") %>%        # make sure to pull from 'ind_ebv' but may change
+  add_index("maternal_v1")        # just give index name
+```
+
+Now when making **selections**, just pull from the `ind_index` table instead of
+the `ind_ebv` or `ind_phenotype` table, etc. 
+
+Here we will select the **top 5 males for their index**:
+
+```{r}
+selected_males <- pop %>%
+  get_table("ind_index") %>%
+  filter(id_ind %in% male_candidates) %>%
+  slice_max(index_value, n=5) %>%
+  pull(id_ind)
+
+print(selected_males)
+```
+
+
+
+
+
+
+
+
+
+
 <br>
 
 ## More on selecting animals
@@ -1991,7 +2157,7 @@ pop %>%
 There are a few different ways you can select animals in `tidybreed`: 
 
 1. First, filter `ind_meta` and use `pull(id_ind)` at the end
-  - Second, filter `ind_ebv` based on these IDs in a stepwise fashion
+    - Second, filter `ind_ebv` based on these IDs in a stepwise fashion
 2. Use `semi_join` from `dplyr`
 3. Use SQL Directly
 
