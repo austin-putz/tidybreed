@@ -1,3 +1,18 @@
+# tidybreed 0.13.1 (2026-05-11)
+
+## Bug fixes
+
+* `format_sql_value()`: added class-based guards for `Date` and `POSIXct`/`POSIXlt`
+  values **before** the `db_type` string-matching branches. If a `Date` object
+  loses its class attribute (e.g. via R's `for`-loop iterator stripping class on
+  some R builds), `infer_duckdb_type()` could fall through to `"DOUBLE"`, causing
+  `as.character(date)` = `"2026-02-26"` to be embedded **unquoted** in the UPDATE
+  SQL. DuckDB then interpreted the bare expression as integer arithmetic
+  (`2026 − 02 − 26 = 1998`) and threw
+  `Conversion Error: Unimplemented type for cast (INTEGER -> DATE)`. The fix
+  ensures Date and TIMESTAMP values always produce `DATE '...'` /
+  `TIMESTAMP '...'` literals regardless of what `db_type` was inferred.
+
 # tidybreed 0.13.0 (2026-05-10)
 
 ## Bug fixes

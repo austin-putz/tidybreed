@@ -350,3 +350,23 @@ test_that("character value maps to VARCHAR", {
   expect_true(all(result$farm == "Iowa"))
   close_pop(pop)
 })
+
+
+test_that("Date column pre-declared as NA then updated to a real date works", {
+  # Regression: mutate_table(date_col = cur_date) where cur_date is a Date
+  # was embedding the value unquoted in SQL (e.g. 2026-02-26 instead of
+  # DATE '2026-02-26'), causing DuckDB to fail with INTEGER -> DATE cast error.
+  pop <- create_pop_for_mutate()
+  # pre-declare column as DATE (using typed NA, like in real scripts)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(mate_date = as.Date(NA))
+  # update females only with a real date (filtered scalar update = scalar SQL path)
+  test_date <- as.Date("2026-02-26")
+  pop <- get_table(pop, "ind_meta") |>
+    dplyr::filter(sex == "F") |>
+    mutate_table(mate_date = test_date)
+  result <- dplyr::collect(get_table(pop, "ind_meta"))
+  expect_s3_class(result$mate_date, "Date")
+  expect_true(all(result$mate_date[result$sex == "F"] == test_date))
+  expect_true(all(is.na(result$mate_date[result$sex == "M"])))
+  close_pop(pop)
+})

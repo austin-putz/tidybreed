@@ -204,6 +204,14 @@ prepare_extra_cols <- function(extra_cols, n_rows, table_name, conn) {
 #' @keywords internal
 format_sql_value <- function(value, db_type) {
   if (is.na(value))                           return("NULL")
+  # Check actual class before db_type — guards against cases where a Date/TIMESTAMP
+  # value loses its class (e.g. for-loop iteration stripping class attributes) and
+  # infer_duckdb_type() falls through to "DOUBLE", which would embed the date string
+  # unquoted in SQL (e.g. 2026-02-26 instead of DATE '2026-02-26').
+  if (inherits(value, "POSIXct") || inherits(value, "POSIXlt"))
+    return(paste0("TIMESTAMP '", format(value, "%Y-%m-%d %H:%M:%S"), "'"))
+  if (inherits(value, "Date"))
+    return(paste0("DATE '", as.character(value), "'"))
   if (db_type == "BOOLEAN")                   return(ifelse(value, "TRUE", "FALSE"))
   if (db_type %in% c("INTEGER", "DOUBLE"))    return(as.character(value))
   if (db_type == "DATE")                      return(paste0("DATE '", as.character(value), "'"))
