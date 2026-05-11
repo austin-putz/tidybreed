@@ -1,3 +1,21 @@
+# tidybreed 0.13.0 (2026-05-10)
+
+## Bug fixes
+
+* `infer_duckdb_type()`: moved `inherits(value, "Date")` and
+  `inherits(value, "POSIXct"/"POSIXlt")` checks **before** `is.numeric()`.
+  `Date` objects are stored internally as doubles, so `is.numeric()` could
+  return `TRUE` for them in some configurations, causing the type to be
+  inferred as `DOUBLE` instead of `DATE`. The symptom was
+  `SET mate_date = 2026-02-26` (unquoted) in the UPDATE SQL, which DuckDB
+  interpreted as integer arithmetic and threw
+  `Conversion Error: Unimplemented type for cast (INTEGER -> DATE)`.
+
+* `format_sql_value()`: date and timestamp literals now use the explicit SQL
+  type-keyword syntax (`DATE '2026-02-26'`, `TIMESTAMP '...'`) instead of bare
+  quoted strings. This removes any remaining ambiguity about literal types
+  regardless of column context.
+
 # tidybreed 0.12.0 (2026-05-03)
 
 ## New features

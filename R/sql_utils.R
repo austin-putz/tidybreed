@@ -116,9 +116,9 @@ infer_duckdb_type <- function(value) {
 
   if (is.logical(value))                              return("BOOLEAN")
   if (is.integer(value))                              return("INTEGER")
-  if (is.numeric(value))                              return("DOUBLE")
   if (inherits(value, "Date"))                        return("DATE")
   if (inherits(value, "POSIXct") || inherits(value, "POSIXlt")) return("TIMESTAMP")
+  if (is.numeric(value))                              return("DOUBLE")
   if (is.character(value))                            return("VARCHAR")
 
   sample_val <- value[!is.na(value)][1]
@@ -206,8 +206,8 @@ format_sql_value <- function(value, db_type) {
   if (is.na(value))                           return("NULL")
   if (db_type == "BOOLEAN")                   return(ifelse(value, "TRUE", "FALSE"))
   if (db_type %in% c("INTEGER", "DOUBLE"))    return(as.character(value))
-  if (db_type == "DATE")                      return(paste0("'", as.character(value), "'"))
-  if (db_type == "TIMESTAMP")                 return(paste0("'", format(value, "%Y-%m-%d %H:%M:%S"), "'"))
+  if (db_type == "DATE")                      return(paste0("DATE '", as.character(value), "'"))
+  if (db_type == "TIMESTAMP")                 return(paste0("TIMESTAMP '", format(value, "%Y-%m-%d %H:%M:%S"), "'"))
   if (db_type == "VARCHAR") {
     escaped <- gsub("'", "''", as.character(value))
     return(paste0("'", escaped, "'"))
