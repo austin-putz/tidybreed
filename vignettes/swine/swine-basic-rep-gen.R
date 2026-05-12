@@ -9,12 +9,30 @@ pak::pak("austin-putz/tidybreed")
 library(tidybreed)
 library(tidyverse)
 
+library(yaml)
+
 #------------------------------------------------------------------------------#
 # Set Input Options
 #------------------------------------------------------------------------------#
 
 n_reps <- 3
 n_gens <- 10
+
+#------------------------------------------------------------------------------#
+# yaml inputs
+#------------------------------------------------------------------------------#
+
+# read config file
+config <- yaml::read_yaml("~/Claude/tidybreed-test/scenarios/sires_n_3.yaml")
+
+# create output directory
+if (dir.exists(config$output$save_dir)){
+  warning("Output directory already exists")
+} else {
+  warning("Output directory will be created for user")
+  # create directory if it doesn't exist
+  dir.create(config$output$save_dir, recursive=TRUE, showWarnings = TRUE)
+}
 
 #------------------------------------------------------------------------------#
 # Start Genome + Population Object with database
