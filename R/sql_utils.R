@@ -97,6 +97,38 @@ TABLE_PRIMARY_KEYS <- list(
 )
 
 
+#' Composite row keys per table (used for exact single-table DELETE)
+#'
+#' For tables with a single PK this is length-1. For composite-PK tables all
+#' key columns are listed so that `delete_rows()` can target exact rows rather
+#' than over-deleting by `id_ind` alone.
+#'
+#' @keywords internal
+TABLE_ROW_KEYS <- list(
+  ind_meta         = "id_ind",
+  genome_meta      = "locus_id",
+  ind_phenotype    = "id_record",
+  trait_meta       = "trait_name",
+  ind_tbv          = c("id_ind", "trait_name"),
+  ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
+  ind_index        = c("id_ind", "index_name", "index_number"),
+  genome_haplotype = c("id_ind", "parent_origin"),
+  genome_genotype  = "id_ind",
+  trait_effects    = c("trait_name", "effect_name"),
+  trait_effect_cov = c("effect_name", "trait_1", "trait_2"),
+  index_meta       = c("index_name", "trait_name")
+)
+
+
+#' Tables that contain the `id_ind` column (used for cross-table deletion)
+#'
+#' @keywords internal
+IND_TABLE_ID_IND_COLS <- c(
+  "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
+  "ind_index", "genome_haplotype", "genome_genotype"
+)
+
+
 #' Infer DuckDB column type from an R value
 #'
 #' @param value An R value (scalar or vector)

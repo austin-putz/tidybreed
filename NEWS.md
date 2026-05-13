@@ -1,3 +1,26 @@
+# tidybreed 0.14.0 (2026-05-13)
+
+## New features
+
+* New `delete_rows(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE)` —
+  delete rows from one or more population tables using the
+  `get_table() |> filter() |> delete_rows()` pipeline.
+  - `tables = NULL` (default): delete from the current table only, using the
+    full composite row key (e.g. filters on `ind_tbv` by `trait_name` delete
+    only that trait's rows, not all rows for those animals).
+  - `tables = "all"`: delete matching individuals from every `ind_*` table
+    plus `genome_haplotype` and `genome_genotype` that exist in the population
+    (includes `ind_meta` for a complete "hard delete").
+  - `tables = c(...)`: delete from an explicit subset of tables; each must
+    have an `id_ind` column.
+  - `dry_run = TRUE`: reports what would be deleted without modifying the DB.
+  - Uses a temp-table JOIN internally (consistent with `mutate_table()`);
+    safe for large ID sets.
+* New internal constants in `R/sql_utils.R`:
+  - `TABLE_ROW_KEYS`: composite row key columns per table, used for exact
+    single-table deletion.
+  - `IND_TABLE_ID_IND_COLS`: character vector of all tables with `id_ind`.
+
 # tidybreed 0.13.2 (2026-05-12)
 
 ## Performance
