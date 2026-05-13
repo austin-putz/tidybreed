@@ -1,3 +1,18 @@
+# tidybreed 0.13.2 (2026-05-12)
+
+## Performance
+
+* `add_offspring()` / `make_gamete()`: ~3x speedup for gamete simulation.
+  - Replaced the per-locus `for` / `while` loop in `make_gamete()` with
+    `findInterval()`, which counts crossovers before each locus position in
+    vectorized C code. Haplotype assignment becomes a single arithmetic
+    expression: `(current_hap - 1 + n_toggles %% 2) %% 2 + 1`.
+  - Added `build_chr_info()` helper that pre-computes per-chromosome locus
+    indices, positions, and lengths once per `add_offspring()` call.
+    Previously, `genome_meta_df$chr == chr_id` (an O(n_loci) scan) was
+    repeated for every chromosome × every gamete. The result is passed into
+    each `make_gamete()` call, eliminating redundant work.
+
 # tidybreed 0.13.1 (2026-05-11)
 
 ## Bug fixes

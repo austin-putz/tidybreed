@@ -1,3 +1,30 @@
+#' Pre-compute per-chromosome locus metadata for gamete simulation
+#'
+#' Called once per `add_offspring()` invocation. The returned list is passed to
+#' every `make_gamete()` call, avoiding O(n_loci × n_chr) masking work inside
+#' the per-offspring loop.
+#'
+#' @param genome_meta_df Data frame with columns `chr` and `pos_Mb`.
+#' @param chr_len_Mb Numeric vector of chromosome lengths (1-based index).
+#' @return Named list, one element per chromosome. Each element is a list with
+#'   `locus_idx` (integer indices into the locus dimension) and `pos_Mb`
+#'   (positions) and `chr_len`.
+#' @keywords internal
+build_chr_info <- function(genome_meta_df, chr_len_Mb) {
+  chrs <- sort(unique(genome_meta_df$chr))
+  stats::setNames(
+    lapply(chrs, function(chr_id) {
+      mask <- genome_meta_df$chr == chr_id
+      list(
+        locus_idx = which(mask),
+        pos_Mb    = genome_meta_df$pos_Mb[mask],
+        chr_len   = chr_len_Mb[chr_id]
+      )
+    }),
+    as.character(chrs)
+  )
+}
+
 #' Produce a gamete from a parent's two haplotypes via chromosomal crossovers
 #'
 #' Simulates chromosomal recombination using the Haldane map function.
@@ -7,45 +34,32 @@
 #'
 #' @param hap_matrix 2 x n_loci integer matrix. Row 1 = haplotype from
 #'   parent_origin 1, row 2 = haplotype from parent_origin 2.
-#' @param genome_meta_df Data frame with columns `chr` (integer) and `pos_Mb`
-#'   (double), one row per locus. Row j must correspond to locus_j (sorted by
-#'   locus_id ascending).
-#' @param chr_len_Mb Numeric vector indexed by chromosome number (1-based).
-#'   Element i = length of chromosome i in megabases.
+#' @param chr_info List returned by `build_chr_info()`. Contains pre-computed
+#'   locus indices, positions, and lengths per chromosome.
 #' @return Integer vector of length n_loci representing the gamete (0 or 1)
 #' @keywords internal
-make_gamete <- function(hap_matrix, genome_meta_df, chr_len_Mb) {
+make_gamete <- function(hap_matrix, chr_info) {
 
   n_loci <- ncol(hap_matrix)
   gamete  <- integer(n_loci)
-  chrs    <- sort(unique(genome_meta_df$chr))
 
-  for (chr_id in chrs) {
-    chr_mask      <- genome_meta_df$chr == chr_id
-    chr_locus_idx <- which(chr_mask)               # column indices in gamete
-    chr_pos       <- genome_meta_df$pos_Mb[chr_mask]
-    chr_len       <- chr_len_Mb[chr_id]
+  for (ci in chr_info) {
+    chr_locus_idx <- ci$locus_idx
+    chr_pos       <- ci$pos_Mb
+    chr_len       <- ci$chr_len
 
     n_cross     <- rpois(1L, lambda = chr_len / 100)
-    current_hap <- sample(1L:2L, 1L)               # random starting haplotype
+    current_hap <- sample(1L:2L, 1L)
 
     if (n_cross == 0L) {
       gamete[chr_locus_idx] <- hap_matrix[current_hap, chr_locus_idx]
     } else {
-      cross_pos <- sort(runif(n_cross, min = 0, max = chr_len))
-      cross_ptr <- 1L
-
-      for (k in seq_along(chr_locus_idx)) {
-        locus_pos <- chr_pos[k]
-
-        # Toggle haplotype for each crossover passed before this locus
-        while (cross_ptr <= n_cross && cross_pos[cross_ptr] < locus_pos) {
-          current_hap <- 3L - current_hap            # 1 <-> 2
-          cross_ptr   <- cross_ptr + 1L
-        }
-
-        gamete[chr_locus_idx[k]] <- hap_matrix[current_hap, chr_locus_idx[k]]
-      }
+      cross_pos   <- sort(runif(n_cross, min = 0, max = chr_len))
+      # findInterval counts crossovers strictly before each locus position;
+      # parity of that count determines how many times the haplotype toggled.
+      n_toggles   <- findInterval(chr_pos, cross_pos)
+      hap_indices <- (current_hap - 1L + n_toggles %% 2L) %% 2L + 1L
+      gamete[chr_locus_idx] <- hap_matrix[cbind(hap_indices, chr_locus_idx)]
     }
   }
 

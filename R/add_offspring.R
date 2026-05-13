@@ -208,6 +208,8 @@ add_offspring <- function(pop, matings) {
     dplyr::arrange(locus_id) |>
     dplyr::collect()
 
+  chr_info <- build_chr_info(genome_meta_df, chr_len_Mb)
+
   # ============================================================================
   # 9. Load parent haplotypes in a single batch query
   # ============================================================================
@@ -276,8 +278,8 @@ add_offspring <- function(pop, matings) {
   hap_dam_mat  <- matrix(0L, nrow = n_offspring, ncol = n_loci)
 
   for (i in seq_len(n_offspring)) {
-    hap_sire_mat[i, ] <- make_gamete(parent_haps[[matings$id_parent_1[i]]], genome_meta_df, chr_len_Mb)
-    hap_dam_mat[i, ]  <- make_gamete(parent_haps[[matings$id_parent_2[i]]], genome_meta_df, chr_len_Mb)
+    hap_sire_mat[i, ] <- make_gamete(parent_haps[[matings$id_parent_1[i]]], chr_info)
+    hap_dam_mat[i, ]  <- make_gamete(parent_haps[[matings$id_parent_2[i]]], chr_info)
   }
 
   # ============================================================================
