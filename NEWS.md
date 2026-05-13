@@ -1,3 +1,16 @@
+# tidybreed 0.15.1 (2026-05-13)
+
+## Bug fixes
+
+* `print.tidybreed_table()`: fixed crash when `select()` is called before
+  printing. Previously, the print method derived column names from
+  `DBI::dbListFields()` (the full physical table schema) and tried to select
+  them from `x$tbl` via `dplyr::all_of()`. After a `select()` call narrows
+  the lazy tbl to a subset of columns, those original column names no longer
+  exist in `x$tbl`, causing `dplyr::all_of()` to error. The fix uses
+  `colnames(x$tbl)` instead, which always reflects the current visible columns.
+  The header field count now also matches the narrowed column set.
+
 # tidybreed 0.15.0 (2026-05-13)
 
 ## Breaking changes

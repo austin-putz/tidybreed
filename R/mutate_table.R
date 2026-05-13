@@ -37,8 +37,8 @@ print.tidybreed_table <- function(x, n = 10, c = 10, ...) {
   n_rows <- DBI::dbGetQuery(
     conn, paste0("SELECT COUNT(*) AS n FROM ", x$table_name)
   )$n
-  all_cols <- DBI::dbListFields(conn, x$table_name)
-  n_cols   <- length(all_cols)
+  tbl_cols <- colnames(x$tbl)
+  n_cols   <- length(tbl_cols)
 
   cat("<tidybreed_table: ", x$table_name, ">  [",
       n_rows, " row", if (n_rows != 1) "s" else "", " × ",
@@ -49,14 +49,14 @@ print.tidybreed_table <- function(x, n = 10, c = 10, ...) {
     cat("Filter: ", paste(exprs, collapse = " & "), "\n", sep = "")
   }
 
-  preview_cols <- head(all_cols, c)
+  preview_cols <- head(tbl_cols, c)
   preview_tbl  <- dplyr::collect(
     dplyr::select(x$tbl, dplyr::all_of(preview_cols))
   )
   print(utils::head(preview_tbl, n), n = n)
 
   if (n_cols > c) {
-    remaining <- all_cols[(c + 1):n_cols]
+    remaining <- tbl_cols[(c + 1):n_cols]
     shown     <- min(5L, length(remaining))
     names_str <- paste(remaining[seq_len(shown)], collapse = ", ")
     if (length(remaining) > shown) names_str <- paste0(names_str, ", …")
