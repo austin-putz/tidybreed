@@ -44,7 +44,7 @@
 #' each chromosome, and the starting haplotype is chosen at random.
 #'
 #' **Offspring IDs:**
-#' IDs follow the same `{line}-{n}` format as `add_founders()`. Numbering
+#' IDs follow the same `{line}_{n}` format as `add_founders()`. Numbering
 #' continues from the current maximum for each line.
 #'
 #' @export
@@ -61,8 +61,8 @@
 #'
 #' # One offspring per mating, extra metadata column (gen)
 #' matings <- tibble::tibble(
-#'   id_parent_1 = rep("A-1", 5),
-#'   id_parent_2 = paste0("A-", 6:10),
+#'   id_parent_1 = rep("A_1", 5),
+#'   id_parent_2 = paste0("A_", 6:10),
 #'   sex         = c("M", "F", "M", "F", "M"),
 #'   line        = "A",
 #'   gen         = 2L
@@ -71,8 +71,8 @@
 #'
 #' # Animal-breeder-style aliases
 #' matings2 <- tibble::tibble(
-#'   id_sire = rep("A-1", 3),
-#'   id_dam  = paste0("A-", 6:8),
+#'   id_sire = rep("A_1", 3),
+#'   id_dam  = paste0("A_", 6:8),
 #'   sex     = c("M", "F", "M"),
 #'   line    = "A",
 #'   gen     = 2L
@@ -138,12 +138,12 @@ add_offspring <- function(pop, matings) {
     )
   }
 
-  invalid_line <- !grepl("^[a-zA-Z][a-zA-Z0-9_-]*$", matings$line)
+  invalid_line <- !grepl("^[a-zA-Z][a-zA-Z0-9_]*$", matings$line)
   if (any(invalid_line)) {
     bad <- paste(unique(matings$line[invalid_line]), collapse = ", ")
     stop(
       "Invalid line value(s): ", bad, ". ",
-      "Must start with a letter and contain only letters, numbers, underscores, or hyphens.",
+      "Must start with a letter and contain only letters, numbers, or underscores.",
       call. = FALSE
     )
   }
@@ -253,8 +253,8 @@ add_offspring <- function(pop, matings) {
     res <- DBI::dbGetQuery(
       pop$db_conn,
       paste0(
-        "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('-' IN id_ind) + 1) AS INTEGER)) AS max_num ",
-        "FROM ind_meta WHERE id_ind LIKE '", ln, "-%'"
+        "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('_' IN id_ind) + 1) AS INTEGER)) AS max_num ",
+        "FROM ind_meta WHERE LEFT(id_ind, ", nchar(ln) + 1L, ") = '", ln, "_'"
       )
     )
     line_start[ln] <- if (is.na(res$max_num)) 1L else as.integer(res$max_num) + 1L
@@ -266,7 +266,7 @@ add_offspring <- function(pop, matings) {
 
   for (i in seq_len(n_offspring)) {
     ln             <- matings$line[i]
-    offspring_ids[i] <- paste0(ln, "-", line_counter[[ln]])
+    offspring_ids[i] <- paste0(ln, "_", line_counter[[ln]])
     line_counter[[ln]] <- line_counter[[ln]] + 1L
   }
 

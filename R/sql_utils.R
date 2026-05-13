@@ -70,19 +70,19 @@ validate_sql_identifier <- function(name, what = "identifier",
 TABLE_RESERVED_COLS <- list(
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line", "sex"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
-  ind_phenotype    = c("id_record", "id_ind", "trait_name", "value", "pheno_number"),
-  ind_tbv          = c("id_ind", "trait_name", "tbv"),
-  ind_ebv          = c("id_ind", "trait_name", "model", "ebv", "acc", "se", "eval_number"),
-  trait_meta       = c("trait_name", "description", "units", "trait_type", "repeatable",
+  ind_phenotype    = c("id_phenotype", "id_ind", "trait_name", "value", "pheno_number"),
+  ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv"),
+  ind_ebv          = c("id_ebv", "id_ind", "trait_name", "model", "ebv", "acc", "se", "eval_number"),
+  trait_meta       = c("id_trait", "trait_name", "description", "units", "trait_type", "repeatable",
                        "recorded_on", "expressed_sex", "expressed_parent", "target_add_mean",
                        "min_value", "max_value", "prevalence", "thresholds",
                        "index_weight", "economic_value"),
   trait_effects    = c("trait_name", "effect_name", "effect_class", "source_column",
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value"),
-  trait_effect_cov = c("effect_name", "trait_1", "trait_2", "cov"),
-  index_meta       = c("index_name", "trait_name", "index_wt"),
-  ind_index        = c("id_ind", "index_name", "index_number", "index_value")
+  trait_effect_cov = c("id_trait_effect_cov", "effect_name", "trait_1", "trait_2", "cov"),
+  index_meta       = c("id_index_name", "index_name", "trait_name", "index_wt"),
+  ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value")
 )
 
 
@@ -90,10 +90,15 @@ TABLE_RESERVED_COLS <- list(
 #'
 #' @keywords internal
 TABLE_PRIMARY_KEYS <- list(
-  ind_meta      = "id_ind",
-  genome_meta   = "locus_id",
-  ind_phenotype = "id_record",
-  trait_meta    = "trait_name"
+  ind_meta         = "id_ind",
+  genome_meta      = "locus_id",
+  ind_phenotype    = "id_phenotype",
+  ind_tbv          = "id_tbv",
+  ind_ebv          = "id_ebv",
+  trait_meta       = "id_trait",
+  trait_effect_cov = "id_trait_effect_cov",
+  index_meta       = "id_index_name",
+  ind_index        = "id_index"
 )
 
 
@@ -107,17 +112,36 @@ TABLE_PRIMARY_KEYS <- list(
 TABLE_ROW_KEYS <- list(
   ind_meta         = "id_ind",
   genome_meta      = "locus_id",
-  ind_phenotype    = "id_record",
-  trait_meta       = "trait_name",
+  ind_phenotype    = "id_phenotype",
+  trait_meta       = "id_trait",
   ind_tbv          = c("id_ind", "trait_name"),
   ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
   ind_index        = c("id_ind", "index_name", "index_number"),
   genome_haplotype = c("id_ind", "parent_origin"),
   genome_genotype  = "id_ind",
   trait_effects    = c("trait_name", "effect_name"),
-  trait_effect_cov = c("effect_name", "trait_1", "trait_2"),
-  index_meta       = c("index_name", "trait_name")
+  trait_effect_cov = "id_trait_effect_cov",
+  index_meta       = "id_index_name"
 )
+
+
+#' Get the next integer ID for a table's primary-key sequence.
+#'
+#' Returns MAX(id_col) + 1, or 1 if the table is empty.
+#' For multi-row inserts, pre-generate a range:
+#'   `seq.int(next_int_id(conn, tbl, col), length.out = n)`
+#'
+#' @param conn A DBI connection.
+#' @param table Character. Table name.
+#' @param id_col Character. Integer PK column name.
+#' @return Integer scalar.
+#' @keywords internal
+next_int_id <- function(conn, table, id_col) {
+  as.integer(DBI::dbGetQuery(
+    conn,
+    paste0("SELECT COALESCE(MAX(", id_col, "), 0) + 1 AS nxt FROM ", table)
+  )$nxt)
+}
 
 
 #' Tables that contain the `id_ind` column (used for cross-table deletion)

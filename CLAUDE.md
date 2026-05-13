@@ -79,7 +79,7 @@ populated by `add_founders()` and `add_offspring()`.
 
 | Column      | Type    | Notes                          |
 |-------------|---------|--------------------------------|
-| id_ind      | VARCHAR | Primary key, format `{line}-{n}` |
+| id_ind      | VARCHAR | Primary key, format `{line}_{n}` (e.g. `Libra_1020`) |
 | id_parent_1 | VARCHAR | NA for founders                |
 | id_parent_2 | VARCHAR | NA for founders                |
 | line        | VARCHAR | Genetic line name              |
@@ -94,7 +94,8 @@ One row per trait. Populated by `add_trait()`.
 
 | Column             | Type    | Notes                                                         |
 |--------------------|---------|---------------------------------------------------------------|
-| trait_name         | VARCHAR | Primary key                                                   |
+| id_trait           | INTEGER | Primary key (auto-incrementing)                               |
+| trait_name         | VARCHAR | Unique trait identifier                                       |
 | description        | VARCHAR | Free text                                                     |
 | units              | VARCHAR | e.g. "kg"                                                     |
 | trait_type         | VARCHAR | `"continuous"` / `"count"` / `"binary"` / `"categorical"`     |
@@ -139,44 +140,47 @@ Reserved `effect_name` values: `"gen_add"` (additive genetic G matrix),
 `"residual"` (residual R matrix). Any other name maps to a user-defined random
 effect matching `effect_name` in `trait_effects`.
 
-| Column      | Type    | Notes                                              |
-|-------------|---------|----------------------------------------------------|
-| effect_name | VARCHAR | `"gen_add"`, `"residual"`, or random effect name   |
-| trait_1     | VARCHAR | Primary key with effect_name + trait_2             |
-| trait_2     | VARCHAR |                                                    |
-| cov         | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
+| Column             | Type    | Notes                                              |
+|--------------------|---------|----------------------------------------------------|
+| id_trait_effect_cov| INTEGER | Primary key (auto-incrementing)                    |
+| effect_name        | VARCHAR | `"gen_add"`, `"residual"`, or random effect name   |
+| trait_1            | VARCHAR |                                                    |
+| trait_2            | VARCHAR |                                                    |
+| cov                | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
 
 ### `ind_phenotype`
 
 Phenotype records in long format. Populated by `add_phenotype()`.
 
-| Column      | Type    | Notes                                             |
-|-------------|---------|---------------------------------------------------|
-| id_record   | VARCHAR | Auto `{trait}-{n}`                                |
-| id_ind      | VARCHAR |                                                   |
-| trait_name  | VARCHAR |                                                   |
-| value       | DOUBLE  | Phenotype value                                   |
-| pheno_number| INTEGER | 1 = first record for this individual × trait, etc.|
-| *user cols* | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+| Column       | Type    | Notes                                             |
+|--------------|---------|---------------------------------------------------|
+| id_phenotype | INTEGER | Primary key (global auto-incrementing integer)    |
+| id_ind       | VARCHAR |                                                   |
+| trait_name   | VARCHAR |                                                   |
+| value        | DOUBLE  | Phenotype value                                   |
+| pheno_number | INTEGER | 1 = first record for this individual × trait, etc.|
+| *user cols*  | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
 
 ### `ind_tbv`
 
 True breeding values (simulation ground truth). Populated by
-`add_phenotype()` and `add_tbv()`. Composite key `(id_ind, trait_name)`.
+`add_phenotype()` and `add_tbv()`. Logical key `(id_ind, trait_name)` unique.
 
-| Column     | Type    |
-|------------|---------|
-| id_ind     | VARCHAR |
-| trait_name | VARCHAR |
-| tbv        | DOUBLE  |
+| Column     | Type    | Notes                                  |
+|------------|---------|----------------------------------------|
+| id_tbv     | INTEGER | Primary key (auto-incrementing)        |
+| id_ind     | VARCHAR |                                        |
+| trait_name | VARCHAR |                                        |
+| tbv        | DOUBLE  |                                        |
 
 ### `ind_ebv`
 
-Estimated breeding values from external BLUP / GBLUP runs. Composite key
-`(id_ind, trait_name, model, eval_number)`. Populated by `add_ebv()`.
+Estimated breeding values from external BLUP / GBLUP runs. Logical key
+`(id_ind, trait_name, model, eval_number)` unique. Populated by `add_ebv()`.
 
 | Column      | Type    | Notes                                                   |
 |-------------|---------|--------------------------------------------------------------|
+| id_ebv      | INTEGER | Primary key (auto-incrementing)                              |
 | id_ind      | VARCHAR |                                                              |
 | trait_name  | VARCHAR |                                                              |
 | model       | VARCHAR | User label, e.g. "ssGBLUP_v1"                               |
@@ -212,7 +216,7 @@ Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
 
 Samples haplotypes for each founder individual using per-locus allele
 frequencies. Appends rows to `ind_meta` (core 5 cols), `genome_haplotype`
-(2 rows each), and `genome_genotype` (1 row each). ID format: `{line_name}-{n}`.
+(2 rows each), and `genome_genotype` (1 row each). ID format: `{line_name}_{n}` (e.g. `Libra_1`).
 
 Accepts `...` for custom `ind_meta` columns written atomically with the new
 rows (see **Custom field forwarding** below).

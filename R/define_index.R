@@ -68,10 +68,12 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
   }
 
   # ---- Build insertion data frame ----
+  start_id <- next_int_id(pop$db_conn, "index_meta", "id_index_name")
   df <- data.frame(
-    index_name = index_name,
-    trait_name = trait_names,
-    index_wt   = as.double(index_wts),
+    id_index_name = seq.int(start_id, start_id + n_rows - 1L),
+    index_name    = index_name,
+    trait_name    = trait_names,
+    index_wt      = as.double(index_wts),
     stringsAsFactors = FALSE
   )
 
@@ -85,7 +87,7 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
   tmp_tbl <- paste0("__define_index_tmp_", as.integer(Sys.time()))
   DBI::dbWriteTable(pop$db_conn, tmp_tbl, df, temporary = TRUE, overwrite = TRUE)
 
-  non_key_cols <- setdiff(names(df), c("index_name", "trait_name"))
+  non_key_cols <- setdiff(names(df), c("id_index_name", "index_name", "trait_name"))
   update_clause <- paste(
     vapply(non_key_cols, function(col) {
       paste0(col, " = EXCLUDED.", col)

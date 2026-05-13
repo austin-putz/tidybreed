@@ -12,7 +12,7 @@
 #' @param n_males Integer. Number of male founders to create
 #' @param n_females Integer. Number of female founders to create
 #' @param line_name Character. Line identifier used for individual IDs.
-#'   IDs are formatted as `"{line_name}-{number}"` (e.g., "A-1", "A-2")
+#'   IDs are formatted as `"{line_name}_{number}"` (e.g., "A_1", "A_2")
 #' @param ... Optional named arguments for custom `ind_meta` columns, e.g.
 #'   `gen = 0L`, `farm = "Iowa"`. Scalar values are broadcast to all new
 #'   founders; vectors must have length `n_males + n_females`. Column types
@@ -35,7 +35,7 @@
 #' 4. Populates `genome_genotype` (1 row per individual, sum of haplotypes)
 #'
 #' **ID Format:**
-#' - Individual IDs: `"{line_name}-{number}"` (e.g., "A-1", "A-2", "B-1")
+#' - Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
 #' - Numbers are sequential within each line
 #' - If founders already exist for a line, numbering continues from max ID
 #'
@@ -101,9 +101,9 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
   stopifnot(is.character(line_name), length(line_name) == 1, nchar(line_name) > 0)
 
   # Validate field name format for line_name
-  if (!grepl("^[a-zA-Z][a-zA-Z0-9_-]*$", line_name)) {
+  if (!grepl("^[a-zA-Z][a-zA-Z0-9_]*$", line_name)) {
     stop(
-      "line_name must start with letter and contain only letters, numbers, underscores, or hyphens",
+      "line_name must start with letter and contain only letters, numbers, or underscores",
       call. = FALSE
     )
   }
@@ -149,8 +149,8 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
 
   # ind_meta always exists (created by initialize_genome()); query current max.
   max_num_result <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('-' IN id_ind) + 1) AS INTEGER)) as max_num ",
-    "FROM ind_meta WHERE id_ind LIKE '", line_name, "-%'"
+    "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('_' IN id_ind) + 1) AS INTEGER)) as max_num ",
+    "FROM ind_meta WHERE LEFT(id_ind, ", nchar(line_name) + 1L, ") = '", line_name, "_'"
   ))
   start_id <- if (is.na(max_num_result$max_num)) 1L else as.integer(max_num_result$max_num) + 1L
 
@@ -173,7 +173,7 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
   # ============================================================================
 
   # Generate individual IDs
-  ind_ids <- paste0(line_name, "-", seq(start_id, start_id + n_founders - 1))
+  ind_ids <- paste0(line_name, "_", seq(start_id, start_id + n_founders - 1))
 
   # Create sex vector
   sex_vector <- c(rep("M", n_males), rep("F", n_females))

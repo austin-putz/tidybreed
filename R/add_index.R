@@ -245,7 +245,9 @@ add_index <- function(tbl,
   }
 
   # ---- Build insertion data frame ----
+  start_id  <- next_int_id(conn, "ind_index", "id_index")
   result_df <- data.frame(
+    id_index     = seq.int(start_id, start_id + n_ind - 1L),
     id_ind       = individuals_sorted,
     index_name   = index_name,
     index_number = new_index_num,

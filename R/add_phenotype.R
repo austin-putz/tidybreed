@@ -390,7 +390,7 @@ add_phenotype <- function(tbl,
     )
 
     records <- tibble::tibble(
-      id_record    = next_record_ids(pop, t, n_ind),
+      id_phenotype = next_phenotype_ids(pop, n_ind),
       id_ind       = ids_t,
       trait_name   = t,
       value        = as.numeric(value),
@@ -435,7 +435,7 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
     if (length(vals) == 0) next
 
     records <- tibble::tibble(
-      id_record    = next_record_ids(pop, t, length(vals)),
+      id_phenotype = next_phenotype_ids(pop, length(vals)),
       id_ind       = ids_t,
       trait_name   = t,
       value        = as.numeric(vals),
@@ -463,12 +463,16 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
 upsert_ind_tbv <- function(pop, tbv_df) {
   if (nrow(tbv_df) == 0) return(invisible(NULL))
 
+  start <- next_int_id(pop$db_conn, "ind_tbv", "id_tbv")
+  tbv_df <- tibble::add_column(tbv_df, id_tbv = seq.int(start, start + nrow(tbv_df) - 1L),
+                                .before = 1)
+
   tmp <- paste0("_tbv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
   duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(tbv_df))
   on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
 
   cols        <- names(tbv_df)
-  key_cols    <- c("id_ind", "trait_name")
+  key_cols    <- c("id_tbv", "id_ind", "trait_name")
   update_cols <- setdiff(cols, key_cols)
 
   col_list   <- paste(cols, collapse = ", ")

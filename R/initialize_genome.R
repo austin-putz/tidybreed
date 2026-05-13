@@ -243,11 +243,11 @@ initialize_genome <- function(pop_name,
 
   DBI::dbExecute(db_conn, "
     CREATE TABLE trait_effect_cov (
-      effect_name VARCHAR,
-      trait_1     VARCHAR,
-      trait_2     VARCHAR,
-      cov         DOUBLE,
-      PRIMARY KEY (effect_name, trait_1, trait_2)
+      id_trait_effect_cov INTEGER PRIMARY KEY,
+      effect_name         VARCHAR,
+      trait_1             VARCHAR,
+      trait_2             VARCHAR,
+      cov                 DOUBLE
     )
   ")
 

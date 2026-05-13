@@ -16,8 +16,8 @@ test_that("add_offspring creates rows in all three tables", {
   pop <- make_test_pop()
 
   matings <- tibble::tibble(
-    id_parent_1 = "A-1",
-    id_parent_2 = "A-6",
+    id_parent_1 = "A_1",
+    id_parent_2 = "A_6",
     sex         = "M",
     line        = "A"
   )
@@ -42,8 +42,8 @@ test_that("add_offspring writes correct parent IDs and sex to ind_meta", {
   pop <- make_test_pop()
 
   matings <- tibble::tibble(
-    id_parent_1 = "A-1",
-    id_parent_2 = "A-6",
+    id_parent_1 = "A_1",
+    id_parent_2 = "A_6",
     sex         = "F",
     line        = "A"
   )
@@ -51,12 +51,12 @@ test_that("add_offspring writes correct parent IDs and sex to ind_meta", {
   pop <- add_offspring(pop, matings)
 
   offspring <- get_table(pop, "ind_meta") |>
-    dplyr::filter(id_ind == "A-11") |>
+    dplyr::filter(id_ind == "A_11") |>
     dplyr::collect()
 
   expect_equal(nrow(offspring), 1)
-  expect_equal(offspring$id_parent_1, "A-1")
-  expect_equal(offspring$id_parent_2, "A-6")
+  expect_equal(offspring$id_parent_1, "A_1")
+  expect_equal(offspring$id_parent_2, "A_6")
   expect_equal(offspring$sex,         "F")
   expect_equal(offspring$line,        "A")
 
@@ -68,8 +68,8 @@ test_that("add_offspring assigns sequential IDs continuing from founders", {
   pop <- make_test_pop(n_males = 3, n_females = 3)
 
   matings <- tibble::tibble(
-    id_parent_1 = c("A-1", "A-1", "A-2"),
-    id_parent_2 = c("A-4", "A-5", "A-6"),
+    id_parent_1 = c("A_1", "A_1", "A_2"),
+    id_parent_2 = c("A_4", "A_5", "A_6"),
     sex         = c("M",   "F",   "M"),
     line        = "A"
   )
@@ -81,7 +81,7 @@ test_that("add_offspring assigns sequential IDs continuing from founders", {
     dplyr::pull(id_ind) |>
     sort()
 
-  expect_equal(offspring_ids, c("A-7", "A-8", "A-9"))
+  expect_equal(offspring_ids, c("A_7", "A_8", "A_9"))
 
   close_pop(pop)
 })
@@ -91,8 +91,8 @@ test_that("add_offspring: multiple offspring per dam (same dam repeated)", {
   pop <- make_test_pop()
 
   matings <- tibble::tibble(
-    id_parent_1 = rep("A-1", 5),
-    id_parent_2 = rep("A-6", 5),
+    id_parent_1 = rep("A_1", 5),
+    id_parent_2 = rep("A_6", 5),
     sex         = rep("F",   5),
     line        = "A"
   )
@@ -103,7 +103,7 @@ test_that("add_offspring: multiple offspring per dam (same dam repeated)", {
   expect_equal(nrow(ind_meta), 15)  # 10 founders + 5 offspring
 
   n_from_dam6 <- get_table(pop, "ind_meta") |>
-    dplyr::filter(id_parent_2 == "A-6") |>
+    dplyr::filter(id_parent_2 == "A_6") |>
     dplyr::count() |>
     dplyr::pull(n)
   expect_equal(n_from_dam6, 5)
@@ -116,8 +116,8 @@ test_that("add_offspring: multiple sires per dam (pooled semen pattern)", {
   pop <- make_test_pop()
 
   matings <- tibble::tibble(
-    id_parent_1 = c("A-1", "A-2", "A-3"),
-    id_parent_2 = rep("A-6", 3),
+    id_parent_1 = c("A_1", "A_2", "A_3"),
+    id_parent_2 = rep("A_6", 3),
     sex         = c("M", "F", "M"),
     line        = "A"
   )
@@ -129,8 +129,8 @@ test_that("add_offspring: multiple sires per dam (pooled semen pattern)", {
     dplyr::collect()
 
   expect_equal(nrow(offspring), 3)
-  expect_equal(sort(offspring$id_parent_1), c("A-1", "A-2", "A-3"))
-  expect_true(all(offspring$id_parent_2 == "A-6"))
+  expect_equal(sort(offspring$id_parent_1), c("A_1", "A_2", "A_3"))
+  expect_true(all(offspring$id_parent_2 == "A_6"))
 
   close_pop(pop)
 })
@@ -150,8 +150,8 @@ test_that("add_offspring: cross-line offspring with independent ID sequences", {
 
   # Cross A sire × B dam, assign to line "C"
   matings <- tibble::tibble(
-    id_parent_1 = c("A-1", "A-2"),
-    id_parent_2 = c("B-3", "B-4"),
+    id_parent_1 = c("A_1", "A_2"),
+    id_parent_2 = c("B_3", "B_4"),
     sex         = c("M",   "F"),
     line        = "C"
   )
@@ -163,7 +163,7 @@ test_that("add_offspring: cross-line offspring with independent ID sequences", {
     dplyr::pull(id_ind) |>
     sort()
 
-  expect_equal(offspring_ids, c("C-1", "C-2"))
+  expect_equal(offspring_ids, c("C_1", "C_2"))
 
   close_pop(pop)
 })
@@ -173,8 +173,8 @@ test_that("add_offspring writes extra column (gen) to ind_meta", {
   pop <- make_test_pop()
 
   matings <- tibble::tibble(
-    id_parent_1 = "A-1",
-    id_parent_2 = "A-6",
+    id_parent_1 = "A_1",
+    id_parent_2 = "A_6",
     sex         = "M",
     line        = "A",
     gen         = 2L
@@ -186,7 +186,7 @@ test_that("add_offspring writes extra column (gen) to ind_meta", {
 
   expect_true("gen" %in% colnames(ind_meta))
 
-  offspring_gen <- dplyr::filter(ind_meta, id_ind == "A-11")$gen
+  offspring_gen <- dplyr::filter(ind_meta, id_ind == "A_11")$gen
   expect_equal(offspring_gen, 2L)
 
   close_pop(pop)
@@ -201,8 +201,8 @@ test_that("add_offspring adds a new extra column not previously in ind_meta", {
   expect_false("farm" %in% existing_cols)
 
   matings <- tibble::tibble(
-    id_parent_1 = c("A-1", "A-2"),
-    id_parent_2 = c("A-6", "A-7"),
+    id_parent_1 = c("A_1", "A_2"),
+    id_parent_2 = c("A_6", "A_7"),
     sex         = c("M",   "F"),
     line        = "A",
     farm        = c("Iowa", "Iowa")
@@ -227,8 +227,8 @@ test_that("add_offspring accepts id_sire / id_dam aliases", {
   pop <- make_test_pop()
 
   matings_alias <- tibble::tibble(
-    id_sire = "A-1",
-    id_dam  = "A-6",
+    id_sire = "A_1",
+    id_dam  = "A_6",
     sex     = "M",
     line    = "A"
   )
@@ -240,8 +240,8 @@ test_that("add_offspring accepts id_sire / id_dam aliases", {
     dplyr::collect()
 
   expect_equal(nrow(offspring), 1)
-  expect_equal(offspring$id_parent_1, "A-1")
-  expect_equal(offspring$id_parent_2, "A-6")
+  expect_equal(offspring$id_parent_1, "A_1")
+  expect_equal(offspring$id_parent_2, "A_6")
 
   close_pop(pop)
 })
@@ -251,15 +251,15 @@ test_that("add_offspring: genome_haplotype has 2 rows per offspring with correct
   pop <- make_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
-    id_parent_1 = c("A-1", "A-2"),
-    id_parent_2 = c("A-6", "A-7"),
+    id_parent_1 = c("A_1", "A_2"),
+    id_parent_2 = c("A_6", "A_7"),
     sex         = c("M",   "F"),
     line        = "A"
   )
 
   pop <- add_offspring(pop, matings)
 
-  offspring_ids <- c("A-11", "A-12")
+  offspring_ids <- c("A_11", "A_12")
 
   haps <- get_table(pop, "genome_haplotype") |>
     dplyr::filter(id_ind %in% offspring_ids) |>
@@ -286,15 +286,15 @@ test_that("add_offspring: genotype equals sum of the two offspring haplotypes", 
   pop <- make_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
-    id_parent_1 = "A-1",
-    id_parent_2 = "A-6",
+    id_parent_1 = "A_1",
+    id_parent_2 = "A_6",
     sex         = "M",
     line        = "A"
   )
 
   pop <- add_offspring(pop, matings)
 
-  offspring_id <- "A-11"
+  offspring_id <- "A_11"
   locus_cols   <- paste0("locus_", 1:50)
 
   haps <- get_table(pop, "genome_haplotype") |>
@@ -331,8 +331,8 @@ test_that("add_offspring recombination produces variation across offspring", {
 
   # Produce 50 offspring from the same pair
   matings <- tibble::tibble(
-    id_parent_1 = rep("A-1", 50),
-    id_parent_2 = rep("A-2", 50),
+    id_parent_1 = rep("A_1", 50),
+    id_parent_2 = rep("A_2", 50),
     sex         = rep("M",   50),
     line        = "A"
   )
@@ -365,7 +365,7 @@ test_that("add_offspring recombination produces variation across offspring", {
 
 test_that("add_offspring errors on non-data.frame matings", {
   pop <- make_test_pop()
-  expect_error(add_offspring(pop, list(id_parent_1 = "A-1")), "data.frame")
+  expect_error(add_offspring(pop, list(id_parent_1 = "A_1")), "data.frame")
   close_pop(pop)
 })
 
@@ -382,10 +382,10 @@ test_that("add_offspring errors on empty matings", {
 test_that("add_offspring errors on missing required columns", {
   pop <- make_test_pop()
 
-  no_sex <- tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6", line = "A")
+  no_sex <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6", line = "A")
   expect_error(add_offspring(pop, no_sex), "sex")
 
-  no_line <- tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6", sex = "M")
+  no_line <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6", sex = "M")
   expect_error(add_offspring(pop, no_line), "line")
 
   close_pop(pop)
@@ -395,7 +395,7 @@ test_that("add_offspring errors on missing required columns", {
 test_that("add_offspring errors on invalid sex values", {
   pop <- make_test_pop()
 
-  bad <- tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6",
+  bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "X", line = "A")
   expect_error(add_offspring(pop, bad), "sex")
 
@@ -406,7 +406,7 @@ test_that("add_offspring errors on invalid sex values", {
 test_that("add_offspring errors on invalid line names", {
   pop <- make_test_pop()
 
-  bad <- tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6",
+  bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "M", line = "1badline")
   expect_error(add_offspring(pop, bad), "line")
 
@@ -417,9 +417,9 @@ test_that("add_offspring errors on invalid line names", {
 test_that("add_offspring errors on non-existent parent IDs", {
   pop <- make_test_pop()
 
-  bad <- tibble::tibble(id_parent_1 = "Z-999", id_parent_2 = "A-6",
+  bad <- tibble::tibble(id_parent_1 = "Z_999", id_parent_2 = "A_6",
                         sex = "M", line = "A")
-  expect_error(add_offspring(pop, bad), "Z-999")
+  expect_error(add_offspring(pop, bad), "Z_999")
 
   close_pop(pop)
 })
@@ -428,7 +428,7 @@ test_that("add_offspring errors on non-existent parent IDs", {
 test_that("add_offspring errors on reserved extra column name (id_ind)", {
   pop <- make_test_pop()
 
-  bad <- tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6",
+  bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "M", line = "A", id_ind = "fake")
   expect_error(add_offspring(pop, bad), "id_ind")
 

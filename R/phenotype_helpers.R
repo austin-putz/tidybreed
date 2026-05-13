@@ -300,22 +300,16 @@ next_pheno_numbers <- function(pop, trait, ids) {
 }
 
 
-#' Generate per-trait next-record IDs for ind_phenotype
+#' Generate next global integer IDs for ind_phenotype
 #'
 #' @param pop A `tidybreed_pop` object.
-#' @param trait Trait name.
 #' @param n Number of IDs to generate.
-#' @return Character vector of length `n` with unique ids like `"ADG-42"`.
+#' @return Integer vector of length `n` with unique sequential ids.
 #' @keywords internal
-next_record_ids <- function(pop, trait, n) {
-  if (n == 0) return(character(0))
-  q <- paste0(
-    "SELECT COALESCE(",
-    "MAX(CAST(SUBSTRING(id_record FROM POSITION('-' IN id_record) + 1) AS INTEGER)),",
-    " 0) AS mx FROM ind_phenotype WHERE id_record LIKE '", trait, "-%'"
-  )
-  start <- DBI::dbGetQuery(pop$db_conn, q)$mx + 1L
-  paste0(trait, "-", seq.int(start, start + n - 1L))
+next_phenotype_ids <- function(pop, n) {
+  if (n == 0L) return(integer(0))
+  start <- next_int_id(pop$db_conn, "ind_phenotype", "id_phenotype")
+  seq.int(start, start + n - 1L)
 }
 
 

@@ -50,7 +50,7 @@ test_that("add_founders correctly assigns IDs and sex", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   # Check IDs
-  expected_ids <- paste0("A-", 1:15)
+  expected_ids <- paste0("A_", 1:15)
   expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check line
@@ -101,7 +101,7 @@ test_that("add_founders creates correct genome_haplotype table", {
 
   # Check each individual has exactly 2 rows
   for (i in 1:10) {
-    ind_id <- paste0("A-", i)
+    ind_id <- paste0("A_", i)
     ind_haps <- haps %>% dplyr::filter(id_ind == !!ind_id)
     expect_equal(nrow(ind_haps), 2)
     expect_equal(sort(ind_haps$parent_origin), c(1L, 2L))
@@ -165,7 +165,7 @@ test_that("genotypes equal sum of haplotypes", {
 
   # Check for each individual
   for (i in 1:10) {
-    ind_id <- paste0("A-", i)
+    ind_id <- paste0("A_", i)
 
     hap_rows <- haps %>% dplyr::filter(id_ind == !!ind_id)
     geno_row <- genos %>% dplyr::filter(id_ind == !!ind_id)
@@ -210,12 +210,12 @@ test_that("add_founders works with multiple lines", {
   # Check line A IDs
   line_a <- ind_meta %>% dplyr::filter(line == "A")
   expect_equal(nrow(line_a), 10)
-  expect_equal(line_a$id_ind, paste0("A-", 1:10))
+  expect_equal(line_a$id_ind, paste0("A_", 1:10))
 
   # Check line B IDs
   line_b <- ind_meta %>% dplyr::filter(line == "B")
   expect_equal(nrow(line_b), 10)
-  expect_equal(line_b$id_ind, paste0("B-", 1:10))
+  expect_equal(line_b$id_ind, paste0("B_", 1:10))
 
   # Check sex assignment
   expect_equal(sum(line_a$sex == "M"), 5)
@@ -249,7 +249,7 @@ test_that("sequential additions to same line continue numbering", {
   expect_equal(nrow(ind_meta), 15)
 
   # Check IDs are sequential
-  expected_ids <- paste0("A-", 1:15)
+  expected_ids <- paste0("A_", 1:15)
   expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check all belong to line A

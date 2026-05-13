@@ -110,19 +110,22 @@ add_effect_cov_matrix <- function(pop,
   )
 
   # Build multi-row INSERT to avoid DBI::dbWriteTable() which consumes R's RNG
-  value_rows <- character(n * n)
+  n_rows    <- n * n
+  start_id  <- next_int_id(pop$db_conn, "trait_effect_cov", "id_trait_effect_cov")
+  value_rows <- character(n_rows)
   k <- 1L
   for (i in seq_len(n)) {
     for (j in seq_len(n)) {
-      value_rows[k] <- paste0("('", effect_name, "', '", trait_names[i], "', '",
-                              trait_names[j], "', ",
+      value_rows[k] <- paste0("(", start_id + k - 1L, ", '", effect_name, "', '",
+                              trait_names[i], "', '", trait_names[j], "', ",
                               format(cov_matrix[i, j], scientific = FALSE), ")")
       k <- k + 1L
     }
   }
   DBI::dbExecute(
     pop$db_conn,
-    paste0("INSERT INTO trait_effect_cov (effect_name, trait_1, trait_2, cov) VALUES ",
+    paste0("INSERT INTO trait_effect_cov ",
+           "(id_trait_effect_cov, effect_name, trait_1, trait_2, cov) VALUES ",
            paste(value_rows, collapse = ", "))
   )
 
@@ -141,11 +144,11 @@ ensure_effect_cov_table <- function(pop) {
   if (!"trait_effect_cov" %in% DBI::dbListTables(pop$db_conn)) {
     DBI::dbExecute(pop$db_conn, "
       CREATE TABLE trait_effect_cov (
-        effect_name VARCHAR,
-        trait_1     VARCHAR,
-        trait_2     VARCHAR,
-        cov         DOUBLE,
-        PRIMARY KEY (effect_name, trait_1, trait_2)
+        id_trait_effect_cov INTEGER PRIMARY KEY,
+        effect_name         VARCHAR,
+        trait_1             VARCHAR,
+        trait_2             VARCHAR,
+        cov                 DOUBLE
       )
     ")
   }
@@ -222,10 +225,12 @@ write_effect_cov_diagonal <- function(pop, effect_name, trait_name, variance) {
     paste0("DELETE FROM trait_effect_cov WHERE effect_name = '", effect_name,
            "' AND trait_1 = '", trait_name, "' AND trait_2 = '", trait_name, "'")
   )
+  new_id <- next_int_id(pop$db_conn, "trait_effect_cov", "id_trait_effect_cov")
   DBI::dbExecute(
     pop$db_conn,
-    paste0("INSERT INTO trait_effect_cov (effect_name, trait_1, trait_2, cov) VALUES ('",
-           effect_name, "', '", trait_name, "', '", trait_name, "', ",
+    paste0("INSERT INTO trait_effect_cov ",
+           "(id_trait_effect_cov, effect_name, trait_1, trait_2, cov) VALUES (",
+           new_id, ", '", effect_name, "', '", trait_name, "', '", trait_name, "', ",
            format(as.numeric(variance), scientific = FALSE), ")")
   )
   invisible(pop)

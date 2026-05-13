@@ -7,9 +7,9 @@ test_that("parse_blupf90_solutions reads solutions.orig with header and alignmen
   # Format: trait  effect  level  original_id  solution  (5 columns, multi-space aligned)
   writeLines(c(
     "trait effect level original_id solution",
-    "   1   2         1 A-1           1.23456789",
-    "   1   2         2 A-2          -0.98765432",
-    "   1   2         3 A-3           0.00000000",
+    "   1   2         1 A_1           1.23456789",
+    "   1   2         2 A_2          -0.98765432",
+    "   1   2         3 A_3           0.00000000",
     "   1   1         1 10            5.00000000"   # mu (effect 1) — should be excluded
   ), file.path(tmp, "solutions.orig"))
 
@@ -17,14 +17,14 @@ test_that("parse_blupf90_solutions reads solutions.orig with header and alignmen
     eval_dir          = tmp,
     trait             = c("ADG"),
     animal_effect_num = 2L,
-    all_ped_ids       = c("A-1", "A-2", "A-3"),
+    all_ped_ids       = c("A_1", "A_2", "A_3"),
     model             = "test_model",
     eval_nums         = c(ADG = 1L)
   )
 
   expect_s3_class(result, "tbl_df")
   expect_equal(nrow(result), 3L)
-  expect_equal(result$id_ind,      c("A-1", "A-2", "A-3"))
+  expect_equal(result$id_ind,      c("A_1", "A_2", "A_3"))
   expect_equal(result$trait_name,  rep("ADG", 3))
   expect_equal(result$model,       rep("test_model", 3))
   expect_equal(result$ebv,         c(1.23456789, -0.98765432, 0.00000000),
@@ -75,11 +75,11 @@ test_that("parse_blupf90_solutions returns empty tibble when no IDs match", {
 
   writeLines(c(
     "trait effect level original_id solution",
-    "   1   2         1 A-1           1.00000000"
+    "   1   2         1 A_1           1.00000000"
   ), file.path(tmp, "solutions.orig"))
 
   expect_warning(
-    result <- tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, c("B-999"), "m", c(ADG = 1L)),
+    result <- tidybreed:::parse_blupf90_solutions(tmp, "ADG", 2L, c("B_999"), "m", c(ADG = 1L)),
     "No animal EBVs matched"
   )
   expect_equal(nrow(result), 0L)

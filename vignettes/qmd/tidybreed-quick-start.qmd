@@ -1432,7 +1432,7 @@ so if the user doesn't give the value, it defaults to `FALSE`
 # OPTIONAL: 
 #   Any columns added to "ind_meta" above (e.g. gen, farm, date_birth)
 new_prog <- tibble(
-  id_parent_1 = sample(c("A-1", "A-2"), replace=TRUE, # sample sire IDs with replacement
+  id_parent_1 = sample(c("A_1", "A_2"), replace=TRUE, # sample sire IDs with replacement
                        size = 8),                    # sample sires 8 times
   id_parent_2 = str_c("A-", 3:10),                   # list all dam IDs 1x
   sex         = sample(c(rep("M", 4), rep("F", 4)),  # sample from "M" or "F"
@@ -1893,7 +1893,7 @@ Trick is to use the `time` argument in the `rep()` function, all mated to
 ```{r}
 # use new phenotype to build mating plan
 data.new.matings <- tibble(
-  id_parent_1 = "A-1",
+  id_parent_1 = "A_1",
   id_parent_2 = rep(c(data.nw$id_ind), time=data.nw$value),
   line = "A",
   sex = sample(c("M", "F"), size=sum(data.nw$value), replace=TRUE, prob=c(0.5, 0.5))
@@ -2299,7 +2299,7 @@ You want to **insert a random animal** into `ind_meta`, use `rows_insert()` and 
 #------------------------------------------------------------------------------#
 
 new_row <- tibble::tibble(
-    id_ind      = "LineA-999",
+    id_ind      = "LineA_999",
     id_parent_1 = NA_character_,
     id_parent_2 = NA_character_,
     line        = "LineA",
@@ -2425,7 +2425,7 @@ simulations, remember we can always delete as we go.
 # we can use a massive list of IDs as well to do this for a table
 
 # list of IDs to remove data for
-ids_to_cull <- c("A-3", "A-7")
+ids_to_cull <- c("A_3", "A_7")
 
 # remove some haplotypes but keep data in ind_meta
 DBI::dbExecute(pop$db_conn,
@@ -2510,7 +2510,7 @@ We can also just use `dplyr` if you prefer to remove rows that way.
 # library(dplyr)
 
 # Build a tibble of IDs to remove
-ids_to_remove <- tibble(id_ind = c("A-1", "A-2", "A-5"))
+ids_to_remove <- tibble(id_ind = c("A_1", "A_2", "A_5"))
 
 # Delete from each table
 rows_delete(get_table(pop, "ind_meta"),         ids_to_remove, by = "id_ind", in_place = TRUE)

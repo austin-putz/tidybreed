@@ -429,12 +429,16 @@ ebv_blupf90 <- function(pop, subset_ids, trait, model, eval_nums,
 upsert_ind_ebv <- function(pop, ebv_df) {
   if (nrow(ebv_df) == 0) return(invisible(NULL))
 
+  start <- next_int_id(pop$db_conn, "ind_ebv", "id_ebv")
+  ebv_df <- tibble::add_column(ebv_df, id_ebv = seq.int(start, start + nrow(ebv_df) - 1L),
+                                .before = 1)
+
   tmp <- paste0("_ebv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
   duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(ebv_df))
   on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
 
   cols        <- names(ebv_df)
-  key_cols    <- c("id_ind", "trait_name", "model", "eval_number")
+  key_cols    <- c("id_ebv", "id_ind", "trait_name", "model", "eval_number")
   update_cols <- setdiff(cols, key_cols)
 
   col_list   <- paste(cols, collapse = ", ")

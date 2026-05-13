@@ -9,7 +9,7 @@ create_pop_for_mutate <- function(n_males = 5, n_females = 5) {
   )
   n_ind  <- n_males + n_females
   ind_df <- tibble::tibble(
-    id_ind      = paste0("A-", seq_len(n_ind)),
+    id_ind      = paste0("A_", seq_len(n_ind)),
     id_parent_1 = NA_character_,
     id_parent_2 = NA_character_,
     line        = "A",

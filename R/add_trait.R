@@ -171,6 +171,7 @@ add_trait <- function(pop,
   }
 
   row <- tibble::tibble(
+    id_trait         = next_int_id(pop$db_conn, "trait_meta", "id_trait"),
     trait_name       = trait_name,
     description      = as.character(description),
     units            = as.character(units),
@@ -214,7 +215,8 @@ ensure_trait_tables <- function(pop) {
   ddl <- list(
     trait_meta = "
       CREATE TABLE trait_meta (
-        trait_name       VARCHAR PRIMARY KEY,
+        id_trait         INTEGER PRIMARY KEY,
+        trait_name       VARCHAR UNIQUE,
         description      VARCHAR,
         units            VARCHAR,
         trait_type       VARCHAR,
@@ -258,7 +260,7 @@ ensure_trait_tables <- function(pop) {
     ",
     ind_phenotype = "
       CREATE TABLE ind_phenotype (
-        id_record    VARCHAR PRIMARY KEY,
+        id_phenotype INTEGER PRIMARY KEY,
         id_ind       VARCHAR,
         trait_name   VARCHAR,
         value        DOUBLE,
@@ -267,14 +269,16 @@ ensure_trait_tables <- function(pop) {
     ",
     ind_tbv = "
       CREATE TABLE ind_tbv (
+        id_tbv     INTEGER PRIMARY KEY,
         id_ind     VARCHAR,
         trait_name VARCHAR,
         tbv        DOUBLE,
-        PRIMARY KEY (id_ind, trait_name)
+        UNIQUE (id_ind, trait_name)
       )
     ",
     ind_ebv = "
       CREATE TABLE ind_ebv (
+        id_ebv      INTEGER PRIMARY KEY,
         id_ind      VARCHAR,
         trait_name  VARCHAR,
         model       VARCHAR,
@@ -282,24 +286,25 @@ ensure_trait_tables <- function(pop) {
         acc         DOUBLE,
         se          DOUBLE,
         eval_number INTEGER,
-        PRIMARY KEY (id_ind, trait_name, model, eval_number)
+        UNIQUE (id_ind, trait_name, model, eval_number)
       )
     ",
     index_meta = "
       CREATE TABLE index_meta (
-        index_name VARCHAR,
-        trait_name VARCHAR,
-        index_wt   DOUBLE,
-        PRIMARY KEY (index_name, trait_name)
+        id_index_name INTEGER PRIMARY KEY,
+        index_name    VARCHAR,
+        trait_name    VARCHAR,
+        index_wt      DOUBLE,
+        UNIQUE (index_name, trait_name)
       )
     ",
     ind_index = "
       CREATE TABLE ind_index (
+        id_index     INTEGER PRIMARY KEY,
         id_ind       VARCHAR,
         index_name   VARCHAR,
         index_number INTEGER,
-        index_value  DOUBLE,
-        PRIMARY KEY (id_ind, index_name, index_number)
+        index_value  DOUBLE
       )
     "
   )

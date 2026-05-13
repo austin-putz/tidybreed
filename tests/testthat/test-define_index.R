@@ -35,8 +35,9 @@ make_index_pop <- function(pop_name = "idx") {
     eval_number = 1L,
     stringsAsFactors = FALSE
   )
-  DBI::dbWriteTable(pop$db_conn, "ind_ebv",
-                    rbind(ebv_adg, ebv_fcr), append = TRUE)
+  combined <- rbind(ebv_adg, ebv_fcr)
+  combined$id_ebv <- seq_len(nrow(combined))
+  DBI::dbWriteTable(pop$db_conn, "ind_ebv", combined, append = TRUE)
   pop
 }
 
@@ -361,6 +362,8 @@ test_that("add_index() errors when duplicate (id_ind, trait_name) rows remain", 
     eval_number = 1L,
     stringsAsFactors = FALSE
   )
+  start_id <- DBI::dbGetQuery(pop$db_conn, "SELECT COALESCE(MAX(id_ebv), 0) + 1 AS nxt FROM ind_ebv")$nxt
+  ebv2$id_ebv <- seq.int(start_id, start_id + nrow(ebv2) - 1L)
   DBI::dbWriteTable(pop$db_conn, "ind_ebv", ebv2, append = TRUE)
 
   pop <- define_index(pop, "terminal", trait_names = "ADG", index_wts = 1.0)

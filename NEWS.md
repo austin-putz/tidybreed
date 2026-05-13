@@ -1,3 +1,38 @@
+# tidybreed 0.15.0 (2026-05-13)
+
+## Breaking changes
+
+* `id_ind` format changed from `{line_name}-{n}` (e.g. `Libra-1020`) to
+  `{line_name}_{n}` (e.g. `Libra_1020`). Underscore separator avoids SQL
+  query issues and DML-string construction with glue/paste. **Existing `.ddb`
+  files are incompatible — recreate databases with this version.**
+
+* `line_name` no longer accepts hyphens. Only letters, digits, and underscores
+  are allowed (regex `^[a-zA-Z][a-zA-Z0-9_]*$`).
+
+* `ind_phenotype`: `id_record VARCHAR` replaced by `id_phenotype INTEGER`.
+  The new column is a global auto-incrementing integer primary key rather than
+  a per-trait formatted string like `"ADG-529"`.
+
+* New integer primary-key columns added to all major tables:
+
+  | Table           | New column           |
+  |-----------------|----------------------|
+  | `ind_tbv`       | `id_tbv INTEGER`     |
+  | `ind_ebv`       | `id_ebv INTEGER`     |
+  | `ind_index`     | `id_index INTEGER`   |
+  | `trait_meta`    | `id_trait INTEGER`   |
+  | `trait_effect_cov` | `id_trait_effect_cov INTEGER` |
+  | `index_meta`    | `id_index_name INTEGER` |
+
+  Each column holds a globally unique auto-incrementing integer, making it
+  easy to reference specific rows without composing multi-column keys. Former
+  composite primary keys are now enforced at the application level (unique
+  constraint retained where relevant).
+
+* New internal helper `next_int_id(conn, table, id_col)` in `R/sql_utils.R`
+  returns `MAX(id_col) + 1` for any table, used by all insert functions.
+
 # tidybreed 0.14.0 (2026-05-13)
 
 ## New features

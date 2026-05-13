@@ -23,8 +23,8 @@ cat("Founders added. ind_meta rows:", nrow(dplyr::collect(get_table(pop, "ind_me
 
 # ── Basic offspring ──────────────────────────────────────────────────────────
 matings <- tibble::tibble(
-  id_parent_1 = rep("A-1", 5),
-  id_parent_2 = paste0("A-", 6:10),
+  id_parent_1 = rep("A_1", 5),
+  id_parent_2 = paste0("A_", 6:10),
   sex         = c("M", "F", "M", "F", "M"),
   line        = "A",
   gen         = 2L
@@ -49,7 +49,7 @@ hap_vals   <- unlist(haps[, locus_cols])
 cat("\nAll haplotype values in {0,1}:", all(hap_vals %in% c(0L, 1L)), "\n")
 
 # Check genotype = hap1 + hap2 for first offspring
-off_id <- "A-11"
+off_id <- "A_11"
 off_haps <- dplyr::filter(haps, id_ind == off_id)
 off_geno <- dplyr::filter(genos, id_ind == off_id)
 h1 <- as.integer(off_haps[off_haps$parent_origin == 1, locus_cols])
@@ -59,8 +59,8 @@ cat("Genotype == hap1 + hap2 for", off_id, ":", all(g == h1 + h2), "\n")
 
 # ── Alias columns ────────────────────────────────────────────────────────────
 matings_alias <- tibble::tibble(
-  id_sire = "A-1",
-  id_dam  = "A-6",
+  id_sire = "A_1",
+  id_dam  = "A_6",
   sex     = "M",
   line    = "A",
   gen     = 2L
@@ -74,8 +74,8 @@ pop <- pop |>
   mutate_ind_meta(gen = 1L)
 
 cross_matings <- tibble::tibble(
-  id_parent_1 = c("A-1", "A-2"),
-  id_parent_2 = c("B-1", "B-2"),
+  id_parent_1 = c("A_1", "A_2"),
+  id_parent_2 = c("B_1", "B_2"),
   sex         = c("M", "F"),
   line        = "C",
   gen         = 2L
@@ -87,12 +87,12 @@ cat("\nCross-line offspring (line C):", paste(c_ids, collapse = ", "), "\n")
 # ── Error checks ─────────────────────────────────────────────────────────────
 cat("\nError checks:\n")
 tryCatch(
-  add_offspring(pop, tibble::tibble(id_parent_1 = "Z-999", id_parent_2 = "A-6",
+  add_offspring(pop, tibble::tibble(id_parent_1 = "Z_999", id_parent_2 = "A_6",
                                     sex = "M", line = "A")),
   error = function(e) cat("  Non-existent parent correctly caught:", conditionMessage(e), "\n")
 )
 tryCatch(
-  add_offspring(pop, tibble::tibble(id_parent_1 = "A-1", id_parent_2 = "A-6",
+  add_offspring(pop, tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                                     sex = "X", line = "A")),
   error = function(e) cat("  Invalid sex correctly caught:", conditionMessage(e), "\n")
 )

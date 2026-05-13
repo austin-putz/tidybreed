@@ -100,7 +100,7 @@ pop <- add_founders(pop, n_males = 2, n_females = 3, line_name = "A")
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
 cat("✓ Total individuals:", nrow(ind_meta), "\n")
-cat("✓ IDs are sequential:", all(ind_meta$id_ind == paste0("A-", 1:15)), "\n")
+cat("✓ IDs are sequential:", all(ind_meta$id_ind == paste0("A_", 1:15)), "\n")
 cat("✓ All IDs:", paste(ind_meta$id_ind, collapse = ", "), "\n\n")
 
 close_pop(pop)
