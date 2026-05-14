@@ -199,16 +199,14 @@ add_offspring <- function(pop, matings) {
   # 8. Load genome metadata (once)
   # ============================================================================
 
-  n_loci    <- pop$metadata$n_loci
-  locus_cols <- paste0("locus_", seq_len(n_loci))
-  chr_len_Mb <- pop$metadata$chr_len_Mb
-
   genome_meta_df <- dplyr::tbl(pop$db_conn, "genome_meta") |>
     dplyr::select(locus_id, chr, pos_Mb) |>
     dplyr::arrange(locus_id) |>
     dplyr::collect()
 
-  chr_info <- build_chr_info(genome_meta_df, chr_len_Mb)
+  n_loci     <- nrow(genome_meta_df)
+  locus_cols <- paste0("locus_", seq_len(n_loci))
+  chr_info   <- build_chr_info(genome_meta_df)
 
   # ============================================================================
   # 9. Load parent haplotypes in a single batch query
@@ -342,14 +340,8 @@ add_offspring <- function(pop, matings) {
   DBI::dbWriteTable(pop$db_conn, "genome_genotype",   genome_genotype_df,  append = TRUE)
 
   # ============================================================================
-  # 16. Update metadata and return
+  # 16. Return
   # ============================================================================
-
-  if (is.null(pop$metadata$n_individuals)) {
-    pop$metadata$n_individuals <- n_offspring
-  } else {
-    pop$metadata$n_individuals <- pop$metadata$n_individuals + n_offspring
-  }
 
   message("Added ", n_offspring, " offspring")
 

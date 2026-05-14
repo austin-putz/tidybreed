@@ -2,10 +2,9 @@
 #'
 #' @description
 #' Re-opens a `.duckdb` file created by `initialize_genome()` and reconstructs
-#' the `tidybreed_pop` R object so that simulation can continue. All runtime
-#' metadata (`n_loci`, `n_chr`, `chr_len_Mb`, `chr_names`, `n_individuals`) is
-#' derived from the current state of `genome_meta` and `ind_meta` — no
-#' additional tables are required and no metadata is stored in the database.
+#' the `tidybreed_pop` R object so that simulation can continue. No metadata is
+#' stored on the object; all genome statistics are derived from live DB queries
+#' when needed by individual functions.
 #'
 #' This is the intended way to resume a simulation after `close_pop()`, after a
 #' crash, or in a new R session. A common pattern is to call
@@ -21,20 +20,6 @@
 #'   used.
 #'
 #' @return A fully operational `tidybreed_pop` object.
-#'
-#' @details
-#' **What is derived and how:**
-#' - `n_loci` — `COUNT(*)` of `genome_meta`
-#' - `n_chr` — count of distinct `chr` values in `genome_meta`
-#' - `chr_names` — ordered distinct `chr_name` values from `genome_meta`
-#' - `chr_len_Mb` — `MAX(pos_Mb)` per chromosome from `genome_meta`. This is
-#'   functionally identical to the original `chr_len_Mb` parameter for
-#'   recombination simulation: crossovers beyond the last locus position cannot
-#'   affect any observed allele.
-#' - `n_individuals` — `COUNT(*)` of `ind_meta` (0 if no founders added yet)
-#'
-#' Founder-haplotype generation parameters (`n_haplotypes`, `allele_freq_dist`,
-#' etc.) are not restored — they are only used at initialisation time.
 #'
 #' @export
 #'
@@ -95,35 +80,11 @@ restore_pop <- function(db_path, pop_name = NULL) {
     )
   }
 
-  # Derive per-chromosome lengths and names from current genome_meta state
-  gm <- DBI::dbGetQuery(
-    db_conn,
-    "SELECT chr, chr_name, MAX(pos_Mb) AS chr_len_Mb
-     FROM genome_meta
-     GROUP BY chr, chr_name
-     ORDER BY chr"
-  )
+  n_loci <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
 
-  if (nrow(gm) == 0) {
+  if (n_loci == 0L) {
     DBI::dbDisconnect(db_conn, shutdown = TRUE)
     stop("'genome_meta' is empty in '", db_path, "'.", call. = FALSE)
-  }
-
-  n_loci     <- as.integer(
-    DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
-  )
-  n_chr      <- nrow(gm)
-  chr_names  <- gm$chr_name
-  chr_len_Mb <- gm$chr_len_Mb
-
-  # n_individuals: always an integer (0L if no founders yet). Both add_founders()
-  # and add_offspring() use is.null() to detect first-use — 0L hits the else
-  # branch and computes 0L + n = n, which is correct.
-  n_individuals <- 0L
-  if ("ind_meta" %in% existing_tables) {
-    n_individuals <- as.integer(
-      DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
-    )
   }
 
   # Infer pop_name from filename when not supplied
@@ -133,30 +94,19 @@ restore_pop <- function(db_path, pop_name = NULL) {
     pop_name <- if (stripped != base) stripped else tools::file_path_sans_ext(base)
   }
 
-  metadata <- list(
-    n_loci        = n_loci,
-    n_chr         = as.integer(n_chr),
-    chr_len_Mb    = chr_len_Mb,
-    chr_names     = chr_names,
-    n_individuals = n_individuals
-  )
-
   pop <- new_tidybreed_pop(
     db_conn  = db_conn,
     pop_name = pop_name,
     db_path  = db_path,
-    tables   = existing_tables,
-    metadata = metadata
+    tables   = existing_tables
   )
 
   validate_tidybreed_pop(pop)
 
+  n_ind <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
+
   message("Restored population '", pop_name, "' from '", db_path, "'")
-  message(
-    "  Loci: ", n_loci,
-    ", Chromosomes: ", n_chr,
-    ", Individuals: ", n_individuals
-  )
+  message("  Loci: ", n_loci, ", Individuals: ", n_ind)
 
   pop
 }

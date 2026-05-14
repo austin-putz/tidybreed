@@ -254,7 +254,6 @@ initialize_genome <- function(pop_name,
   # Generate founder haplotypes if requested
   tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype",
                       "ind_meta", "trait_effect_cov")
-  founder_metadata <- list()
 
   if (!is.null(n_haplotypes)) {
     message("Generating ", n_haplotypes, " founder haplotypes...")
@@ -298,34 +297,18 @@ initialize_genome <- function(pop_name,
     # Write to database
     DBI::dbWriteTable(db_conn, "founder_haplotypes", founder_haplotypes, overwrite = TRUE)
 
-    # Update tables list and metadata
+    # Update tables list
     tables_created <- c(tables_created, "founder_haplotypes")
-    founder_metadata <- list(
-      n_haplotypes = n_haplotypes,
-      allele_freq_dist = if (!is.null(fixed_allele_freq)) "fixed" else allele_freq_dist,
-      fixed_allele_freq = fixed_allele_freq,
-      min_allele_freq = if (is.null(fixed_allele_freq)) min_allele_freq else NULL,
-      max_allele_freq = if (is.null(fixed_allele_freq)) max_allele_freq else NULL
-    )
 
     message("  Created founder_haplotypes table")
   }
 
   # Create tidybreed_pop object
   pop <- new_tidybreed_pop(
-    db_conn = db_conn,
+    db_conn  = db_conn,
     pop_name = pop_name,
-    db_path = db_path,
-    tables = tables_created,
-    metadata = c(
-      list(
-        n_loci = n_loci,
-        n_chr = n_chr,
-        chr_len_Mb = chr_len_Mb,
-        chr_names = chr_names
-      ),
-      founder_metadata
-    )
+    db_path  = db_path,
+    tables   = tables_created
   )
 
   validate_tidybreed_pop(pop)

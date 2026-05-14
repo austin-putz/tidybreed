@@ -5,12 +5,12 @@
 #' the per-offspring loop.
 #'
 #' @param genome_meta_df Data frame with columns `chr` and `pos_Mb`.
-#' @param chr_len_Mb Numeric vector of chromosome lengths (1-based index).
 #' @return Named list, one element per chromosome. Each element is a list with
-#'   `locus_idx` (integer indices into the locus dimension) and `pos_Mb`
-#'   (positions) and `chr_len`.
+#'   `locus_idx` (integer indices into the locus dimension), `pos_Mb`
+#'   (positions), and `chr_len` (derived as `MAX(pos_Mb)` for the chromosome;
+#'   crossovers beyond the last locus are invisible to inheritance).
 #' @keywords internal
-build_chr_info <- function(genome_meta_df, chr_len_Mb) {
+build_chr_info <- function(genome_meta_df) {
   chrs <- sort(unique(genome_meta_df$chr))
   stats::setNames(
     lapply(chrs, function(chr_id) {
@@ -18,7 +18,7 @@ build_chr_info <- function(genome_meta_df, chr_len_Mb) {
       list(
         locus_idx = which(mask),
         pos_Mb    = genome_meta_df$pos_Mb[mask],
-        chr_len   = chr_len_Mb[chr_id]
+        chr_len   = max(genome_meta_df$pos_Mb[mask])
       )
     }),
     as.character(chrs)

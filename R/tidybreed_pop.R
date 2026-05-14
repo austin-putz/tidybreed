@@ -8,15 +8,13 @@
 #' @param pop_name Character string naming the population
 #' @param db_path Path to the DuckDB database file
 #' @param tables Character vector of table names in the database
-#' @param metadata List of additional metadata
 #'
 #' @return A `tidybreed_pop` object
 #' @keywords internal
 new_tidybreed_pop <- function(db_conn,
                                pop_name,
                                db_path,
-                               tables = character(),
-                               metadata = list()) {
+                               tables = character()) {
 
   stopifnot(inherits(db_conn, "duckdb_connection"))
   stopifnot(is.character(pop_name))
@@ -24,11 +22,10 @@ new_tidybreed_pop <- function(db_conn,
 
   structure(
     list(
-      db_conn = db_conn,
+      db_conn  = db_conn,
       pop_name = pop_name,
-      db_path = db_path,
-      tables = tables,
-      metadata = metadata
+      db_path  = db_path,
+      tables   = tables
     ),
     class = c("tidybreed_pop", "list")
   )

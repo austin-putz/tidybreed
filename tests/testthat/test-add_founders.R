@@ -255,8 +255,7 @@ test_that("sequential additions to same line continue numbering", {
   # Check all belong to line A
   expect_true(all(ind_meta$line == "A"))
 
-  # Check metadata counter
-  expect_equal(pop$metadata$n_individuals, 15)
+  expect_equal(nrow(ind_meta), 15L)
 
   close_pop(pop)
 })

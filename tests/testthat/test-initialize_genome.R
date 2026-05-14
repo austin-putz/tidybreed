@@ -229,9 +229,7 @@ test_that("initialize_genome creates founder haplotypes with uniform frequencies
   expect_true(all(genome_meta$founder_allele_freq >= 0.1))
   expect_true(all(genome_meta$founder_allele_freq <= 0.9))
 
-  # Check metadata
-  expect_equal(pop$metadata$n_haplotypes, 50)
-  expect_equal(pop$metadata$allele_freq_dist, "uniform")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "founder_haplotypes"))), 50L)
 
   close_pop(pop)
   unlink(temp_db)
@@ -259,10 +257,7 @@ test_that("initialize_genome creates founder haplotypes with fixed frequency", {
   genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
   expect_true(all(genome_meta$founder_allele_freq == 0.5))
 
-  # Check metadata
-  expect_equal(pop$metadata$n_haplotypes, 30)
-  expect_equal(pop$metadata$allele_freq_dist, "fixed")
-  expect_equal(pop$metadata$fixed_allele_freq, 0.5)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "founder_haplotypes"))), 30L)
 
   close_pop(pop)
   unlink(temp_db)
@@ -288,8 +283,6 @@ test_that("initialize_genome works without founder haplotypes", {
   genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
   expect_false("founder_allele_freq" %in% colnames(genome_meta))
 
-  # Check metadata does not have founder info
-  expect_null(pop$metadata$n_haplotypes)
 
   close_pop(pop)
   unlink(temp_db)

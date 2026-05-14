@@ -249,13 +249,6 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
   # 9. Update and return
   # ============================================================================
 
-  # Update metadata
-  if (is.null(pop$metadata$n_individuals)) {
-    pop$metadata$n_individuals <- n_founders
-  } else {
-    pop$metadata$n_individuals <- pop$metadata$n_individuals + n_founders
-  }
-
   message("Added ", n_founders, " founders (", n_males, " males, ", n_females, " females) to line '", line_name, "'")
 
   # Return modified pop object

@@ -1,3 +1,36 @@
+# tidybreed 0.17.0 (2026-05-14)
+
+## Breaking changes
+
+* `pop$metadata` has been removed from the `tidybreed_pop` S3 object. Any
+  code that reads `pop$metadata$n_loci`, `pop$metadata$n_chr`,
+  `pop$metadata$chr_len_Mb`, `pop$metadata$chr_names`, or
+  `pop$metadata$n_individuals` will need to query the database directly
+  (e.g. `SELECT COUNT(*) FROM genome_meta`).
+
+## Improvements
+
+* **Database is the single source of truth.** Genome shape (`n_loci`,
+  chromosome lengths, etc.) is no longer cached on the pop object at
+  initialization. All functions that need this information query `genome_meta`
+  live, so they automatically reflect any changes made to the table.
+
+* **Dynamic genomes are now possible.** Because no genome summary is cached,
+  users can add rows to `genome_meta` and columns to `genome_haplotype` /
+  `genome_genotype` after initialization (e.g. for novel mutations, gene
+  editing, or adding newly discovered QTL). `add_offspring()` and `add_tbv()`
+  will automatically pick up the updated locus set without any metadata
+  refresh step.
+
+* `build_chr_info()` no longer takes a `chr_len_Mb` argument. Chromosome
+  length for recombination is now derived as `MAX(pos_Mb)` per chromosome
+  from the in-memory `genome_meta_df` slice — genomically equivalent since
+  crossovers beyond the last locus position cannot affect observed alleles.
+
+* `restore_pop()` simplified: no metadata reconstruction block. Function now
+  just opens the connection, verifies `genome_meta` is non-empty, infers
+  `pop_name`, and returns the pop object.
+
 # tidybreed 0.16.0 (2026-05-14)
 
 ## New features

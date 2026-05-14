@@ -1,4 +1,4 @@
-test_that("restore_pop() reconstructs metadata from a freshly initialized DB", {
+test_that("restore_pop() produces a valid pop object from a freshly initialized DB", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name     = "test_pop",
@@ -13,20 +13,34 @@ test_that("restore_pop() reconstructs metadata from a freshly initialized DB", {
   pop2 <- restore_pop(tmp, pop_name = "test_pop")
 
   expect_s3_class(pop2, "tidybreed_pop")
-  expect_equal(pop2$pop_name,            "test_pop")
-  expect_equal(pop2$db_path,             tmp)
-  expect_equal(pop2$metadata$n_loci,     100L)
-  expect_equal(pop2$metadata$n_chr,      2L)
-  expect_equal(length(pop2$metadata$chr_len_Mb), 2L)
-  expect_equal(pop2$metadata$chr_names,  c("1", "2"))
-  expect_equal(pop2$metadata$n_individuals, 0L)
+  expect_equal(pop2$pop_name, "test_pop")
+  expect_equal(pop2$db_path,  tmp)
+
+  expect_equal(
+    as.integer(DBI::dbGetQuery(pop2$db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n),
+    100L
+  )
+  expect_equal(
+    as.integer(DBI::dbGetQuery(pop2$db_conn,
+      "SELECT COUNT(DISTINCT chr) AS n FROM genome_meta")$n),
+    2L
+  )
+  expect_equal(
+    DBI::dbGetQuery(pop2$db_conn,
+      "SELECT chr_name FROM genome_meta GROUP BY chr_name ORDER BY MIN(chr)")$chr_name,
+    c("1", "2")
+  )
+  expect_equal(
+    as.integer(DBI::dbGetQuery(pop2$db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n),
+    0L
+  )
 
   close_pop(pop2)
   unlink(tmp)
 })
 
 
-test_that("restore_pop() derives n_individuals from ind_meta", {
+test_that("restore_pop() returns pop with correct individual count in ind_meta", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name = "count_test", n_loci = 50, n_chr = 2,
@@ -37,14 +51,17 @@ test_that("restore_pop() derives n_individuals from ind_meta", {
 
   pop2 <- restore_pop(tmp)
 
-  expect_equal(pop2$metadata$n_individuals, 30L)
+  expect_equal(
+    as.integer(DBI::dbGetQuery(pop2$db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n),
+    30L
+  )
 
   close_pop(pop2)
   unlink(tmp)
 })
 
 
-test_that("restore_pop() preserves heterogeneous chr_len_Mb", {
+test_that("restore_pop() handles heterogeneous chromosome lengths", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name     = "cattle",
@@ -58,11 +75,13 @@ test_that("restore_pop() preserves heterogeneous chr_len_Mb", {
 
   pop2 <- restore_pop(tmp)
 
-  expect_equal(pop2$metadata$n_chr, 3L)
-  expect_equal(pop2$metadata$chr_names, c("1", "2", "3"))
-  # chr_len_Mb from max(pos_Mb) will be <= original; just check ordering
-  expect_true(pop2$metadata$chr_len_Mb[1] >= pop2$metadata$chr_len_Mb[2])
-  expect_true(pop2$metadata$chr_len_Mb[2] >= pop2$metadata$chr_len_Mb[3])
+  chr_lengths <- DBI::dbGetQuery(pop2$db_conn,
+    "SELECT chr, MAX(pos_Mb) AS max_pos FROM genome_meta GROUP BY chr ORDER BY chr")
+
+  expect_equal(nrow(chr_lengths), 3L)
+  # Loci distributed proportional to chromosome length, so ordering is preserved
+  expect_true(chr_lengths$max_pos[1] >= chr_lengths$max_pos[2])
+  expect_true(chr_lengths$max_pos[2] >= chr_lengths$max_pos[3])
 
   close_pop(pop2)
   unlink(tmp)
