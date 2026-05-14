@@ -73,8 +73,9 @@ means no limit.}
 \item{prevalence}{Numeric between 0 and 1. For binary traits, the fraction
 expected to be affected; determines the liability threshold.}
 
-\item{thresholds}{Numeric vector. For categorical traits, liability
-cutpoints separating ordered levels. Stored as a comma-separated string.}
+\item{thresholds}{Numeric vector of length K−1 for K ordered levels. For
+categorical traits, liability cutpoints separating the levels. Stored as
+a comma-separated string in \code{trait_meta}.}
 
 \item{index_weight}{Numeric. Weight in a downstream selection index.}
 
@@ -117,6 +118,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_qtl]{define_qtl()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}}, \code{\link[=add_trait_covariate]{add_trait_covariate()}},
-\code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=add_trait_simple]{add_trait_simple()}}
+\code{\link[=define_qtl]{define_qtl()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
+\code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}}, \code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}},
+\code{\link[=add_trait_simple]{add_trait_simple()}}
 }

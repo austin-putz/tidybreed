@@ -1,3 +1,16 @@
+# tidybreed 0.18.1 (2026-05-14)
+
+## Documentation
+
+* Removed all references to removed functions (`mutate_ind_meta()`,
+  `mutate_genome_meta()`, `set_residual_cov()`) from roxygen examples,
+  `@seealso` sections, vignettes, and test scripts; replaced with current API.
+* Replaced `[add_trait_covariate()]` in `@seealso` of `add_trait()` and
+  `add_phenotype()` with the current `add_effect_*()` functions.
+* Tightened `@param` type documentation across all exported functions to
+  explicitly state scalar vs. vector, valid choices, and R type suffixes.
+* Updated vignette subtitle to v0.18.1 and corrected table name `ind_phenotype`.
+
 # tidybreed 0.18.0 (2026-05-14)
 
 ## New features

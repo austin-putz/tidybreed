@@ -25,7 +25,7 @@ add_effect_random(
 \item{source_column}{Character. Column in \code{source_table} whose distinct
 values define the groups (e.g. \code{"herd_id"}, \code{"litter"}).}
 
-\item{variance}{Numeric. Variance of the random effect distribution.
+\item{variance}{Numeric scalar. Variance of the random effect distribution.
 Optional if a variance has already been stored via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}
 for this \code{effect_name} and \code{trait_name}. Required otherwise.}
 

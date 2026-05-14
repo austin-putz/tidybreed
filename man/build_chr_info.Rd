@@ -4,17 +4,16 @@
 \alias{build_chr_info}
 \title{Pre-compute per-chromosome locus metadata for gamete simulation}
 \usage{
-build_chr_info(genome_meta_df, chr_len_Mb)
+build_chr_info(genome_meta_df)
 }
 \arguments{
 \item{genome_meta_df}{Data frame with columns \code{chr} and \code{pos_Mb}.}
-
-\item{chr_len_Mb}{Numeric vector of chromosome lengths (1-based index).}
 }
 \value{
 Named list, one element per chromosome. Each element is a list with
-\code{locus_idx} (integer indices into the locus dimension) and \code{pos_Mb}
-(positions) and \code{chr_len}.
+\code{locus_idx} (integer indices into the locus dimension), \code{pos_Mb}
+(positions), and \code{chr_len} (derived as \code{MAX(pos_Mb)} for the chromosome;
+crossovers beyond the last locus are invisible to inheritance).
 }
 \description{
 Called once per \code{add_offspring()} invocation. The returned list is passed to

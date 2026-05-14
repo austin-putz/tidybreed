@@ -4,13 +4,7 @@
 \alias{new_tidybreed_pop}
 \title{Create a new tidybreed population object}
 \usage{
-new_tidybreed_pop(
-  db_conn,
-  pop_name,
-  db_path,
-  tables = character(),
-  metadata = list()
-)
+new_tidybreed_pop(db_conn, pop_name, db_path, tables = character())
 }
 \arguments{
 \item{db_conn}{A DuckDB connection object}
@@ -20,8 +14,6 @@ new_tidybreed_pop(
 \item{db_path}{Path to the DuckDB database file}
 
 \item{tables}{Character vector of table names in the database}
-
-\item{metadata}{List of additional metadata}
 }
 \value{
 A \code{tidybreed_pop} object

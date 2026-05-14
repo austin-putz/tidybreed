@@ -245,7 +245,7 @@ define_chip <- function(pop,
   }
 
   # ============================================================================
-  # 4. Create column using mutate_genome_meta()
+  # 4. Create column via mutate_table() on genome_meta
   # ============================================================================
 
   args   <- setNames(list(chip_indicator), col_name)

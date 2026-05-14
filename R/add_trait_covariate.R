@@ -12,24 +12,26 @@
 #'   individuals in that level.
 #'
 #' The user is responsible for ensuring `source_column` exists in `ind_meta`
-#' (via [mutate_ind_meta()] or as an extra column in [add_offspring()]).
+#' (via `get_table("ind_meta") |> mutate_table()` or as an extra column in [add_offspring()]).
 #'
 #' @param pop A `tidybreed_pop` object.
-#' @param trait_name Character. Name of an existing trait.
-#' @param effect_name Character. Label for this effect (unique within a
-#'   trait). Valid SQL identifier.
-#' @param effect_class Character. `"fixed"` or `"random"`.
-#' @param source_column Character. Column in `ind_meta` used as the grouping
-#'   variable. Required for both fixed and random effects.
-#' @param levels For fixed effects: a **named numeric vector** mapping levels
-#'   (e.g. `"M"`, `"F"`) to shifts on the trait scale. Ignored for random.
-#' @param distribution Character. For random effects: `"normal"` (default),
-#'   `"gamma"`, or `"uniform"`.
-#' @param variance Numeric. Variance component for random effects.
-#' @param value Numeric. A scalar constant (rarely used; normally the shift
-#'   lives in `levels`).
-#' @param overwrite Logical. If `TRUE` and a row with the same (trait,
-#'   effect_name) exists, replace it.
+#' @param trait_name Character scalar. Name of an existing trait.
+#' @param effect_name Character scalar. Label for this effect (unique within a
+#'   trait). Must be a valid SQL identifier.
+#' @param effect_class Character scalar. One of `"fixed"` or `"random"`.
+#' @param source_column Character scalar. Column in `ind_meta` used as the
+#'   grouping variable. Required for both fixed and random effects.
+#' @param levels For fixed effects: a **named numeric vector** mapping level
+#'   names (e.g. `"M"`, `"F"`) to numeric shifts on the trait scale. Ignored
+#'   for random effects.
+#' @param distribution Character scalar. For random effects, the distribution
+#'   used to draw level values. One of `"normal"` (default), `"gamma"`, or
+#'   `"uniform"`.
+#' @param variance Numeric scalar. Variance component for random effects.
+#' @param value Numeric scalar. A constant shift (rarely used; normally the
+#'   shift lives in `levels`).
+#' @param overwrite Logical scalar. If `TRUE` and a row with the same (trait,
+#'   effect_name) pair exists, replace it.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'

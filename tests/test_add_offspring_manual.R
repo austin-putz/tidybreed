@@ -16,8 +16,7 @@ pop <- initialize_genome(
 )
 
 pop <- pop |>
-  add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-  mutate_ind_meta(gen = 1L)
+  add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
 cat("Founders added. ind_meta rows:", nrow(dplyr::collect(get_table(pop, "ind_meta"))), "\n")
 
@@ -70,8 +69,7 @@ cat("\nAlias (id_sire / id_dam) accepted without error: TRUE\n")
 
 # ── Cross-line mating ────────────────────────────────────────────────────────
 pop <- pop |>
-  add_founders(n_males = 2, n_females = 2, line_name = "B") |>
-  mutate_ind_meta(gen = 1L)
+  add_founders(n_males = 2, n_females = 2, line_name = "B", gen = 1L)
 
 cross_matings <- tibble::tibble(
   id_parent_1 = c("A_1", "A_2"),

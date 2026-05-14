@@ -21,31 +21,14 @@ A fully operational \code{tidybreed_pop} object.
 }
 \description{
 Re-opens a \code{.duckdb} file created by \code{initialize_genome()} and reconstructs
-the \code{tidybreed_pop} R object so that simulation can continue. All runtime
-metadata (\code{n_loci}, \code{n_chr}, \code{chr_len_Mb}, \code{chr_names}, \code{n_individuals}) is
-derived from the current state of \code{genome_meta} and \code{ind_meta} — no
-additional tables are required and no metadata is stored in the database.
+the \code{tidybreed_pop} R object so that simulation can continue. No metadata is
+stored on the object; all genome statistics are derived from live DB queries
+when needed by individual functions.
 
 This is the intended way to resume a simulation after \code{close_pop()}, after a
 crash, or in a new R session. A common pattern is to call
 \code{initialize_genome()} once, configure all traits and covariances, then start
 each replicate with \code{restore_pop()} followed by \code{add_founders()}.
-}
-\details{
-\strong{What is derived and how:}
-\itemize{
-\item \code{n_loci} — \verb{COUNT(*)} of \code{genome_meta}
-\item \code{n_chr} — count of distinct \code{chr} values in \code{genome_meta}
-\item \code{chr_names} — ordered distinct \code{chr_name} values from \code{genome_meta}
-\item \code{chr_len_Mb} — \code{MAX(pos_Mb)} per chromosome from \code{genome_meta}. This is
-functionally identical to the original \code{chr_len_Mb} parameter for
-recombination simulation: crossovers beyond the last locus position cannot
-affect any observed allele.
-\item \code{n_individuals} — \verb{COUNT(*)} of \code{ind_meta} (0 if no founders added yet)
-}
-
-Founder-haplotype generation parameters (\code{n_haplotypes}, \code{allele_freq_dist},
-etc.) are not restored — they are only used at initialisation time.
 }
 \examples{
 \dontrun{

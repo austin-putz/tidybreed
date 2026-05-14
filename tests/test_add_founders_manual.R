@@ -105,9 +105,9 @@ cat("✓ All IDs:", paste(ind_meta$id_ind, collapse = ", "), "\n\n")
 
 close_pop(pop)
 
-# Test 5: Integration with mutate_ind_meta
-cat("Test 5: Integration with mutate_ind_meta\n")
-cat("----------------------------------------\n")
+# Test 5: Integration with mutate_table on ind_meta
+cat("Test 5: Integration with get_table('ind_meta') |> mutate_table()\n")
+cat("------------------------------------------------------------------\n")
 
 pop <- initialize_genome(
   pop_name = "test",
@@ -117,12 +117,8 @@ pop <- initialize_genome(
   n_haplotypes = 50,
   db_path = ":memory:"
 ) %>%
-  add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
-  mutate_ind_meta(
-    gen = 0,
-    farm = "FarmA",
-    date_birth = as.Date("2024-01-01")
-  )
+  add_founders(n_males = 10, n_females = 100, line_name = "A",
+               gen = 0L, farm = "FarmA", date_birth = as.Date("2024-01-01"))
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 

@@ -13,32 +13,38 @@
 #' Optionally creates founder haplotypes for later sampling:
 #' - `founder_haplotypes`: Pool of haplotypes to sample from when adding founders
 #'
-#' @param pop_name Character string naming the population
-#' @param n_loci Integer. Total number of loci to simulate
-#' @param n_chr Integer. Number of chromosomes
-#' @param chr_len_Mb Numeric. Chromosome length in megabases. Can be:
-#'   - Single value (all chromosomes same length)
-#'   - Vector of length `n_chr` (chromosome-specific lengths)
-#' @param db_path Character. Path to DuckDB database file. Default creates
-#'   a file in the current directory named `{pop_name}_tidybreed.duckdb`.
-#'   Use `:memory:` for in-memory database (not recommended for large sims).
-#' @param locus_names Character vector of locus names. If NULL (default),
-#'   names are generated as "Locus_1", "Locus_2", etc.
-#' @param chr_names Character vector of chromosome names. If NULL (default),
-#'   chromosomes are numbered 1, 2, ..., n_chr.
-#' @param overwrite Logical. If TRUE and `db_path` exists, overwrite it.
-#'   Default is FALSE.
-#' @param n_haplotypes Integer. Number of founder haplotypes to generate.
-#'   If NULL (default), no founder haplotypes are created.
-#' @param allele_freq_dist Character. Distribution for sampling allele frequencies.
-#'   Currently only "uniform" is supported. Ignored if `fixed_allele_freq` is provided.
-#' @param min_allele_freq Numeric. Minimum allele frequency for uniform distribution.
-#'   Default is 0.01 (1%).
-#' @param max_allele_freq Numeric. Maximum allele frequency for uniform distribution.
-#'   Default is 0.99 (99%).
-#' @param fixed_allele_freq Numeric. If provided, use this fixed allele frequency
-#'   for all loci (e.g., 0.5 for 50% frequency). Overrides `allele_freq_dist`,
-#'   `min_allele_freq`, and `max_allele_freq`.
+#' @param pop_name Character scalar. Name of the population; used as the prefix
+#'   for the default `.duckdb` filename.
+#' @param n_loci Integer scalar. Total number of loci to simulate.
+#' @param n_chr Integer scalar. Number of chromosomes.
+#' @param chr_len_Mb Numeric scalar or numeric vector of length `n_chr`.
+#'   Chromosome length(s) in megabases. A single scalar applies the same
+#'   length to all chromosomes; a vector specifies each chromosome separately.
+#' @param db_path Character scalar. Path to the DuckDB database file. Default
+#'   creates a file in the current directory named
+#'   `{pop_name}_tidybreed.duckdb`. Use `":memory:"` for an in-memory
+#'   database (not recommended for large simulations).
+#' @param locus_names Character vector of length `n_loci` or `NULL`. Custom
+#'   locus names. When `NULL` (default), names are auto-generated as
+#'   `"Locus_1"`, `"Locus_2"`, etc.
+#' @param chr_names Character vector of length `n_chr` or `NULL`. Custom
+#'   chromosome names. When `NULL` (default), chromosomes are numbered
+#'   `1, 2, ..., n_chr`.
+#' @param overwrite Logical scalar. If `TRUE` and `db_path` already exists,
+#'   the file is deleted and recreated. Default `FALSE`.
+#' @param n_haplotypes Integer scalar or `NULL`. Number of founder haplotypes
+#'   to generate and store in `founder_haplotypes`. When `NULL` (default),
+#'   no founder haplotypes are created and `add_founders()` cannot be called.
+#' @param allele_freq_dist Character scalar. Distribution for sampling
+#'   per-locus allele frequencies. Currently only `"uniform"` is supported.
+#'   Ignored when `fixed_allele_freq` is supplied.
+#' @param min_allele_freq Numeric scalar in (0, 1). Minimum allele frequency
+#'   for the uniform distribution. Default `0.01`.
+#' @param max_allele_freq Numeric scalar in (0, 1). Maximum allele frequency
+#'   for the uniform distribution. Default `0.99`.
+#' @param fixed_allele_freq Numeric scalar in (0, 1) or `NULL`. When
+#'   supplied, every locus is assigned this allele frequency exactly.
+#'   Overrides `allele_freq_dist`, `min_allele_freq`, and `max_allele_freq`.
 #'
 #' @return A `tidybreed_pop` object containing:
 #'   - DuckDB connection

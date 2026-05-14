@@ -48,8 +48,9 @@
 #'   means no limit.
 #' @param prevalence Numeric between 0 and 1. For binary traits, the fraction
 #'   expected to be affected; determines the liability threshold.
-#' @param thresholds Numeric vector. For categorical traits, liability
-#'   cutpoints separating ordered levels. Stored as a comma-separated string.
+#' @param thresholds Numeric vector of length K−1 for K ordered levels. For
+#'   categorical traits, liability cutpoints separating the levels. Stored as
+#'   a comma-separated string in `trait_meta`.
 #' @param index_weight Numeric. Weight in a downstream selection index.
 #' @param economic_value Numeric. Economic value per unit of the trait.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
@@ -58,8 +59,9 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [define_qtl()], [set_qtl_effects()], [add_trait_covariate()],
-#'   [add_phenotype()], [add_trait_simple()]
+#' @seealso [define_qtl()], [set_qtl_effects()], [add_effect_fixed_class()],
+#'   [add_effect_fixed_cov()], [add_effect_random()], [add_phenotype()],
+#'   [add_trait_simple()]
 #'
 #' @examples
 #' \dontrun{

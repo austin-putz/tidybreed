@@ -52,7 +52,8 @@
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
 #' @seealso [add_trait()], [define_qtl()], [set_qtl_effects()],
-#'   [add_effect_cov_matrix()], [add_trait_covariate()], [add_tbv()]
+#'   [add_effect_cov_matrix()], [add_effect_fixed_class()], [add_effect_fixed_cov()],
+#'   [add_effect_random()], [add_tbv()]
 #'
 #' @examples
 #' \dontrun{

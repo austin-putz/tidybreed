@@ -16,7 +16,7 @@
 #' @param effect_name Character. Unique label for this effect within the trait.
 #' @param source_column Character. Column in `source_table` whose distinct
 #'   values define the groups (e.g. `"herd_id"`, `"litter"`).
-#' @param variance Numeric. Variance of the random effect distribution.
+#' @param variance Numeric scalar. Variance of the random effect distribution.
 #'   Optional if a variance has already been stored via [add_effect_cov_matrix()]
 #'   for this `effect_name` and `trait_name`. Required otherwise.
 #' @param distribution Character. Sampling distribution: `"normal"` (default),

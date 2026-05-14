@@ -67,8 +67,7 @@ pop <- initialize_genome(
   chr_len_Mb = 100, n_haplotypes = 200
 )
 pop <- pop |>
-  add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-  mutate_ind_meta(gen = 1L)
+  add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
 # One offspring per mating, extra metadata column (gen)
 matings <- tibble::tibble(

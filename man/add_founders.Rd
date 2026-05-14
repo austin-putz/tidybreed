@@ -78,13 +78,15 @@ pop <- initialize_genome(
 pop <- pop \%>\%
   add_founders(n_males = 10, n_females = 100, line_name = "A")
 
-# Add custom metadata
-pop <- pop \%>\%
-  mutate_ind_meta(
-    gen = 0,
-    farm = "FarmA",
-    date_birth = Sys.Date()
-  )
+# Option A — pass custom fields directly via ... (recommended)
+pop <- pop |>
+  add_founders(n_males = 10, n_females = 100, line_name = "A",
+               gen = 0L, farm = "FarmA", date_birth = Sys.Date())
+
+# Option B — add or update custom columns in a separate step
+pop <- pop |>
+  get_table("ind_meta") |>
+  mutate_table(gen = 0L, farm = "FarmA", date_birth = Sys.Date())
 
 # Add second line to same database
 pop <- pop \%>\%

@@ -4,10 +4,15 @@
 \alias{close_pop}
 \title{Close tidybreed population database connection}
 \usage{
-close_pop(pop)
+close_pop(pop, results_dir = NULL)
 }
 \arguments{
 \item{pop}{A tidybreed_pop object}
+
+\item{results_dir}{Optional path to a directory. When provided, the \code{.duckdb}
+file is moved there after the connection is closed. The directory is created
+if it does not yet exist. Errors if the destination file already exists.
+Ignored silently for in-memory databases.}
 }
 \description{
 Close tidybreed population database connection

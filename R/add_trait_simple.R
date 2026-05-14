@@ -7,7 +7,7 @@
 #' [set_qtl_effects_multi()].
 #'
 #' @param pop A `tidybreed_pop` object.
-#' @param trait_name Trait name.
+#' @param trait_name Character. Trait name; must be a valid SQL identifier.
 #' @param n_qtl Integer. Number of QTL to select.
 #' @param qtl_method Character. Selection method: `"random"`, `"even"`, or
 #'   `"chromosome_even"`.

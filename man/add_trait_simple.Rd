@@ -18,7 +18,7 @@ add_trait_simple(
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Trait name.}
+\item{trait_name}{Character. Trait name; must be a valid SQL identifier.}
 
 \item{n_qtl}{Integer. Number of QTL to select.}
 

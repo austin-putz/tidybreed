@@ -20,29 +20,31 @@ add_trait_covariate(
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{trait_name}{Character scalar. Name of an existing trait.}
 
-\item{effect_name}{Character. Label for this effect (unique within a
-trait). Valid SQL identifier.}
+\item{effect_name}{Character scalar. Label for this effect (unique within a
+trait). Must be a valid SQL identifier.}
 
-\item{effect_class}{Character. \code{"fixed"} or \code{"random"}.}
+\item{effect_class}{Character scalar. One of \code{"fixed"} or \code{"random"}.}
 
-\item{source_column}{Character. Column in \code{ind_meta} used as the grouping
-variable. Required for both fixed and random effects.}
+\item{source_column}{Character scalar. Column in \code{ind_meta} used as the
+grouping variable. Required for both fixed and random effects.}
 
-\item{levels}{For fixed effects: a \strong{named numeric vector} mapping levels
-(e.g. \code{"M"}, \code{"F"}) to shifts on the trait scale. Ignored for random.}
+\item{levels}{For fixed effects: a \strong{named numeric vector} mapping level
+names (e.g. \code{"M"}, \code{"F"}) to numeric shifts on the trait scale. Ignored
+for random effects.}
 
-\item{distribution}{Character. For random effects: \code{"normal"} (default),
-\code{"gamma"}, or \code{"uniform"}.}
+\item{distribution}{Character scalar. For random effects, the distribution
+used to draw level values. One of \code{"normal"} (default), \code{"gamma"}, or
+\code{"uniform"}.}
 
-\item{variance}{Numeric. Variance component for random effects.}
+\item{variance}{Numeric scalar. Variance component for random effects.}
 
-\item{value}{Numeric. A scalar constant (rarely used; normally the shift
-lives in \code{levels}).}
+\item{value}{Numeric scalar. A constant shift (rarely used; normally the
+shift lives in \code{levels}).}
 
-\item{overwrite}{Logical. If \code{TRUE} and a row with the same (trait,
-effect_name) exists, replace it.}
+\item{overwrite}{Logical scalar. If \code{TRUE} and a row with the same (trait,
+effect_name) pair exists, replace it.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -60,7 +62,7 @@ individuals in that level.
 }
 
 The user is responsible for ensuring \code{source_column} exists in \code{ind_meta}
-(via \code{\link[=mutate_ind_meta]{mutate_ind_meta()}} or as an extra column in \code{\link[=add_offspring]{add_offspring()}}).
+(via \code{get_table("ind_meta") |> mutate_table()} or as an extra column in \code{\link[=add_offspring]{add_offspring()}}).
 }
 \examples{
 \dontrun{

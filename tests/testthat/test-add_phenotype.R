@@ -146,9 +146,9 @@ test_that("fixed-effect covariate shifts phenotype by level", {
     add_trait("ADG", target_add_var = 0.01, residual_var = 0.01) |>
     define_qtl("ADG", n = 20) |>
     set_qtl_effects("ADG") |>
-    add_trait_covariate("ADG", "sex",
-                        effect_class = "fixed", source_column = "sex",
-                        levels = c(M = 10, F = -10))
+    add_effect_fixed_class("ADG", "sex",
+                           source_column = "sex",
+                           levels = c(M = 10, F = -10))
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))

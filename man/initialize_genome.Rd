@@ -21,46 +21,50 @@ initialize_genome(
 )
 }
 \arguments{
-\item{pop_name}{Character string naming the population}
+\item{pop_name}{Character scalar. Name of the population; used as the prefix
+for the default \code{.duckdb} filename.}
 
-\item{n_loci}{Integer. Total number of loci to simulate}
+\item{n_loci}{Integer scalar. Total number of loci to simulate.}
 
-\item{n_chr}{Integer. Number of chromosomes}
+\item{n_chr}{Integer scalar. Number of chromosomes.}
 
-\item{chr_len_Mb}{Numeric. Chromosome length in megabases. Can be:
-\itemize{
-\item Single value (all chromosomes same length)
-\item Vector of length \code{n_chr} (chromosome-specific lengths)
-}}
+\item{chr_len_Mb}{Numeric scalar or numeric vector of length \code{n_chr}.
+Chromosome length(s) in megabases. A single scalar applies the same
+length to all chromosomes; a vector specifies each chromosome separately.}
 
-\item{db_path}{Character. Path to DuckDB database file. Default creates
-a file in the current directory named \verb{\{pop_name\}_tidybreed.duckdb}.
-Use \verb{:memory:} for in-memory database (not recommended for large sims).}
+\item{db_path}{Character scalar. Path to the DuckDB database file. Default
+creates a file in the current directory named
+\verb{\{pop_name\}_tidybreed.duckdb}. Use \code{":memory:"} for an in-memory
+database (not recommended for large simulations).}
 
-\item{locus_names}{Character vector of locus names. If NULL (default),
-names are generated as "Locus_1", "Locus_2", etc.}
+\item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}. Custom
+locus names. When \code{NULL} (default), names are auto-generated as
+\code{"Locus_1"}, \code{"Locus_2"}, etc.}
 
-\item{chr_names}{Character vector of chromosome names. If NULL (default),
-chromosomes are numbered 1, 2, ..., n_chr.}
+\item{chr_names}{Character vector of length \code{n_chr} or \code{NULL}. Custom
+chromosome names. When \code{NULL} (default), chromosomes are numbered
+\verb{1, 2, ..., n_chr}.}
 
-\item{overwrite}{Logical. If TRUE and \code{db_path} exists, overwrite it.
-Default is FALSE.}
+\item{overwrite}{Logical scalar. If \code{TRUE} and \code{db_path} already exists,
+the file is deleted and recreated. Default \code{FALSE}.}
 
-\item{n_haplotypes}{Integer. Number of founder haplotypes to generate.
-If NULL (default), no founder haplotypes are created.}
+\item{n_haplotypes}{Integer scalar or \code{NULL}. Number of founder haplotypes
+to generate and store in \code{founder_haplotypes}. When \code{NULL} (default),
+no founder haplotypes are created and \code{add_founders()} cannot be called.}
 
-\item{allele_freq_dist}{Character. Distribution for sampling allele frequencies.
-Currently only "uniform" is supported. Ignored if \code{fixed_allele_freq} is provided.}
+\item{allele_freq_dist}{Character scalar. Distribution for sampling
+per-locus allele frequencies. Currently only \code{"uniform"} is supported.
+Ignored when \code{fixed_allele_freq} is supplied.}
 
-\item{min_allele_freq}{Numeric. Minimum allele frequency for uniform distribution.
-Default is 0.01 (1\%).}
+\item{min_allele_freq}{Numeric scalar in (0, 1). Minimum allele frequency
+for the uniform distribution. Default \code{0.01}.}
 
-\item{max_allele_freq}{Numeric. Maximum allele frequency for uniform distribution.
-Default is 0.99 (99\%).}
+\item{max_allele_freq}{Numeric scalar in (0, 1). Maximum allele frequency
+for the uniform distribution. Default \code{0.99}.}
 
-\item{fixed_allele_freq}{Numeric. If provided, use this fixed allele frequency
-for all loci (e.g., 0.5 for 50\% frequency). Overrides \code{allele_freq_dist},
-\code{min_allele_freq}, and \code{max_allele_freq}.}
+\item{fixed_allele_freq}{Numeric scalar in (0, 1) or \code{NULL}. When
+supplied, every locus is assigned this allele frequency exactly.
+Overrides \code{allele_freq_dist}, \code{min_allele_freq}, and \code{max_allele_freq}.}
 }
 \value{
 A \code{tidybreed_pop} object containing:

@@ -1,6 +1,6 @@
 ---
 title: "tidybreed Quick Start Guide"
-subtitle: "v0.12.0"
+subtitle: "v0.18.0"
 date: today
 author: "Austin Putz"
 format:
@@ -480,7 +480,7 @@ very early in your script. Avoid adding them mid loop.
     - **1 line per trait**
 - `trait_effects` - fixed effects per trait
 - `trait_random_effects` - random effect per trait
-- `ind_phenotypes` - individual phenotypes per trait
+- `ind_phenotype` - individual phenotypes per trait
     - **1 line per phenotype**
     - therefore 'long' format with traits stacked on top of each other
 - `ind_tbv` - individual true breeding values (TBVs) from additive effects

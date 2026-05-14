@@ -1,10 +1,10 @@
 #!/usr/bin/env Rscript
-# Quick integration test for mutate_genome_meta() and define_chip()
+# Quick integration test for mutate_table() on genome_meta and define_chip()
 
 library(tidybreed)
 library(dplyr)
 
-cat("=== Testing mutate_genome_meta() and define_chip() ===\n\n")
+cat("=== Testing mutate_table() on genome_meta and define_chip() ===\n\n")
 
 # Initialize genome
 cat("1. Initializing genome...\n")
@@ -20,9 +20,9 @@ pop <- initialize_genome(
 # Define SNP chips
 cat("2. Defining SNP chips...\n")
 pop <- pop %>%
-  define_chip(chip_name = "50k", n_snp = 500, method = "random") %>%
-  define_chip(chip_name = "HD", n_snp = 900, method = "even") %>%
-  define_chip(chip_name = "10k", n_snp = 100, method = "chromosome_even")
+  define_chip(chip_name = "50k", n = 500, method = "random") %>%
+  define_chip(chip_name = "HD",  n = 900, method = "even") %>%
+  define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
 
 # Check chips were created
 cat("3. Checking chip columns...\n")
@@ -39,32 +39,31 @@ cat("  SNPs on 50k chip:", sum(genome$is_50k), "\n")
 cat("  SNPs on HD chip:", sum(genome$is_HD), "\n")
 cat("  SNPs on 10k chip:", sum(genome$is_10k), "\n")
 
-# Add QTL effects to 50k chip SNPs
-cat("4. Adding QTL effects to 50k chip SNPs...\n")
+# Add custom columns to genome_meta via mutate_table()
+cat("4. Adding custom columns to genome_meta via mutate_table()...\n")
 n_loci <- nrow(genome)
 set.seed(123)
-effect_vec <- ifelse(
-  genome$is_50k,
-  rnorm(n_loci, 0, 1),
-  0
-)
+effect_vec <- ifelse(genome$is_50k, rnorm(n_loci, 0, 1), 0)
 
-pop <- pop %>% mutate_genome_meta(
-  effect_50k = effect_vec,
-  is_QTL_growth = genome$is_50k  # Mark chip SNPs as QTL
-)
+pop <- pop %>%
+  get_table("genome_meta") %>%
+  mutate_table(
+    effect_50k    = effect_vec,
+    is_QTL_growth = genome$is_50k  # Mark chip SNPs as QTL
+  )
 
 # Add founders
 cat("5. Adding founders...\n")
 pop <- pop %>%
   add_founders(n_males = 10, n_females = 100, line_name = "A")
 
-# Mark individuals as genotyped on 50k chip
-cat("6. Marking individuals as genotyped...\n")
+# Mark individuals via mutate_table() on ind_meta
+cat("6. Marking individuals with custom columns via mutate_table()...\n")
 pop <- pop %>%
-  mutate_ind_meta(
+  get_table("ind_meta") %>%
+  mutate_table(
     genotyped_50k = TRUE,
-    gen = 0
+    gen           = 0L
   )
 
 # Query chip genotypes
@@ -84,10 +83,10 @@ cat("  Genotype matrix dimensions:", nrow(chip_genotypes), "x", ncol(chip_genoty
 
 # Summary
 cat("\n=== Summary ===\n")
-cat("✓ mutate_genome_meta() working correctly\n")
+cat("✓ get_table('genome_meta') |> mutate_table() working correctly\n")
 cat("✓ define_chip() working correctly\n")
 cat("✓ Integration with add_founders() working\n")
-cat("✓ Integration with mutate_ind_meta() working\n")
+cat("✓ get_table('ind_meta') |> mutate_table() working\n")
 cat("✓ Can query chip genotypes successfully\n")
 
 # View final genome_meta structure

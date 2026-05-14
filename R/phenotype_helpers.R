@@ -3,7 +3,7 @@
 #' @description
 #' Serialises a named numeric vector (e.g. `c(M = 30, F = 0)`) into a
 #' JSON-style string `{"M":30,"F":0}` that fits a VARCHAR column. Used by
-#' [add_trait_covariate()] to persist fixed-effect level maps.
+#' [add_effect_fixed_class()] to persist fixed-effect level maps.
 #'
 #' Keys containing `"`, `,`, or `:` are not supported (fixed-effect levels in
 #' breeding programs are typically short tokens like `"M"`, `"A"`, `"gen1"`).
