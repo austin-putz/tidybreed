@@ -21,7 +21,8 @@
 #' Trait-type specific output:
 #' * `"continuous"`: liability written verbatim.
 #' * `"count"`: liability rounded and clipped to `[min_value, max_value]`.
-#' * `"binary"`: 0/1 via quantile threshold at `1 - prevalence`.
+#' * `"binary"`: 0/1 via fixed threshold `target_add_mean + qnorm(1-p)*sqrt(VA+VR)`.
+#'     Observed prevalence fluctuates around the target due to finite sample size.
 #' * `"categorical"`: integer level via `thresholds` cutpoints.
 #'
 #' **Subset selection**: pipe a `tidybreed_table` (from [get_table()] and
@@ -383,7 +384,15 @@ add_phenotype <- function(tbl,
       m$trait_type,
       continuous  = liability,
       count       = as.numeric(clip_count(liability, m$min_value, m$max_value)),
-      binary      = as.numeric(liability_to_binary(liability, m$prevalence)),
+      binary      = {
+        va     <- get_effect_var(pop, "gen_add",  t)
+        vr     <- get_effect_var(pop, "residual", t)
+        va     <- if (is.na(va)) 0 else va
+        vr     <- if (is.na(vr)) 0 else vr
+        thresh <- m$target_add_mean +
+                  stats::qnorm(1 - m$prevalence) * sqrt(va + vr)
+        as.numeric(liability_to_binary(liability, thresh))
+      },
       categorical = as.numeric(liability_to_categorical(
                        liability,
                        as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]]))),

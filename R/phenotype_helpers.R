@@ -88,18 +88,15 @@ sample_residuals <- function(n_ind, residual_var, R = NULL) {
 }
 
 
-#' Convert a liability vector to binary 0/1 using a prevalence threshold
+#' Convert a liability vector to binary 0/1 using a fixed threshold
 #'
 #' @param liability Numeric vector on the continuous scale.
-#' @param prevalence Numeric between 0 and 1.
+#' @param threshold Fixed liability cutpoint: individuals with
+#'   `liability > threshold` are coded 1 (affected).
 #' @return Integer vector of 0/1.
 #' @keywords internal
-liability_to_binary <- function(liability, prevalence) {
-  # Threshold at the empirical (1 - prevalence) quantile so the realised rate
-  # matches the target even when variance components differ from 1.
-  thresh <- stats::quantile(liability, probs = 1 - prevalence, na.rm = TRUE,
-                            names = FALSE)
-  as.integer(liability > thresh)
+liability_to_binary <- function(liability, threshold) {
+  as.integer(liability > threshold)
 }
 
 

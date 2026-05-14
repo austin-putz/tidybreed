@@ -1,3 +1,19 @@
+# tidybreed 0.18.2 (2026-05-14)
+
+## Bug fix
+
+* `add_phenotype()` binary trait now uses a **fixed theoretical threshold**
+  (`target_add_mean + qnorm(1 - prevalence) * sqrt(VA + VR)`) rather than the
+  empirical quantile of the current batch. The old approach mechanically forced
+  exactly the target prevalence; the new approach correctly shows sampling
+  variation around the target, matching the standard threshold model from
+  quantitative genetics.
+* Updated the existing testthat binary-trait test to use explicit absolute
+  tolerance (`abs(rate - 0.1) <= 0.04`) instead of relative tolerance.
+* Added `tests/test_binary_mortality.R` — a stand-alone demo script that sets
+  up 10% mortality with VA = 1, VR = 9 (h² = 0.10) and verifies the observed
+  rate is within 1.5 pp of the target.
+
 # tidybreed 0.18.1 (2026-05-14)
 
 ## Documentation
