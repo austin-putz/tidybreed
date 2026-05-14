@@ -9,8 +9,13 @@ memory/
 
 # markdowns
 PACKAGE_OUTLINE.md
+IDEA_*.md
+TODO.md
 PHENOTYPING_PLAN.md
 YAML_PLAN.md
+
+# and duckdb files
+*.duckdb
 
 # BLUPF90 example/scratch files
 *.par

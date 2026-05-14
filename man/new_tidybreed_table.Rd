@@ -9,6 +9,6 @@ new_tidybreed_table(pop, table_name)
 \description{
 Returned by \code{\link[=get_table]{get_table()}}. Carries the parent population object, the
 table name, a lazy dplyr tibble for reading, and a pending filter list.
-Supports \code{\link[=filter]{filter()}}, \code{\link[dplyr:compute]{dplyr::collect()}}, and \code{\link[=mutate_table]{mutate_table()}}.
+Supports \code{\link[=filter]{filter()}}, \code{\link[dplyr:collect]{collect()}}, and \code{\link[=mutate_table]{mutate_table()}}.
 }
 \keyword{internal}

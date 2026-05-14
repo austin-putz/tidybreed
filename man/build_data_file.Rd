@@ -4,7 +4,7 @@
 \alias{build_data_file}
 \title{Build the BLUPF90 data file}
 \usage{
-build_data_file(pop, subset_ids, trait, eval_dir)
+build_data_file(pop, subset_ids, trait, eval_dir, pheno_ids = NULL)
 }
 \arguments{
 \item{pop}{tidybreed_pop}

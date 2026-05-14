@@ -19,5 +19,10 @@ Useful links:
 \author{
 \strong{Maintainer}: Austin Putz \email{putz.austin@gmail.com} (\href{https://orcid.org/0000-0001-6459-7123}{ORCID})
 
+Authors:
+\itemize{
+  \item Austin Putz \email{putz.austin@gmail.com} (\href{https://orcid.org/0000-0001-6459-7123}{ORCID})
+}
+
 }
 \keyword{internal}

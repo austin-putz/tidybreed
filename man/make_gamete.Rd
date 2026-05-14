@@ -4,18 +4,14 @@
 \alias{make_gamete}
 \title{Produce a gamete from a parent's two haplotypes via chromosomal crossovers}
 \usage{
-make_gamete(hap_matrix, genome_meta_df, chr_len_Mb)
+make_gamete(hap_matrix, chr_info)
 }
 \arguments{
 \item{hap_matrix}{2 x n_loci integer matrix. Row 1 = haplotype from
 parent_origin 1, row 2 = haplotype from parent_origin 2.}
 
-\item{genome_meta_df}{Data frame with columns \code{chr} (integer) and \code{pos_Mb}
-(double), one row per locus. Row j must correspond to locus_j (sorted by
-locus_id ascending).}
-
-\item{chr_len_Mb}{Numeric vector indexed by chromosome number (1-based).
-Element i = length of chromosome i in megabases.}
+\item{chr_info}{List returned by \code{build_chr_info()}. Contains pre-computed
+locus indices, positions, and lengths per chromosome.}
 }
 \value{
 Integer vector of length n_loci representing the gamete (0 or 1)

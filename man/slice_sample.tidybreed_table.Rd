@@ -9,12 +9,12 @@
 \arguments{
 \item{.data}{A \code{tidybreed_table} object.}
 
-\item{...}{Passed to \code{\link[dplyr:slice]{dplyr::slice_sample()}} (e.g. \code{n = 10}, \code{prop = 0.1}).}
+\item{...}{Passed to \code{\link[dplyr:slice_sample]{dplyr::slice_sample()}} (e.g. \code{n = 10}, \code{prop = 0.1}).}
 }
 \value{
 A \code{tidybreed_table} with the slice applied.
 }
 \description{
-Applies \code{\link[dplyr:slice]{dplyr::slice_sample()}} to the underlying lazy tbl and returns a
+Applies \code{\link[dplyr:slice_sample]{dplyr::slice_sample()}} to the underlying lazy tbl and returns a
 modified \code{tidybreed_table} so that further dplyr chains continue to work.
 }

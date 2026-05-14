@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A \code{tidybreed_table} object.}
 
-\item{...}{Passed to \code{\link[dplyr:compute]{dplyr::collect()}}.}
+\item{...}{Passed to \code{\link[dplyr:collect]{dplyr::collect()}}.}
 }
 \value{
 A tibble with the (filtered) table contents.

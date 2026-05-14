@@ -57,7 +57,7 @@ approximately 1 Morgan per 100 Mb. Crossover positions are uniform within
 each chromosome, and the starting haplotype is chosen at random.
 
 \strong{Offspring IDs:}
-IDs follow the same \code{{line}-{n}} format as \code{add_founders()}. Numbering
+IDs follow the same \verb{\{line\}_\{n\}} format as \code{add_founders()}. Numbering
 continues from the current maximum for each line.
 }
 \examples{
@@ -72,8 +72,8 @@ pop <- pop |>
 
 # One offspring per mating, extra metadata column (gen)
 matings <- tibble::tibble(
-  id_parent_1 = rep("A-1", 5),
-  id_parent_2 = paste0("A-", 6:10),
+  id_parent_1 = rep("A_1", 5),
+  id_parent_2 = paste0("A_", 6:10),
   sex         = c("M", "F", "M", "F", "M"),
   line        = "A",
   gen         = 2L
@@ -82,8 +82,8 @@ pop <- pop |> add_offspring(matings)
 
 # Animal-breeder-style aliases
 matings2 <- tibble::tibble(
-  id_sire = rep("A-1", 3),
-  id_dam  = paste0("A-", 6:8),
+  id_sire = rep("A_1", 3),
+  id_dam  = paste0("A_", 6:8),
   sex     = c("M", "F", "M"),
   line    = "A",
   gen     = 2L

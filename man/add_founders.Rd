@@ -14,7 +14,7 @@ add_founders(pop, n_males, n_females, line_name, ...)
 \item{n_females}{Integer. Number of female founders to create}
 
 \item{line_name}{Character. Line identifier used for individual IDs.
-IDs are formatted as \code{"{line_name}-{number}"} (e.g., "A-1", "A-2")}
+IDs are formatted as \code{"{line_name}_{number}"} (e.g., "A_1", "A_2")}
 
 \item{...}{Optional named arguments for custom \code{ind_meta} columns, e.g.
 \code{gen = 0L}, \code{farm = "Iowa"}. Scalar values are broadcast to all new
@@ -52,7 +52,7 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 
 \strong{ID Format:}
 \itemize{
-\item Individual IDs: \code{"{line_name}-{number}"} (e.g., "A-1", "A-2", "B-1")
+\item Individual IDs: \code{"{line_name}_{number}"} (e.g., "A_1", "A_2", "B_1")
 \item Numbers are sequential within each line
 \item If founders already exist for a line, numbering continues from max ID
 }

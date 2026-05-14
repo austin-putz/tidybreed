@@ -11,12 +11,12 @@
 
 \item{order_by}{Column or expression to order by (tidy-eval).}
 
-\item{...}{Passed to \code{\link[dplyr:slice]{dplyr::slice_min()}}.}
+\item{...}{Passed to \code{\link[dplyr:slice_min]{dplyr::slice_min()}}.}
 }
 \value{
 A \code{tidybreed_table} with the slice applied.
 }
 \description{
-Applies \code{\link[dplyr:slice]{dplyr::slice_min()}} to the underlying lazy tbl and returns a
+Applies \code{\link[dplyr:slice_min]{dplyr::slice_min()}} to the underlying lazy tbl and returns a
 modified \code{tidybreed_table} so that further dplyr chains continue to work.
 }

@@ -18,6 +18,7 @@ add_ebv(
   eval_id = NULL,
   estimate_var = FALSE,
   update_covars = FALSE,
+  phenotype = NULL,
   ...
 )
 }
@@ -64,6 +65,12 @@ estimation (\verb{OPTION method VCE}) instead of BLUP-only. Default \code{FALSE}
 
 \item{update_covars}{Logical. If \code{estimate_var = TRUE}, write estimated
 variance components back to \code{trait_effect_cov}. Default \code{FALSE}.}
+
+\item{phenotype}{Optional \code{tidybreed_table} from
+\code{get_table("ind_phenotype") |> filter(...)}. When supplied, only phenotype
+records matching the filter are included in the BLUPF90 data file. The
+pedigree is unaffected — all traced ancestors remain in the pedigree file
+regardless of this filter. Ignored (with a warning) in \code{parent_avg} mode.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly). EBVs are appended to
@@ -104,6 +111,17 @@ pop <- pop |>
           model    = "blup_v1",
           run_dir  = "./eval_runs",
           n_gen_pedigree = 2)
+
+# BLUPF90 with phenotype date filter (exclude future records)
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen >= 3L) |>
+  add_ebv(c("ADG", "BF"),
+          software  = "blupf90",
+          model     = "blup_v1",
+          phenotype = pop |>
+                        get_table("ind_phenotype") |>
+                        dplyr::filter(pheno_date < Sys.Date()))
 }
 }
 \seealso{

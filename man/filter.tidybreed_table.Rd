@@ -19,6 +19,6 @@ The \code{tidybreed_table} object with the filter stashed and applied.
 \description{
 Stashes filter predicates on the \code{tidybreed_table} object (for
 \code{\link[=mutate_table]{mutate_table()}} to use in the SQL WHERE clause) AND applies them eagerly
-to the underlying lazy dplyr tbl (so \code{\link[dplyr:compute]{dplyr::collect()}} continues to work
+to the underlying lazy dplyr tbl (so \code{\link[dplyr:collect]{collect()}} continues to work
 correctly for read-only queries).
 }

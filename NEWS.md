@@ -1,3 +1,15 @@
+# tidybreed 0.16.0 (2026-05-14)
+
+## New features
+
+* `restore_pop(db_path)` — reconnects to an existing `.duckdb` file and
+  reconstructs a fully operational `tidybreed_pop` object. Allows simulations
+  to be resumed after `close_pop()`, a crash, or in a fresh R session without
+  any stored metadata tables. All runtime metadata (`n_loci`, `n_chr`,
+  `chr_len_Mb`, `chr_names`) is derived on the fly from the current state of
+  `genome_meta`. An optional `pop_name` argument overrides the name inferred
+  from the filename.
+
 # tidybreed 0.15.2 (2026-05-13)
 
 ## New features
