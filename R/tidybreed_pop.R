@@ -160,10 +160,49 @@ get_table <- function(pop, table_name) {
 #' Close tidybreed population database connection
 #'
 #' @param pop A tidybreed_pop object
+#' @param results_dir Optional path to a directory. When provided, the `.duckdb`
+#'   file is moved there after the connection is closed. The directory is created
+#'   if it does not yet exist. Errors if the destination file already exists.
+#'   Ignored silently for in-memory databases.
 #' @export
-close_pop <- function(pop) {
+close_pop <- function(pop, results_dir = NULL) {
+
   stopifnot(inherits(pop, "tidybreed_pop"))
+
+  db_path <- pop$db_path
+
   DBI::dbDisconnect(pop$db_conn, shutdown = TRUE)
+
+  if (!is.null(results_dir)) {
+    if (db_path == ":memory:") {
+      warning("Cannot move an in-memory database; results_dir ignored.", call. = FALSE)
+      return(invisible(NULL))
+    }
+
+    if (!file.exists(db_path)) {
+      warning("Database file '", db_path, "' not found; nothing moved.", call. = FALSE)
+      return(invisible(NULL))
+    }
+
+    if (!dir.exists(results_dir)) {
+      dir.create(results_dir, recursive = TRUE)
+    }
+
+    dest_path <- file.path(results_dir, basename(db_path))
+
+    if (file.exists(dest_path)) {
+      stop("Destination already exists: ", dest_path, call. = FALSE)
+    }
+
+    moved <- file.rename(db_path, dest_path)
+    if (!moved) {
+      if (!file.copy(db_path, dest_path)) {
+        stop("Failed to move database to '", dest_path, "'", call. = FALSE)
+      }
+      file.remove(db_path)
+    }
+  }
+
   invisible(NULL)
 }
 

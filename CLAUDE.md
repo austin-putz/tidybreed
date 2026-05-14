@@ -2,7 +2,7 @@
 
 ## What This Package Does
 
-`tidybreed` simulates animal and plant breeding programs. It provides a
+`tidybreed` simulates breeding programs. It provides a
 pipe-friendly API where all genomic and individual data is stored in a
 file-based DuckDB database (not in R memory). Users build a `tidybreed_pop`
 object step by step, query tables with `dplyr`, and eventually run selection
@@ -12,7 +12,7 @@ and mating cycles.
 
 1. **Database-first** — all data lives in DuckDB, not R objects
 2. **File-based by default** — enables simulations larger than RAM; supports
-   resumable runs and sharing
+   replicates, resumable runs, and sharing easily
 3. **Lazy evaluation** — use `dplyr::tbl()` / `get_table()` and filter before
    `collect()`-ing into R
 4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
@@ -21,6 +21,14 @@ and mating cycles.
    `get_table()` and return `tidybreed_pop`
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
    columns are inferred via `infer_duckdb_type()`
+6. **Disdain and intolerance for storing metadata** - storing data such as
+   n_loci for loci count is silly when the function that needs that data
+   can run a basic SQL query to pull out info and makes the program truly modular
+
+If metadata is required, it needs to be considered carefully and likely 
+should be stored in a table and never in the R object itself, for restarts
+and for `restore_pop()` to be complete without having to recreate it or
+given as options again. 
 
 ## Function Naming Convention
 

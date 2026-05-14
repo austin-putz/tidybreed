@@ -1,3 +1,13 @@
+# tidybreed 0.18.0 (2026-05-14)
+
+## New features
+
+* `close_pop()` gains a `results_dir` argument. When provided, the `.duckdb`
+  file is moved to that directory after the connection is closed. The directory
+  is created automatically if it does not exist. An error is raised if a file
+  with the same name already exists at the destination. In-memory databases
+  are silently ignored.
+
 # tidybreed 0.17.0 (2026-05-14)
 
 ## Breaking changes
