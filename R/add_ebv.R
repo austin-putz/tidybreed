@@ -44,6 +44,11 @@
 #'   estimation (`OPTION method VCE`) instead of BLUP-only. Default `FALSE`.
 #' @param update_covars Logical. If `estimate_var = TRUE`, write estimated
 #'   variance components back to `trait_effect_cov`. Default `FALSE`.
+#' @param phenotype Optional `tidybreed_table` from
+#'   `get_table("ind_phenotype") |> filter(...)`. When supplied, only phenotype
+#'   records matching the filter are included in the BLUPF90 data file. The
+#'   pedigree is unaffected — all traced ancestors remain in the pedigree file
+#'   regardless of this filter. Ignored (with a warning) in `parent_avg` mode.
 #'
 #' @return The modified `tidybreed_pop` (invisibly). EBVs are appended to
 #'   `ind_ebv` with an auto-incrementing `eval_number` per trait. Use
@@ -70,6 +75,17 @@
 #'           model    = "blup_v1",
 #'           run_dir  = "./eval_runs",
 #'           n_gen_pedigree = 2)
+#'
+#' # BLUPF90 with phenotype date filter (exclude future records)
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   dplyr::filter(gen >= 3L) |>
+#'   add_ebv(c("ADG", "BF"),
+#'           software  = "blupf90",
+#'           model     = "blup_v1",
+#'           phenotype = pop |>
+#'                         get_table("ind_phenotype") |>
+#'                         dplyr::filter(pheno_date < Sys.Date()))
 #' }
 #' @export
 add_ebv <- function(tbl,
@@ -85,6 +101,7 @@ add_ebv <- function(tbl,
                     eval_id        = NULL,
                     estimate_var   = FALSE,
                     update_covars  = FALSE,
+                    phenotype      = NULL,
                     ...) {
 
   # ---- Input validation ----
@@ -109,6 +126,28 @@ add_ebv <- function(tbl,
 
   use_blupf90    <- identical(software, "blupf90")
   use_parent_avg <- isTRUE(parent_avg)
+
+  # ---- Validate phenotype filter ----
+  pheno_ids <- NULL
+  if (!is.null(phenotype)) {
+    if (!inherits(phenotype, "tidybreed_table"))
+      stop("`phenotype` must be a tidybreed_table from get_table('ind_phenotype').",
+           call. = FALSE)
+    if (!identical(phenotype$table_name, "ind_phenotype"))
+      stop("`phenotype` table must be 'ind_phenotype', got '", phenotype$table_name, "'.",
+           call. = FALSE)
+    if (use_parent_avg) {
+      warning("`phenotype` filter is ignored in parent_avg mode.", call. = FALSE)
+    } else {
+      pheno_collected <- dplyr::collect(phenotype$tbl)
+      if (!"id_phenotype" %in% names(pheno_collected))
+        stop("Collected `phenotype` table must contain 'id_phenotype'.", call. = FALSE)
+      pheno_ids <- unique(pheno_collected[["id_phenotype"]])
+      if (length(pheno_ids) == 0)
+        warning("`phenotype` filter matched no records; data file may be empty.",
+                call. = FALSE)
+    }
+  }
 
   if (!is.null(software) && !software %in% "blupf90")
     stop("Unknown software '", software, "'. Currently supported: 'blupf90'.", call. = FALSE)
@@ -185,7 +224,8 @@ add_ebv <- function(tbl,
                           run_dir        = run_dir,
                           eval_id        = eval_id,
                           estimate_var   = estimate_var,
-                          update_covars  = update_covars)
+                          update_covars  = update_covars,
+                          pheno_ids      = pheno_ids)
   }
 
   # ---- Upsert into ind_ebv ----
@@ -324,7 +364,8 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
 
 ebv_blupf90 <- function(pop, subset_ids, trait, model, eval_nums,
                          n_gen_pedigree, chip_name, run_dir, eval_id,
-                         estimate_var, update_covars) {
+                         estimate_var, update_covars,
+                         pheno_ids = NULL) {
 
   renumf90_path <- find_blupf90_binary("renumf90")
   blupf90_path  <- find_blupf90_binary("blupf90+")
@@ -351,7 +392,8 @@ ebv_blupf90 <- function(pop, subset_ids, trait, model, eval_nums,
 
   # Build and write data file
   message("Building data file...")
-  data_res <- build_data_file(pop, subset_ids, trait, eval_dir)
+  data_res <- build_data_file(pop, subset_ids, trait, eval_dir,
+                               pheno_ids = pheno_ids)
 
   # Write genotype file
   geno_res <- NULL

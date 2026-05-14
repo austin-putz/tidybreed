@@ -63,7 +63,8 @@ trace_pedigree <- function(pop, subset_ids, n_gen) {
 #' @return list with data, col_map, distinct_effects, effects_df,
 #'   n_fixed_effects, trait_cols
 #' @keywords internal
-build_data_file <- function(pop, subset_ids, trait, eval_dir) {
+build_data_file <- function(pop, subset_ids, trait, eval_dir,
+                             pheno_ids = NULL) {
   n_traits <- length(trait)
 
   # Pull fixed effects for these traits (fixed_class and fixed_cov only)
@@ -103,12 +104,16 @@ build_data_file <- function(pop, subset_ids, trait, eval_dir) {
 
   # Pull phenotypic data: average per id_ind per trait
   id_in <- paste0("'", subset_ids, "'", collapse = ", ")
+  pheno_clause <- if (!is.null(pheno_ids) && length(pheno_ids) > 0)
+    paste0(" AND id_phenotype IN (", paste(pheno_ids, collapse = ", "), ")")
+  else ""
   pheno_long <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT id_ind, trait_name, AVG(value) AS value FROM ind_phenotype ",
            "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
-           "AND id_ind IN (", id_in, ") ",
-           "GROUP BY id_ind, trait_name")
+           "AND id_ind IN (", id_in, ")",
+           pheno_clause,
+           " GROUP BY id_ind, trait_name")
   )
   if (nrow(pheno_long) == 0)
     stop("No phenotypic records found for the requested individuals and traits.",

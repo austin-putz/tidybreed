@@ -1,3 +1,15 @@
+# tidybreed 0.15.2 (2026-05-13)
+
+## New features
+
+* `add_ebv()`: new optional `phenotype` argument accepts a `tidybreed_table`
+  from `get_table("ind_phenotype") |> filter(...)`. When supplied, only
+  phenotype records matching the filter are included in the BLUPF90 data file;
+  the pedigree (and which animals receive EBVs) is unaffected. This solves the
+  "future phenotype" problem where records are sampled early (e.g., number
+  weaned, age at puberty) but should be excluded from evaluations until
+  actually observed. Ignored with a warning in `parent_avg` mode.
+
 # tidybreed 0.15.1 (2026-05-13)
 
 ## Bug fixes
