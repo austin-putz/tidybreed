@@ -1,13 +1,26 @@
-test_that("extract_genotypes() returns a tibble with correct dimensions", {
-  n_chip <- 60
+make_extract_pop <- function(pop_name = "extract_test", chip_name = "50k",
+                             n_males = 5, n_females = 5) {
   pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
+    pop_name = pop_name, n_loci = 100, n_chr = 2,
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = n_chip, method = "random")
-  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+    add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 
+  # Use chr == 1 loci as chip; with n_loci = 100, n_chr = 2 this is 50 loci
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(chr == 1L) |>
+    define_chip(chip_name)
+
+  pop
+}
+
+
+test_that("extract_genotypes() returns a tibble with correct dimensions", {
+  pop <- make_extract_pop("test_eg_dim")
+  n_chip <- sum(dplyr::collect(get_table(pop, "genome_meta"))$is_50k)
+
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
   geno <- pop |> get_table("ind_meta") |> extract_genotypes("50k")
 
   expect_s3_class(geno, "tbl_df")
@@ -19,12 +32,7 @@ test_that("extract_genotypes() returns a tibble with correct dimensions", {
 })
 
 test_that("extract_genotypes() respects filter()", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 60, method = "random")
+  pop <- make_extract_pop("test_eg_filter")
   pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
 
   geno <- pop |>
@@ -37,12 +45,7 @@ test_that("extract_genotypes() respects filter()", {
 })
 
 test_that("extract_genotypes() intersects filter with has_<chip> == TRUE", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 60, method = "random")
+  pop <- make_extract_pop("test_eg_intersect")
 
   # Only genotype females
   pop <- pop |>
@@ -57,16 +60,21 @@ test_that("extract_genotypes() intersects filter with has_<chip> == TRUE", {
   close_pop(pop)
 })
 
-test_that("extract_genotypes() returns only chip loci columns", {
-  n_chip <- 40
+test_that("extract_genotypes() returns only chip loci columns with correct encoding", {
   pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
+    pop_name = "test_eg_cols", n_loci = 100, n_chr = 2,
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
-    add_founders(n_males = 3, n_females = 3, line_name = "A") |>
-    define_chip("HD", n = n_chip, method = "even")
-  pop <- pop |> get_table("ind_meta") |> add_genotypes("HD")
+    add_founders(n_males = 3, n_females = 3, line_name = "A")
 
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(chr == 2L) |>
+    define_chip("HD")
+
+  n_chip <- sum(dplyr::collect(get_table(pop, "genome_meta"))$is_HD)
+
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("HD")
   geno <- pop |> get_table("ind_meta") |> extract_genotypes("HD")
 
   locus_cols <- grep("^locus_", names(geno), value = TRUE)
@@ -80,12 +88,7 @@ test_that("extract_genotypes() returns only chip loci columns", {
 })
 
 test_that("extract_genotypes() errors if add_genotypes() not called", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 60, method = "random")
+  pop <- make_extract_pop("test_eg_nogenotype")
 
   expect_error(
     pop |> get_table("ind_meta") |> extract_genotypes("50k"),
@@ -96,7 +99,7 @@ test_that("extract_genotypes() errors if add_genotypes() not called", {
 
 test_that("extract_genotypes() errors if chip not defined", {
   pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
+    pop_name = "test_eg_nochip", n_loci = 100, n_chr = 2,
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")

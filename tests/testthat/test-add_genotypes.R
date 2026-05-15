@@ -1,10 +1,23 @@
-test_that("add_genotypes() adds has_<chip> column to ind_meta", {
+make_chip_pop <- function(pop_name = "geno_test", n_loci = 100, chip_name = "50k",
+                          n_males = 5, n_females = 5) {
   pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
+    pop_name = pop_name, n_loci = n_loci, n_chr = 2,
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 80, method = "random")
+    add_founders(n_males = n_males, n_females = n_females, line_name = "A")
+
+  # Filter to first chromosome as chip loci (stable, order-independent)
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(chr == 1L) |>
+    define_chip(chip_name)
+
+  pop
+}
+
+
+test_that("add_genotypes() adds has_<chip> column to ind_meta", {
+  pop <- make_chip_pop("test_ag_col")
 
   pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
 
@@ -17,12 +30,7 @@ test_that("add_genotypes() adds has_<chip> column to ind_meta", {
 })
 
 test_that("add_genotypes() with filter only marks filtered animals", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 80, method = "random")
+  pop <- make_chip_pop("test_ag_filter")
 
   pop <- pop |>
     get_table("ind_meta") |>
@@ -37,12 +45,7 @@ test_that("add_genotypes() with filter only marks filtered animals", {
 })
 
 test_that("add_genotypes() is additive (union semantics)", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 80, method = "random")
+  pop <- make_chip_pop("test_ag_additive")
 
   pop <- pop |>
     get_table("ind_meta") |>
@@ -61,12 +64,7 @@ test_that("add_genotypes() is additive (union semantics)", {
 })
 
 test_that("add_genotypes() with filter returns tidybreed_pop", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_chip("50k", n = 80, method = "random")
+  pop <- make_chip_pop("test_ag_class")
 
   pop <- pop |>
     get_table("ind_meta") |>
@@ -79,7 +77,7 @@ test_that("add_genotypes() with filter returns tidybreed_pop", {
 
 test_that("add_genotypes() errors if chip not defined", {
   pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
+    pop_name = "test_ag_noship", n_loci = 100, n_chr = 2,
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
@@ -92,12 +90,7 @@ test_that("add_genotypes() errors if chip not defined", {
 })
 
 test_that("add_genotypes() supports col_name override", {
-  pop <- initialize_genome(
-    pop_name = "test", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
-  ) |>
-    add_founders(n_males = 3, n_females = 3, line_name = "A") |>
-    define_chip("50k", n = 60, method = "random")
+  pop <- make_chip_pop("test_ag_colname", n_males = 3, n_females = 3)
 
   pop <- pop |> get_table("ind_meta") |> add_genotypes("50k", col_name = "genotyped_50k")
 

@@ -21,7 +21,8 @@
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [filter()]). The table must contain an `id_ind` column.
-#' @param trait_name Character vector of trait name(s).
+#' @param trait_name Character vector of trait name(s). When `NULL` (default),
+#'   all traits currently in `trait_meta` are used (in `id_trait` order).
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -35,11 +36,22 @@
 #'   add_tbv(c("ADG", "BW"))
 #' }
 #' @export
-add_tbv <- function(tbl, trait_name, ...) {
+add_tbv <- function(tbl, trait_name = NULL, ...) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
+
+  if (is.null(trait_name)) {
+    trait_name <- DBI::dbGetQuery(
+      pop$db_conn,
+      "SELECT trait_name FROM trait_meta ORDER BY id_trait"
+    )$trait_name
+    if (length(trait_name) == 0L)
+      stop("No traits found in trait_meta. Define traits with add_trait() first.",
+           call. = FALSE)
+  }
+
   stopifnot(is.character(trait_name), length(trait_name) >= 1)
   lapply(trait_name, validate_sql_identifier, what = "trait name")
   trait <- trait_name

@@ -54,9 +54,12 @@ pop <- add_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75,
 pop <- add_trait(pop, "BW",  target_add_var = 0.30, residual_var = 0.70,
                  mean = 450)
 
-pop <- define_qtl(pop, "ADG", n = 150, method = "random")
-qtl_tf <- get_table(pop, "genome_meta") |> collect() |> pull(is_QTL_ADG)
-pop <- define_qtl(pop, "BW", locus_tf = qtl_tf)
+sel_qtl <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = 150) |> pull(locus_name)
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(locus_name %in% sel_qtl) |>
+  define_qtl(c("ADG", "BW"))
 
 pop <- set_qtl_effects_multi(pop, c("ADG", "BW"), G = G, seed = 42)
 pop <- add_effect_cov_matrix(pop, "residual", R)
@@ -74,8 +77,13 @@ pop <- pop |>
 
 pop <- add_trait(pop, "mort", trait_type = "binary", prevalence = 0.08,
                  target_add_var = 1, residual_var = 1)
-pop <- define_qtl(pop, "mort", n = 60)
-pop <- set_qtl_effects(pop, "mort")
+sel_mort <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = 60) |> pull(locus_name)
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(locus_name %in% sel_mort) |>
+  define_qtl("mort") |>
+  set_qtl_effects("mort")
 pop <- pop |>
   get_table("ind_meta") |>
   filter(gen == 1L) |>

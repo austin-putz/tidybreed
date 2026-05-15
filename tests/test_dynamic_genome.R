@@ -44,7 +44,12 @@ pop <- add_trait(pop,
   target_add_var = 1.0,
   residual_var   = 1.0
 )
-pop <- define_qtl(pop, "ADG", n = 20)
+sel_qtl <- get_table(pop, "genome_meta") |> collect() |>
+  dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(locus_name %in% sel_qtl) |>
+  define_qtl("ADG")
 pop <- set_qtl_effects(pop, "ADG", seed = 99)
 
 n_start <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n

@@ -67,9 +67,13 @@ test_that("low-cardinality VARCHAR column gets frequency table display", {
 
 test_that("DOUBLE column gets 5-number summary display", {
   pop <- make_summary_pop()
+  pop <- pop |> add_trait("ADG", target_add_var = 1, residual_var = 1)
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
   pop <- pop |>
-    add_trait("ADG", target_add_var = 1, residual_var = 1) |>
-    define_qtl("ADG", n = 20) |>
+    get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG") |>
     set_qtl_effects("ADG", seed = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
   summ    <- summary(pop, tables = "ind_phenotype")

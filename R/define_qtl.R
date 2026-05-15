@@ -1,136 +1,140 @@
-#' Define QTL loci for a trait
+#' Define QTL loci for one or more traits
 #'
 #' @description
-#' Marks a subset of loci as QTL for a named trait by writing a BOOLEAN
-#' column `is_QTL_{trait}` to `genome_meta`. Mirrors [define_chip()]: the same
-#' six selection methods are supported (by count + `method`, by logical
-#' vector, by locus IDs, by locus names).
+#' Marks the loci in a filtered `genome_meta` table as QTL for the specified
+#' trait(s), writing a `BOOLEAN` column `is_QTL_{trait_name}` per trait to
+#' `genome_meta`. All other loci receive `FALSE`.
 #'
-#' The trait must already exist in `trait_meta` (see [add_trait()]).
+#' Pipe `get_table("genome_meta")` — optionally through `dplyr::filter()` —
+#' into this function. The unique `locus_id` values in the collected result
+#' determine QTL membership for every trait named in `trait_name`.
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param trait_name Character. Name of an existing trait in `trait_meta`.
-#' @param n Integer. Number of QTL to select (with `method`). Mutually
-#'   exclusive with `locus_tf`, `locus_ids`, `locus_names`.
-#' @param method Character. Selection method when using `n`: `"random"`
-#'   (default), `"even"`, or `"chromosome_even"`.
-#' @param locus_tf Logical. TRUE/FALSE vector of length `n_loci` indicating
-#'   QTL membership.
-#' @param locus_ids Integer vector of locus IDs to mark as QTL.
-#' @param locus_names Character vector of locus names to mark as QTL.
-#' @param col_name Character. Column name in `genome_meta`. Default:
-#'   `paste0("is_QTL_", trait_name)`.
+#' When `trait_name` is omitted, all traits currently in `trait_meta` are used.
+#'
+#' Returns the modified `tidybreed_pop` so the result can be piped directly
+#' into [set_qtl_effects()].
+#'
+#' @param tbl A `tidybreed_table` from `get_table("genome_meta")` (optionally
+#'   piped through `dplyr::filter()`). Must contain a `locus_id` column.
+#' @param trait_name Character vector of trait name(s) that exist in
+#'   `trait_meta`. Default: all traits in `trait_meta` (in id_trait order).
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [define_chip()], [set_qtl_effects()], [add_trait()]
+#' @seealso [define_chip()], [set_qtl_effects()], [set_qtl_effects_multi()],
+#'   [add_trait()]
 #'
 #' @examples
 #' \dontrun{
+#' # Define QTL for ADG on chromosome 1 loci, then set effects
 #' pop <- pop |>
-#'   add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
-#'   define_qtl("ADG", n = 100, method = "chromosome_even")
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(chr == 1) |>
+#'   define_qtl("ADG") |>
+#'   set_qtl_effects("ADG", distribution = "normal")
+#'
+#' # Define the same loci as QTL for multiple traits in one call
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(locus_name %in% qtl_loci) |>
+#'   define_qtl(c("ADG", "BW"))
+#'
+#' # Shared QTL pleiotropy: give BW the same QTL set as ADG
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(is_QTL_ADG == TRUE) |>
+#'   define_qtl("BW")
+#'
+#' # Omit trait_name to define QTL for every trait in trait_meta
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(locus_name %in% qtl_loci) |>
+#'   define_qtl()
 #' }
 #' @export
-define_qtl <- function(pop,
-                       trait_name,
-                       n           = NULL,
-                       method      = "random",
-                       locus_tf    = NULL,
-                       locus_ids   = NULL,
-                       locus_names = NULL,
-                       col_name    = paste0("is_QTL_", trait_name)) {
+define_qtl <- function(tbl, trait_name = NULL) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
-  validate_sql_identifier(trait_name, what = "trait name")
 
   if (!"trait_meta" %in% pop$tables) {
     stop("No traits defined yet. Call add_trait() first.", call. = FALSE)
   }
-  trait_exists <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT COUNT(*) AS n FROM trait_meta WHERE trait_name = '",
-           trait_name, "'")
-  )$n
-  if (trait_exists == 0) {
-    stop("Trait '", trait_name, "' not found in trait_meta.", call. = FALSE)
-  }
 
-  methods_provided <- sum(
-    !is.null(n),
-    !is.null(locus_tf),
-    !is.null(locus_ids),
-    !is.null(locus_names)
-  )
-  if (methods_provided == 0) {
-    stop(
-      "Must specify one selection method: n, locus_tf, locus_ids, or locus_names",
-      call. = FALSE
-    )
-  }
-  if (methods_provided > 1) {
-    stop(
-      "Cannot specify multiple selection methods. ",
-      "Choose one of: n, locus_tf, locus_ids, locus_names",
-      call. = FALSE
-    )
-  }
+  # Resolve trait_name: default to all traits in trait_meta
+  if (is.null(trait_name)) {
+    trait_name <- DBI::dbGetQuery(
+      pop$db_conn,
+      "SELECT trait_name FROM trait_meta ORDER BY id_trait"
+    )$trait_name
+    if (length(trait_name) == 0L) {
+      stop("No traits found in trait_meta. Call add_trait() first.", call. = FALSE)
+    }
+  } else {
+    stopifnot(is.character(trait_name), length(trait_name) >= 1L)
+    lapply(trait_name, validate_sql_identifier, what = "trait name")
 
-  if (!is.null(n)) {
-    valid_methods <- c("random", "even", "chromosome_even")
-    if (!method %in% valid_methods) {
+    existing_traits <- DBI::dbGetQuery(
+      pop$db_conn,
+      "SELECT trait_name FROM trait_meta"
+    )$trait_name
+    bad_traits <- setdiff(trait_name, existing_traits)
+    if (length(bad_traits) > 0L) {
       stop(
-        "Invalid method: '", method, "'. ",
-        "Must be one of: ", paste(valid_methods, collapse = ", "),
+        "Trait(s) not found in trait_meta: ",
+        paste(bad_traits, collapse = ", "),
         call. = FALSE
       )
     }
   }
-
-  stopifnot(is.character(col_name), length(col_name) == 1, nchar(col_name) > 0)
 
   if (!"genome_meta" %in% pop$tables) {
     stop("genome_meta table does not exist. Call initialize_genome() first.",
          call. = FALSE)
   }
 
-  genome <- dplyr::collect(get_table(pop, "genome_meta"))
-  n_loci <- nrow(genome)
-  if (n_loci == 0) {
-    stop("genome_meta table is empty. Cannot define QTL.", call. = FALSE)
+  # Collect filtered locus IDs
+  collected <- dplyr::collect(tbl)
+  if (!"locus_id" %in% names(collected)) {
+    stop(
+      "The filtered table must contain 'locus_id'. ",
+      "Pipe get_table(\"genome_meta\") into define_qtl().",
+      call. = FALSE
+    )
+  }
+  if (nrow(collected) == 0L) {
+    stop(
+      "No loci selected — your filter returned zero rows. ",
+      "Check the filter before piping into define_qtl().",
+      call. = FALSE
+    )
   }
 
-  qtl_indicator <- rep(FALSE, n_loci)
+  selected_ids <- collected$locus_id
+  ids_sql      <- paste(selected_ids, collapse = ", ")
 
-  if (!is.null(n)) {
-    qtl_indicator <- select_by_n(genome, n, method)
-    message("Defined QTL for '", trait_name, "' with ", sum(qtl_indicator),
-            " loci (method: ", method, ")")
-  } else if (!is.null(locus_tf)) {
-    if (!is.logical(locus_tf)) {
-      stop("locus_tf must be a logical vector", call. = FALSE)
+  # For each trait: add BOOLEAN column (DEFAULT FALSE) and flip QTL loci to TRUE
+  existing_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
+  for (tn in trait_name) {
+    qtl_col <- paste0("is_QTL_", tn)
+    if (qtl_col %in% existing_cols) {
+      stop(
+        "Column '", qtl_col, "' already exists in genome_meta. ",
+        "QTL for trait '", tn, "' have already been defined.",
+        call. = FALSE
+      )
     }
-    if (length(locus_tf) != n_loci) {
-      stop("locus_tf length (", length(locus_tf),
-           ") must equal number of loci (", n_loci, ")",
-           call. = FALSE)
-    }
-    qtl_indicator <- locus_tf
-    message("Defined QTL for '", trait_name, "' with ", sum(qtl_indicator),
-            " loci (by locus_tf)")
-  } else if (!is.null(locus_ids)) {
-    qtl_indicator <- select_by_locus_ids(genome, locus_ids)
-    message("Defined QTL for '", trait_name, "' with ", sum(qtl_indicator),
-            " loci (by locus IDs)")
-  } else if (!is.null(locus_names)) {
-    qtl_indicator <- select_by_locus_names(genome, locus_names)
-    message("Defined QTL for '", trait_name, "' with ", sum(qtl_indicator),
-            " loci (by locus names)")
+    DBI::dbExecute(
+      pop$db_conn,
+      paste0("ALTER TABLE genome_meta ADD COLUMN ", qtl_col, " BOOLEAN DEFAULT FALSE")
+    )
+    DBI::dbExecute(
+      pop$db_conn,
+      paste0("UPDATE genome_meta SET ", qtl_col, " = TRUE WHERE locus_id IN (", ids_sql, ")")
+    )
+    message("Defined QTL for '", tn, "' with ", length(selected_ids), " loci")
   }
 
-  args   <- setNames(list(qtl_indicator), col_name)
-  result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
-
-  invisible(result)
+  invisible(pop)
 }

@@ -2,18 +2,18 @@
 #'
 #' @description
 #' Convenience wrapper that chains [add_trait()], [define_qtl()], and
-#' [set_qtl_effects()] for a single uncorrelated trait. For correlated
-#' multi-trait simulations use the three low-level functions directly plus
-#' [set_qtl_effects_multi()].
+#' [set_qtl_effects()] for a single uncorrelated trait using random QTL
+#' placement. For correlated multi-trait simulations, or to control QTL
+#' placement (e.g. by chromosome or position), use the three functions
+#' individually with `get_table("genome_meta") |> filter(...) |> define_qtl()`.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Trait name; must be a valid SQL identifier.
-#' @param n_qtl Integer. Number of QTL to select.
-#' @param qtl_method Character. Selection method: `"random"`, `"even"`, or
-#'   `"chromosome_even"`.
+#' @param n_qtl Integer. Number of QTL to randomly select from `genome_meta`.
 #' @param effect_distribution Character. `"normal"` or `"gamma"`.
 #' @param scale_to_target Logical. Passed to [set_qtl_effects()].
-#' @param seed Optional integer for reproducibility.
+#' @param seed Optional integer for reproducibility (applied before both the
+#'   QTL random draw and the effect sampling).
 #' @param ... Additional arguments forwarded to [add_trait()] (e.g.
 #'   `trait_type`, `target_add_var`, `residual_var`, `target_add_mean`,
 #'   `prevalence`, `expressed_sex`).
@@ -30,7 +30,6 @@
 #'     target_add_var      = 0.25,
 #'     residual_var        = 0.75,
 #'     target_add_mean     = 850,
-#'     qtl_method          = "chromosome_even",
 #'     effect_distribution = "normal"
 #'   )
 #' }
@@ -38,7 +37,6 @@
 add_trait_simple <- function(pop,
                              trait_name,
                              n_qtl,
-                             qtl_method          = "random",
                              effect_distribution = "normal",
                              scale_to_target     = TRUE,
                              seed                = NULL,
@@ -47,12 +45,24 @@ add_trait_simple <- function(pop,
   stopifnot(inherits(pop, "tidybreed_pop"))
   stopifnot(is.numeric(n_qtl), length(n_qtl) == 1, n_qtl > 0)
 
+  if (!is.null(seed)) set.seed(seed)
+
   pop <- add_trait(pop, trait_name = trait_name, ...)
-  pop <- define_qtl(pop, trait_name = trait_name, n = as.integer(n_qtl),
-                    method = qtl_method)
+
+  sel <- pop |>
+    get_table("genome_meta") |>
+    dplyr::collect() |>
+    dplyr::slice_sample(n = as.integer(n_qtl)) |>
+    dplyr::pull(locus_name)
+
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl(trait_name)
+
   pop <- set_qtl_effects(pop, trait_name = trait_name,
                          distribution    = effect_distribution,
                          scale_to_target = scale_to_target,
-                         seed            = seed)
+                         seed            = NULL)
   invisible(pop)
 }

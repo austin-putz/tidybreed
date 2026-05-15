@@ -17,13 +17,18 @@ and mating cycles.
    `collect()`-ing into R
 4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
    return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tbv`,
-   `add_genotypes`, `extract_genotypes`) accept a `tidybreed_table` from
-   `get_table()` and return `tidybreed_pop`
+   `add_genotypes`, `extract_genotypes`, `define_chip`, `define_qtl`) accept
+   a `tidybreed_table` from `get_table()` and return `tidybreed_pop`
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
    columns are inferred via `infer_duckdb_type()`
 6. **Disdain and intolerance for storing metadata** - storing data such as
    n_loci for loci count is silly when the function that needs that data
    can run a basic SQL query to pull out info and makes the program truly modular
+7. **No implicit ordering** — never accept positional vectors (logical TRUE/FALSE
+   or integer indices) to select rows from a database table. Row order is not
+   guaranteed and changes silently when rows are added or reordered. All
+   selection flows through named identifiers (`id_ind`, `locus_name`, `locus_id`
+   as PK) or explicit SQL filter predicates via `get_table() |> filter()`.
 
 If metadata is required, it needs to be considered carefully and likely 
 should be stored in a table and never in the R object itself, for restarts
@@ -349,15 +354,23 @@ pop <- pop |>
 
 `R/define_chip.R`
 
-Convenience wrapper. Marks loci as members of a named chip by writing a
-`BOOLEAN` column `is_{chip_name}` to `genome_meta`. Four selection methods:
+Marks the loci in a filtered `genome_meta` table as members of a named chip,
+writing a `BOOLEAN` column `is_{chip_name}` to `genome_meta`. All other loci
+receive `FALSE`. Accepts a `tidybreed_table` from `get_table("genome_meta")`
+(optionally filtered) as its first argument; returns `tidybreed_pop`.
 
-- `n` + `method = "random"` — randomly sample `n` loci
-- `n` + `method = "even"` — evenly spaced across all loci by position
-- `n` + `method = "chromosome_even"` — proportional to chromosome length
-- `locus_tf` — logical vector (same length as `genome_meta` rows); TRUE = on chip. Useful for passing the complement of an existing chip (`!existing_tf`).
-- `locus_ids` — integer vector of specific locus IDs
-- `locus_names` — character vector of specific locus names
+```r
+# Filter first, then define chip
+pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> define_chip("chr1to5")
+
+# Random chip: sample locus names, then filter
+sel <- pop |> get_table("genome_meta") |> collect() |>
+  slice_sample(n = 500) |> pull(locus_name)
+pop |> get_table("genome_meta") |> filter(locus_name %in% sel) |> define_chip("50K")
+
+# Complement of an existing chip
+pop |> get_table("genome_meta") |> filter(is_50K == FALSE) |> define_chip("non50K")
+```
 
 ### `get_table()` / `close_pop()` / `print.tidybreed_pop()`
 
@@ -400,8 +413,21 @@ pop |>
   `initialize_genome()`, not on first `add_trait()` call.)
   `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
   `trait_meta`).
-- `define_qtl()` — mirror of `define_chip()` for QTL. Writes
-  `is_QTL_{trait}` BOOLEAN. Reuses all `chip_helpers.R` selection methods.
+- `define_qtl()` — accepts a `tidybreed_table` from `get_table("genome_meta")`
+  (optionally filtered) as its first argument; `trait_name` is optional
+  (defaults to all traits in `trait_meta`). Writes `is_QTL_{trait}` BOOLEAN
+  for each trait, with `DEFAULT FALSE` for unselected loci. Returns
+  `tidybreed_pop` so it can be piped into `set_qtl_effects()`.
+  ```r
+  # Single trait
+  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG")
+  # Multiple traits at once (same loci)
+  pop |> get_table("genome_meta") |> filter(...) |> define_qtl(c("ADG", "BW"))
+  # Shared QTL pleiotropy
+  pop |> get_table("genome_meta") |> filter(is_QTL_ADG == TRUE) |> define_qtl("BW")
+  # Pipeline into set_qtl_effects
+  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG") |> set_qtl_effects("ADG")
+  ```
 - `set_qtl_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
   (normal/gamma) with optional rescale. Reads `target_add_var` from
   `trait_effect_cov` (`effect_name = "gen_add"`).
@@ -436,21 +462,25 @@ pop |>
 Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
 
-- `add_phenotype()` — the workhorse. Extracts unique `id_ind` from the
-  filtered table, intersects with `expressed_sex`, computes TBV
-  (genotype × effects, or haplotype dose for imprinted traits), adds
-  fixed/random covariate contributions, samples residuals (joint `MVN(0, R)`
-  when multiple traits share the subset and `R` is stored; otherwise
-  independent). Converts liability to phenotype per `trait_type`. Writes
-  `ind_phenotype` rows and updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records.
+- `add_phenotype()` — the workhorse. `trait_name` defaults to all traits
+  in `trait_meta` when omitted. Extracts unique `id_ind` from the filtered
+  table, intersects with `expressed_sex`, computes TBV (genotype × effects,
+  or haplotype dose for imprinted traits), adds fixed/random covariate
+  contributions, samples residuals (joint `MVN(0, R)` when multiple traits
+  share the subset and `R` is stored; otherwise independent). Converts
+  liability to phenotype per `trait_type`. Writes `ind_phenotype` rows and
+  updates `ind_tbv`.
+- `add_tbv()` — TBV-only; no phenotype records. `trait_name` also defaults
+  to all traits in `trait_meta` when omitted.
 
 ### `add_trait_simple()`
 
 `R/add_trait_simple.R`
 
-Convenience wrapper that chains `add_trait()` → `define_qtl()` →
-`set_qtl_effects()` for a single uncorrelated trait.
+Convenience wrapper that chains `add_trait()` → random `define_qtl()` →
+`set_qtl_effects()` for a single uncorrelated trait. QTL are always placed
+randomly (n = `n_qtl`). The `qtl_method` parameter has been removed; for
+non-random QTL placement use the three functions individually.
 
 ## Roadmap
 

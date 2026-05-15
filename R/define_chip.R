@@ -1,256 +1,114 @@
 #' Define a SNP chip
 #'
 #' @description
-#' Convenience function to mark which loci are on a SNP chip. Creates a logical
-#' column in the `genome_meta` table indicating chip membership.
+#' Marks the loci in a filtered `genome_meta` table as members of a SNP chip,
+#' creating a `BOOLEAN` column (default: `is_{chip_name}`) in `genome_meta`.
 #'
-#' Four selection methods are supported:
-#' - **By count** (`n`): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
-#' - **By logical vector** (`locus_tf`): Pass a TRUE/FALSE vector the same length as the number of loci
-#' - **By ID** (`locus_ids`): Select specific loci by their locus_id values
-#' - **By name** (`locus_names`): Select specific loci by their locus_name values
+#' Pipe `get_table("genome_meta")` — optionally piped through `dplyr::filter()`
+#' — into this function. The unique `locus_id` values in the collected result
+#' determine chip membership. All other loci receive `FALSE`.
 #'
-#' @param pop A `tidybreed_pop` object
-#' @param chip_name Character. Name of the SNP chip (used in messages and default column name)
-#' @param n Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)
-#' @param locus_tf Logical vector. TRUE/FALSE membership vector with one element per locus, in the
-#'   same order as `genome_meta`. Useful when you have already computed membership (e.g., pass
-#'   `!pop_50k$is_50k` to select the complement of an existing chip). Mutually exclusive with
-#'   n/locus_ids/locus_names.
-#' @param locus_ids Integer vector. Specific locus IDs to select (mutually exclusive with n/locus_tf/locus_names)
-#' @param locus_names Character vector. Specific locus names to select (mutually exclusive with n/locus_tf/locus_ids)
-#' @param method Character. Selection method when using `n`. One of:
-#'   - `"random"`: Randomly sample SNPs across entire genome (default)
-#'   - `"even"`: Evenly space SNPs across entire genome
-#'   - `"chromosome_even"`: Distribute SNPs proportionally across chromosomes
-#' @param col_name Character. Column name to create in genome_meta.
-#'   Default: `paste0("is_", chip_name)` (e.g., "50k" → "is_50k")
+#' This replaces the old positional selection methods (`n`/`method`, `locus_tf`,
+#' `locus_ids`, `locus_names`). Selection is now done entirely by the caller
+#' using standard dplyr verbs on the `genome_meta` table, which is order-safe
+#' and compatible with dynamic genomes.
+#'
+#' @param tbl A `tidybreed_table` from `get_table("genome_meta")` (optionally
+#'   piped through `dplyr::filter()`). Must contain a `locus_id` column.
+#' @param chip_name Character scalar. Name of the SNP chip; used in messages
+#'   and to derive the default column name.
+#' @param col_name Character scalar. Column name created in `genome_meta`.
+#'   Default: `paste0("is_", chip_name)`. Must be a valid SQL identifier.
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
-#'   **Important:** Assign the result back to update your object: `pop <- define_chip(pop, ...)`
 #'
-#' @details
-#' **Selection Methods:**
-#'
-#' 1. **Random** (`n` + `method = "random"`):
-#'    - Randomly samples n loci without replacement
-#'    - Uniform distribution across entire genome
-#'
-#' 2. **Even spacing** (`n` + `method = "even"`):
-#'    - Evenly spaces n loci across genome by position
-#'    - Based on sequential locus order in genome_meta
-#'
-#' 3. **Chromosome-even** (`n` + `method = "chromosome_even"`):
-#'    - Distributes n proportionally across chromosomes
-#'    - Each chromosome gets n * (chr_loci / total_loci) SNPs
-#'    - SNPs are evenly spaced within each chromosome
-#'
-#' 4. **By logical vector** (`locus_tf`):
-#'    - Pass a logical vector with one element per locus (same length as genome_meta)
-#'    - TRUE marks the locus as on the chip, FALSE marks it as off
-#'    - Useful for building chips from existing chip membership, e.g., `!existing_tf` for the complement
-#'
-#' 5. **By locus IDs** (`locus_ids`):
-#'    - Select specific loci by their locus_id values (1, 2, 3, ...)
-#'    - All specified IDs must exist in genome_meta
-#'
-#' 6. **By locus names** (`locus_names`):
-#'    - Select specific loci by their locus_name values
-#'    - All specified names must exist in genome_meta
-#'
-#' **Column naming:**
-#' - Default column name is `is_{name}` (e.g., "50k" → "is_50k")
-#' - Can override with `col_name` parameter for custom naming
-#' - Column contains logical TRUE/FALSE values
-#'
-#' **Overwriting:**
-#' - If column already exists, it will be overwritten (follows `mutate_*` semantics)
-#'
-#' @export
+#' @seealso [define_qtl()], [add_genotypes()], [extract_genotypes()]
 #'
 #' @examples
 #' \dontrun{
-#' # Initialize genome
-#' pop <- initialize_genome(
-#'   pop_name = "test",
-#'   n_loci = 1000,
-#'   n_chr = 10,
-#'   chr_len_Mb = 100,
-#'   n_haplotypes = 100
-#' )
+#' # All loci on chromosomes 1-5
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(chr %in% 1:5) |>
+#'   define_chip("chr1to5")
 #'
-#' # Random selection of 500 SNPs
-#' pop <- pop %>%
-#'   define_chip(chip_name = "50k", n = 500, method = "random")
+#' # Random chip — sample locus names, then filter
+#' selected <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::collect() |>
+#'   dplyr::slice_sample(n = 500) |>
+#'   dplyr::pull(locus_name)
 #'
-#' # Evenly spaced SNPs
-#' pop <- pop %>%
-#'   define_chip(chip_name = "HD", n = 900, method = "even")
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(locus_name %in% selected) |>
+#'   define_chip("50K")
 #'
-#' # Proportional distribution across chromosomes
-#' pop <- pop %>%
-#'   define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
-#'
-#' # Logical vector — complement of an existing chip
-#' chip_tf <- get_table(pop, "genome_meta") %>%
-#'   dplyr::pull(is_50k)
-#' pop <- pop %>%
-#'   define_chip(chip_name = "non50k", locus_tf = !chip_tf)
-#'
-#' # Specific loci by ID
-#' pop <- pop %>%
-#'   define_chip(chip_name = "custom", locus_ids = c(1, 10, 50, 100))
-#'
-#' # Specific loci by name (e.g., from external chip manifest)
-#' chip_manifest <- c("Locus_1", "Locus_10", "Locus_50")
-#' pop <- pop %>%
-#'   define_chip(chip_name = "custom", locus_names = chip_manifest)
-#'
-#' # Custom column name
-#' pop <- pop %>%
-#'   define_chip(chip_name = "bovine_50k", n = 500, col_name = "SNP_50k")
-#'
-#' # View chip definition
-#' get_table(pop, "genome_meta") %>%
-#'   select(locus_id, locus_name, chr, pos_Mb, is_50k) %>%
-#'   filter(is_50k == TRUE) %>%
-#'   collect()
+#' # Complement of an existing chip
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(is_50K == FALSE) |>
+#'   define_chip("non50K")
 #' }
-define_chip <- function(pop,
-                        chip_name,
-                        n = NULL,
-                        locus_tf = NULL,
-                        locus_ids = NULL,
-                        locus_names = NULL,
-                        method = "random",
-                        col_name = paste0("is_", chip_name)) {
+#' @export
+define_chip <- function(tbl, chip_name, col_name = paste0("is_", chip_name)) {
 
-  # ============================================================================
-  # 1. Validate inputs
-  # ============================================================================
-
-  # Validate pop object
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
 
-  # Validate chip_name
-  stopifnot(is.character(chip_name), length(chip_name) == 1, nchar(chip_name) > 0)
-
-  # Validate exactly one selection method provided
-  methods_provided <- sum(
-    !is.null(n),
-    !is.null(locus_tf),
-    !is.null(locus_ids),
-    !is.null(locus_names)
-  )
-
-  if (methods_provided == 0) {
-    stop(
-      "Must specify one selection method: n, locus_tf, locus_ids, or locus_names",
-      call. = FALSE
-    )
-  }
-
-  if (methods_provided > 1) {
-    stop(
-      "Cannot specify multiple selection methods. ",
-      "Choose one of: n, locus_tf, locus_ids, locus_names",
-      call. = FALSE
-    )
-  }
-
-  # Validate method parameter (only relevant for n)
-  if (!is.null(n)) {
-    valid_methods <- c("random", "even", "chromosome_even")
-    if (!method %in% valid_methods) {
-      stop(
-        "Invalid method: '", method, "'. ",
-        "Must be one of: ", paste(valid_methods, collapse = ", "),
-        call. = FALSE
-      )
-    }
-  }
-
-  # Validate col_name
-  stopifnot(is.character(col_name), length(col_name) == 1, nchar(col_name) > 0)
-
-  # ============================================================================
-  # 2. Get genome_meta table
-  # ============================================================================
+  stopifnot(is.character(chip_name), length(chip_name) == 1L, nchar(chip_name) > 0L)
+  validate_sql_identifier(col_name, what = "col_name")
 
   if (!"genome_meta" %in% pop$tables) {
+    stop("genome_meta table does not exist. Call initialize_genome() first.",
+         call. = FALSE)
+  }
+
+  # Collect filtered locus IDs
+  collected <- dplyr::collect(tbl)
+  if (!"locus_id" %in% names(collected)) {
     stop(
-      "genome_meta table does not exist. Call initialize_genome() first.",
+      "The filtered table must contain 'locus_id'. ",
+      "Pipe get_table(\"genome_meta\") into define_chip().",
+      call. = FALSE
+    )
+  }
+  if (nrow(collected) == 0L) {
+    stop(
+      "No loci selected — your filter returned zero rows. ",
+      "Check the filter before piping into define_chip().",
       call. = FALSE
     )
   }
 
-  genome <- get_table(pop, "genome_meta") %>%
-    dplyr::collect()
+  selected_ids <- collected$locus_id
 
-  n_loci <- nrow(genome)
-
-  if (n_loci == 0) {
-    stop("genome_meta table is empty. Cannot define chip.", call. = FALSE)
-  }
-
-  # ============================================================================
-  # 3. Generate logical vector based on selection method
-  # ============================================================================
-
-  chip_indicator <- rep(FALSE, n_loci)
-
-  if (!is.null(n)) {
-    # Selection by count
-    chip_indicator <- select_by_n(genome, n, method)
-    n_selected <- sum(chip_indicator)
-    message(
-      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
-      "(method: ", method, ")"
-    )
-
-  } else if (!is.null(locus_tf)) {
-    # Selection by logical vector
-    if (!is.logical(locus_tf)) {
-      stop("locus_tf must be a logical vector", call. = FALSE)
-    }
-    if (length(locus_tf) != n_loci) {
-      stop(
-        "locus_tf length (", length(locus_tf), ") must equal number of loci (",
-        n_loci, ")",
-        call. = FALSE
-      )
-    }
-    chip_indicator <- locus_tf
-    n_selected <- sum(chip_indicator)
-    message("Defined chip '", chip_name, "' with ", n_selected, " SNPs (by locus_tf)")
-
-  } else if (!is.null(locus_ids)) {
-    # Selection by locus IDs
-    chip_indicator <- select_by_locus_ids(genome, locus_ids)
-    n_selected <- sum(chip_indicator)
-    message(
-      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
-      "(by locus IDs)"
-    )
-
-  } else if (!is.null(locus_names)) {
-    # Selection by locus names
-    chip_indicator <- select_by_locus_names(genome, locus_names)
-    n_selected <- sum(chip_indicator)
-    message(
-      "Defined chip '", chip_name, "' with ", n_selected, " SNPs ",
-      "(by locus names)"
+  # Guard: error if column already exists
+  existing_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
+  if (col_name %in% existing_cols) {
+    stop(
+      "Column '", col_name, "' already exists in genome_meta. ",
+      "Use a different chip_name or drop the column first.",
+      call. = FALSE
     )
   }
 
-  # ============================================================================
-  # 4. Create column via mutate_table() on genome_meta
-  # ============================================================================
+  # Add column defaulting FALSE, then flip selected loci to TRUE
+  DBI::dbExecute(
+    pop$db_conn,
+    paste0("ALTER TABLE genome_meta ADD COLUMN ", col_name, " BOOLEAN DEFAULT FALSE")
+  )
+  ids_sql <- paste(selected_ids, collapse = ", ")
+  DBI::dbExecute(
+    pop$db_conn,
+    paste0("UPDATE genome_meta SET ", col_name, " = TRUE WHERE locus_id IN (", ids_sql, ")")
+  )
 
-  args   <- setNames(list(chip_indicator), col_name)
-  result <- do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args))
+  message(
+    "Defined chip '", chip_name, "' with ", length(selected_ids),
+    " SNPs in column '", col_name, "'"
+  )
 
-  # Return modified pop object
-  invisible(result)
+  invisible(pop)
 }

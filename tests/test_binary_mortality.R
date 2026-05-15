@@ -75,8 +75,13 @@ pop <- pop |>
     description     = "Neonatal mortality (0 = survived, 1 = died)",
     target_add_var  = VA,
     residual_var    = VR
-  ) |>
-  define_qtl("mortality", n = N_QTL) |>
+  )
+sel_mort <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = N_QTL) |> pull(locus_name)
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(locus_name %in% sel_mort) |>
+  define_qtl("mortality") |>
   set_qtl_effects("mortality")
 
 # ---- Simulate phenotypes ----------------------------------------------

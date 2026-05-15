@@ -19,7 +19,11 @@ test_that("set_qtl_effects() rescales to target_add_var within tolerance", {
   pop <- make_effects_pop("eff_scale", n_ind = 600, n_loci = 600)
 
   pop <- add_trait(pop, "ADG", target_add_var = 0.5, residual_var = 0.5)
-  pop <- define_qtl(pop, "ADG", n = 100, method = "random")
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG")
   pop <- set_qtl_effects(pop, "ADG", distribution = "normal", seed = 1)
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
@@ -43,7 +47,11 @@ test_that("TBV mean is approximately 0 for founder population", {
 
   pop <- add_trait(pop, "ADG", target_add_var = 100, residual_var = 100,
                    target_add_mean = 0)
-  pop <- define_qtl(pop, "ADG", n = 200, method = "random")
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 200) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG")
   pop <- set_qtl_effects(pop, "ADG", distribution = "normal",
                          base = "founder_haplotypes", seed = 3)
 
@@ -64,7 +72,11 @@ test_that("base_allele_freq_{trait} column is written to genome_meta", {
   pop <- make_effects_pop("eff_base_col")
 
   pop <- add_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
-  pop <- define_qtl(pop, "ADG", n = 50, method = "random")
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 50) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG")
   pop <- set_qtl_effects(pop, "ADG", distribution = "normal")
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
@@ -83,7 +95,11 @@ test_that("base = 'current_pop' via tidybreed_table pipe works", {
 
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop <- add_trait(pop, "ADG", target_add_var = 50, residual_var = 50)
-  pop <- define_qtl(pop, "ADG", n = 100, method = "random")
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG")
 
   # Pass tidybreed_table as first arg with base = "current_pop"
   pop <- pop |>
@@ -107,7 +123,11 @@ test_that("base = 'current_pop' via tidybreed_table pipe works", {
 test_that("set_qtl_effects() accepts manual effects", {
   pop <- make_effects_pop("eff_manual")
   pop <- add_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
-  pop <- define_qtl(pop, "ADG", n = 10, method = "even")
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("ADG")
 
   # 10 QTL, all effects = 2.0
   pop <- set_qtl_effects(pop, "ADG", effects = rep(2.0, 10))
@@ -126,10 +146,12 @@ test_that("set_qtl_effects_multi() hits target variances per trait", {
   pop <- add_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75)
   pop <- add_trait(pop, "BW",  target_add_var = 0.50, residual_var = 0.50)
 
-  # Same QTL for both traits (full pleiotropy)
-  pop <- define_qtl(pop, "ADG", n = 150, method = "random")
-  qtl_tf <- dplyr::collect(get_table(pop, "genome_meta"))$is_QTL_ADG
-  pop <- define_qtl(pop, "BW", locus_tf = qtl_tf)
+  # Same QTL for both traits (full pleiotropy) — define in one call
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 150) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl(c("ADG", "BW"))
 
   G <- matrix(c(0.25, 0.10, 0.10, 0.50), 2, 2)
   pop <- set_qtl_effects_multi(pop, c("ADG", "BW"), G = G, seed = 7)

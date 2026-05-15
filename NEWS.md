@@ -1,3 +1,64 @@
+# tidybreed 0.22.0 (2026-05-15)
+
+## Breaking changes — eliminate implicit locus ordering
+
+All positional locus selection methods have been removed. Loci are now always
+selected via the `get_table("genome_meta") |> filter(...) |> fn()` pattern,
+which is order-safe and consistent with individual selection throughout the
+package.
+
+### `define_chip()` — signature change
+
+Old interface (removed):
+```r
+define_chip(pop, chip_name, n, method, locus_tf, locus_ids, locus_names)
+```
+
+New interface — pipe a filtered `genome_meta` table:
+```r
+pop |> get_table("genome_meta") |> filter(...) |> define_chip(chip_name)
+```
+
+The helper functions `select_by_n()`, `select_by_locus_ids()`, and
+`select_by_locus_names()` in `chip_helpers.R` have been removed entirely.
+
+### `define_qtl()` — signature change
+
+Old interface (removed):
+```r
+define_qtl(pop, trait_name, n, method, locus_tf, locus_ids, locus_names)
+```
+
+New interface — pipe a filtered `genome_meta` table; `trait_name` is now optional:
+```r
+pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG")
+pop |> get_table("genome_meta") |> filter(...) |> define_qtl(c("ADG", "BW"))
+pop |> get_table("genome_meta") |> filter(...) |> define_qtl()  # all traits
+```
+
+Shared QTL pleiotropy pattern:
+```r
+pop |> get_table("genome_meta") |> filter(is_QTL_ADG == TRUE) |> define_qtl("BW")
+```
+
+`define_qtl()` still returns `tidybreed_pop`, so it can pipe into
+`set_qtl_effects()`.
+
+### `add_trait_simple()` — `qtl_method` argument removed
+
+The `qtl_method` parameter no longer exists. QTL are always placed randomly
+inside `add_trait_simple()`. For non-random placement, use `define_qtl()`
+directly after filtering `genome_meta`.
+
+### `add_phenotype()` and `add_tbv()` — `trait_name` now optional
+
+When omitted, all traits in `trait_meta` are used (in `id_trait` order).
+
+```r
+pop |> get_table("ind_meta") |> add_phenotype()  # all traits
+pop |> get_table("ind_meta") |> add_tbv()         # all traits
+```
+
 # tidybreed 0.21.0 (2026-05-15)
 
 ## Breaking changes — naming consistency

@@ -19,10 +19,21 @@ pop <- initialize_genome(
 
 # Define SNP chips
 cat("2. Defining SNP chips...\n")
-pop <- pop %>%
-  define_chip(chip_name = "50k", n = 500, method = "random") %>%
-  define_chip(chip_name = "HD",  n = 900, method = "even") %>%
-  define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
+set.seed(42)
+sel_50k <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = 500) |> pull(locus_name)
+pop <- pop |> get_table("genome_meta") |>
+  filter(locus_name %in% sel_50k) |> define_chip("50k")
+
+sel_HD <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = 900) |> pull(locus_name)
+pop <- pop |> get_table("genome_meta") |>
+  filter(locus_name %in% sel_HD) |> define_chip("HD")
+
+sel_10k <- get_table(pop, "genome_meta") |> collect() |>
+  slice_sample(n = 100) |> pull(locus_name)
+pop <- pop |> get_table("genome_meta") |>
+  filter(locus_name %in% sel_10k) |> define_chip("10k")
 
 # Check chips were created
 cat("3. Checking chip columns...\n")

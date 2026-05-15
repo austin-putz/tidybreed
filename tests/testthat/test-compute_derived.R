@@ -24,8 +24,13 @@ make_ap_pop <- function() {
       min_value      = 150,
       max_value      = 250,
       expressed_sex  = "F"
-    ) |>
-    define_qtl("AP", n = 10) |>
+    )
+  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(locus_name %in% sel) |>
+    define_qtl("AP") |>
     set_qtl_effects("AP")
   pop <- get_table(pop, "ind_meta") |>
     dplyr::filter(sex == "F") |>
