@@ -6,7 +6,7 @@
 \usage{
 add_phenotype(
   tbl,
-  trait,
+  trait_name,
   user_residual = NULL,
   user_values = NULL,
   seed = NULL,
@@ -18,7 +18,7 @@ add_phenotype(
 through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column; unique
 values in that column determine which individuals are phenotyped.}
 
-\item{trait}{Character vector of trait name(s).}
+\item{trait_name}{Character vector of trait name(s).}
 
 \item{user_residual}{Optional override for residual draws. Numeric vector
 of length \code{n_subset} for single trait, or a named list keyed by trait
@@ -91,7 +91,7 @@ pop <- pop |>
 # Pre-select by phenotype record value from another table
 pop <- pop |>
   get_table("ind_phenotype") |>
-  dplyr::filter(value > 500) |>
+  dplyr::filter(pheno_value > 500) |>
   add_phenotype("ADG2")
 }
 }

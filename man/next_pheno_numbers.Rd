@@ -4,14 +4,14 @@
 \alias{next_pheno_numbers}
 \title{Compute the next pheno_number for each individual for a given trait}
 \usage{
-next_pheno_numbers(pop, trait, ids)
+next_pheno_numbers(pop, trait_name, ids)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait}{Trait name.}
-
 \item{ids}{Character vector of individual IDs (unique within call).}
+
+\item{trait}{Trait name.}
 }
 \value{
 Integer vector, same length and order as \code{ids}.

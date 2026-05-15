@@ -63,8 +63,9 @@ trace_pedigree <- function(pop, subset_ids, n_gen) {
 #' @return list with data, col_map, distinct_effects, effects_df,
 #'   n_fixed_effects, trait_cols
 #' @keywords internal
-build_data_file <- function(pop, subset_ids, trait, eval_dir,
+build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
                              pheno_ids = NULL) {
+  trait    <- trait_name
   n_traits <- length(trait)
 
   # Pull fixed effects for these traits (fixed_class and fixed_cov only)
@@ -109,7 +110,7 @@ build_data_file <- function(pop, subset_ids, trait, eval_dir,
   else ""
   pheno_long <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, trait_name, AVG(value) AS value FROM ind_phenotype ",
+    paste0("SELECT id_ind, trait_name, AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
            "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
            "AND id_ind IN (", id_in, ")",
            pheno_clause,
@@ -123,9 +124,9 @@ build_data_file <- function(pop, subset_ids, trait, eval_dir,
   all_ids_with_pheno <- unique(pheno_long$id_ind)
   pheno_wide <- data.frame(id_ind = all_ids_with_pheno, stringsAsFactors = FALSE)
   for (t in trait) {
-    t_rows <- pheno_long[pheno_long$trait_name == t, c("id_ind", "value"), drop = FALSE]
+    t_rows <- pheno_long[pheno_long$trait_name == t, c("id_ind", "pheno_value"), drop = FALSE]
     pheno_wide <- merge(pheno_wide, t_rows, by = "id_ind", all.x = TRUE)
-    names(pheno_wide)[names(pheno_wide) == "value"] <- t
+    names(pheno_wide)[names(pheno_wide) == "pheno_value"] <- t
   }
   # Replace NA with 0 (BLUPF90 missing indicator)
   for (t in trait) pheno_wide[[t]][is.na(pheno_wide[[t]])] <- 0
@@ -444,8 +445,9 @@ run_blupf90_plus <- function(eval_dir, blupf90_path) {
 #' @param eval_nums named integer vector of eval_number per trait name
 #' @return tibble: id_ind, trait_name, model, ebv, acc, se, eval_number
 #' @keywords internal
-parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
+parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
                                      all_ped_ids, model, eval_nums) {
+  trait <- trait_name
   sols_path <- file.path(eval_dir, "solutions.orig")
   if (!file.exists(sols_path))
     stop("Solutions file not found: ", sols_path, call. = FALSE)
@@ -476,7 +478,7 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
       id_ind      = character(),
       trait_name  = character(),
       model       = character(),
-      ebv         = numeric(),
+      ebv_value   = numeric(),
       acc         = numeric(),
       se          = numeric(),
       eval_number = integer()
@@ -489,7 +491,7 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
     id_ind      = anim_rows$orig_id,
     trait_name  = anim_rows$trait_name,
     model       = model,
-    ebv         = as.numeric(anim_rows$solution),
+    ebv_value   = as.numeric(anim_rows$solution),
     acc         = NA_real_,
     se          = NA_real_,
     eval_number = as.integer(eval_nums[anim_rows$trait_name])
@@ -497,7 +499,7 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
 
   # Summary message
   for (t in unique(result$trait_name)) {
-    vals <- result$ebv[result$trait_name == t]
+    vals <- result$ebv_value[result$trait_name == t]
     message(sprintf("  EBV [%s]: n=%d, mean=%.4f, sd=%.4f",
                     t, length(vals), mean(vals, na.rm = TRUE), sd(vals, na.rm = TRUE)))
   }
@@ -507,7 +509,7 @@ parse_blupf90_solutions <- function(eval_dir, trait, animal_effect_num,
 
 #' Stub for VCE writeback — parse blupf90.out and update trait_effect_cov
 #' @keywords internal
-update_covars_from_blupf90 <- function(pop, eval_dir, trait) {
+update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
   message("VCE writeback: automated parsing not yet implemented. ",
           "Inspect blupf90.out and update trait_effect_cov manually via ",
           "add_effect_cov_matrix().")

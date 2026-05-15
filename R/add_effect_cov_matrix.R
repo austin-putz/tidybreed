@@ -22,7 +22,7 @@
 #' variances automatically.
 #'
 #' All n² pairs (diagonal and both off-diagonal directions) are stored to
-#' support lookups in either (trait_1, trait_2) order. Previous entries for
+#' support lookups in either (trait_name_1, trait_name_2) order. Previous entries for
 #' this `effect_name` × traits combination are replaced.
 #'
 #' @param pop A `tidybreed_pop` object.
@@ -105,8 +105,8 @@ add_effect_cov_matrix <- function(pop,
   DBI::dbExecute(
     pop$db_conn,
     paste0("DELETE FROM trait_effect_cov WHERE effect_name = '", effect_name,
-           "' AND trait_1 IN (", quoted_traits,
-           ") AND trait_2 IN (", quoted_traits, ")")
+           "' AND trait_name_1 IN (", quoted_traits,
+           ") AND trait_name_2 IN (", quoted_traits, ")")
   )
 
   # Build multi-row INSERT to avoid DBI::dbWriteTable() which consumes R's RNG
@@ -125,7 +125,7 @@ add_effect_cov_matrix <- function(pop,
   DBI::dbExecute(
     pop$db_conn,
     paste0("INSERT INTO trait_effect_cov ",
-           "(id_trait_effect_cov, effect_name, trait_1, trait_2, cov) VALUES ",
+           "(id_trait_effect_cov, effect_name, trait_name_1, trait_name_2, cov_value) VALUES ",
            paste(value_rows, collapse = ", "))
   )
 
@@ -146,9 +146,9 @@ ensure_effect_cov_table <- function(pop) {
       CREATE TABLE trait_effect_cov (
         id_trait_effect_cov INTEGER PRIMARY KEY,
         effect_name         VARCHAR,
-        trait_1             VARCHAR,
-        trait_2             VARCHAR,
-        cov                 DOUBLE
+        trait_name_1        VARCHAR,
+        trait_name_2        VARCHAR,
+        cov_value           DOUBLE
       )
     ")
   }
@@ -170,12 +170,12 @@ get_effect_var <- function(pop, effect_name, trait_name) {
   }
   row <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT cov FROM trait_effect_cov ",
+    paste0("SELECT cov_value FROM trait_effect_cov ",
            "WHERE effect_name = '", effect_name, "' ",
-           "AND trait_1 = '", trait_name, "' ",
-           "AND trait_2 = '", trait_name, "'")
+           "AND trait_name_1 = '", trait_name, "' ",
+           "AND trait_name_2 = '", trait_name, "'")
   )
-  if (nrow(row) == 0L) NA_real_ else row$cov[[1L]]
+  if (nrow(row) == 0L) NA_real_ else row$cov_value[[1L]]
 }
 
 
@@ -183,23 +183,23 @@ get_effect_var <- function(pop, effect_name, trait_name) {
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param effect_name Character.
-#' @param traits Character vector of trait names.
+#' @param trait_names Character vector of trait names.
 #' @return Named numeric matrix, or `NULL` if any entry is missing.
 #' @keywords internal
-load_effect_cov <- function(pop, effect_name, traits) {
+load_effect_cov <- function(pop, effect_name, trait_names) {
   if (!"trait_effect_cov" %in% DBI::dbListTables(pop$db_conn)) return(NULL)
-  n <- length(traits)
-  R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(traits, traits))
+  n <- length(trait_names)
+  R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(trait_names, trait_names))
   rows <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_1, trait_2, cov FROM trait_effect_cov ",
+    paste0("SELECT trait_name_1, trait_name_2, cov_value FROM trait_effect_cov ",
            "WHERE effect_name = '", effect_name, "' ",
-           "AND trait_1 IN (", paste0("'", traits, "'", collapse = ", "), ") ",
-           "AND trait_2 IN (", paste0("'", traits, "'", collapse = ", "), ")")
+           "AND trait_name_1 IN (", paste0("'", trait_names, "'", collapse = ", "), ") ",
+           "AND trait_name_2 IN (", paste0("'", trait_names, "'", collapse = ", "), ")")
   )
   if (nrow(rows) == 0L) return(NULL)
   for (i in seq_len(nrow(rows))) {
-    R[rows$trait_1[i], rows$trait_2[i]] <- rows$cov[i]
+    R[rows$trait_name_1[i], rows$trait_name_2[i]] <- rows$cov_value[i]
   }
   if (any(is.na(R))) return(NULL)
   R
@@ -223,13 +223,13 @@ write_effect_cov_diagonal <- function(pop, effect_name, trait_name, variance) {
   DBI::dbExecute(
     pop$db_conn,
     paste0("DELETE FROM trait_effect_cov WHERE effect_name = '", effect_name,
-           "' AND trait_1 = '", trait_name, "' AND trait_2 = '", trait_name, "'")
+           "' AND trait_name_1 = '", trait_name, "' AND trait_name_2 = '", trait_name, "'")
   )
   new_id <- next_int_id(pop$db_conn, "trait_effect_cov", "id_trait_effect_cov")
   DBI::dbExecute(
     pop$db_conn,
     paste0("INSERT INTO trait_effect_cov ",
-           "(id_trait_effect_cov, effect_name, trait_1, trait_2, cov) VALUES (",
+           "(id_trait_effect_cov, effect_name, trait_name_1, trait_name_2, cov_value) VALUES (",
            new_id, ", '", effect_name, "', '", trait_name, "', '", trait_name, "', ",
            format(as.numeric(variance), scientific = FALSE), ")")
   )

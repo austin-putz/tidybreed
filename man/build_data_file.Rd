@@ -4,16 +4,16 @@
 \alias{build_data_file}
 \title{Build the BLUPF90 data file}
 \usage{
-build_data_file(pop, subset_ids, trait, eval_dir, pheno_ids = NULL)
+build_data_file(pop, subset_ids, trait_name, eval_dir, pheno_ids = NULL)
 }
 \arguments{
 \item{pop}{tidybreed_pop}
 
 \item{subset_ids}{character vector of animal IDs whose phenotypes to include}
 
-\item{trait}{character vector of trait names}
-
 \item{eval_dir}{path to evaluation folder; writes data.txt there}
+
+\item{trait}{character vector of trait names}
 }
 \value{
 list with data, col_map, distinct_effects, effects_df,

@@ -101,7 +101,7 @@ add_index <- function(tbl,
   idx_weights <- DBI::dbGetQuery(
     pop$db_conn,
     paste0(
-      "SELECT trait_name, index_wt FROM index_meta WHERE index_name = '",
+      "SELECT trait_name, index_weight FROM index_meta WHERE index_name = '",
       gsub("'", "''", index_name), "' ORDER BY trait_name"
     )
   )
@@ -115,7 +115,7 @@ add_index <- function(tbl,
   }
 
   index_traits <- idx_weights$trait_name
-  index_wts    <- setNames(idx_weights$index_wt, idx_weights$trait_name)
+  index_wts    <- setNames(idx_weights$index_weight, idx_weights$trait_name)
 
   # ---- Print weights message ----
   wt_str <- paste(
@@ -139,7 +139,7 @@ add_index <- function(tbl,
     # Auto-select latest eval_number per (id_ind, trait_name)
     ebv_df <- DBI::dbGetQuery(
       pop$db_conn,
-      "SELECT e.id_ind, e.trait_name, e.ebv
+      "SELECT e.id_ind, e.trait_name, e.ebv_value
        FROM ind_ebv e
        INNER JOIN (
          SELECT id_ind, trait_name, MAX(eval_number) AS max_eval
@@ -150,7 +150,7 @@ add_index <- function(tbl,
           AND e.eval_number = m.max_eval"
     )
   } else {
-    ebv_df <- dplyr::collect(tbl$tbl)[, c("id_ind", "trait_name", "ebv")]
+    ebv_df <- dplyr::collect(tbl$tbl)[, c("id_ind", "trait_name", "ebv_value")]
   }
 
   # ---- Filter to only index traits ----
@@ -207,7 +207,7 @@ add_index <- function(tbl,
   # causing column name mangling that makes wide[[tr]] return NULL.
   ebv_mat <- vapply(index_traits, function(tr) {
     tr_rows <- ebv_df[ebv_df$trait_name == tr, , drop = FALSE]
-    tr_rows$ebv[match(individuals_sorted, tr_rows$id_ind)]
+    tr_rows$ebv_value[match(individuals_sorted, tr_rows$id_ind)]
   }, numeric(length(individuals_sorted)))
 
   index_values <- as.numeric(ebv_mat %*% index_wts[index_traits])

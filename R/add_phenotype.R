@@ -42,7 +42,7 @@
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [filter()]). The table must contain an `id_ind` column; unique
 #'   values in that column determine which individuals are phenotyped.
-#' @param trait Character vector of trait name(s).
+#' @param trait_name Character vector of trait name(s).
 #' @param user_residual Optional override for residual draws. Numeric vector
 #'   of length `n_subset` for single trait, or a named list keyed by trait
 #'   for multi-trait.
@@ -71,12 +71,12 @@
 #' # Pre-select by phenotype record value from another table
 #' pop <- pop |>
 #'   get_table("ind_phenotype") |>
-#'   dplyr::filter(value > 500) |>
+#'   dplyr::filter(pheno_value > 500) |>
 #'   add_phenotype("ADG2")
 #' }
 #' @export
 add_phenotype <- function(tbl,
-                          trait,
+                          trait_name,
                           user_residual = NULL,
                           user_values   = NULL,
                           seed          = NULL,
@@ -85,8 +85,9 @@ add_phenotype <- function(tbl,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
-  stopifnot(is.character(trait), length(trait) >= 1)
-  lapply(trait, validate_sql_identifier, what = "trait name")
+  stopifnot(is.character(trait_name), length(trait_name) >= 1)
+  lapply(trait_name, validate_sql_identifier, what = "trait name")
+  trait <- trait_name
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
@@ -233,7 +234,7 @@ add_phenotype <- function(tbl,
     tbv_df <- tibble::tibble(
       id_ind     = ids_t,
       trait_name = t,
-      tbv        = tbv
+      tbv_value  = tbv
     )
     upsert_ind_tbv(pop, tbv_df)
   }
@@ -253,17 +254,17 @@ add_phenotype <- function(tbl,
       pop$db_conn,
       paste0("SELECT DISTINCT effect_name FROM trait_effect_cov ",
              "WHERE effect_name NOT IN ('gen_add', 'residual') ",
-             "AND trait_1 IN (", traits_sql, ") ",
-             "AND trait_2 IN (", traits_sql, ")")
+             "AND trait_name_1 IN (", traits_sql, ") ",
+             "AND trait_name_2 IN (", traits_sql, ")")
     )$effect_name
 
     for (eff in cov_effects) {
       eff_traits_q <- DBI::dbGetQuery(
         pop$db_conn,
-        paste0("SELECT DISTINCT trait_1 AS t FROM trait_effect_cov ",
+        paste0("SELECT DISTINCT trait_name_1 AS t FROM trait_effect_cov ",
                "WHERE effect_name = '", eff, "' ",
-               "AND trait_1 IN (", traits_sql, ") ",
-               "AND trait_2 IN (", traits_sql, ")")
+               "AND trait_name_1 IN (", traits_sql, ") ",
+               "AND trait_name_2 IN (", traits_sql, ")")
       )$t
       eff_traits <- intersect(trait, eff_traits_q)
       if (length(eff_traits) < 2) next
@@ -445,7 +446,7 @@ add_phenotype <- function(tbl,
       id_phenotype = next_phenotype_ids(pop, n_ind),
       id_ind       = ids_t,
       trait_name   = t,
-      value        = as.numeric(value),
+      pheno_value  = as.numeric(value),
       pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
     if (length(extra_cols) > 0) {
@@ -511,7 +512,7 @@ write_user_phenotype_values <- function(pop, trait, subset_by_trait,
       id_phenotype = next_phenotype_ids(pop, length(vals)),
       id_ind       = ids_t,
       trait_name   = t,
-      value        = as.numeric(vals),
+      pheno_value  = as.numeric(vals),
       pheno_number = next_pheno_numbers(pop, t, ids_t)
     )
     if (length(extra_cols) > 0) {

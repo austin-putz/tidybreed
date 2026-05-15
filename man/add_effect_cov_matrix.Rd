@@ -53,7 +53,7 @@ early in a simulation so that downstream functions can look up stored
 variances automatically.
 
 All n² pairs (diagonal and both off-diagonal directions) are stored to
-support lookups in either (trait_1, trait_2) order. Previous entries for
+support lookups in either (trait_name_1, trait_name_2) order. Previous entries for
 this \code{effect_name} × traits combination are replaced.
 }
 \examples{

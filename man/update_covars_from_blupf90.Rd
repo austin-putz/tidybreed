@@ -4,7 +4,7 @@
 \alias{update_covars_from_blupf90}
 \title{Stub for VCE writeback — parse blupf90.out and update trait_effect_cov}
 \usage{
-update_covars_from_blupf90(pop, eval_dir, trait)
+update_covars_from_blupf90(pop, eval_dir, trait_name)
 }
 \description{
 Stub for VCE writeback — parse blupf90.out and update trait_effect_cov

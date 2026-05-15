@@ -52,9 +52,9 @@ test_that("TBV mean is approximately 0 for founder population", {
   tbv_df <- dplyr::collect(get_table(pop, "ind_tbv"))
   expect_equal(nrow(tbv_df), 500)
   # mean TBV should be close to 0 (within ~2 SE = 2*sqrt(100/500) ≈ 0.9)
-  expect_equal(mean(tbv_df$tbv), 0, tolerance = 2.0)
+  expect_equal(mean(tbv_df$tbv_value), 0, tolerance = 2.0)
   # var TBV should be close to target_add_var = 100
-  expect_equal(var(tbv_df$tbv), 100, tolerance = 15)
+  expect_equal(var(tbv_df$tbv_value), 100, tolerance = 15)
 
   close_pop(pop)
 })
@@ -98,7 +98,7 @@ test_that("base = 'current_pop' via tidybreed_table pipe works", {
   # TBV mean should be ≈ 0
   pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
   tbv_df <- dplyr::collect(get_table(pop, "ind_tbv"))
-  expect_equal(mean(tbv_df$tbv), 0, tolerance = 3.0)
+  expect_equal(mean(tbv_df$tbv_value), 0, tolerance = 3.0)
 
   close_pop(pop)
 })

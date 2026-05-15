@@ -12,7 +12,7 @@ create_pop_for_mutate <- function(n_males = 5, n_females = 5) {
     id_ind      = paste0("A_", seq_len(n_ind)),
     id_parent_1 = NA_character_,
     id_parent_2 = NA_character_,
-    line        = "A",
+    line_name   = "A",
     sex         = c(rep("M", n_males), rep("F", n_females))
   )
   DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_df, overwrite = TRUE)
@@ -249,7 +249,7 @@ test_that("mutate_table() errors if not called after get_table()", {
 
 test_that("reserved columns are blocked in ind_meta", {
   pop <- create_pop_for_mutate()
-  for (col in c("id_ind", "id_parent_1", "id_parent_2", "line", "sex")) {
+  for (col in c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex")) {
     args <- setNames(list(1L), col)
     expect_error(
       do.call(mutate_table, c(list(tbl_obj = get_table(pop, "ind_meta")), args)),

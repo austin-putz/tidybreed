@@ -6,7 +6,7 @@
 \usage{
 add_ebv(
   tbl,
-  trait,
+  trait_name,
   software = NULL,
   parent_avg = FALSE,
   model = "model_1",
@@ -26,7 +26,7 @@ add_ebv(
 \item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally filtered).
 Must contain an \code{id_ind} column.}
 
-\item{trait}{Character vector of trait name(s) to evaluate.}
+\item{trait_name}{Character vector of trait name(s) to evaluate.}
 
 \item{software}{Character or \code{NULL}. Pass \code{"blupf90"} to run the BLUPF90
 suite. Use together with \code{parent_avg = FALSE}.}

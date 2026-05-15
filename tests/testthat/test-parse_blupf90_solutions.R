@@ -15,7 +15,7 @@ test_that("parse_blupf90_solutions reads solutions.orig with header and alignmen
 
   result <- tidybreed:::parse_blupf90_solutions(
     eval_dir          = tmp,
-    trait             = c("ADG"),
+    trait_name        = c("ADG"),
     animal_effect_num = 2L,
     all_ped_ids       = c("A_1", "A_2", "A_3"),
     model             = "test_model",
@@ -27,7 +27,7 @@ test_that("parse_blupf90_solutions reads solutions.orig with header and alignmen
   expect_equal(result$id_ind,      c("A_1", "A_2", "A_3"))
   expect_equal(result$trait_name,  rep("ADG", 3))
   expect_equal(result$model,       rep("test_model", 3))
-  expect_equal(result$ebv,         c(1.23456789, -0.98765432, 0.00000000),
+  expect_equal(result$ebv_value,   c(1.23456789, -0.98765432, 0.00000000),
                tolerance = 1e-6)
   expect_equal(result$eval_number, rep(1L, 3))
 })
@@ -45,7 +45,7 @@ test_that("parse_blupf90_solutions handles numeric-looking original IDs", {
 
   result <- tidybreed:::parse_blupf90_solutions(
     eval_dir          = tmp,
-    trait             = c("BW"),
+    trait_name        = c("BW"),
     animal_effect_num = 2L,
     all_ped_ids       = c("10", "20"),
     model             = "m1",
@@ -54,7 +54,7 @@ test_that("parse_blupf90_solutions handles numeric-looking original IDs", {
 
   expect_equal(nrow(result), 2L)
   expect_equal(result$id_ind, c("10", "20"))
-  expect_equal(result$ebv, c(1.0, -2.0), tolerance = 1e-6)
+  expect_equal(result$ebv_value, c(1.0, -2.0), tolerance = 1e-6)
 })
 
 test_that("parse_blupf90_solutions errors when solutions.orig is missing", {

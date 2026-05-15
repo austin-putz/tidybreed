@@ -4,14 +4,14 @@
 \alias{load_effect_cov}
 \title{Load a full covariance matrix from trait_effect_cov}
 \usage{
-load_effect_cov(pop, effect_name, traits)
+load_effect_cov(pop, effect_name, trait_names)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
 \item{effect_name}{Character.}
 
-\item{traits}{Character vector of trait names.}
+\item{trait_names}{Character vector of trait names.}
 }
 \value{
 Named numeric matrix, or \code{NULL} if any entry is missing.

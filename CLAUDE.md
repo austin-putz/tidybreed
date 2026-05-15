@@ -30,6 +30,28 @@ should be stored in a table and never in the R object itself, for restarts
 and for `restore_pop()` to be complete without having to recreate it or
 given as options again. 
 
+## Naming Consistency Rules
+
+1. **Function argument names must match the database column they populate exactly.**
+   Never use a different name for the same thing (e.g. argument `line_name` → column
+   `line_name`, not `line`).
+
+2. **All primary numeric value columns follow the `{prefix}_value` pattern.**
+   Examples: `pheno_value` in `ind_phenotype`, `tbv_value` in `ind_tbv`,
+   `ebv_value` in `ind_ebv`, `cov_value` in `trait_effect_cov`,
+   `index_value` in `ind_index`.
+
+3. **All name/label columns end in `_name`.**
+   Examples: `trait_name`, `locus_name`, `chr_name`, `line_name`, `effect_name`,
+   `index_name`. Never abbreviate to just `trait`, `line`, `chr`, etc. when
+   used as a column or function parameter that maps to one of these columns.
+
+4. **All ID foreign-key columns start with `id_`.**
+   Examples: `id_ind`, `id_trait`, `id_ebv`, `id_tbv`. No `phenotype_id`-style names.
+
+5. **No abbreviations in column names when the full word is unambiguous.**
+   `index_weight` not `index_wt`; `trait_name_1`/`trait_name_2` not `trait_1`/`trait_2`.
+
 ## Function Naming Convention
 
 | Prefix        | Meaning                                        |
@@ -85,16 +107,16 @@ is cheap and recomputation during mating is expensive.
 Individual-level metadata. Created empty by `initialize_genome()`; rows
 populated by `add_founders()` and `add_offspring()`.
 
-| Column      | Type    | Notes                          |
-|-------------|---------|--------------------------------|
-| id_ind      | VARCHAR | Primary key, format `{line}_{n}` (e.g. `Libra_1020`) |
-| id_parent_1 | VARCHAR | NA for founders                |
-| id_parent_2 | VARCHAR | NA for founders                |
-| line        | VARCHAR | Genetic line name              |
-| sex         | VARCHAR | "M" or "F"                     |
+| Column      | Type    | Notes                               |
+|-------------|---------|-------------------------------------|
+| id_ind      | VARCHAR | Primary key, format `{line_name}_{n}` (e.g. `Libra_1020`) |
+| id_parent_1 | VARCHAR | NA for founders                     |
+| id_parent_2 | VARCHAR | NA for founders                     |
+| line_name   | VARCHAR | Genetic line name                   |
+| sex         | VARCHAR | "M" or "F"                          |
 | *user cols* | any     | Added via `mutate_table()` or `...` in `add_founders()` |
 
-**Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line`, `sex`
+**Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line_name`, `sex`
 
 ### `trait_meta`
 
@@ -140,7 +162,7 @@ random effects). One row per (trait × effect).
 ### `trait_effect_cov`
 
 Unified variance/covariance table for all random effects (additive genetic,
-residual, and named random effects). One row per (effect_name, trait_1, trait_2).
+residual, and named random effects). One row per (effect_name, trait_name_1, trait_name_2).
 Both `(i,j)` and `(j,i)` pairs stored. Populated by `add_effect_cov_matrix()`,
 `add_trait()`, and `add_effect_random()`.
 
@@ -152,9 +174,9 @@ effect matching `effect_name` in `trait_effects`.
 |--------------------|---------|----------------------------------------------------|
 | id_trait_effect_cov| INTEGER | Primary key (auto-incrementing)                    |
 | effect_name        | VARCHAR | `"gen_add"`, `"residual"`, or random effect name   |
-| trait_1            | VARCHAR |                                                    |
-| trait_2            | VARCHAR |                                                    |
-| cov                | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
+| trait_name_1       | VARCHAR |                                                    |
+| trait_name_2       | VARCHAR |                                                    |
+| cov_value          | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
 
 ### `ind_phenotype`
 
@@ -165,7 +187,7 @@ Phenotype records in long format. Populated by `add_phenotype()`.
 | id_phenotype | INTEGER | Primary key (global auto-incrementing integer)    |
 | id_ind       | VARCHAR |                                                   |
 | trait_name   | VARCHAR |                                                   |
-| value        | DOUBLE  | Phenotype value                                   |
+| pheno_value  | DOUBLE  | Phenotype value                                   |
 | pheno_number | INTEGER | 1 = first record for this individual × trait, etc.|
 | *user cols*  | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
 
@@ -179,7 +201,7 @@ True breeding values (simulation ground truth). Populated by
 | id_tbv     | INTEGER | Primary key (auto-incrementing)        |
 | id_ind     | VARCHAR |                                        |
 | trait_name | VARCHAR |                                        |
-| tbv        | DOUBLE  |                                        |
+| tbv_value  | DOUBLE  |                                        |
 
 ### `ind_ebv`
 
@@ -192,7 +214,7 @@ Estimated breeding values from external BLUP / GBLUP runs. Logical key
 | id_ind      | VARCHAR |                                                              |
 | trait_name  | VARCHAR |                                                              |
 | model       | VARCHAR | User label, e.g. "ssGBLUP_v1"                               |
-| ebv         | DOUBLE  |                                                              |
+| ebv_value   | DOUBLE  |                                                              |
 | acc         | DOUBLE  | Optional accuracy                                            |
 | se          | DOUBLE  | Optional standard error                                      |
 | eval_number | INTEGER | Auto-incrementing counter per trait (global across models); 1 = first evaluation |

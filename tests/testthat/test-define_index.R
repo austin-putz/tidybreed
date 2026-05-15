@@ -19,7 +19,7 @@ make_index_pop <- function(pop_name = "idx") {
     id_ind      = ind_ids,
     trait_name  = "ADG",
     model       = "test_model",
-    ebv         = seq(100, 190, length.out = length(ind_ids)),
+    ebv_value   = seq(100, 190, length.out = length(ind_ids)),
     acc         = NA_real_,
     se          = NA_real_,
     eval_number = 1L,
@@ -29,7 +29,7 @@ make_index_pop <- function(pop_name = "idx") {
     id_ind      = ind_ids,
     trait_name  = "FCR",
     model       = "test_model",
-    ebv         = seq(2.5, 3.4, length.out = length(ind_ids)),
+    ebv_value   = seq(2.5, 3.4, length.out = length(ind_ids)),
     acc         = NA_real_,
     se          = NA_real_,
     eval_number = 1L,
@@ -59,7 +59,7 @@ test_that("define_index() creates index_meta rows", {
   expect_equal(nrow(rows), 2L)
   expect_equal(rows$index_name, c("terminal", "terminal"))
   expect_equal(rows$trait_name, c("ADG", "FCR"))
-  expect_equal(rows$index_wt,   c(1.2, -0.8), tolerance = 1e-9)
+  expect_equal(rows$index_weight,   c(1.2, -0.8), tolerance = 1e-9)
 })
 
 
@@ -77,7 +77,7 @@ test_that("define_index() upserts — re-running updates weights", {
   rows <- DBI::dbGetQuery(pop$db_conn,
     "SELECT * FROM index_meta WHERE index_name = 'terminal' ORDER BY trait_name")
   expect_equal(nrow(rows), 2L)
-  expect_equal(rows$index_wt, c(2.0, -1.0), tolerance = 1e-9)
+  expect_equal(rows$index_weight, c(2.0, -1.0), tolerance = 1e-9)
 })
 
 
@@ -171,10 +171,10 @@ test_that("add_index() computes correct index values", {
 
   # Verify one computed value manually
   adg_vals <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, ebv FROM ind_ebv WHERE trait_name = 'ADG' ORDER BY id_ind")
+    "SELECT id_ind, ebv_value FROM ind_ebv WHERE trait_name = 'ADG' ORDER BY id_ind")
   fcr_vals <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, ebv FROM ind_ebv WHERE trait_name = 'FCR' ORDER BY id_ind")
-  expected <- adg_vals$ebv * 1.0 + fcr_vals$ebv * (-1.0)
+    "SELECT id_ind, ebv_value FROM ind_ebv WHERE trait_name = 'FCR' ORDER BY id_ind")
+  expected <- adg_vals$ebv_value * 1.0 + fcr_vals$ebv_value * (-1.0)
   expect_equal(result$index_value, expected, tolerance = 1e-9)
 })
 
@@ -356,7 +356,7 @@ test_that("add_index() errors when duplicate (id_ind, trait_name) rows remain", 
     id_ind      = ind_ids,
     trait_name  = "ADG",
     model       = "model_2",
-    ebv         = rnorm(length(ind_ids)),
+    ebv_value   = rnorm(length(ind_ids)),
     acc         = NA_real_,
     se          = NA_real_,
     eval_number = 1L,

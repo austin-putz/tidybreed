@@ -127,8 +127,8 @@ clip_count <- function(x, min_value = NA_real_, max_value = NA_real_) {
 #' @return Numeric vector of length `nrow(subset_df)` giving the summed
 #'   covariate contribution per individual.
 #' @keywords internal
-compute_covariate_contribution <- function(pop, trait, subset_df) {
-
+compute_covariate_contribution <- function(pop, trait_name, subset_df) {
+  trait <- trait_name
   effects <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT * FROM trait_effects WHERE trait_name = '", trait, "'")
@@ -269,7 +269,8 @@ compute_covariate_contribution <- function(pop, trait, subset_df) {
 #' @param ids Character vector of individual IDs (unique within call).
 #' @return Integer vector, same length and order as `ids`.
 #' @keywords internal
-next_pheno_numbers <- function(pop, trait, ids) {
+next_pheno_numbers <- function(pop, trait_name, ids) {
+  trait <- trait_name
   if (length(ids) == 0) return(integer(0))
   ids_df <- data.frame(id_ind = ids, stringsAsFactors = FALSE)
   DBI::dbWriteTable(pop$db_conn, "_tb_pn_ids", ids_df, overwrite = TRUE)

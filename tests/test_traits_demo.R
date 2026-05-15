@@ -39,7 +39,7 @@ matings <- tibble::tibble(
   id_parent_1 = sample(sires, 200, replace = TRUE),
   id_parent_2 = sample(dams,  200, replace = TRUE),
   sex         = sample(c("M", "F"), 200, replace = TRUE),
-  line        = "A",
+  line_name   = "A",
   gen         = 1L
 )
 pop <- add_offspring(pop, matings)
@@ -100,13 +100,13 @@ print(summary_tbl)
 pheno <- get_table(pop, "ind_phenotype") |>
   filter(trait_name %in% c("ADG", "BW")) |>
   collect()
-wide <- reshape(as.data.frame(pheno[, c("id_ind", "trait_name", "value")]),
+wide <- reshape(as.data.frame(pheno[, c("id_ind", "trait_name", "pheno_value")]),
                 idvar = "id_ind", timevar = "trait_name",
                 direction = "wide")
-if (all(c("value.ADG", "value.BW") %in% names(wide))) {
+if (all(c("pheno_value.ADG", "pheno_value.BW") %in% names(wide))) {
   cat("\n=== Phenotype correlation diagnostic ===\n")
   cat(sprintf("cor(ADG, BW) = %.3f\n",
-              cor(wide$value.ADG, wide$value.BW, use = "complete.obs")))
+              cor(wide$pheno_value.ADG, wide$pheno_value.BW, use = "complete.obs")))
 }
 
 close_pop(pop)

@@ -71,8 +71,8 @@ pop <- add_founders(pop, n_males = 3, n_females = 7, line_name = "B")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
-line_a <- ind_meta %>% filter(line == "A")
-line_b <- ind_meta %>% filter(line == "B")
+line_a <- ind_meta %>% filter(line_name == "A")
+line_b <- ind_meta %>% filter(line_name == "B")
 
 cat("✓ Line A:", nrow(line_a), "individuals\n")
 cat("✓ Line A IDs:", paste(head(line_a$id_ind, 5), collapse = ", "), "\n")

@@ -118,13 +118,13 @@ pop <- pop |>
   add_tbv("ADG")
 
 tbv_df <- DBI::dbGetQuery(conn,
-  "SELECT id_ind, tbv FROM ind_tbv WHERE trait_name = 'ADG' ORDER BY tbv DESC")
+  "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG' ORDER BY tbv_value DESC")
 
 cat("TBV results (all individuals, sorted):\n")
 print(tbv_df)
 
-edited_tbv  <- tbv_df$tbv[tbv_df$id_ind == edited_id]
-other_tbvs  <- tbv_df$tbv[tbv_df$id_ind != edited_id]
+edited_tbv  <- tbv_df$tbv_value[tbv_df$id_ind == edited_id]
+other_tbvs  <- tbv_df$tbv_value[tbv_df$id_ind != edited_id]
 
 cat("\nGene-edited individual", edited_id, "TBV:", round(edited_tbv, 3), "\n")
 cat("Max TBV among others:     ", round(max(other_tbvs), 3), "\n")
@@ -152,7 +152,7 @@ matings <- data.frame(
   id_parent_1 = rep(edited_id, 5),
   id_parent_2 = paste0("A_", 11:15),
   sex         = rep("M", 5),
-  line        = "A",
+  line_name   = "A",
   gen         = 1L
 )
 

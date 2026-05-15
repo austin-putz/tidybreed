@@ -185,7 +185,7 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
     id_ind = ind_ids,
     id_parent_1 = NA_character_,  # NULL for founders
     id_parent_2 = NA_character_,  # NULL for founders
-    line = line_name,
+    line_name = line_name,
     sex = sex_vector
   )
 

@@ -21,7 +21,7 @@
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [filter()]). The table must contain an `id_ind` column.
-#' @param trait Character vector of trait name(s).
+#' @param trait_name Character vector of trait name(s).
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -35,13 +35,14 @@
 #'   add_tbv(c("ADG", "BW"))
 #' }
 #' @export
-add_tbv <- function(tbl, trait, ...) {
+add_tbv <- function(tbl, trait_name, ...) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
-  stopifnot(is.character(trait), length(trait) >= 1)
-  lapply(trait, validate_sql_identifier, what = "trait name")
+  stopifnot(is.character(trait_name), length(trait_name) >= 1)
+  lapply(trait_name, validate_sql_identifier, what = "trait name")
+  trait <- trait_name
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
@@ -136,7 +137,7 @@ add_tbv <- function(tbl, trait, ...) {
     tbv_df <- tibble::tibble(
       id_ind     = ids_t,
       trait_name = t,
-      tbv        = tbv
+      tbv_value  = tbv
     )
     if (length(extra_cols) > 0) {
       prepped <- prepare_extra_cols(extra_cols, nrow(tbv_df), "ind_tbv",

@@ -125,7 +125,7 @@ test_that("add_offspring() works after restore; IDs continue without collision",
     id_parent_1 = "A_1",
     id_parent_2 = "A_6",
     sex         = "M",
-    line        = "A"
+    line_name   = "A"
   )
 
   expect_no_error({

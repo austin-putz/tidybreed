@@ -90,8 +90,8 @@ print(ph)
 tbv <- pop |> get_table("ind_tbv")       |> collect()
 
 n_total   <- nrow(ph)
-n_dead    <- sum(ph$value == 1)
-obs_rate  <- mean(ph$value)
+n_dead    <- sum(ph$pheno_value == 1)
+obs_rate  <- mean(ph$pheno_value)
 
 cat("=== Phenotype results ===\n")
 cat(sprintf("Total animals phenotyped: %d\n", n_total))
@@ -101,7 +101,7 @@ cat(sprintf("Observed mortality rate:  %.4f  (%.2f%%)\n", obs_rate, obs_rate * 1
 cat(sprintf("Target  mortality rate:   %.4f  (%.2f%%)\n", PREV, PREV * 100))
 cat(sprintf("Difference:               %+.4f (%+.2f%%)\n",
             obs_rate - PREV, (obs_rate - PREV) * 100))
-cat(sprintf("All values are 0 or 1:    %s\n", all(ph$value %in% c(0, 1))))
+cat(sprintf("All values are 0 or 1:    %s\n", all(ph$pheno_value %in% c(0, 1))))
 cat(sprintf("liability_value written:  %s\n", "liability_value" %in% names(ph)))
 cat(sprintf("cat_name written:         %s\n\n", "cat_name" %in% names(ph)))
 if ("cat_name" %in% names(ph)) {
@@ -110,10 +110,10 @@ if ("cat_name" %in% names(ph)) {
 }
 
 cat("=== TBV (liability scale) ===\n")
-cat(sprintf("Mean TBV:     % .4f  (expected ~0)\n",  mean(tbv$tbv)))
-cat(sprintf("Var(TBV):     %.4f  (target VA = %.1f)\n", var(tbv$tbv), VA))
+cat(sprintf("Mean TBV:     % .4f  (expected ~0)\n",  mean(tbv$tbv_value)))
+cat(sprintf("Var(TBV):     %.4f  (target VA = %.1f)\n", var(tbv$tbv_value), VA))
 cat(sprintf("SD(TBV):      %.4f  (expected ~%.4f)\n",
-            sd(tbv$tbv), sqrt(VA)))
+            sd(tbv$tbv_value), sqrt(VA)))
 
 # ---- Verify threshold is approximately correct -------------------------
 cat("\n=== Threshold verification ===\n")

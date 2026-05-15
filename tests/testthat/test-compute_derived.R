@@ -37,15 +37,19 @@ make_ap_pop <- function() {
 # ── 1. Core functionality ─────────────────────────────────────────────────────
 
 test_that("compute_derived() returns pop invisibly", {
+  # run all code above as function
   pop <- make_ap_pop()
+  
+  # use `compute_derived()` function to add `puberty_date` to `ind_meta`
   result <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_meta = "puberty_date")
     )
+  
   expect_s3_class(result, "tidybreed_pop")
   close_pop(pop)
 })
@@ -56,7 +60,7 @@ test_that("compute_derived() writes to secondary table (ind_meta)", {
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_meta = "puberty_date")
@@ -76,10 +80,10 @@ test_that("compute_derived() writes to secondary table (ind_meta)", {
   # Value should equal birth_date + AP value (in days)
   joined <- merge(
     meta_f[, c("id_ind", "birth_date", "puberty_date")],
-    ap_pheno[, c("id_ind", "value")],
+    ap_pheno[, c("id_ind", "pheno_value")],
     by = "id_ind"
   )
-  expected <- as.Date("2024-01-01") + as.integer(joined$value)
+  expected <- as.Date("2024-01-01") + as.integer(joined$pheno_value)
   expect_equal(joined$puberty_date, expected)
 
   close_pop(pop)
@@ -91,7 +95,7 @@ test_that("compute_derived() writes to primary table (ind_phenotype)", {
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_phenotype = "pheno_date")
@@ -109,9 +113,9 @@ test_that("compute_derived() writes to primary table (ind_phenotype)", {
   meta_f <- get_table(pop, "ind_meta") |>
     dplyr::filter(sex == "F") |>
     dplyr::collect()
-  joined <- merge(ap_pheno[, c("id_ind", "value", "pheno_date")],
+  joined <- merge(ap_pheno[, c("id_ind", "pheno_value", "pheno_date")],
                   meta_f[, c("id_ind", "birth_date")], by = "id_ind")
-  expect_equal(joined$pheno_date, as.Date("2024-01-01") + as.integer(joined$value))
+  expect_equal(joined$pheno_date, as.Date("2024-01-01") + as.integer(joined$pheno_value))
 
   close_pop(pop)
 })
@@ -122,7 +126,7 @@ test_that("compute_derived() writes to both tables in a single call", {
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_meta = "puberty_date", ind_phenotype = "pheno_date")
@@ -157,7 +161,7 @@ test_that("compute_derived() updates an existing column (no duplicate column add
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_meta = "puberty_date")
@@ -204,14 +208,14 @@ test_that("compute_derived() works without join_table (primary table only)", {
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP") |>
     compute_derived(
-      compute  = \(df) df$value * 0.1,   # scaled value
+      compute  = \(df) df$pheno_value * 0.1,   # scaled value
       write_to = c(ind_phenotype = "value_scaled")
     )
   ap <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP") |>
     dplyr::collect()
   expect_true("value_scaled" %in% names(ap))
-  expect_equal(ap$value_scaled, ap$value * 0.1)
+  expect_equal(ap$value_scaled, ap$pheno_value * 0.1)
   close_pop(pop)
 })
 
@@ -229,14 +233,14 @@ test_that("conflict error when two rows for same id_ind produce different values
   dup_rows <- ap_rows
   dup_rows$id_phenotype <- dup_rows$id_phenotype + max(ap_rows$id_phenotype)
   dup_rows$pheno_number <- 2L
-  dup_rows$value        <- dup_rows$value + 10  # different value
+  dup_rows$pheno_value  <- dup_rows$pheno_value + 10  # different value
   DBI::dbWriteTable(pop$db_conn, "ind_phenotype", dup_rows, append = TRUE)
 
   expect_error(
     get_table(pop, "ind_phenotype") |>
       dplyr::filter(trait_name == "AP") |>
       compute_derived(
-        compute    = \(df) df$birth_date + as.integer(df$value),
+        compute    = \(df) df$birth_date + as.integer(df$pheno_value),
         join_table = "ind_meta",
         join_by    = "id_ind",
         write_to   = c(ind_meta = "puberty_date")
@@ -395,8 +399,8 @@ test_that("error if dest_col is a reserved column", {
     get_table(pop, "ind_phenotype") |>
       dplyr::filter(trait_name == "AP") |>
       compute_derived(
-        compute  = \(df) df$value,
-        write_to = c(ind_phenotype = "value")   # "value" is reserved
+        compute  = \(df) df$pheno_value,
+        write_to = c(ind_phenotype = "pheno_value")   # "pheno_value" is reserved
       ),
     "Cannot modify reserved column"
   )
@@ -410,7 +414,7 @@ test_that("early return with message when filter matches 0 rows", {
     pop2 <- get_table(pop, "ind_phenotype") |>
       dplyr::filter(trait_name == "NONEXISTENT") |>
       compute_derived(
-        compute  = \(df) df$value,
+        compute  = \(df) df$pheno_value,
         write_to = c(ind_phenotype = "value_copy")
       ),
     "0 rows"
@@ -427,7 +431,7 @@ test_that("Date result creates DATE column", {
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
     compute_derived(
-      compute    = \(df) df$birth_date + as.integer(df$value),
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
       write_to   = c(ind_meta = "puberty_date")

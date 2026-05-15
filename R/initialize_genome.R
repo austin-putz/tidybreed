@@ -242,7 +242,7 @@ initialize_genome <- function(pop_name,
       id_ind      VARCHAR PRIMARY KEY,
       id_parent_1 VARCHAR,
       id_parent_2 VARCHAR,
-      line        VARCHAR,
+      line_name   VARCHAR,
       sex         VARCHAR
     )
   ")
@@ -251,9 +251,9 @@ initialize_genome <- function(pop_name,
     CREATE TABLE trait_effect_cov (
       id_trait_effect_cov INTEGER PRIMARY KEY,
       effect_name         VARCHAR,
-      trait_1             VARCHAR,
-      trait_2             VARCHAR,
-      cov                 DOUBLE
+      trait_name_1        VARCHAR,
+      trait_name_2        VARCHAR,
+      cov_value           DOUBLE
     )
   ")
 

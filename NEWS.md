@@ -1,3 +1,41 @@
+# tidybreed 0.21.0 (2026-05-15)
+
+## Breaking changes — naming consistency
+
+All column and argument names have been standardised. Scripts that reference
+any of the old names must be updated.
+
+### Database column renames
+
+| Table | Old column | New column |
+|---|---|---|
+| `ind_meta` | `line` | `line_name` |
+| `ind_phenotype` | `value` | `pheno_value` |
+| `ind_tbv` | `tbv` | `tbv_value` |
+| `ind_ebv` | `ebv` | `ebv_value` |
+| `trait_effect_cov` | `trait_1` | `trait_name_1` |
+| `trait_effect_cov` | `trait_2` | `trait_name_2` |
+| `trait_effect_cov` | `cov` | `cov_value` |
+| `index_meta` | `index_wt` | `index_weight` |
+
+### Public function parameter renames
+
+* `add_phenotype(tbl, trait, ...)` — `trait` → `trait_name`
+* `add_tbv(tbl, trait, ...)` — `trait` → `trait_name`
+* `add_ebv(tbl, trait_name, ...)` — already correct; now consistent throughout
+* Internal helpers (`build_data_file`, `parse_blupf90_solutions`,
+  `update_covars_from_blupf90`, `compute_covariate_contribution`,
+  `next_pheno_numbers`, `load_effect_cov`) — `trait` → `trait_name`
+
+### CLAUDE.md — new naming consistency rules
+
+Five rules now documented in `CLAUDE.md`:
+1. Function argument names must match the database column they populate exactly.
+2. All primary numeric value columns follow the `{prefix}_value` pattern.
+3. All name/label columns end in `_name`.
+4. All ID columns start with `id_`.
+5. No abbreviations when the full word is unambiguous.
+
 # tidybreed 0.20.1 (2026-05-14)
 
 ## Documentation & cleanup

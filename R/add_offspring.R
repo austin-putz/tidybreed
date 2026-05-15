@@ -112,14 +112,14 @@ add_offspring <- function(pop, matings) {
   # 3. Check required columns are present
   # ============================================================================
 
-  required_cols <- c("id_parent_1", "id_parent_2", "sex", "line")
+  required_cols <- c("id_parent_1", "id_parent_2", "sex", "line_name")
   missing_req   <- setdiff(required_cols, names(matings))
 
   if (length(missing_req) > 0) {
     stop(
       "matings is missing required column(s): ",
       paste(missing_req, collapse = ", "), ". ",
-      "Required: id_parent_1 (or id_sire), id_parent_2 (or id_dam), sex, line",
+      "Required: id_parent_1 (or id_sire), id_parent_2 (or id_dam), sex, line_name",
       call. = FALSE
     )
   }
@@ -137,9 +137,9 @@ add_offspring <- function(pop, matings) {
     )
   }
 
-  invalid_line <- !grepl("^[a-zA-Z][a-zA-Z0-9_]*$", matings$line)
+  invalid_line <- !grepl("^[a-zA-Z][a-zA-Z0-9_]*$", matings$line_name)
   if (any(invalid_line)) {
-    bad <- paste(unique(matings$line[invalid_line]), collapse = ", ")
+    bad <- paste(unique(matings$line_name[invalid_line]), collapse = ", ")
     stop(
       "Invalid line value(s): ", bad, ". ",
       "Must start with a letter and contain only letters, numbers, or underscores.",
@@ -242,7 +242,7 @@ add_offspring <- function(pop, matings) {
   # 10. Determine offspring IDs (per-line sequential numbering)
   # ============================================================================
 
-  unique_lines <- unique(matings$line)
+  unique_lines <- unique(matings$line_name)
   line_start   <- integer(length(unique_lines))
   names(line_start) <- unique_lines
 
@@ -262,7 +262,7 @@ add_offspring <- function(pop, matings) {
   line_counter  <- as.list(line_start)
 
   for (i in seq_len(n_offspring)) {
-    ln             <- matings$line[i]
+    ln             <- matings$line_name[i]
     offspring_ids[i] <- paste0(ln, "_", line_counter[[ln]])
     line_counter[[ln]] <- line_counter[[ln]] + 1L
   }
@@ -316,7 +316,7 @@ add_offspring <- function(pop, matings) {
     id_ind      = offspring_ids,
     id_parent_1 = matings$id_parent_1,
     id_parent_2 = matings$id_parent_2,
-    line        = matings$line,
+    line_name   = matings$line_name,
     sex         = matings$sex
   )
 

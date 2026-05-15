@@ -74,7 +74,7 @@ test_that("DOUBLE column gets 5-number summary display", {
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
   summ    <- summary(pop, tables = "ind_phenotype")
   cs      <- summ$tables[["ind_phenotype"]]$col_summaries
-  val_row <- cs[cs$col_name == "value", ]
+  val_row <- cs[cs$col_name == "pheno_value", ]
   expect_match(val_row$display, "Min:")
   expect_match(val_row$display, "Q1:")
   expect_match(val_row$display, "Med:")

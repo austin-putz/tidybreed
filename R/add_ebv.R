@@ -16,7 +16,7 @@
 #'
 #' @param tbl A `tidybreed_table` from [get_table()] (optionally filtered).
 #'   Must contain an `id_ind` column.
-#' @param trait Character vector of trait name(s) to evaluate.
+#' @param trait_name Character vector of trait name(s) to evaluate.
 #' @param software Character or `NULL`. Pass `"blupf90"` to run the BLUPF90
 #'   suite. Use together with `parent_avg = FALSE`.
 #' @param parent_avg Logical. If `TRUE`, compute EBVs as the average of
@@ -89,7 +89,7 @@
 #' }
 #' @export
 add_ebv <- function(tbl,
-                    trait,
+                    trait_name,
                     software       = NULL,
                     parent_avg     = FALSE,
                     model          = "model_1",
@@ -109,9 +109,10 @@ add_ebv <- function(tbl,
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
 
-  stopifnot(is.character(trait), length(trait) >= 1)
-  lapply(trait, validate_sql_identifier, what = "trait name")
+  stopifnot(is.character(trait_name), length(trait_name) >= 1)
+  lapply(trait_name, validate_sql_identifier, what = "trait name")
   validate_sql_identifier(model, what = "model label")
+  trait <- trait_name
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
@@ -236,7 +237,7 @@ add_ebv <- function(tbl,
       for (nm in names(prepped)) ebv_df[[nm]] <- prepped[[nm]]
     }
     upsert_ind_ebv(pop, ebv_df)
-    n_written <- sum(!is.na(ebv_df$ebv))
+    n_written <- sum(!is.na(ebv_df$ebv_value))
     message("Stored ", nrow(ebv_df), " EBV record(s) in ind_ebv",
             if (n_written < nrow(ebv_df))
               paste0(" (", nrow(ebv_df) - n_written, " NA)"),
@@ -251,7 +252,8 @@ add_ebv <- function(tbl,
 # Parent average
 # ---------------------------------------------------------------------------
 
-ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
+ebv_parent_avg <- function(pop, subset_ids, trait_name, model, eval_nums) {
+  trait <- trait_name
   id_in    <- paste0("'", subset_ids, "'", collapse = ", ")
   cand_meta <- DBI::dbGetQuery(
     pop$db_conn,
@@ -269,7 +271,7 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
     parent_ebv <- DBI::dbGetQuery(
       pop$db_conn,
       paste0(
-        "SELECT e.id_ind, e.trait_name, e.ebv, agg.max_eval, agg.n_evals ",
+        "SELECT e.id_ind, e.trait_name, e.ebv_value, agg.max_eval, agg.n_evals ",
         "FROM ind_ebv e ",
         "JOIN ( ",
         "  SELECT id_ind, trait_name, ",
@@ -320,12 +322,12 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
 
     for (t in trait) {
       p1_ebv <- if (!is.na(p1)) {
-        v <- parent_ebv$ebv[parent_ebv$id_ind == p1 & parent_ebv$trait_name == t]
+        v <- parent_ebv$ebv_value[parent_ebv$id_ind == p1 & parent_ebv$trait_name == t]
         if (length(v) == 1L) v else NA_real_
       } else NA_real_
 
       p2_ebv <- if (!is.na(p2)) {
-        v <- parent_ebv$ebv[parent_ebv$id_ind == p2 & parent_ebv$trait_name == t]
+        v <- parent_ebv$ebv_value[parent_ebv$id_ind == p2 & parent_ebv$trait_name == t]
         if (length(v) == 1L) v else NA_real_
       } else NA_real_
 
@@ -350,7 +352,7 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
     id_ind      = id_out,
     trait_name  = trait_out,
     model       = model,
-    ebv         = ebv_out,
+    ebv_value   = ebv_out,
     acc         = NA_real_,
     se          = NA_real_,
     eval_number = eval_out
@@ -362,10 +364,11 @@ ebv_parent_avg <- function(pop, subset_ids, trait, model, eval_nums) {
 # BLUPF90 path
 # ---------------------------------------------------------------------------
 
-ebv_blupf90 <- function(pop, subset_ids, trait, model, eval_nums,
+ebv_blupf90 <- function(pop, subset_ids, trait_name, model, eval_nums,
                          n_gen_pedigree, chip_name, run_dir, eval_id,
                          estimate_var, update_covars,
                          pheno_ids = NULL) {
+  trait <- trait_name
 
   renumf90_path <- find_blupf90_binary("renumf90")
   blupf90_path  <- find_blupf90_binary("blupf90+")

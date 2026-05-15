@@ -25,7 +25,7 @@ matings <- tibble::tibble(
   id_parent_1 = rep("A_1", 5),
   id_parent_2 = paste0("A_", 6:10),
   sex         = c("M", "F", "M", "F", "M"),
-  line        = "A",
+  line_name   = "A",
   gen         = 2L
 )
 
@@ -58,11 +58,11 @@ cat("Genotype == hap1 + hap2 for", off_id, ":", all(g == h1 + h2), "\n")
 
 # ── Alias columns ────────────────────────────────────────────────────────────
 matings_alias <- tibble::tibble(
-  id_sire = "A_1",
-  id_dam  = "A_6",
-  sex     = "M",
-  line    = "A",
-  gen     = 2L
+  id_sire   = "A_1",
+  id_dam    = "A_6",
+  sex       = "M",
+  line_name = "A",
+  gen       = 2L
 )
 pop <- pop |> add_offspring(matings_alias)
 cat("\nAlias (id_sire / id_dam) accepted without error: TRUE\n")
@@ -75,23 +75,23 @@ cross_matings <- tibble::tibble(
   id_parent_1 = c("A_1", "A_2"),
   id_parent_2 = c("B_1", "B_2"),
   sex         = c("M", "F"),
-  line        = "C",
+  line_name   = "C",
   gen         = 2L
 )
 pop <- pop |> add_offspring(cross_matings)
-c_ids <- dplyr::filter(dplyr::collect(get_table(pop, "ind_meta")), line == "C")$id_ind
+c_ids <- dplyr::filter(dplyr::collect(get_table(pop, "ind_meta")), line_name == "C")$id_ind
 cat("\nCross-line offspring (line C):", paste(c_ids, collapse = ", "), "\n")
 
 # ── Error checks ─────────────────────────────────────────────────────────────
 cat("\nError checks:\n")
 tryCatch(
   add_offspring(pop, tibble::tibble(id_parent_1 = "Z_999", id_parent_2 = "A_6",
-                                    sex = "M", line = "A")),
+                                    sex = "M", line_name = "A")),
   error = function(e) cat("  Non-existent parent correctly caught:", conditionMessage(e), "\n")
 )
 tryCatch(
   add_offspring(pop, tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
-                                    sex = "X", line = "A")),
+                                    sex = "X", line_name = "A")),
   error = function(e) cat("  Invalid sex correctly caught:", conditionMessage(e), "\n")
 )
 

@@ -73,7 +73,7 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
     id_index_name = seq.int(start_id, start_id + n_rows - 1L),
     index_name    = index_name,
     trait_name    = trait_names,
-    index_wt      = as.double(index_wts),
+    index_weight  = as.double(index_wts),
     stringsAsFactors = FALSE
   )
 

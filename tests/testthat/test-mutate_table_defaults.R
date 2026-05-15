@@ -95,7 +95,7 @@ test_that(".set_default works on populated table", {
 
   result2 <- pop |>
     get_table("ind_meta") |>
-    dplyr::filter(line == "B") |>
+    dplyr::filter(line_name == "B") |>
     collect()
   expect_true(all(result2$farm == "Iowa"))
 

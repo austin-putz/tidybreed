@@ -28,7 +28,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 200)
   expect_true(all(ph$trait_name == "ADG"))
-  expect_equal(mean(ph$value), 10, tolerance = 0.3)
+  expect_equal(mean(ph$pheno_value), 10, tolerance = 0.3)
 
   tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
   expect_equal(nrow(tbv), 200)
@@ -85,10 +85,10 @@ test_that("categorical trait with prevalence respects target rate approximately"
   pop <- pop |> get_table("ind_meta") |> add_phenotype("mort")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  rate <- mean(ph$value)
+  rate <- mean(ph$pheno_value)
   # Fixed threshold: observed rate fluctuates; check within 4 percentage points
   expect_true(abs(rate - 0.1) <= 0.04)
-  expect_true(all(ph$value %in% c(0, 1)))
+  expect_true(all(ph$pheno_value %in% c(0, 1)))
   # Reserved columns written
   expect_true("liability_value" %in% names(ph))
   expect_true("cat_name"        %in% names(ph))
@@ -123,7 +123,7 @@ test_that("categorical trait with explicit thresholds produces correct categorie
   pop <- pop |> get_table("ind_meta") |> add_phenotype("body_score")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  expect_true(all(ph$value %in% c(1, 2, 3, 4)))
+  expect_true(all(ph$pheno_value %in% c(1, 2, 3, 4)))
   expect_true("liability_value" %in% names(ph))
   expect_true("cat_name"        %in% names(ph))
   expect_true(all(ph$cat_name %in% c("thin", "fair", "good", "excellent")))
@@ -145,9 +145,9 @@ test_that("count trait clips to min/max", {
   pop <- pop |> get_table("ind_meta") |> add_phenotype("litter")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  expect_true(all(ph$value >= 0))
-  expect_true(all(ph$value <= 20))
-  expect_true(all(ph$value == round(ph$value)))
+  expect_true(all(ph$pheno_value >= 0))
+  expect_true(all(ph$pheno_value <= 20))
+  expect_true(all(ph$pheno_value == round(ph$pheno_value)))
 
   close_pop(pop)
 })
@@ -170,10 +170,10 @@ test_that("user_values override bypasses the model", {
     add_phenotype("ADG", user_values = list(ADG = custom))
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  expect_equal(length(ph$value), length(ids))
+  expect_equal(length(ph$pheno_value), length(ids))
   # Exact match by id_ind
   expect_equal(
-    sort(ph$value[match(ids, ph$id_ind)]),
+    sort(ph$pheno_value[match(ids, ph$id_ind)]),
     sort(unname(custom))
   )
 
@@ -198,8 +198,8 @@ test_that("fixed-effect covariate shifts phenotype by level", {
   ind <- dplyr::collect(get_table(pop, "ind_meta"))
   ph$sex <- ind$sex[match(ph$id_ind, ind$id_ind)]
 
-  mean_m <- mean(ph$value[ph$sex == "M"])
-  mean_f <- mean(ph$value[ph$sex == "F"])
+  mean_m <- mean(ph$pheno_value[ph$sex == "M"])
+  mean_f <- mean(ph$pheno_value[ph$sex == "F"])
   expect_gt(mean_m - mean_f, 15)      # difference is ~20 with small noise
 
   close_pop(pop)

@@ -327,7 +327,7 @@ ensure_trait_tables <- function(pop) {
         id_phenotype INTEGER PRIMARY KEY,
         id_ind       VARCHAR,
         trait_name   VARCHAR,
-        value        DOUBLE,
+        pheno_value  DOUBLE,
         pheno_number INTEGER
       )
     ",
@@ -336,7 +336,7 @@ ensure_trait_tables <- function(pop) {
         id_tbv     INTEGER PRIMARY KEY,
         id_ind     VARCHAR,
         trait_name VARCHAR,
-        tbv        DOUBLE,
+        tbv_value  DOUBLE,
         UNIQUE (id_ind, trait_name)
       )
     ",
@@ -346,7 +346,7 @@ ensure_trait_tables <- function(pop) {
         id_ind      VARCHAR,
         trait_name  VARCHAR,
         model       VARCHAR,
-        ebv         DOUBLE,
+        ebv_value   DOUBLE,
         acc         DOUBLE,
         se          DOUBLE,
         eval_number INTEGER,
@@ -358,7 +358,7 @@ ensure_trait_tables <- function(pop) {
         id_index_name INTEGER PRIMARY KEY,
         index_name    VARCHAR,
         trait_name    VARCHAR,
-        index_wt      DOUBLE,
+        index_weight  DOUBLE,
         UNIQUE (index_name, trait_name)
       )
     ",

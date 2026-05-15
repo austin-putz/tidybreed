@@ -22,13 +22,13 @@ test_that("add_founders creates ind_meta table with correct structure", {
   # Check structure
   expect_equal(nrow(ind_meta), 30)
   expect_equal(ncol(ind_meta), 5)
-  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line", "sex") %in% colnames(ind_meta)))
+  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex") %in% colnames(ind_meta)))
 
   # Check data types
   expect_type(ind_meta$id_ind, "character")
   expect_type(ind_meta$id_parent_1, "character")
   expect_type(ind_meta$id_parent_2, "character")
-  expect_type(ind_meta$line, "character")
+  expect_type(ind_meta$line_name, "character")
   expect_type(ind_meta$sex, "character")
 
   close_pop(pop)
@@ -54,7 +54,7 @@ test_that("add_founders correctly assigns IDs and sex", {
   expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check line
-  expect_true(all(ind_meta$line == "A"))
+  expect_true(all(ind_meta$line_name == "A"))
 
   # Check sex assignment
   expect_equal(sum(ind_meta$sex == "M"), 5)
@@ -208,12 +208,12 @@ test_that("add_founders works with multiple lines", {
   expect_equal(nrow(ind_meta), 20)
 
   # Check line A IDs
-  line_a <- ind_meta %>% dplyr::filter(line == "A")
+  line_a <- ind_meta %>% dplyr::filter(line_name == "A")
   expect_equal(nrow(line_a), 10)
   expect_equal(line_a$id_ind, paste0("A_", 1:10))
 
   # Check line B IDs
-  line_b <- ind_meta %>% dplyr::filter(line == "B")
+  line_b <- ind_meta %>% dplyr::filter(line_name == "B")
   expect_equal(nrow(line_b), 10)
   expect_equal(line_b$id_ind, paste0("B_", 1:10))
 
@@ -253,7 +253,7 @@ test_that("sequential additions to same line continue numbering", {
   expect_equal(ind_meta$id_ind, expected_ids)
 
   # Check all belong to line A
-  expect_true(all(ind_meta$line == "A"))
+  expect_true(all(ind_meta$line_name == "A"))
 
   expect_equal(nrow(ind_meta), 15L)
 
@@ -424,7 +424,7 @@ test_that("integration: initialize_genome -> add_founders -> mutate_table", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   expect_equal(nrow(ind_meta), 110)
-  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
+  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex", "gen", "farm", "date_birth") %in% colnames(ind_meta)))
 
   # Check custom metadata
   expect_true(all(ind_meta$gen == 0))

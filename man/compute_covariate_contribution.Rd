@@ -5,16 +5,16 @@
 \title{Compute the covariate contribution (fixed + random shifts) for each
 individual in a subset, for a single trait}
 \usage{
-compute_covariate_contribution(pop, trait, subset_df)
+compute_covariate_contribution(pop, trait_name, subset_df)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object (connection used for queries).}
 
-\item{trait}{Trait name.}
-
 \item{subset_df}{Data frame: the per-trait subset of \code{ind_meta} (already
 sex-filtered). Must contain \code{id_ind} and any \code{ind_meta} columns referenced
 by effects. Effects from other tables are fetched from the DB directly.}
+
+\item{trait}{Trait name.}
 }
 \value{
 Numeric vector of length \code{nrow(subset_df)} giving the summed
