@@ -1,11 +1,11 @@
 #' Add a trait with QTL and sampled effects in one call
 #'
 #' @description
-#' Convenience wrapper that chains [add_trait()], [define_qtl()], and
-#' [add_additive_effects()] for a single uncorrelated trait using random QTL
-#' placement. For correlated multi-trait simulations, or to control QTL
-#' placement (e.g. by chromosome or position), use the three functions
-#' individually with `get_table("genome_meta") |> filter(...) |> define_qtl()`.
+#' Convenience wrapper that chains [add_trait()] and [add_additive_effects()]
+#' for a single uncorrelated trait using random QTL placement. For correlated
+#' multi-trait simulations, or to control QTL placement (e.g. by chromosome
+#' or position), use the functions individually with
+#' `get_table("genome_meta") |> filter(...) |> add_additive_effects()`.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Trait name; must be a valid SQL identifier.
@@ -58,9 +58,7 @@ add_trait_simple <- function(pop,
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
-    define_qtl(trait_name)
-
-  pop <- add_additive_effects(pop, trait_name = trait_name,
+    add_additive_effects(trait_name = trait_name,
                          distribution    = effect_distribution,
                          scale_to_target = scale_to_target,
                          seed            = NULL)

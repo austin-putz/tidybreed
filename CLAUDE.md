@@ -79,11 +79,36 @@ Locus-level metadata. One row per locus.
 | chr        | INTEGER | Chromosome number              |
 | chr_name   | VARCHAR | Chromosome name string         |
 | pos_Mb     | DOUBLE  | Position in megabases          |
-| *user cols*| any     | Added via `mutate_genome_meta()` or `define_chip()` |
+| *user cols*| any     | Added via `mutate_table()` or `define_chip()` |
 
 **Reserved** (cannot be modified): `locus_id`, `locus_name`, `chr`, `chr_name`, `pos_Mb`
 
-Example user columns: `is_50K BOOLEAN`, `is_HD BOOLEAN`, `effect_ADG DOUBLE`
+Example user columns: `is_50K BOOLEAN`, `is_HD BOOLEAN`
+
+**Note**: QTL effects are **not** stored as columns in `genome_meta`. They live in
+the `genome_effects` table (see below). There are no `add_{trait}`, `is_QTL_{trait}`,
+or `base_allele_freq_{trait}` columns.
+
+### `genome_effects`
+
+QTL effect data. One row per (locus × trait × effect type × line). Populated by
+`add_additive_effects()` and `set_qtl_effects_multi()`.
+
+| Column             | Type    | Notes                                                      |
+|--------------------|---------|------------------------------------------------------------|
+| id_genome_effect   | INTEGER | Primary key (auto-incrementing)                            |
+| locus_name         | VARCHAR | FK to `genome_meta.locus_name`                             |
+| line_name          | VARCHAR | NULL = population-wide; set for line-specific effects      |
+| trait_name         | VARCHAR | FK to `trait_meta.trait_name`                              |
+| genome_effect_type | VARCHAR | `"additive"` now; `"dominance"` and others later           |
+| genome_value       | DOUBLE  | Effect size                                                |
+| base_allele_freq   | DOUBLE  | Base allele frequency used for TBV centering (Falconer)    |
+
+**Reserved**: all columns (the table is managed exclusively by `add_additive_effects()`).
+
+QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
+`genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
+flag is stored.
 
 ### `genome_haplotype`
 
@@ -405,35 +430,41 @@ pop |>
   add_phenotype("ADG2")
 ```
 
-### `add_trait()` / `define_qtl()` / `add_additive_effects()` / `set_qtl_effects_multi()`
+### `add_trait()` / `add_additive_effects()` / `set_qtl_effects_multi()`
 
-`R/add_trait.R`, `R/define_qtl.R`, `R/add_additive_effects.R`
+`R/add_trait.R`, `R/add_additive_effects.R`
 
 - `add_trait()` — one row in `trait_meta`. (Trait tables are created by
   `initialize_genome()`, not on first `add_trait()` call.)
   `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
   `trait_meta`).
-- `define_qtl()` — accepts a `tidybreed_table` from `get_table("genome_meta")`
-  (optionally filtered) as its first argument; `trait_name` is optional
-  (defaults to all traits in `trait_meta`). Writes `is_QTL_{trait}` BOOLEAN
-  for each trait, with `DEFAULT FALSE` for unselected loci. Returns
-  `tidybreed_pop` so it can be piped into `add_additive_effects()`.
+- `add_additive_effects()` — accepts a `tidybreed_table` from
+  `get_table("genome_meta")` (optionally filtered) as its **first argument**.
+  The filtered rows determine which loci are QTL. Writes rows to `genome_effects`
+  with `genome_effect_type = "additive"`. Manual or sampled (normal/gamma) with
+  optional rescale. Reads `target_add_var` from `trait_effect_cov`.
+  Re-calling for the same trait replaces existing rows in `genome_effects`.
   ```r
-  # Single trait
-  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG")
-  # Multiple traits at once (same loci)
-  pop |> get_table("genome_meta") |> filter(...) |> define_qtl(c("ADG", "BW"))
-  # Shared QTL pleiotropy
-  pop |> get_table("genome_meta") |> filter(is_QTL_ADG == TRUE) |> define_qtl("BW")
-  # Pipeline into set_qtl_effects
-  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG") |> add_additive_effects("ADG")
+  # Single trait — filter defines QTL, effects are written in one step
+  pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> add_additive_effects("ADG")
+
+  # Multiple traits with same QTL set
+  for (t in c("ADG", "BW")) {
+    pop <- pop |> get_table("genome_meta") |> filter(locus_name %in% sel) |>
+      add_additive_effects(t)
+  }
+
+  # Use generation-0 animals to define base allele frequencies
+  gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
+  pop |> get_table("genome_meta") |> filter(...) |>
+    add_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
   ```
-- `add_additive_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
-  (normal/gamma) with optional rescale. Reads `target_add_var` from
-  `trait_effect_cov` (`effect_name = "gen_add"`).
 - `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
-  multiple traits via `MASS::mvrnorm`. `G = NULL` reads from `trait_effect_cov`.
-  `method = "shared"` (pleiotropy) or `"union"`.
+  multiple traits via `MASS::mvrnorm`. First argument is a `tidybreed_table`
+  from `get_table("genome_meta")` defining the candidate loci.
+  `G = NULL` reads from `trait_effect_cov`. `method = "shared"` (all listed
+  traits get effects at the filtered loci) or `"union"` (per-trait QTL sets
+  read from existing `genome_effects` rows, restricted to the filtered loci).
 
 ### `add_effect_cov_matrix()` / `add_effect_random()` / `add_effect_fixed_class()` / `add_effect_fixed_cov()` / `add_effect_int()`
 
@@ -463,24 +494,26 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
 
 - `add_phenotype()` — the workhorse. `trait_name` defaults to all traits
-  in `trait_meta` when omitted. Extracts unique `id_ind` from the filtered
-  table, intersects with `expressed_sex`, computes TBV (genotype × effects,
-  or haplotype dose for imprinted traits), adds fixed/random covariate
-  contributions, samples residuals (joint `MVN(0, R)` when multiple traits
-  share the subset and `R` is stored; otherwise independent). Converts
-  liability to phenotype per `trait_type`. Writes `ind_phenotype` rows and
-  updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records. `trait_name` also defaults
-  to all traits in `trait_meta` when omitted.
+  in `trait_meta` when omitted. Internally calls `add_tbv()` first (which reads
+  effects from `genome_effects`), then reads TBVs back from `ind_tbv` for the
+  phenotype model. Adds fixed/random covariate contributions, samples residuals
+  (joint `MVN(0, R)` when multiple traits share the subset and `R` is stored;
+  otherwise independent). Converts liability to phenotype per `trait_type`.
+  Writes `ind_phenotype` rows and updates `ind_tbv`.
+- `add_tbv()` — TBV-only; no phenotype records. Reads additive effects from
+  `genome_effects` (where `genome_effect_type = "additive"` and
+  `line_name IS NULL`). `trait_name` also defaults to all traits in `trait_meta`
+  when omitted.
 
 ### `add_trait_simple()`
 
 `R/add_trait_simple.R`
 
-Convenience wrapper that chains `add_trait()` → random `define_qtl()` →
-`add_additive_effects()` for a single uncorrelated trait. QTL are always placed
-randomly (n = `n_qtl`). The `qtl_method` parameter has been removed; for
-non-random QTL placement use the three functions individually.
+Convenience wrapper that chains `add_trait()` and `add_additive_effects()` for
+a single uncorrelated trait. QTL are always placed randomly (n = `n_qtl`).
+For non-random QTL placement or correlated multi-trait effects, use the
+functions individually with `get_table("genome_meta") |> filter(...)  |>
+add_additive_effects()`.
 
 ## Roadmap
 

@@ -1,3 +1,41 @@
+# tidybreed 0.23.0 (2026-05-15)
+
+## Breaking changes — genome_effects table replaces genome_meta effect columns
+
+* New `genome_effects` table stores all QTL effect data in long format. The
+  dynamically-added wide columns `add_{trait}`, `is_QTL_{trait}`, and
+  `base_allele_freq_{trait}` no longer exist in `genome_meta`. Existing
+  databases created with prior versions are incompatible.
+
+* `define_qtl()` is removed. Its role is absorbed by `add_additive_effects()`,
+  which now accepts a filtered `tidybreed_table` from `get_table("genome_meta")`
+  as its first argument. QTL selection and effect assignment happen in one step.
+
+  **Migration:**
+  ```r
+  # Old (v0.22.x):
+  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("T") |> add_additive_effects("T")
+
+  # New (v0.23.0):
+  pop |> get_table("genome_meta") |> filter(...) |> add_additive_effects("T")
+  ```
+
+* `add_additive_effects()` first argument is now always a `tidybreed_table`
+  from `get_table("genome_meta")` (never a bare `tidybreed_pop`). The
+  `base = "current_pop"` individual filter is now supplied via the new
+  `base_tbl` argument instead of piping from an `ind_meta` table.
+
+* `set_qtl_effects_multi()` first argument is now a `tidybreed_table` from
+  `get_table("genome_meta")` (defining the shared/union loci set) instead of
+  a `tidybreed_pop`. Add `line_name` and `base_tbl` arguments.
+
+## Improvements
+
+* `add_phenotype()` no longer duplicates TBV computation. It now calls
+  `add_tbv()` internally and reads TBVs from `ind_tbv` for the phenotype model.
+* `genome_effects` table supports a `line_name` column for future line-specific
+  QTL effects (`NULL` = population-wide, the default).
+
 # tidybreed 0.22.1 (2026-05-15)
 
 ## Breaking changes — rename `set_qtl_effects()` to `add_additive_effects()`

@@ -7,8 +7,9 @@
 #' (sex-limited, parent-of-origin), and index / economic weights.
 #'
 #' `add_trait()` does not touch the genome or sample QTL. Those are separate
-#' steps handled by [define_qtl()] and [add_additive_effects()]. For the common
-#' one-off case, use [add_trait_simple()] which chains all three together.
+#' steps handled by [add_additive_effects()] (pipe from a filtered
+#' `get_table("genome_meta")`). For the common one-off case, use
+#' [add_trait_simple()] which chains both together.
 #'
 #' On first call, creates the trait-layer tables (`trait_meta`, `trait_effects`,
 #' `trait_random_effects`, `ind_phenotype`, `ind_tbv`, `ind_ebv`).
@@ -18,7 +19,7 @@
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Trait name; used as the primary key and as the
-#'   suffix for `is_QTL_{trait_name}` and `add_{trait_name}` columns in `genome_meta`.
+#'   Used as the primary key in `trait_meta`.
 #'   Must be a valid SQL identifier.
 #' @param description Character. Free-text description of the trait.
 #' @param units Character. Measurement units, e.g. `"kg"`, `"count"`.
@@ -75,7 +76,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [define_qtl()], [add_additive_effects()], [add_effect_fixed_class()],
+#' @seealso [add_additive_effects()], [add_effect_fixed_class()],
 #'   [add_effect_fixed_cov()], [add_effect_random()], [add_phenotype()],
 #'   [add_trait_simple()]
 #'

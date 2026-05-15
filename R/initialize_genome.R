@@ -257,9 +257,21 @@ initialize_genome <- function(pop_name,
     )
   ")
 
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE genome_effects (
+      id_genome_effect   INTEGER PRIMARY KEY,
+      locus_name         VARCHAR NOT NULL,
+      line_name          VARCHAR,
+      trait_name         VARCHAR NOT NULL,
+      genome_effect_type VARCHAR NOT NULL,
+      genome_value       DOUBLE  NOT NULL,
+      base_allele_freq   DOUBLE
+    )
+  ")
+
   # Generate founder haplotypes if requested
   tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype",
-                      "ind_meta", "trait_effect_cov")
+                      "ind_meta", "trait_effect_cov", "genome_effects")
 
   if (!is.null(n_haplotypes)) {
     message("Generating ", n_haplotypes, " founder haplotypes...")

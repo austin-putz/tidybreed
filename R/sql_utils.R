@@ -70,6 +70,8 @@ validate_sql_identifier <- function(name, what = "identifier",
 TABLE_RESERVED_COLS <- list(
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
+  genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
+                       "genome_effect_type", "genome_value", "base_allele_freq"),
   ind_phenotype    = c("id_phenotype", "id_ind", "trait_name", "pheno_value", "pheno_number",
                        "liability_value", "cat_name"),
   ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value"),
@@ -94,6 +96,7 @@ TABLE_RESERVED_COLS <- list(
 TABLE_PRIMARY_KEYS <- list(
   ind_meta         = "id_ind",
   genome_meta      = "locus_id",
+  genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   ind_tbv          = "id_tbv",
   ind_ebv          = "id_ebv",
@@ -114,6 +117,7 @@ TABLE_PRIMARY_KEYS <- list(
 TABLE_ROW_KEYS <- list(
   ind_meta         = "id_ind",
   genome_meta      = "locus_id",
+  genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   trait_meta       = "id_trait",
   ind_tbv          = c("id_ind", "trait_name"),

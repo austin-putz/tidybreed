@@ -22,7 +22,7 @@
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'
-#' @seealso [define_qtl()], [add_genotypes()], [extract_genotypes()]
+#' @seealso [add_additive_effects()], [add_genotypes()], [extract_genotypes()]
 #'
 #' @examples
 #' \dontrun{

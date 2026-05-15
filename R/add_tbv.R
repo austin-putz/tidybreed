@@ -104,15 +104,13 @@ add_tbv <- function(tbl, trait_name = NULL, ...) {
   }
   meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
 
-  genome_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
-  for (t in trait) {
-    if (!paste0("add_", t) %in% genome_cols) {
-      stop("Additive-effect column 'add_", t, "' not found. Call ",
-           "add_additive_effects('", t, "', ...) first.", call. = FALSE)
-    }
-  }
+  # Locus order needed to map genome_effects locus_name to genotype matrix columns
+  locus_order <- DBI::dbGetQuery(
+    pop$db_conn,
+    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id"
+  )
+  n_loci <- nrow(locus_order)
 
-  genome <- dplyr::collect(get_table(pop, "genome_meta"))
   geno_mat_full <- get_genotype_matrix(pop, subset_ids = subset_ids)
 
   for (t in trait) {
@@ -124,17 +122,32 @@ add_tbv <- function(tbl, trait_name = NULL, ...) {
     }
     if (length(ids_t) == 0) next
 
-    a <- genome[[paste0("add_", t)]]
-    a[is.na(a)] <- 0
-
-    p_base_col <- paste0("base_allele_freq_", t)
-    p_base <- if (p_base_col %in% names(genome)) {
-      pv <- as.numeric(genome[[p_base_col]])
-      pv[is.na(pv)] <- 0
-      pv
-    } else {
-      rep(0, length(a))
+    # Load additive effects from genome_effects (population-wide: line_name IS NULL)
+    effects_df <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0(
+        "SELECT locus_name, genome_value, base_allele_freq ",
+        "FROM genome_effects ",
+        "WHERE trait_name = '", t, "' ",
+        "AND genome_effect_type = 'additive' ",
+        "AND line_name IS NULL"
+      )
+    )
+    if (nrow(effects_df) == 0L) {
+      stop(
+        "No additive effects found for trait '", t, "' in genome_effects. ",
+        "Call add_additive_effects() first.",
+        call. = FALSE
+      )
     }
+
+    # Map locus_name → position in the genotype matrix (locus_id order)
+    a      <- rep(0, n_loci)
+    p_base <- rep(0, n_loci)
+    idx    <- match(effects_df$locus_name, locus_order$locus_name)
+    a[idx]      <- effects_df$genome_value
+    baf <- effects_df$base_allele_freq
+    p_base[idx] <- ifelse(is.na(baf), 0, baf)
 
     if (m$expressed_parent == "both") {
       rows_idx <- match(ids_t, rownames(geno_mat_full))

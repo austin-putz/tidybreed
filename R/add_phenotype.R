@@ -12,8 +12,8 @@
 #'
 #' * `target_add_mean` comes from `trait_meta`.
 #' * Fixed and random shifts come from `trait_effects` rows.
-#' * `TBV_i` = sum over QTL of `add_{trait}` * genotype dose (or haplotype
-#'   dose for imprinted traits).
+#' * `TBV_i` = sum over additive effects in `genome_effects` * genotype dose
+#'   (or haplotype dose for imprinted traits).
 #' * `e_i` is residual: drawn from `MVN(0, R)` across traits when a residual
 #'   covariance matrix is stored (see [add_effect_cov_matrix()]) and multiple
 #'   traits share the same subset; otherwise drawn independently.
@@ -54,7 +54,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_trait()], [define_qtl()], [add_additive_effects()],
+#' @seealso [add_trait()], [add_additive_effects()],
 #'   [add_effect_cov_matrix()], [add_effect_fixed_class()], [add_effect_fixed_cov()],
 #'   [add_effect_random()], [add_tbv()]
 #'
@@ -154,15 +154,23 @@ add_phenotype <- function(tbl,
   }
   meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
 
-  genome_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
+  # Validate that additive effects exist in genome_effects for each trait
   for (t in trait) {
-    if (!paste0("is_QTL_", t) %in% genome_cols) {
-      stop("QTL column 'is_QTL_", t, "' not found. Call define_qtl('", t,
-           "', ...) first.", call. = FALSE)
-    }
-    if (!paste0("add_", t) %in% genome_cols) {
-      stop("Additive-effect column 'add_", t, "' not found. Call ",
-           "add_additive_effects('", t, "', ...) first.", call. = FALSE)
+    n_eff <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0(
+        "SELECT COUNT(*) AS n FROM genome_effects ",
+        "WHERE trait_name = '", t, "' ",
+        "AND genome_effect_type = 'additive' ",
+        "AND line_name IS NULL"
+      )
+    )$n
+    if (n_eff == 0L) {
+      stop(
+        "No additive effects found for trait '", t, "' in genome_effects. ",
+        "Call add_additive_effects() first.",
+        call. = FALSE
+      )
     }
   }
 
@@ -205,51 +213,25 @@ add_phenotype <- function(tbl,
     }
   }
 
-  # 5. Pull genome data needed for TBV. Only push a subset filter to DuckDB
-  #    when the user actually filtered — a 1-million-wide IN() list for the
-  #    full population is slower than a plain SELECT *.
-  genome <- dplyr::collect(get_table(pop, "genome_meta"))
-  geno_mat_full <- get_genotype_matrix(pop, subset_ids = subset_ids)
+  # 5. Compute and persist TBVs via add_tbv(); then read back for phenotype model
+  pop <- add_tbv(tbl, trait_name = trait)
 
-  # 6. Compute TBV per trait for each trait's subset + store in ind_tbv
-  tbv_by_trait <- list()
-  for (t in trait) {
-    m <- meta_rows[meta_rows$trait_name == t, ]
+  tbv_by_trait <- lapply(trait, function(t) {
     ids_t <- subset_by_trait[[t]]$id_ind
-    if (length(ids_t) == 0) {
-      tbv_by_trait[[t]] <- numeric(0)
-      next
-    }
-    a <- genome[[paste0("add_", t)]]
-    a[is.na(a)] <- 0
-
-    p_base_col <- paste0("base_allele_freq_", t)
-    p_base <- if (p_base_col %in% names(genome)) {
-      pv <- as.numeric(genome[[p_base_col]])
-      pv[is.na(pv)] <- 0
-      pv
-    } else {
-      rep(0, length(a))
-    }
-
-    if (m$expressed_parent == "both") {
-      rows_idx <- match(ids_t, rownames(geno_mat_full))
-      tbv <- as.numeric(geno_mat_full[rows_idx, , drop = FALSE] %*% a) -
-             2 * sum(p_base * a)
-    } else {
-      parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
-      hap_mat <- get_haplotype_matrix(pop, parent_origin, ids_t)
-      tbv <- as.numeric(hap_mat %*% a) - sum(p_base * a)
-    }
-    tbv_by_trait[[t]] <- stats::setNames(tbv, ids_t)
-
-    tbv_df <- tibble::tibble(
-      id_ind     = ids_t,
-      trait_name = t,
-      tbv_value  = tbv
+    if (length(ids_t) == 0L) return(stats::setNames(numeric(0), character(0)))
+    ids_sql <- paste0("'", ids_t, "'", collapse = ", ")
+    rows <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0(
+        "SELECT id_ind, tbv_value FROM ind_tbv ",
+        "WHERE trait_name = '", t, "' ",
+        "AND id_ind IN (", ids_sql, ")"
+      )
     )
-    upsert_ind_tbv(pop, tbv_df)
-  }
+    vals <- stats::setNames(rows$tbv_value, rows$id_ind)
+    vals[ids_t]
+  })
+  names(tbv_by_trait) <- trait
 
   # 7. If user_values supplied, short-circuit the model
   if (!is.null(user_values)) {
