@@ -50,7 +50,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(locus_name %in% sel_qtl) |>
   define_qtl("ADG")
-pop <- set_qtl_effects(pop, "ADG", seed = 99)
+pop <- add_additive_effects(pop, "ADG", seed = 99)
 
 n_start <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
 cat("Baseline setup complete.\n")
@@ -104,7 +104,7 @@ cat("  Gene edit: individual", edited_id, "set to heterozygous at", new_locus_co
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Set a LARGE additive effect for the new locus on ADG
 #    is_QTL_ADG and add_ADG columns already exist (created by define_qtl /
-#    set_qtl_effects); new locus row has them as NULL — just UPDATE.
+#    add_additive_effects); new locus row has them as NULL — just UPDATE.
 # ─────────────────────────────────────────────────────────────────────────────
 
 DBI::dbExecute(conn, sprintf(

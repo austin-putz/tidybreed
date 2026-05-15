@@ -64,7 +64,7 @@ base population. Used as the intercept in the phenotype model. Defaults to
 
 \item{target_add_var}{Numeric. Target additive-genetic variance. When
 provided, written to \code{trait_effect_cov} as a diagonal entry under
-\code{effect_name = "gen_add"}. Used by \code{\link[=set_qtl_effects]{set_qtl_effects()}} to rescale effects.
+\code{effect_name = "gen_add"}. Used by \code{\link[=add_additive_effects]{add_additive_effects()}} to rescale effects.
 If already set via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, leave \code{NULL}.}
 
 \item{residual_var}{Numeric. Residual variance. When provided, written to
@@ -117,7 +117,7 @@ trait type (continuous / count / binary / categorical), expression rules
 (sex-limited, parent-of-origin), and index / economic weights.
 
 \code{add_trait()} does not touch the genome or sample QTL. Those are separate
-steps handled by \code{\link[=define_qtl]{define_qtl()}} and \code{\link[=set_qtl_effects]{set_qtl_effects()}}. For the common
+steps handled by \code{\link[=define_qtl]{define_qtl()}} and \code{\link[=add_additive_effects]{add_additive_effects()}}. For the common
 one-off case, use \code{\link[=add_trait_simple]{add_trait_simple()}} which chains all three together.
 
 On first call, creates the trait-layer tables (\code{trait_meta}, \code{trait_effects},
@@ -140,7 +140,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_qtl]{define_qtl()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
+\code{\link[=define_qtl]{define_qtl()}}, \code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
 \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}}, \code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}},
 \code{\link[=add_trait_simple]{add_trait_simple()}}
 }

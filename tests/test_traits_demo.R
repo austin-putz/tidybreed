@@ -83,7 +83,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_mort) |>
   define_qtl("mort") |>
-  set_qtl_effects("mort")
+  add_additive_effects("mort")
 pop <- pop |>
   get_table("ind_meta") |>
   filter(gen == 1L) |>

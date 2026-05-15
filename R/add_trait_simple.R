@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Convenience wrapper that chains [add_trait()], [define_qtl()], and
-#' [set_qtl_effects()] for a single uncorrelated trait using random QTL
+#' [add_additive_effects()] for a single uncorrelated trait using random QTL
 #' placement. For correlated multi-trait simulations, or to control QTL
 #' placement (e.g. by chromosome or position), use the three functions
 #' individually with `get_table("genome_meta") |> filter(...) |> define_qtl()`.
@@ -11,7 +11,7 @@
 #' @param trait_name Character. Trait name; must be a valid SQL identifier.
 #' @param n_qtl Integer. Number of QTL to randomly select from `genome_meta`.
 #' @param effect_distribution Character. `"normal"` or `"gamma"`.
-#' @param scale_to_target Logical. Passed to [set_qtl_effects()].
+#' @param scale_to_target Logical. Passed to [add_additive_effects()].
 #' @param seed Optional integer for reproducibility (applied before both the
 #'   QTL random draw and the effect sampling).
 #' @param ... Additional arguments forwarded to [add_trait()] (e.g.
@@ -60,7 +60,7 @@ add_trait_simple <- function(pop,
     dplyr::filter(locus_name %in% sel) |>
     define_qtl(trait_name)
 
-  pop <- set_qtl_effects(pop, trait_name = trait_name,
+  pop <- add_additive_effects(pop, trait_name = trait_name,
                          distribution    = effect_distribution,
                          scale_to_target = scale_to_target,
                          seed            = NULL)

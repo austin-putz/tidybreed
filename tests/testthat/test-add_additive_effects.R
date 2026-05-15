@@ -14,7 +14,7 @@ make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
 }
 
 
-test_that("set_qtl_effects() rescales to target_add_var within tolerance", {
+test_that("add_additive_effects() rescales to target_add_var within tolerance", {
   set.seed(42)
   pop <- make_effects_pop("eff_scale", n_ind = 600, n_loci = 600)
 
@@ -24,7 +24,7 @@ test_that("set_qtl_effects() rescales to target_add_var within tolerance", {
   pop <- pop |> get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("ADG")
-  pop <- set_qtl_effects(pop, "ADG", distribution = "normal", seed = 1)
+  pop <- add_additive_effects(pop, "ADG", distribution = "normal", seed = 1)
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   a <- genome$add_ADG
@@ -52,7 +52,7 @@ test_that("TBV mean is approximately 0 for founder population", {
   pop <- pop |> get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("ADG")
-  pop <- set_qtl_effects(pop, "ADG", distribution = "normal",
+  pop <- add_additive_effects(pop, "ADG", distribution = "normal",
                          base = "founder_haplotypes", seed = 3)
 
   pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
@@ -77,7 +77,7 @@ test_that("base_allele_freq_{trait} column is written to genome_meta", {
   pop <- pop |> get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("ADG")
-  pop <- set_qtl_effects(pop, "ADG", distribution = "normal")
+  pop <- add_additive_effects(pop, "ADG", distribution = "normal")
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   expect_true("base_allele_freq_ADG" %in% names(genome))
@@ -105,7 +105,7 @@ test_that("base = 'current_pop' via tidybreed_table pipe works", {
   pop <- pop |>
     get_table("ind_meta") |>
     dplyr::filter(gen == 0L) |>
-    set_qtl_effects("ADG", base = "current_pop", distribution = "normal", seed = 5)
+    add_additive_effects("ADG", base = "current_pop", distribution = "normal", seed = 5)
 
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   expect_true("add_ADG" %in% names(genome))
@@ -120,7 +120,7 @@ test_that("base = 'current_pop' via tidybreed_table pipe works", {
 })
 
 
-test_that("set_qtl_effects() accepts manual effects", {
+test_that("add_additive_effects() accepts manual effects", {
   pop <- make_effects_pop("eff_manual")
   pop <- add_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
@@ -130,7 +130,7 @@ test_that("set_qtl_effects() accepts manual effects", {
     define_qtl("ADG")
 
   # 10 QTL, all effects = 2.0
-  pop <- set_qtl_effects(pop, "ADG", effects = rep(2.0, 10))
+  pop <- add_additive_effects(pop, "ADG", effects = rep(2.0, 10))
   genome <- dplyr::collect(get_table(pop, "genome_meta"))
   expect_equal(sum(!is.na(genome$add_ADG)), 10)
   expect_true(all(genome$add_ADG[!is.na(genome$add_ADG)] == 2.0))

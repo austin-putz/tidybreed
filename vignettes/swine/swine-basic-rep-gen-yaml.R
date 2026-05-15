@@ -256,7 +256,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  set_qtl_effects(
+  add_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -323,7 +323,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  set_qtl_effects(
+  add_additive_effects(
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -392,7 +392,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  set_qtl_effects(
+  add_additive_effects(
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target

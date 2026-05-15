@@ -31,7 +31,7 @@ make_ap_pop <- function() {
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("AP") |>
-    set_qtl_effects("AP")
+    add_additive_effects("AP")
   pop <- get_table(pop, "ind_meta") |>
     dplyr::filter(sex == "F") |>
     add_phenotype("AP")

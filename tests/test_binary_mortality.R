@@ -82,7 +82,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_mort) |>
   define_qtl("mortality") |>
-  set_qtl_effects("mortality")
+  add_additive_effects("mortality")
 
 # ---- Simulate phenotypes ----------------------------------------------
 pop <- pop |>

@@ -1,3 +1,15 @@
+# tidybreed 0.22.1 (2026-05-15)
+
+## Breaking changes — rename `set_qtl_effects()` to `add_additive_effects()`
+
+`set_qtl_effects()` has been renamed to `add_additive_effects()` to align with
+the `add_` naming convention and to prepare for future `add_dominance_effects()`
+and other effect-type functions. All callers (tests, vignettes, documentation)
+have been updated.
+
+**Migration:** replace every `set_qtl_effects(` with `add_additive_effects(`.
+`set_qtl_effects_multi()` is unchanged.
+
 # tidybreed 0.22.0 (2026-05-15)
 
 ## Breaking changes — eliminate implicit locus ordering

@@ -54,7 +54,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_trait()], [define_qtl()], [set_qtl_effects()],
+#' @seealso [add_trait()], [define_qtl()], [add_additive_effects()],
 #'   [add_effect_cov_matrix()], [add_effect_fixed_class()], [add_effect_fixed_cov()],
 #'   [add_effect_random()], [add_tbv()]
 #'
@@ -162,7 +162,7 @@ add_phenotype <- function(tbl,
     }
     if (!paste0("add_", t) %in% genome_cols) {
       stop("Additive-effect column 'add_", t, "' not found. Call ",
-           "set_qtl_effects('", t, "', ...) first.", call. = FALSE)
+           "add_additive_effects('", t, "', ...) first.", call. = FALSE)
     }
   }
 

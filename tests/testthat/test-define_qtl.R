@@ -115,7 +115,7 @@ test_that("define_qtl() shared QTL via filter on existing is_QTL column", {
 })
 
 
-test_that("define_qtl() pipeline into set_qtl_effects() works", {
+test_that("define_qtl() pipeline into add_additive_effects() works", {
   pop <- make_qtl_pop("qtl_pipeline")
 
   set.seed(42)
@@ -126,7 +126,7 @@ test_that("define_qtl() pipeline into set_qtl_effects() works", {
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("ADG") |>
-    set_qtl_effects("ADG", distribution = "normal", seed = 7L)
+    add_additive_effects("ADG", distribution = "normal", seed = 7L)
 
   cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
   expect_true("add_ADG" %in% cols)

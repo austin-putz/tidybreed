@@ -1054,7 +1054,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects for this trait
-  set_qtl_effects(
+  add_additive_effects(
     trait_name = "ADG",        # trait name
     distribution = "normal",   # distribution of QTL effects
     scale_to_target = TRUE,    # scale to meet additive variance target
@@ -1078,7 +1078,7 @@ with effect sizes for QTL. Users can now query the haplotype/genotype data based
 logical vector or filter by `NOT NULL` in **SQL** or `!is.na()` in **R**. 
 
 - `define_qtl()` sets the loci and adds `is_QTL_<trait name>` to `genome_meta`
-- `set_qtl_effects()` samples the effects of those loci and standardizes them, adds `add_<trait name>` to `genome_meta`
+- `add_additive_effects()` samples the effects of those loci and standardizes them, adds `add_<trait name>` to `genome_meta`
 
 <br> 
 
@@ -1307,7 +1307,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects for BF
-  set_qtl_effects(
+  add_additive_effects(
     trait_name = "BF",        # trait name
     distribution = "normal",   # distribution of QTL effects
     scale_to_target = TRUE,    # scale to meet additive variance target
@@ -1829,7 +1829,7 @@ pop %>%
     n = 50,
     method = "random"
   ) %>%
-  set_qtl_effects(
+  add_additive_effects(
     "NW",
     distribution = "normal",
     base = "current_pop",

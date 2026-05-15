@@ -108,7 +108,7 @@ add_tbv <- function(tbl, trait_name = NULL, ...) {
   for (t in trait) {
     if (!paste0("add_", t) %in% genome_cols) {
       stop("Additive-effect column 'add_", t, "' not found. Call ",
-           "set_qtl_effects('", t, "', ...) first.", call. = FALSE)
+           "add_additive_effects('", t, "', ...) first.", call. = FALSE)
     }
   }
 

@@ -12,7 +12,7 @@
 #' When `trait_name` is omitted, all traits currently in `trait_meta` are used.
 #'
 #' Returns the modified `tidybreed_pop` so the result can be piped directly
-#' into [set_qtl_effects()].
+#' into [add_additive_effects()].
 #'
 #' @param tbl A `tidybreed_table` from `get_table("genome_meta")` (optionally
 #'   piped through `dplyr::filter()`). Must contain a `locus_id` column.
@@ -21,7 +21,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [define_chip()], [set_qtl_effects()], [set_qtl_effects_multi()],
+#' @seealso [define_chip()], [add_additive_effects()], [set_qtl_effects_multi()],
 #'   [add_trait()]
 #'
 #' @examples
@@ -31,7 +31,7 @@
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr == 1) |>
 #'   define_qtl("ADG") |>
-#'   set_qtl_effects("ADG", distribution = "normal")
+#'   add_additive_effects("ADG", distribution = "normal")
 #'
 #' # Define the same loci as QTL for multiple traits in one call
 #' pop <- pop |>

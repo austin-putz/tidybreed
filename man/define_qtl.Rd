@@ -55,5 +55,5 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_chip]{define_chip()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}}, \code{\link[=add_trait]{add_trait()}}
+\code{\link[=define_chip]{define_chip()}}, \code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_trait]{add_trait()}}
 }

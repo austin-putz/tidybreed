@@ -7,7 +7,7 @@
 #' (sex-limited, parent-of-origin), and index / economic weights.
 #'
 #' `add_trait()` does not touch the genome or sample QTL. Those are separate
-#' steps handled by [define_qtl()] and [set_qtl_effects()]. For the common
+#' steps handled by [define_qtl()] and [add_additive_effects()]. For the common
 #' one-off case, use [add_trait_simple()] which chains all three together.
 #'
 #' On first call, creates the trait-layer tables (`trait_meta`, `trait_effects`,
@@ -40,7 +40,7 @@
 #'   0 so that `E[TBV] = 0` when TBV is centered on base allele frequencies.
 #' @param target_add_var Numeric. Target additive-genetic variance. When
 #'   provided, written to `trait_effect_cov` as a diagonal entry under
-#'   `effect_name = "gen_add"`. Used by [set_qtl_effects()] to rescale effects.
+#'   `effect_name = "gen_add"`. Used by [add_additive_effects()] to rescale effects.
 #'   If already set via [add_effect_cov_matrix()], leave `NULL`.
 #' @param residual_var Numeric. Residual variance. When provided, written to
 #'   `trait_effect_cov` under `effect_name = "residual"`. Used by
@@ -75,7 +75,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [define_qtl()], [set_qtl_effects()], [add_effect_fixed_class()],
+#' @seealso [define_qtl()], [add_additive_effects()], [add_effect_fixed_class()],
 #'   [add_effect_fixed_cov()], [add_effect_random()], [add_phenotype()],
 #'   [add_trait_simple()]
 #'

@@ -405,9 +405,9 @@ pop |>
   add_phenotype("ADG2")
 ```
 
-### `add_trait()` / `define_qtl()` / `set_qtl_effects()` / `set_qtl_effects_multi()`
+### `add_trait()` / `define_qtl()` / `add_additive_effects()` / `set_qtl_effects_multi()`
 
-`R/add_trait.R`, `R/define_qtl.R`, `R/set_qtl_effects.R`
+`R/add_trait.R`, `R/define_qtl.R`, `R/add_additive_effects.R`
 
 - `add_trait()` — one row in `trait_meta`. (Trait tables are created by
   `initialize_genome()`, not on first `add_trait()` call.)
@@ -417,7 +417,7 @@ pop |>
   (optionally filtered) as its first argument; `trait_name` is optional
   (defaults to all traits in `trait_meta`). Writes `is_QTL_{trait}` BOOLEAN
   for each trait, with `DEFAULT FALSE` for unselected loci. Returns
-  `tidybreed_pop` so it can be piped into `set_qtl_effects()`.
+  `tidybreed_pop` so it can be piped into `add_additive_effects()`.
   ```r
   # Single trait
   pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG")
@@ -426,9 +426,9 @@ pop |>
   # Shared QTL pleiotropy
   pop |> get_table("genome_meta") |> filter(is_QTL_ADG == TRUE) |> define_qtl("BW")
   # Pipeline into set_qtl_effects
-  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG") |> set_qtl_effects("ADG")
+  pop |> get_table("genome_meta") |> filter(...) |> define_qtl("ADG") |> add_additive_effects("ADG")
   ```
-- `set_qtl_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
+- `add_additive_effects()` — writes `add_{trait}` DOUBLE. Manual or sampled
   (normal/gamma) with optional rescale. Reads `target_add_var` from
   `trait_effect_cov` (`effect_name = "gen_add"`).
 - `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
@@ -478,7 +478,7 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `R/add_trait_simple.R`
 
 Convenience wrapper that chains `add_trait()` → random `define_qtl()` →
-`set_qtl_effects()` for a single uncorrelated trait. QTL are always placed
+`add_additive_effects()` for a single uncorrelated trait. QTL are always placed
 randomly (n = `n_qtl`). The `qtl_method` parameter has been removed; for
 non-random QTL placement use the three functions individually.
 

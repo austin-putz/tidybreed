@@ -74,7 +74,7 @@ test_that("DOUBLE column gets 5-number summary display", {
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_qtl("ADG") |>
-    set_qtl_effects("ADG", seed = 1)
+    add_additive_effects("ADG", seed = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
   summ    <- summary(pop, tables = "ind_phenotype")
   cs      <- summ$tables[["ind_phenotype"]]$col_summaries

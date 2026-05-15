@@ -3467,7 +3467,7 @@ Traits: 1 </code></pre>
 <span id="cb93-7"><a href="#cb93-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">&quot;random&quot;</span>           <span class="co"># allocate to loci randomly</span></span>
 <span id="cb93-8"><a href="#cb93-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
 <span id="cb93-9"><a href="#cb93-9" aria-hidden="true" tabindex="-1"></a>  <span class="co"># set QTL effects for this trait</span></span>
-<span id="cb93-10"><a href="#cb93-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_qtl_effects</span>(</span>
+<span id="cb93-10"><a href="#cb93-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_additive_effects</span>(</span>
 <span id="cb93-11"><a href="#cb93-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_name =</span> <span class="st">&quot;ADG&quot;</span>,        <span class="co"># trait name</span></span>
 <span id="cb93-12"><a href="#cb93-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">distribution =</span> <span class="st">&quot;normal&quot;</span>,   <span class="co"># distribution of QTL effects</span></span>
 <span id="cb93-13"><a href="#cb93-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale_to_target =</span> <span class="cn">TRUE</span>,    <span class="co"># scale to meet additive variance target</span></span>
@@ -3519,7 +3519,7 @@ Filter: !is.na(add_ADG)
 <p>Now we see that we added <code>is_QTL_ADG</code> field as logical and <code>add_ADG</code> as numeric/double with effect sizes for QTL. Users can now query the haplotype/genotype data based on the logical vector or filter by <code>NOT NULL</code> in <strong>SQL</strong> or <code>!is.na()</code> in <strong>R</strong>.</p>
 <ul>
 <li><code>define_qtl()</code> sets the loci and adds <code>is_QTL_&lt;trait name&gt;</code> to <code>genome_meta</code></li>
-<li><code>set_qtl_effects()</code> samples the effects of those loci and standardizes them, adds <code>add_&lt;trait name&gt;</code> to <code>genome_meta</code></li>
+<li><code>add_additive_effects()</code> samples the effects of those loci and standardizes them, adds <code>add_&lt;trait name&gt;</code> to <code>genome_meta</code></li>
 </ul>
 <p><br></p>
 <p><strong>Step 5:</strong> Calculate and store <strong>TBVs</strong></p>
@@ -3791,7 +3791,7 @@ Filter: !is.na(add_ADG)
 <span id="cb131-7"><a href="#cb131-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">&quot;random&quot;</span>           <span class="co"># allocate to loci randomly</span></span>
 <span id="cb131-8"><a href="#cb131-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
 <span id="cb131-9"><a href="#cb131-9" aria-hidden="true" tabindex="-1"></a>  <span class="co"># set QTL effects for BF</span></span>
-<span id="cb131-10"><a href="#cb131-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_qtl_effects</span>(</span>
+<span id="cb131-10"><a href="#cb131-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_additive_effects</span>(</span>
 <span id="cb131-11"><a href="#cb131-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_name =</span> <span class="st">&quot;BF&quot;</span>,        <span class="co"># trait name</span></span>
 <span id="cb131-12"><a href="#cb131-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">distribution =</span> <span class="st">&quot;normal&quot;</span>,   <span class="co"># distribution of QTL effects</span></span>
 <span id="cb131-13"><a href="#cb131-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale_to_target =</span> <span class="cn">TRUE</span>,    <span class="co"># scale to meet additive variance target</span></span>
@@ -4564,7 +4564,7 @@ Filter: id_ind %in% gen_2_ids
 <span id="cb225-4"><a href="#cb225-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">50</span>,</span>
 <span id="cb225-5"><a href="#cb225-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">&quot;random&quot;</span></span>
 <span id="cb225-6"><a href="#cb225-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb225-7"><a href="#cb225-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_qtl_effects</span>(</span>
+<span id="cb225-7"><a href="#cb225-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_additive_effects</span>(</span>
 <span id="cb225-8"><a href="#cb225-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;NW&quot;</span>,</span>
 <span id="cb225-9"><a href="#cb225-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">distribution =</span> <span class="st">&quot;normal&quot;</span>,</span>
 <span id="cb225-10"><a href="#cb225-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">base =</span> <span class="st">&quot;current_pop&quot;</span>,</span>

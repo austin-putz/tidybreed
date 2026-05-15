@@ -39,7 +39,7 @@ tidybreed.
 Common \code{effect_name} values:
 \itemize{
 \item \code{"gen_add"} — additive genetic (co)variances (G matrix). Used by
-\code{\link[=set_qtl_effects]{set_qtl_effects()}} when rescaling to target variance and by
+\code{\link[=add_additive_effects]{add_additive_effects()}} when rescaling to target variance and by
 \code{\link[=set_qtl_effects_multi]{set_qtl_effects_multi()}} as the sampling distribution.
 \item \code{"residual"} — residual (co)variances (R matrix). Used by \code{\link[=add_phenotype]{add_phenotype()}}
 when drawing residuals.

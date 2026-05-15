@@ -49,16 +49,16 @@
 #' pop <- pop |>
 #'   add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
 #'   define_qtl("ADG", n = 100) |>
-#'   set_qtl_effects("ADG", distribution = "normal")
+#'   add_additive_effects("ADG", distribution = "normal")
 #'
 #' # current_pop: use only generation-0 animals to define base frequencies
 #' pop <- pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 0L) |>
-#'   set_qtl_effects("ADG", base = "current_pop", distribution = "normal")
+#'   add_additive_effects("ADG", base = "current_pop", distribution = "normal")
 #' }
 #' @export
-set_qtl_effects <- function(x,
+add_additive_effects <- function(x,
                             trait_name,
                             effects         = NULL,
                             distribution    = c("normal", "gamma"),
@@ -169,7 +169,7 @@ set_qtl_effects <- function(x,
 #'
 #' If `scale_to_target = TRUE`, each trait's effects are rescaled independently
 #' using the Falconer formula so the expected additive variance in the base
-#' population matches its `target_add_var`. See [set_qtl_effects()] for details
+#' population matches its `target_add_var`. See [add_additive_effects()] for details
 #' on the `base` argument.
 #'
 #' @param x A `tidybreed_pop` object, or a `tidybreed_table` when

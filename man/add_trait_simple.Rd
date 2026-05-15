@@ -27,7 +27,7 @@ add_trait_simple(
 
 \item{effect_distribution}{Character. \code{"normal"} or \code{"gamma"}.}
 
-\item{scale_to_target}{Logical. Passed to \code{\link[=set_qtl_effects]{set_qtl_effects()}}.}
+\item{scale_to_target}{Logical. Passed to \code{\link[=add_additive_effects]{add_additive_effects()}}.}
 
 \item{seed}{Optional integer for reproducibility.}
 
@@ -40,7 +40,7 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Convenience wrapper that chains \code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, and
-\code{\link[=set_qtl_effects]{set_qtl_effects()}} for a single uncorrelated trait. For correlated
+\code{\link[=add_additive_effects]{add_additive_effects()}} for a single uncorrelated trait. For correlated
 multi-trait simulations use the three low-level functions directly plus
 \code{\link[=set_qtl_effects_multi]{set_qtl_effects_multi()}}.
 }

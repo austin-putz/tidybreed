@@ -96,7 +96,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, \code{\link[=set_qtl_effects]{set_qtl_effects()}},
+\code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, \code{\link[=add_additive_effects]{add_additive_effects()}},
 \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}}, \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}},
 \code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

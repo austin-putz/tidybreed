@@ -299,7 +299,7 @@ pop <- pop |>
 	method = "random"        # randomly select from genome_meta table
   ) |>
   # set QTL effects in genome for ADG
-  set_qtl_effects(
+  add_additive_effects(
     trait_name = "ADG", 
 	distribution = "normal",   # effects sampled from normal distribution
 	scale_to_target = TRUE,    # scale to target additive var (set above)
@@ -462,7 +462,7 @@ pop %>%
 | `add_founders()`      | Add founder individuals with haplotypes/genotypes    |
 | `define_chip()`       | Mark loci as on a named SNP chip                     |
 | `define_qtl()`        | set QTL loci by trait                                | 
-| `set_qtl_effects()`   | set QTL effects by trait                             | 
+| `add_additive_effects()`   | set QTL effects by trait                             | 
 | `add_phenotype()`     | add phenotype by summing QTL + fixed/random + resid  | 
 | `add_tbv()`           | sum QTL effects for True Breeding Value              | 
 | `add_ebv()`           | run evaluation software or parent average            |

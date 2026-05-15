@@ -9,7 +9,7 @@
 #' Common `effect_name` values:
 #'
 #' * `"gen_add"` — additive genetic (co)variances (G matrix). Used by
-#'   [set_qtl_effects()] when rescaling to target variance and by
+#'   [add_additive_effects()] when rescaling to target variance and by
 #'   [set_qtl_effects_multi()] as the sampling distribution.
 #' * `"residual"` — residual (co)variances (R matrix). Used by [add_phenotype()]
 #'   when drawing residuals.
