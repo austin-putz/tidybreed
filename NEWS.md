@@ -1,3 +1,16 @@
+# tidybreed 0.20.0 (2026-05-14)
+
+## New features
+
+* `compute_derived()` — new action function that joins a filtered primary
+  table with an optional secondary table, applies a user-supplied R function
+  to produce a derived vector, and writes the result to one or more destination
+  columns in any combination of tables. Reduces ~25-line dplyr workflows for
+  computed date fields (e.g. `puberty_date = birth_date + AP_value`) to a
+  single declarative pipe step. Accepts `write_to = c(table = "col")` syntax
+  to write the same computed value under different column names in different
+  tables.
+
 # tidybreed 0.19.0 (2026-05-14)
 
 ## Breaking change
