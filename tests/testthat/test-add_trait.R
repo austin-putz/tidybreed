@@ -64,15 +64,94 @@ test_that("add_trait() refuses duplicate names without overwrite", {
 test_that("add_trait() validates trait_type-specific args", {
   pop <- make_tiny_pop("trait_validate")
 
-  # binary requires prevalence
+  # binary is removed — should error with helpful message
   expect_error(
     add_trait(pop, "mort", trait_type = "binary"),
-    "prevalence"
+    "removed"
   )
-  # categorical requires thresholds
+  # categorical requires thresholds OR prevalence
   expect_error(
     add_trait(pop, "score", trait_type = "categorical"),
     "thresholds"
+  )
+  # cannot supply both
+  expect_error(
+    add_trait(pop, "score", trait_type = "categorical",
+              thresholds = c(0), prevalence = 0.1),
+    "not both"
+  )
+
+  close_pop(pop)
+})
+
+
+test_that("add_trait() accepts categorical with prevalence (2-category)", {
+  pop <- make_tiny_pop("trait_cat_prev")
+
+  pop <- add_trait(pop, "mort",
+                   trait_type      = "categorical",
+                   prevalence      = 0.10,
+                   cat_values      = c(0, 1),
+                   cat_names       = c("Alive", "Dead"),
+                   store_liability = TRUE,
+                   target_add_var  = 1,
+                   residual_var    = 9)
+
+  row <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM trait_meta WHERE trait_name = 'mort'")
+  expect_equal(row$trait_type,  "categorical")
+  expect_equal(row$prevalence,  0.10)
+  expect_equal(row$cat_values,  "0,1")
+  expect_equal(row$cat_names,   "Alive,Dead")
+  expect_true(row$store_liability)
+
+  close_pop(pop)
+})
+
+
+test_that("add_trait() accepts categorical with explicit thresholds", {
+  pop <- make_tiny_pop("trait_cat_thresh")
+
+  pop <- add_trait(pop, "score",
+                   trait_type  = "categorical",
+                   thresholds  = c(-1, 0, 1),
+                   cat_values  = c(1, 2, 3, 4),
+                   cat_names   = c("thin", "fair", "good", "excellent"),
+                   target_add_var = 1,
+                   residual_var   = 1)
+
+  row <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM trait_meta WHERE trait_name = 'score'")
+  expect_equal(row$thresholds, "-1,0,1")
+  expect_equal(row$cat_values, "1,2,3,4")
+  expect_equal(row$cat_names,  "thin,fair,good,excellent")
+
+  close_pop(pop)
+})
+
+
+test_that("add_trait() validates cat_values and cat_names lengths", {
+  pop <- make_tiny_pop("trait_cat_len")
+
+  # 1 threshold → 2 categories; cat_values must be length 2
+  expect_error(
+    add_trait(pop, "x", trait_type = "categorical",
+              thresholds = c(0), cat_values = c(1, 2, 3)),
+    "length 2"
+  )
+  # cat_names same length as cat_values
+  expect_error(
+    add_trait(pop, "x", trait_type = "categorical",
+              thresholds = c(0), cat_values = c(0, 1),
+              cat_names = c("No")),
+    "length 2"
+  )
+  # cat_names cannot contain commas
+  expect_error(
+    add_trait(pop, "x", trait_type = "categorical",
+              thresholds = c(0),
+              cat_names = c("Yes, really", "No")),
+    "commas"
   )
 
   close_pop(pop)

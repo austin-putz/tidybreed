@@ -60,10 +60,10 @@ test_that("get_table() |> filter() restricts phenotyped subset", {
 })
 
 
-test_that("binary trait respects prevalence approximately", {
+test_that("categorical trait with prevalence respects target rate approximately", {
   set.seed(7)
   pop <- initialize_genome(
-    pop_name        = "ph_binary",
+    pop_name        = "ph_categorical",
     n_loci          = 300,
     n_chr           = 3,
     chr_len_Mb      = 100,
@@ -74,8 +74,12 @@ test_that("binary trait respects prevalence approximately", {
   pop <- add_founders(pop, n_males = 500, n_females = 500, line_name = "A")
 
   pop <- pop |>
-    add_trait("mort", trait_type = "binary", prevalence = 0.1,
-              target_add_var = 1, residual_var = 1) |>
+    add_trait("mort", trait_type = "categorical",
+              prevalence      = 0.1,
+              cat_values      = c(0, 1),
+              cat_names       = c("Alive", "Dead"),
+              store_liability = TRUE,
+              target_add_var  = 1, residual_var = 1) |>
     define_qtl("mort", n = 50) |>
     set_qtl_effects("mort")
   pop <- pop |> get_table("ind_meta") |> add_phenotype("mort")
@@ -85,6 +89,44 @@ test_that("binary trait respects prevalence approximately", {
   # Fixed threshold: observed rate fluctuates; check within 4 percentage points
   expect_true(abs(rate - 0.1) <= 0.04)
   expect_true(all(ph$value %in% c(0, 1)))
+  # Reserved columns written
+  expect_true("liability_value" %in% names(ph))
+  expect_true("cat_name"        %in% names(ph))
+  expect_true(all(ph$cat_name %in% c("Alive", "Dead")))
+
+  close_pop(pop)
+})
+
+
+test_that("categorical trait with explicit thresholds produces correct categories", {
+  set.seed(42)
+  pop <- initialize_genome(
+    pop_name        = "ph_cat_thresh",
+    n_loci          = 200,
+    n_chr           = 2,
+    chr_len_Mb      = 100,
+    n_haplotypes    = 100,
+    db_path         = ":memory:",
+    fixed_allele_freq = 0.5
+  )
+  pop <- add_founders(pop, n_males = 250, n_females = 250, line_name = "A")
+
+  pop <- pop |>
+    add_trait("body_score", trait_type = "categorical",
+              thresholds     = c(-1, 0, 1),
+              cat_values     = c(1, 2, 3, 4),
+              cat_names      = c("thin", "fair", "good", "excellent"),
+              store_liability = TRUE,
+              target_add_var = 1, residual_var = 1) |>
+    define_qtl("body_score", n = 40) |>
+    set_qtl_effects("body_score")
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("body_score")
+
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_true(all(ph$value %in% c(1, 2, 3, 4)))
+  expect_true("liability_value" %in% names(ph))
+  expect_true("cat_name"        %in% names(ph))
+  expect_true(all(ph$cat_name %in% c("thin", "fair", "good", "excellent")))
 
   close_pop(pop)
 })

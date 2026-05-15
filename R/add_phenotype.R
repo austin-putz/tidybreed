@@ -21,9 +21,10 @@
 #' Trait-type specific output:
 #' * `"continuous"`: liability written verbatim.
 #' * `"count"`: liability rounded and clipped to `[min_value, max_value]`.
-#' * `"binary"`: 0/1 via fixed threshold `target_add_mean + qnorm(1-p)*sqrt(VA+VR)`.
-#'     Observed prevalence fluctuates around the target due to finite sample size.
-#' * `"categorical"`: integer level via `thresholds` cutpoints.
+#' * `"categorical"`: category value via `thresholds` cutpoints (or `prevalence`
+#'     for a 2-category trait). Mapped to `cat_values` if set; otherwise `1..K`.
+#'     Raw liability stored in `liability_value` column when `store_liability = TRUE`.
+#'     Category labels stored in `cat_name` column when `cat_names` is defined.
 #'
 #' **Subset selection**: pipe a `tidybreed_table` (from [get_table()] and
 #' optionally [filter()]) as the first argument. The unique `id_ind` values in
@@ -410,24 +411,35 @@ add_phenotype <- function(tbl,
     tbv <- tbv_by_trait[[t]]
     liability <- m$target_add_mean + covariate_contrib + as.numeric(tbv) + resid
 
-    value <- switch(
-      m$trait_type,
-      continuous  = liability,
-      count       = as.numeric(clip_count(liability, m$min_value, m$max_value)),
-      binary      = {
-        va     <- get_effect_var(pop, "gen_add",  t)
-        vr     <- get_effect_var(pop, "residual", t)
-        va     <- if (is.na(va)) 0 else va
-        vr     <- if (is.na(vr)) 0 else vr
-        thresh <- m$target_add_mean +
-                  stats::qnorm(1 - m$prevalence) * sqrt(va + vr)
-        as.numeric(liability_to_binary(liability, thresh))
-      },
-      categorical = as.numeric(liability_to_categorical(
-                       liability,
-                       as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]]))),
-      liability
-    )
+    # Categorical: compute outside switch so cat_idx is in scope for
+    # liability_value and cat_name writes below
+    cat_idx <- NULL
+    if (m$trait_type == "categorical") {
+      if (!is.na(m$thresholds) && nzchar(m$thresholds)) {
+        thresh_vec <- as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]])
+      } else {
+        va <- get_effect_var(pop, "gen_add", t)
+        vr <- get_effect_var(pop, "residual", t)
+        va <- if (is.na(va)) 0 else va
+        vr <- if (is.na(vr)) 0 else vr
+        thresh_vec <- m$target_add_mean +
+                      stats::qnorm(1 - m$prevalence) * sqrt(va + vr)
+      }
+      cat_idx <- liability_to_categorical(liability, thresh_vec)
+      value <- if (!is.na(m$cat_values) && nzchar(m$cat_values)) {
+        cv <- as.numeric(strsplit(m$cat_values, ",", fixed = TRUE)[[1]])
+        as.numeric(cv[cat_idx])
+      } else {
+        as.numeric(cat_idx)
+      }
+    } else {
+      value <- switch(
+        m$trait_type,
+        continuous = liability,
+        count      = as.numeric(clip_count(liability, m$min_value, m$max_value)),
+        liability
+      )
+    }
 
     records <- tibble::tibble(
       id_phenotype = next_phenotype_ids(pop, n_ind),
@@ -441,6 +453,27 @@ add_phenotype <- function(tbl,
                                    pop$db_conn)
       for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
     }
+
+    # Store raw liability when requested for categorical traits
+    if (isTRUE(m$store_liability) && !is.null(cat_idx)) {
+      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
+      if (!"liability_value" %in% pheno_cols)
+        DBI::dbExecute(pop$db_conn,
+          "ALTER TABLE ind_phenotype ADD COLUMN liability_value DOUBLE")
+      records$liability_value <- as.numeric(liability)
+    }
+
+    # Store category label when cat_names defined for categorical traits
+    if (!is.null(cat_idx) &&
+        !is.na(m$cat_names) && nzchar(m$cat_names)) {
+      cn <- strsplit(m$cat_names, ",", fixed = TRUE)[[1]]
+      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
+      if (!"cat_name" %in% pheno_cols)
+        DBI::dbExecute(pop$db_conn,
+          "ALTER TABLE ind_phenotype ADD COLUMN cat_name VARCHAR")
+      records$cat_name <- cn[cat_idx]
+    }
+
     DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
     message("Wrote ", n_ind, " phenotype records for trait '", t, "'.")
   }

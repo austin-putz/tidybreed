@@ -1,20 +1,21 @@
 ### test_binary_mortality.R
-### Demonstrates binary trait simulation using the threshold model.
+### Demonstrates 2-category threshold trait simulation.
 ###
 ### Setup:
-###   - Trait: neonatal mortality (1 = died, 0 = survived)
-###   - Target prevalence: 10%
+###   - Trait: neonatal mortality (cat_values = c(0,1); 1 = died, 0 = survived)
+###   - Target prevalence: 10%  (used to compute the liability threshold)
 ###   - Additive variance (VA) = 1, Residual variance (VR) = 9
 ###   - Heritability h² = VA / (VA + VR) = 0.10
 ###   - Total liability variance = 10
 ###   - Fixed threshold = target_add_mean + qnorm(0.90) * sqrt(10) ≈ 4.05
+###   - store_liability = TRUE: raw liability also written to ind_phenotype
 ###
 ### Expected result: observed mortality rate near 10% (sampling variation expected).
 
 devtools::load_all(rprojroot::find_root(rprojroot::has_file("DESCRIPTION")), quiet = TRUE)
 library(dplyr)
 
-cat("=== Binary Trait (Mortality) Simulation Test ===\n\n")
+cat("=== Categorical Trait (Mortality) Simulation Test ===\n\n")
 
 # ---- Parameters -------------------------------------------------------
 N_MALES   <- 2000
@@ -27,8 +28,12 @@ PREV      <- 0.10  # target prevalence (mortality rate)
 SEED      <- 2024
 
 # ---- Expected threshold -----------------------------------------------
+# total liability variance
 total_var <- VA + VR
+# expected threshold with qnorm()
 expected_threshold <- stats::qnorm(1 - PREV) * sqrt(total_var)
+
+# message
 cat(sprintf("Liability model: mean=0, VA=%.1f, VR=%.1f, total_var=%.1f, h2=%.2f\n",
             VA, VR, total_var, VA / total_var))
 cat(sprintf("Fixed threshold on liability scale: %.4f\n", expected_threshold))
@@ -62,11 +67,14 @@ cat(sprintf("Founders: %d total (%d M + %d F)\n\n", N_MALES + N_FEMALES, N_MALES
 pop <- pop |>
   add_trait(
     "mortality",
-    trait_type     = "binary",
-    prevalence     = PREV,
-    description    = "Neonatal mortality (1 = died, 0 = survived)",
-    target_add_var = VA,
-    residual_var   = VR
+    trait_type      = "categorical",
+    prevalence      = PREV,
+    cat_values      = c(0, 1),
+    cat_names       = c("Survived", "Died"),
+    store_liability = TRUE,
+    description     = "Neonatal mortality (0 = survived, 1 = died)",
+    target_add_var  = VA,
+    residual_var    = VR
   ) |>
   define_qtl("mortality", n = N_QTL) |>
   set_qtl_effects("mortality")
@@ -92,7 +100,13 @@ cat(sprintf("Observed mortality rate:  %.4f  (%.2f%%)\n", obs_rate, obs_rate * 1
 cat(sprintf("Target  mortality rate:   %.4f  (%.2f%%)\n", PREV, PREV * 100))
 cat(sprintf("Difference:               %+.4f (%+.2f%%)\n",
             obs_rate - PREV, (obs_rate - PREV) * 100))
-cat(sprintf("All values are 0 or 1:    %s\n\n", all(ph$value %in% c(0, 1))))
+cat(sprintf("All values are 0 or 1:    %s\n", all(ph$value %in% c(0, 1))))
+cat(sprintf("liability_value written:  %s\n", "liability_value" %in% names(ph)))
+cat(sprintf("cat_name written:         %s\n\n", "cat_name" %in% names(ph)))
+if ("cat_name" %in% names(ph)) {
+  print(table(ph$cat_name))
+  cat("\n")
+}
 
 cat("=== TBV (liability scale) ===\n")
 cat(sprintf("Mean TBV:     % .4f  (expected ~0)\n",  mean(tbv$tbv)))

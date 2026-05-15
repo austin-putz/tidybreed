@@ -88,18 +88,6 @@ sample_residuals <- function(n_ind, residual_var, R = NULL) {
 }
 
 
-#' Convert a liability vector to binary 0/1 using a fixed threshold
-#'
-#' @param liability Numeric vector on the continuous scale.
-#' @param threshold Fixed liability cutpoint: individuals with
-#'   `liability > threshold` are coded 1 (affected).
-#' @return Integer vector of 0/1.
-#' @keywords internal
-liability_to_binary <- function(liability, threshold) {
-  as.integer(liability > threshold)
-}
-
-
 #' Convert a liability vector to ordered integer categories
 #'
 #' @param liability Numeric vector on the continuous scale.

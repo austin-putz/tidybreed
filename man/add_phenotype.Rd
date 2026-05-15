@@ -56,7 +56,8 @@ Trait-type specific output:
 \itemize{
 \item \code{"continuous"}: liability written verbatim.
 \item \code{"count"}: liability rounded and clipped to \verb{[min_value, max_value]}.
-\item \code{"binary"}: 0/1 via quantile threshold at \code{1 - prevalence}.
+\item \code{"binary"}: 0/1 via fixed threshold \code{target_add_mean + qnorm(1-p)*sqrt(VA+VR)}.
+Observed prevalence fluctuates around the target due to finite sample size.
 \item \code{"categorical"}: integer level via \code{thresholds} cutpoints.
 }
 

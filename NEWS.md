@@ -1,3 +1,43 @@
+# tidybreed 0.19.0 (2026-05-14)
+
+## Breaking change
+
+* `trait_type = "binary"` has been **removed**. Use `trait_type = "categorical"`
+  with `prevalence = <p>` (for a 2-category trait) or `thresholds = c(<value>)`
+  and add `cat_values = c(0, 1)` to recover 0/1 encoding. Binary was a strict
+  subset of categorical — this eliminates the duplication.
+
+## New features
+
+* `add_trait()` gains three new parameters for categorical traits:
+  * `cat_values` — numeric vector (length = n_categories) giving the phenotype
+    value stored in `ind_phenotype` for each category (e.g. `c(0, 1)` for
+    standard binary, or `c(1, 2, 3, 4)` for a 4-level score). Defaults to
+    `1, 2, ..., K` when `NULL`.
+  * `cat_names` — character vector of human-readable labels per category
+    (e.g. `c("Alive", "Dead")`), written to the reserved `cat_name` column
+    in `ind_phenotype`. Must not contain commas.
+  * `store_liability` — logical. When `TRUE`, the raw liability value on the
+    continuous scale is written to the reserved `liability_value` column in
+    `ind_phenotype` alongside the observed category value.
+
+* `add_trait()` now accepts `prevalence` for `categorical` traits (previously
+  only accepted for `binary`). A single prevalence value defines a 2-category
+  threshold; the actual threshold is computed at phenotype time from
+  `target_add_mean + qnorm(1 - prevalence) * sqrt(VA + VR)`.
+
+* `add_trait()` validates that exactly one of `thresholds` or `prevalence` is
+  supplied for categorical traits; supplying both is an error.
+
+* Two reserved column names are added to `ind_phenotype`:
+  `liability_value` (DOUBLE) and `cat_name` (VARCHAR). Both are added
+  dynamically via `ALTER TABLE` on first use, so existing databases are not
+  affected until a categorical trait with these options is phenotyped.
+
+* `trait_meta` gains three new columns: `cat_values VARCHAR`,
+  `cat_names VARCHAR`, `store_liability BOOLEAN`. Existing databases are
+  migrated automatically on the next call to `ensure_trait_tables()`.
+
 # tidybreed 0.18.3 (2026-05-14)
 
 ## Bug fix / Enhancement
