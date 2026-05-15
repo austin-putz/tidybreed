@@ -1,3 +1,13 @@
+# tidybreed 0.18.3 (2026-05-14)
+
+## Bug fix / Enhancement
+
+* `add_phenotype()` now enforces the `repeatable` field from `trait_meta`.
+  If `repeatable = FALSE` and individuals in the candidate set already have a
+  phenotype record for that trait, they are silently skipped and a warning is
+  issued reporting the number rejected and the number that will receive a new
+  record. Individuals with no prior record are phenotyped as usual.
+
 # tidybreed 0.18.2 (2026-05-14)
 
 ## Bug fix

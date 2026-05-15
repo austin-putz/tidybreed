@@ -161,6 +161,36 @@ add_phenotype <- function(tbl,
   })
   names(subset_by_trait) <- trait
 
+  # 4.5 Repeatable guard: for non-repeatable traits, drop individuals who
+  #     already have a phenotype record and warn with the rejected / accepted counts.
+  for (t in trait) {
+    m_t <- meta_rows[meta_rows$trait_name == t, ]
+    if (isFALSE(m_t$repeatable)) {
+      ids_t <- subset_by_trait[[t]]$id_ind
+      if (length(ids_t) == 0) next
+      ids_sql <- paste0("'", ids_t, "'", collapse = ", ")
+      already_done <- DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT DISTINCT id_ind FROM ind_phenotype ",
+               "WHERE trait_name = '", t, "' ",
+               "AND id_ind IN (", ids_sql, ")")
+      )$id_ind
+      n_rejected <- length(already_done)
+      if (n_rejected > 0) {
+        keep <- ids_t[!ids_t %in% already_done]
+        warning(
+          "Trait '", t, "' is not repeatable: ",
+          n_rejected, " individual(s) already phenotyped were skipped; ",
+          length(keep), " individual(s) will receive a new phenotype record.",
+          call. = FALSE
+        )
+        subset_by_trait[[t]] <- subset_by_trait[[t]][
+          subset_by_trait[[t]]$id_ind %in% keep, , drop = FALSE
+        ]
+      }
+    }
+  }
+
   # 5. Pull genome data needed for TBV. Only push a subset filter to DuckDB
   #    when the user actually filtered — a 1-million-wide IN() list for the
   #    full population is slower than a plain SELECT *.
