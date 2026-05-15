@@ -56,9 +56,10 @@ Trait-type specific output:
 \itemize{
 \item \code{"continuous"}: liability written verbatim.
 \item \code{"count"}: liability rounded and clipped to \verb{[min_value, max_value]}.
-\item \code{"binary"}: 0/1 via fixed threshold \code{target_add_mean + qnorm(1-p)*sqrt(VA+VR)}.
-Observed prevalence fluctuates around the target due to finite sample size.
-\item \code{"categorical"}: integer level via \code{thresholds} cutpoints.
+\item \code{"categorical"}: category value via \code{thresholds} cutpoints (or \code{prevalence}
+for a 2-category trait). Mapped to \code{cat_values} if set; otherwise \verb{1..K}.
+Raw liability stored in \code{liability_value} column when \code{store_liability = TRUE}.
+Category labels stored in \code{cat_name} column when \code{cat_names} is defined.
 }
 
 \strong{Subset selection}: pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and

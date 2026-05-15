@@ -9,7 +9,7 @@ add_trait(
   trait_name,
   description = NA_character_,
   units = NA_character_,
-  trait_type = c("continuous", "count", "binary", "categorical"),
+  trait_type = c("continuous", "count", "categorical"),
   repeatable = FALSE,
   recorded_on = c("self", "dam", "sire", "offspring_mean"),
   expressed_sex = c("both", "M", "F"),
@@ -20,7 +20,10 @@ add_trait(
   min_value = NA_real_,
   max_value = NA_real_,
   prevalence = NA_real_,
-  thresholds = NA_real_,
+  thresholds = NULL,
+  cat_values = NULL,
+  cat_names = NULL,
+  store_liability = FALSE,
   index_weight = 0,
   economic_value = 0,
   overwrite = FALSE
@@ -37,8 +40,10 @@ Must be a valid SQL identifier.}
 
 \item{units}{Character. Measurement units, e.g. \code{"kg"}, \code{"count"}.}
 
-\item{trait_type}{Character. One of \code{"continuous"}, \code{"count"}, \code{"binary"},
-\code{"categorical"}.}
+\item{trait_type}{Character. One of \code{"continuous"}, \code{"count"},
+\code{"categorical"}. (\code{"binary"} has been removed — use \code{"categorical"} with
+one threshold or \code{prevalence}, and \code{cat_values = c(0, 1)} for 0/1
+encoding.)}
 
 \item{repeatable}{Logical. Whether an individual can have multiple records
 for this trait (e.g. test-day yield).}
@@ -70,12 +75,29 @@ If already set via \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}
 \item{min_value, max_value}{Numeric. Clipping bounds for count traits. \code{NA}
 means no limit.}
 
-\item{prevalence}{Numeric between 0 and 1. For binary traits, the fraction
-expected to be affected; determines the liability threshold.}
+\item{prevalence}{Numeric between 0 and 1. For categorical traits with a
+single threshold (two categories), the fraction expected above the
+threshold. The threshold is computed at phenotype time as
+\code{target_add_mean + qnorm(1 - prevalence) * sqrt(VA + VR)}.
+Mutually exclusive with \code{thresholds}.}
 
-\item{thresholds}{Numeric vector of length K−1 for K ordered levels. For
-categorical traits, liability cutpoints separating the levels. Stored as
-a comma-separated string in \code{trait_meta}.}
+\item{thresholds}{Numeric vector of length K−1 for K ordered categories.
+Liability cutpoints in ascending order separating the categories. Stored
+as a comma-separated string in \code{trait_meta}. Mutually exclusive with
+\code{prevalence}.}
+
+\item{cat_values}{Numeric vector of length K (one per category) giving the
+phenotype value stored in \code{ind_phenotype} for each category. E.g.
+\code{c(0, 1)} for standard binary encoding. Defaults to \verb{1, 2, ..., K} when
+\code{NULL}.}
+
+\item{cat_names}{Character vector of length K. Human-readable label per
+category, e.g. \code{c("Alive", "Dead")}. Written to the reserved
+\code{cat_name} column in \code{ind_phenotype}. Must not contain commas.}
+
+\item{store_liability}{Logical. When \code{TRUE}, the underlying liability value
+is written to the reserved \code{liability_value} column in \code{ind_phenotype}
+alongside the observed category value.}
 
 \item{index_weight}{Numeric. Weight in a downstream selection index.}
 

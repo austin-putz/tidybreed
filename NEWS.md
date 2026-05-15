@@ -1,3 +1,14 @@
+# tidybreed 0.20.1 (2026-05-14)
+
+## Documentation & cleanup
+
+* `NAMESPACE` now exports `compute_derived()` (was missing from v0.20.0 commit).
+* `man/compute_derived.Rd` added (roxygen docs for `compute_derived()`).
+* `man/add_trait.Rd` and `man/add_phenotype.Rd` updated to reflect v0.19.0
+  binary → categorical unification (`cat_values`, `cat_names`, `store_liability`
+  params; removed `"binary"` from `trait_type` choices).
+* Added swine basic replication/generation YAML vignette script.
+
 # tidybreed 0.20.0 (2026-05-14)
 
 ## New features

@@ -86,6 +86,7 @@ pop <- pop |>
 
 # ---- Results ----------------------------------------------------------
 ph  <- pop |> get_table("ind_phenotype") |> collect()
+print(ph)
 tbv <- pop |> get_table("ind_tbv")       |> collect()
 
 n_total   <- nrow(ph)
