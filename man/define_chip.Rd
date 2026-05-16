@@ -4,154 +4,61 @@
 \alias{define_chip}
 \title{Define a SNP chip}
 \usage{
-define_chip(
-  pop,
-  chip_name,
-  n = NULL,
-  locus_tf = NULL,
-  locus_ids = NULL,
-  locus_names = NULL,
-  method = "random",
-  col_name = paste0("is_", chip_name)
-)
+define_chip(tbl, chip_name, col_name = paste0("is_", chip_name))
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object}
+\item{tbl}{A \code{tidybreed_table} from \code{get_table("genome_meta")} (optionally
+piped through \code{dplyr::filter()}). Must contain a \code{locus_id} column.}
 
-\item{chip_name}{Character. Name of the SNP chip (used in messages and default column name)}
+\item{chip_name}{Character scalar. Name of the SNP chip; used in messages
+and to derive the default column name.}
 
-\item{n}{Integer. Number of SNPs to select (mutually exclusive with locus_tf/locus_ids/locus_names)}
-
-\item{locus_tf}{Logical vector. TRUE/FALSE membership vector with one element per locus, in the
-same order as \code{genome_meta}. Useful when you have already computed membership (e.g., pass
-\code{!pop_50k$is_50k} to select the complement of an existing chip). Mutually exclusive with
-n/locus_ids/locus_names.}
-
-\item{locus_ids}{Integer vector. Specific locus IDs to select (mutually exclusive with n/locus_tf/locus_names)}
-
-\item{locus_names}{Character vector. Specific locus names to select (mutually exclusive with n/locus_tf/locus_ids)}
-
-\item{method}{Character. Selection method when using \code{n}. One of:
-\itemize{
-\item \code{"random"}: Randomly sample SNPs across entire genome (default)
-\item \code{"even"}: Evenly space SNPs across entire genome
-\item \code{"chromosome_even"}: Distribute SNPs proportionally across chromosomes
-}}
-
-\item{col_name}{Character. Column name to create in genome_meta.
-Default: \code{paste0("is_", chip_name)} (e.g., "50k" → "is_50k")}
+\item{col_name}{Character scalar. Column name created in \code{genome_meta}.
+Default: \code{paste0("is_", chip_name)}. Must be a valid SQL identifier.}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).
-\strong{Important:} Assign the result back to update your object: \code{pop <- define_chip(pop, ...)}
 }
 \description{
-Convenience function to mark which loci are on a SNP chip. Creates a logical
-column in the \code{genome_meta} table indicating chip membership.
+Marks the loci in a filtered \code{genome_meta} table as members of a SNP chip,
+creating a \code{BOOLEAN} column (default: \verb{is_\{chip_name\}}) in \code{genome_meta}.
 
-Four selection methods are supported:
-\itemize{
-\item \strong{By count} (\code{n}): Select a specified number of SNPs using random, even, or chromosome-proportional spacing
-\item \strong{By logical vector} (\code{locus_tf}): Pass a TRUE/FALSE vector the same length as the number of loci
-\item \strong{By ID} (\code{locus_ids}): Select specific loci by their locus_id values
-\item \strong{By name} (\code{locus_names}): Select specific loci by their locus_name values
-}
-}
-\details{
-\strong{Selection Methods:}
-\enumerate{
-\item \strong{Random} (\code{n} + \code{method = "random"}):
-\itemize{
-\item Randomly samples n loci without replacement
-\item Uniform distribution across entire genome
-}
-\item \strong{Even spacing} (\code{n} + \code{method = "even"}):
-\itemize{
-\item Evenly spaces n loci across genome by position
-\item Based on sequential locus order in genome_meta
-}
-\item \strong{Chromosome-even} (\code{n} + \code{method = "chromosome_even"}):
-\itemize{
-\item Distributes n proportionally across chromosomes
-\item Each chromosome gets n * (chr_loci / total_loci) SNPs
-\item SNPs are evenly spaced within each chromosome
-}
-\item \strong{By logical vector} (\code{locus_tf}):
-\itemize{
-\item Pass a logical vector with one element per locus (same length as genome_meta)
-\item TRUE marks the locus as on the chip, FALSE marks it as off
-\item Useful for building chips from existing chip membership, e.g., \code{!existing_tf} for the complement
-}
-\item \strong{By locus IDs} (\code{locus_ids}):
-\itemize{
-\item Select specific loci by their locus_id values (1, 2, 3, ...)
-\item All specified IDs must exist in genome_meta
-}
-\item \strong{By locus names} (\code{locus_names}):
-\itemize{
-\item Select specific loci by their locus_name values
-\item All specified names must exist in genome_meta
-}
-}
+Pipe \code{get_table("genome_meta")} — optionally piped through \code{dplyr::filter()}
+— into this function. The unique \code{locus_id} values in the collected result
+determine chip membership. All other loci receive \code{FALSE}.
 
-\strong{Column naming:}
-\itemize{
-\item Default column name is \verb{is_\{name\}} (e.g., "50k" → "is_50k")
-\item Can override with \code{col_name} parameter for custom naming
-\item Column contains logical TRUE/FALSE values
-}
-
-\strong{Overwriting:}
-\itemize{
-\item If column already exists, it will be overwritten (follows \verb{mutate_*} semantics)
-}
+This replaces the old positional selection methods (\code{n}/\code{method}, \code{locus_tf},
+\code{locus_ids}, \code{locus_names}). Selection is now done entirely by the caller
+using standard dplyr verbs on the \code{genome_meta} table, which is order-safe
+and compatible with dynamic genomes.
 }
 \examples{
 \dontrun{
-# Initialize genome
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100,
-  n_haplotypes = 100
-)
+# All loci on chromosomes 1-5
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr \%in\% 1:5) |>
+  define_chip("chr1to5")
 
-# Random selection of 500 SNPs
-pop <- pop \%>\%
-  define_chip(chip_name = "50k", n = 500, method = "random")
+# Random chip — sample locus names, then filter
+selected <- pop |>
+  get_table("genome_meta") |>
+  dplyr::collect() |>
+  dplyr::slice_sample(n = 500) |>
+  dplyr::pull(locus_name)
 
-# Evenly spaced SNPs
-pop <- pop \%>\%
-  define_chip(chip_name = "HD", n = 900, method = "even")
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(locus_name \%in\% selected) |>
+  define_chip("50K")
 
-# Proportional distribution across chromosomes
-pop <- pop \%>\%
-  define_chip(chip_name = "10k", n = 100, method = "chromosome_even")
-
-# Logical vector — complement of an existing chip
-chip_tf <- get_table(pop, "genome_meta") \%>\%
-  dplyr::pull(is_50k)
-pop <- pop \%>\%
-  define_chip(chip_name = "non50k", locus_tf = !chip_tf)
-
-# Specific loci by ID
-pop <- pop \%>\%
-  define_chip(chip_name = "custom", locus_ids = c(1, 10, 50, 100))
-
-# Specific loci by name (e.g., from external chip manifest)
-chip_manifest <- c("Locus_1", "Locus_10", "Locus_50")
-pop <- pop \%>\%
-  define_chip(chip_name = "custom", locus_names = chip_manifest)
-
-# Custom column name
-pop <- pop \%>\%
-  define_chip(chip_name = "bovine_50k", n = 500, col_name = "SNP_50k")
-
-# View chip definition
-get_table(pop, "genome_meta") \%>\%
-  select(locus_id, locus_name, chr, pos_Mb, is_50k) \%>\%
-  filter(is_50k == TRUE) \%>\%
-  collect()
+# Complement of an existing chip
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(is_50K == FALSE) |>
+  define_chip("non50K")
 }
+}
+\seealso{
+\code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_genotypes]{add_genotypes()}}, \code{\link[=extract_genotypes]{extract_genotypes()}}
 }

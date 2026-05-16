@@ -33,7 +33,7 @@ add_trait(
 \item{pop}{A \code{tidybreed_pop} object.}
 
 \item{trait_name}{Character. Trait name; used as the primary key and as the
-suffix for \verb{is_QTL_\{trait_name\}} and \verb{add_\{trait_name\}} columns in \code{genome_meta}.
+Used as the primary key in \code{trait_meta}.
 Must be a valid SQL identifier.}
 
 \item{description}{Character. Free-text description of the trait.}
@@ -104,8 +104,10 @@ alongside the observed category value.}
 \item{economic_value}{Numeric. Economic value per unit of the trait.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a trait with the same name already
-exists, replace its \code{trait_meta} row. Associated rows in \code{trait_effects}
-are cleared for that trait.}
+exists, replace its \code{trait_meta} row and clear associated \code{trait_effects}
+rows. Also updates the global \code{index_meta} entry (\code{index_name = NULL}) for
+the trait. Default \code{FALSE} errors if the trait already exists in
+\code{trait_meta}; the \code{index_meta} entry is left unchanged.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly). Assign the result back.
@@ -117,8 +119,9 @@ trait type (continuous / count / binary / categorical), expression rules
 (sex-limited, parent-of-origin), and index / economic weights.
 
 \code{add_trait()} does not touch the genome or sample QTL. Those are separate
-steps handled by \code{\link[=define_qtl]{define_qtl()}} and \code{\link[=add_additive_effects]{add_additive_effects()}}. For the common
-one-off case, use \code{\link[=add_trait_simple]{add_trait_simple()}} which chains all three together.
+steps handled by \code{\link[=add_additive_effects]{add_additive_effects()}} (pipe from a filtered
+\code{get_table("genome_meta")}). For the common one-off case, use
+\code{\link[=add_trait_simple]{add_trait_simple()}} which chains both together.
 
 On first call, creates the trait-layer tables (\code{trait_meta}, \code{trait_effects},
 \code{trait_random_effects}, \code{ind_phenotype}, \code{ind_tbv}, \code{ind_ebv}).
@@ -140,7 +143,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_qtl]{define_qtl()}}, \code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
+\code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}},
 \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}}, \code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}},
 \code{\link[=add_trait_simple]{add_trait_simple()}}
 }

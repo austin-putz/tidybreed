@@ -63,7 +63,7 @@ test_that("define_index() creates index_meta rows", {
 })
 
 
-test_that("define_index() upserts — re-running updates weights", {
+test_that("define_index() overwrite = TRUE updates existing rows", {
   pop <- make_index_pop("di_upsert")
   on.exit(close_pop(pop))
 
@@ -72,7 +72,8 @@ test_that("define_index() upserts — re-running updates weights", {
                       index_wts   = c(1.2, -0.8))
   pop <- define_index(pop, "terminal",
                       trait_names = c("ADG", "FCR"),
-                      index_wts   = c(2.0, -1.0))
+                      index_wts   = c(2.0, -1.0),
+                      overwrite   = TRUE)
 
   rows <- DBI::dbGetQuery(pop$db_conn,
     "SELECT * FROM index_meta WHERE index_name = 'terminal' ORDER BY trait_name")
@@ -376,6 +377,64 @@ test_that("add_index() errors when duplicate (id_ind, trait_name) rows remain", 
     ),
     regexp = "more than one EBV row"
   )
+})
+
+
+test_that("define_index() writes economic_wts to index_meta", {
+  pop <- make_index_pop("di_ev_basic")
+  on.exit(close_pop(pop))
+
+  pop <- define_index(pop, "terminal",
+                      trait_names     = c("ADG", "FCR"),
+                      index_wts       = c(1.2, -0.8),
+                      economic_wts = c(2.5, 1.0))
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM index_meta WHERE index_name = 'terminal' ORDER BY trait_name")
+  expect_equal(nrow(rows), 2L)
+  expect_true("economic_weight" %in% names(rows))
+  expect_equal(rows$economic_weight, c(2.5, 1.0), tolerance = 1e-9)
+})
+
+
+test_that("define_index() overwrite = FALSE (default) preserves existing rows", {
+  pop <- make_index_pop("di_no_overwrite")
+  on.exit(close_pop(pop))
+
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(1.2, -0.8))
+  # Re-call with different weights but overwrite = FALSE (default) — no change
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(9.9, 9.9))
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM index_meta WHERE index_name = 'terminal' ORDER BY trait_name")
+  expect_equal(nrow(rows), 2L)
+  expect_equal(rows$index_weight, c(1.2, -0.8), tolerance = 1e-9)
+})
+
+
+test_that("define_index() overwrite = TRUE updates economic_weight", {
+  pop <- make_index_pop("di_ev_overwrite")
+  on.exit(close_pop(pop))
+
+  pop <- define_index(pop, "terminal",
+                      trait_names     = c("ADG"),
+                      index_wts       = c(1.0),
+                      economic_wts = c(5.0))
+  pop <- define_index(pop, "terminal",
+                      trait_names     = c("ADG"),
+                      index_wts       = c(2.0),
+                      economic_wts = c(10.0),
+                      overwrite       = TRUE)
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM index_meta WHERE index_name = 'terminal'")
+  expect_equal(nrow(rows), 1L)
+  expect_equal(rows$index_weight,   2.0,  tolerance = 1e-9)
+  expect_equal(rows$economic_weight, 10.0, tolerance = 1e-9)
 })
 
 

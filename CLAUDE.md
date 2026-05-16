@@ -249,6 +249,39 @@ Estimated breeding values from external BLUP / GBLUP runs. Logical key
 | se          | DOUBLE  | Optional standard error                                      |
 | eval_number | INTEGER | Auto-incrementing counter per trait (global across models); 1 = first evaluation |
 
+### `index_meta`
+
+Selection index definitions. One row per (index × trait). Populated by
+`define_index()`. A special row with `index_name = NULL` is written by
+`add_trait()` to record the global economic weight for each trait.
+
+| Column          | Type    | Notes                                                         |
+|-----------------|---------|---------------------------------------------------------------|
+| id_index_name   | INTEGER | Primary key (auto-incrementing)                               |
+| index_name      | VARCHAR | NULL = global/default entry written by `add_trait()`; named index written by `define_index()` |
+| trait_name      | VARCHAR | FK to `trait_meta.trait_name`                                 |
+| index_weight    | DOUBLE  | Selection index weight (NULL for global rows)                 |
+| economic_weight | DOUBLE  | Economic value per unit of the trait                          |
+| *user cols*     | any     | Added via `...` in `define_index()`                           |
+
+**Reserved**: `id_index_name`, `index_name`, `trait_name`, `index_weight`, `economic_weight`
+
+**Unique constraint**: `(index_name, trait_name)` (NULL `index_name` uniqueness enforced in R code).
+
+### `ind_index`
+
+Computed selection index values. One row per (individual × index × run).
+Populated by `add_index()`.
+
+| Column       | Type    | Notes                                          |
+|--------------|---------|------------------------------------------------|
+| id_index     | INTEGER | Primary key (auto-incrementing)                |
+| id_ind       | VARCHAR |                                                |
+| index_name   | VARCHAR | FK to `index_meta.index_name`                  |
+| index_number | INTEGER | Auto-incrementing run counter per individual   |
+| index_value  | DOUBLE  | Computed index value                           |
+| *user cols*  | any     | Added via `...` in `add_index()`               |
+
 ## Implemented Functions (Phase 1 Complete)
 
 ### `initialize_genome()`
@@ -434,8 +467,11 @@ pop |>
 
 `R/add_trait.R`, `R/add_additive_effects.R`
 
-- `add_trait()` — one row in `trait_meta`. (Trait tables are created by
-  `initialize_genome()`, not on first `add_trait()` call.)
+- `add_trait()` — one row in `trait_meta`. Also writes a global
+  `(index_name = NULL, trait_name, economic_weight)` entry to `index_meta` so
+  each trait has a default economic weight without needing `define_index()` first.
+  `overwrite = FALSE` (default) errors if the trait already exists in `trait_meta`;
+  the existing `index_meta` row is preserved. `overwrite = TRUE` replaces both.
   `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
   `trait_meta`).
 - `add_additive_effects()` — accepts a `tidybreed_table` from
@@ -514,6 +550,24 @@ a single uncorrelated trait. QTL are always placed randomly (n = `n_qtl`).
 For non-random QTL placement or correlated multi-trait effects, use the
 functions individually with `get_table("genome_meta") |> filter(...)  |>
 add_additive_effects()`.
+
+### `define_index()` / `add_index()`
+
+`R/define_index.R`, `R/add_index.R`
+
+- `define_index(pop, index_name, trait_names, index_wts, economic_wts = NULL, overwrite = FALSE, ...)` —
+  registers a named selection index in `index_meta`. `overwrite = FALSE` (default)
+  is a no-op when `(index_name, trait_name)` already exists; `overwrite = TRUE`
+  updates weights and economic weights in place. `economic_wts` is an optional
+  numeric vector (same length as `trait_names`; some values may be 0) written to
+  `index_meta.economic_weight`. Extra `...` columns are broadcast or per-trait.
+- `add_index(tbl, index_name, overwrite_index = FALSE, delete_all = FALSE, ...)` —
+  accepts a `tidybreed_table` from `get_table("ind_ebv")` (optionally filtered).
+  Multiplies each individual's EBVs by the weights in `index_meta` and appends
+  to `ind_index`. Every individual must have an EBV for every index trait. Issues
+  a warning when no filter is applied (auto-selects latest `eval_number`).
+  `overwrite_index = TRUE` clears prior runs for the named index; `delete_all = TRUE`
+  clears all of `ind_index`.
 
 ## Roadmap
 

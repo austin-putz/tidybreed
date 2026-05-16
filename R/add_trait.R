@@ -71,8 +71,10 @@
 #' @param index_weight Numeric. Weight in a downstream selection index.
 #' @param economic_value Numeric. Economic value per unit of the trait.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
-#'   exists, replace its `trait_meta` row. Associated rows in `trait_effects`
-#'   are cleared for that trait.
+#'   exists, replace its `trait_meta` row and clear associated `trait_effects`
+#'   rows. Also updates the global `index_meta` entry (`index_name = NULL`) for
+#'   the trait. Default `FALSE` errors if the trait already exists in
+#'   `trait_meta`; the `index_meta` entry is left unchanged.
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
@@ -253,6 +255,29 @@ add_trait <- function(pop,
 
   DBI::dbWriteTable(pop$db_conn, "trait_meta", row, append = TRUE)
 
+  # Write a global economic-value entry to index_meta (index_name = NULL)
+  ev <- as.numeric(economic_value)
+  existing_ev <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT COUNT(*) AS n FROM index_meta ",
+           "WHERE index_name IS NULL AND trait_name = '",
+           gsub("'", "''", trait_name), "'"))$n
+
+  if (existing_ev > 0 && overwrite) {
+    DBI::dbExecute(pop$db_conn,
+      paste0("UPDATE index_meta SET economic_weight = ", ev,
+             " WHERE index_name IS NULL AND trait_name = '",
+             gsub("'", "''", trait_name), "'"))
+  } else if (existing_ev == 0) {
+    new_id <- next_int_id(pop$db_conn, "index_meta", "id_index_name")
+    DBI::dbExecute(pop$db_conn,
+      paste0("INSERT INTO index_meta ",
+             "(id_index_name, index_name, trait_name, index_weight, economic_weight) ",
+             "VALUES (", new_id, ", NULL, '", gsub("'", "''", trait_name),
+             "', NULL, ", ev, ")"))
+  }
+  # existing_ev > 0 && !overwrite: preserve existing value (no-op)
+
   message("Added trait '", trait_name, "' (type: ", trait_type, ").")
 
   invisible(pop)
@@ -356,10 +381,11 @@ ensure_trait_tables <- function(pop) {
     ",
     index_meta = "
       CREATE TABLE index_meta (
-        id_index_name INTEGER PRIMARY KEY,
-        index_name    VARCHAR,
-        trait_name    VARCHAR,
-        index_weight  DOUBLE,
+        id_index_name   INTEGER PRIMARY KEY,
+        index_name      VARCHAR,
+        trait_name      VARCHAR,
+        index_weight    DOUBLE,
+        economic_weight DOUBLE,
         UNIQUE (index_name, trait_name)
       )
     ",
@@ -420,6 +446,14 @@ ensure_trait_tables <- function(pop) {
           paste0("ALTER TABLE trait_meta ADD COLUMN ", new_col))
       }
     }
+  }
+
+  # Migrate index_meta: add economic_weight if the table already existed
+  if ("index_meta" %in% existing) {
+    idx_cols <- DBI::dbListFields(pop$db_conn, "index_meta")
+    if (!"economic_weight" %in% idx_cols)
+      DBI::dbExecute(pop$db_conn,
+        "ALTER TABLE index_meta ADD COLUMN economic_weight DOUBLE")
   }
 
   pop$tables <- unique(c(pop$tables, names(ddl)))

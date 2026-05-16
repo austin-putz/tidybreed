@@ -6,7 +6,7 @@
 \usage{
 add_phenotype(
   tbl,
-  trait_name,
+  trait_name = NULL,
   user_residual = NULL,
   user_values = NULL,
   seed = NULL,
@@ -18,7 +18,8 @@ add_phenotype(
 through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column; unique
 values in that column determine which individuals are phenotyped.}
 
-\item{trait_name}{Character vector of trait name(s).}
+\item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
+all traits currently in \code{trait_meta} are used (in \code{id_trait} order).}
 
 \item{user_residual}{Optional override for residual draws. Numeric vector
 of length \code{n_subset} for single trait, or a named list keyed by trait
@@ -45,8 +46,8 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 \itemize{
 \item \code{target_add_mean} comes from \code{trait_meta}.
 \item Fixed and random shifts come from \code{trait_effects} rows.
-\item \code{TBV_i} = sum over QTL of \verb{add_\{trait\}} * genotype dose (or haplotype
-dose for imprinted traits).
+\item \code{TBV_i} = sum over additive effects in \code{genome_effects} * genotype dose
+(or haplotype dose for imprinted traits).
 \item \code{e_i} is residual: drawn from \code{MVN(0, R)} across traits when a residual
 covariance matrix is stored (see \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}) and multiple
 traits share the same subset; otherwise drawn independently.
@@ -96,7 +97,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, \code{\link[=add_additive_effects]{add_additive_effects()}},
+\code{\link[=add_trait]{add_trait()}}, \code{\link[=add_additive_effects]{add_additive_effects()}},
 \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}}, \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}},
 \code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

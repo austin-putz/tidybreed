@@ -5,32 +5,41 @@
 \title{Sample correlated additive QTL effects across multiple traits}
 \usage{
 set_qtl_effects_multi(
-  x,
+  tbl,
   trait_names,
   G = NULL,
   method = c("shared", "union"),
   base = c("founder_haplotypes", "current_pop"),
+  base_tbl = NULL,
+  line_name = NULL,
   scale_to_target = TRUE,
   seed = NULL
 )
 }
 \arguments{
-\item{x}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} when
-\code{base = "current_pop"} to specify which individuals define the base allele
-frequencies.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}\code{("genome_meta")} (with an
+optional \code{\link[=filter]{filter()}}) that defines the loci to use. For \code{method = "shared"}
+these loci become the QTL for \strong{all} \code{trait_names}. For \code{method = "union"}
+these loci form the candidate pool; per-trait membership is determined from
+existing rows in \code{genome_effects}.}
 
 \item{trait_names}{Character vector of trait names (length >= 2). All must
-exist in \code{trait_meta} and have \verb{is_QTL_\{trait_name\}} already defined.}
+exist in \code{trait_meta}.}
 
 \item{G}{Optional numeric matrix of additive-genetic (co)variances. Must be
-square with side length \code{length(trait_names)} and symmetric. When supplied,
-stored to \code{trait_effect_cov} under \code{"gen_add"} before use. When \code{NULL},
-read from \code{trait_effect_cov} (requires a prior call to
-\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}} with \code{effect_name = "gen_add"}).}
+square and symmetric with side length \code{length(trait_names)}. When supplied,
+stored to \code{trait_effect_cov} under \code{"gen_add"}. When \code{NULL}, read from
+\code{trait_effect_cov}.}
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}.}
 
 \item{base}{Character. \code{"founder_haplotypes"} (default) or \code{"current_pop"}.}
+
+\item{base_tbl}{Optional \code{tidybreed_table} used when \code{base = "current_pop"}
+to restrict which individuals define base allele frequencies.}
+
+\item{line_name}{Optional character. Tag effects to a specific line (NULL =
+population-wide).}
 
 \item{scale_to_target}{Logical. Rescale each trait's effects to its
 \code{target_add_var} using the Falconer formula.}
@@ -42,38 +51,31 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Draws additive effects for multiple traits from a multivariate normal
-distribution keyed by the additive-genetic covariance matrix \code{G}. Two
-selection methods:
+distribution keyed by the additive-genetic covariance matrix \code{G}, and writes
+them to \code{genome_effects}. Two selection methods:
 \itemize{
-\item \code{method = "shared"} — effects are drawn only at loci that are QTL for
-\strong{all} listed traits (pure pleiotropy). Loci that are QTL for only a
-subset of traits receive independent draws (with the diagonal variance
-of \code{G} for that trait).
-\item \code{method = "union"} — effects are drawn at the union of QTL across traits
-using \code{MASS::mvrnorm}; loci that are not QTL for a particular trait have
-their effect set to \code{NA} for that trait.
+\item \code{method = "shared"} — effects are drawn at the loci supplied via \code{tbl}
+(used as the shared QTL set for all traits). Loci that are QTL for only a
+subset of traits in \code{genome_effects} also receive independent draws (with
+the diagonal variance of \code{G} for that trait).
+\item \code{method = "union"} — the loci in \code{tbl} form the union of QTL across all
+traits. Existing per-trait QTL sets (from prior \code{add_additive_effects()}
+calls) in \code{genome_effects} are used to determine which loci are active for
+each trait within that union; loci not yet assigned to a trait receive \code{NA}
+and are excluded from the TBV for that trait.
 }
 
 If \code{scale_to_target = TRUE}, each trait's effects are rescaled independently
-using the Falconer formula so the expected additive variance in the base
-population matches its \code{target_add_var}. See \code{\link[=add_additive_effects]{add_additive_effects()}} for details
-on the \code{base} argument.
+using the Falconer formula.
 }
 \examples{
 \dontrun{
 G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
-# Option A: pass G explicitly (also stores it for later use)
-pop <- pop |>
-  define_qtl("ADG", n = 200) |>
-  define_qtl("BW",  n = 200) |>
-  set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
-
-# Option B: store G first, then omit it
 pop <- pop |>
   add_effect_cov_matrix("gen_add", G) |>
-  define_qtl("ADG", n = 200) |>
-  define_qtl("BW",  n = 200) |>
-  set_qtl_effects_multi(trait_names = c("ADG", "BW"))
+  get_table("genome_meta") |>
+  dplyr::filter(chr \%in\% 1:5) |>
+  set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
 }
 }

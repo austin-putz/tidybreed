@@ -4,7 +4,15 @@
 \alias{define_index}
 \title{Define a selection index}
 \usage{
-define_index(pop, index_name, trait_names, index_wts, ...)
+define_index(
+  pop,
+  index_name,
+  trait_names,
+  index_wts,
+  economic_wts = NULL,
+  overwrite = FALSE,
+  ...
+)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
@@ -18,6 +26,15 @@ Each must be a valid SQL identifier. Order must match \code{index_wts}.}
 \item{index_wts}{Numeric vector. Selection index weights, one per trait in
 \code{trait_names}. Positive weights favour higher trait values; negative
 weights favour lower values.}
+
+\item{economic_wts}{Numeric vector (optional). Economic value per unit for
+each trait, in the same order as \code{trait_names}. Some values may be \code{0}.
+When \code{NULL} (default), the \code{economic_weight} column is not written.}
+
+\item{overwrite}{Logical. If \code{FALSE} (default), re-calling for an existing
+\verb{(index_name, trait_name)} pair is a no-op — existing weights and economic
+values are preserved. If \code{TRUE}, all non-key columns (\code{index_weight},
+\code{economic_weight}, and any \code{...} columns) are updated in place.}
 
 \item{...}{Optional extra columns to add to \code{index_meta}. Scalars are
 broadcast to all rows (one per trait). Vectors must have length equal to

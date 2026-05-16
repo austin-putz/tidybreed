@@ -18,6 +18,13 @@
 #' @param index_wts Numeric vector. Selection index weights, one per trait in
 #'   `trait_names`. Positive weights favour higher trait values; negative
 #'   weights favour lower values.
+#' @param economic_wts Numeric vector (optional). Economic value per unit for
+#'   each trait, in the same order as `trait_names`. Some values may be `0`.
+#'   When `NULL` (default), the `economic_weight` column is not written.
+#' @param overwrite Logical. If `FALSE` (default), re-calling for an existing
+#'   `(index_name, trait_name)` pair is a no-op — existing weights and economic
+#'   values are preserved. If `TRUE`, all non-key columns (`index_weight`,
+#'   `economic_weight`, and any `...` columns) are updated in place.
 #' @param ... Optional extra columns to add to `index_meta`. Scalars are
 #'   broadcast to all rows (one per trait). Vectors must have length equal to
 #'   `length(trait_names)`. Types are inferred via [infer_duckdb_type()].
@@ -39,7 +46,10 @@
 #'                     source = "genetic_team_v2")
 #' }
 #' @export
-define_index <- function(pop, index_name, trait_names, index_wts, ...) {
+define_index <- function(pop, index_name, trait_names, index_wts,
+                         economic_wts = NULL,
+                         overwrite       = FALSE,
+                         ...) {
 
   # ---- Input validation ----
   validate_tidybreed_pop(pop)
@@ -51,6 +61,18 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
   lapply(trait_names, validate_sql_identifier, what = "trait name")
 
   stopifnot(is.numeric(index_wts), length(index_wts) == length(trait_names))
+
+  if (!is.null(economic_wts)) {
+    if (!is.numeric(economic_wts) || length(economic_wts) != length(trait_names)) {
+      stop(
+        "`economic_wts` must be a numeric vector of the same length as `trait_names` (",
+        length(trait_names), ").",
+        call. = FALSE
+      )
+    }
+  }
+
+  stopifnot(is.logical(overwrite), length(overwrite) == 1)
 
   extra_cols <- list(...)
   n_rows <- length(trait_names)
@@ -77,6 +99,9 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
     stringsAsFactors = FALSE
   )
 
+  if (!is.null(economic_wts))
+    df$economic_weight <- as.double(economic_wts)
+
   # ---- Attach extra columns ----
   if (length(extra_cols) > 0) {
     prepped <- prepare_extra_cols(extra_cols, n_rows, "index_meta", pop$db_conn)
@@ -88,16 +113,22 @@ define_index <- function(pop, index_name, trait_names, index_wts, ...) {
   DBI::dbWriteTable(pop$db_conn, tmp_tbl, df, temporary = TRUE, overwrite = TRUE)
 
   non_key_cols <- setdiff(names(df), c("id_index_name", "index_name", "trait_name"))
-  update_clause <- paste(
-    vapply(non_key_cols, function(col) {
-      paste0(col, " = EXCLUDED.", col)
-    }, character(1)),
-    collapse = ", "
-  )
+  conflict_action <- if (overwrite && length(non_key_cols) > 0) {
+    update_clause <- paste(
+      vapply(non_key_cols, function(col) paste0(col, " = EXCLUDED.", col),
+             character(1)),
+      collapse = ", "
+    )
+    paste0("DO UPDATE SET ", update_clause)
+  } else {
+    "DO NOTHING"
+  }
 
+  col_list <- paste(names(df), collapse = ", ")
   sql <- paste0(
-    "INSERT INTO index_meta SELECT * FROM ", tmp_tbl,
-    " ON CONFLICT (index_name, trait_name) DO UPDATE SET ", update_clause
+    "INSERT INTO index_meta (", col_list, ") ",
+    "SELECT ", col_list, " FROM ", tmp_tbl,
+    " ON CONFLICT (index_name, trait_name) ", conflict_action
   )
   DBI::dbExecute(pop$db_conn, sql)
   DBI::dbExecute(pop$db_conn, paste0("DROP TABLE IF EXISTS ", tmp_tbl))

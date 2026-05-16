@@ -8,7 +8,6 @@ add_trait_simple(
   pop,
   trait_name,
   n_qtl,
-  qtl_method = "random",
   effect_distribution = "normal",
   scale_to_target = TRUE,
   seed = NULL,
@@ -20,16 +19,14 @@ add_trait_simple(
 
 \item{trait_name}{Character. Trait name; must be a valid SQL identifier.}
 
-\item{n_qtl}{Integer. Number of QTL to select.}
-
-\item{qtl_method}{Character. Selection method: \code{"random"}, \code{"even"}, or
-\code{"chromosome_even"}.}
+\item{n_qtl}{Integer. Number of QTL to randomly select from \code{genome_meta}.}
 
 \item{effect_distribution}{Character. \code{"normal"} or \code{"gamma"}.}
 
 \item{scale_to_target}{Logical. Passed to \code{\link[=add_additive_effects]{add_additive_effects()}}.}
 
-\item{seed}{Optional integer for reproducibility.}
+\item{seed}{Optional integer for reproducibility (applied before both the
+QTL random draw and the effect sampling).}
 
 \item{...}{Additional arguments forwarded to \code{\link[=add_trait]{add_trait()}} (e.g.
 \code{trait_type}, \code{target_add_var}, \code{residual_var}, \code{target_add_mean},
@@ -39,10 +36,11 @@ add_trait_simple(
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Convenience wrapper that chains \code{\link[=add_trait]{add_trait()}}, \code{\link[=define_qtl]{define_qtl()}}, and
-\code{\link[=add_additive_effects]{add_additive_effects()}} for a single uncorrelated trait. For correlated
-multi-trait simulations use the three low-level functions directly plus
-\code{\link[=set_qtl_effects_multi]{set_qtl_effects_multi()}}.
+Convenience wrapper that chains \code{\link[=add_trait]{add_trait()}} and \code{\link[=add_additive_effects]{add_additive_effects()}}
+for a single uncorrelated trait using random QTL placement. For correlated
+multi-trait simulations, or to control QTL placement (e.g. by chromosome
+or position), use the functions individually with
+\code{get_table("genome_meta") |> filter(...) |> add_additive_effects()}.
 }
 \examples{
 \dontrun{
@@ -54,7 +52,6 @@ pop <- pop |>
     target_add_var      = 0.25,
     residual_var        = 0.75,
     target_add_mean     = 850,
-    qtl_method          = "chromosome_even",
     effect_distribution = "normal"
   )
 }

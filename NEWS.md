@@ -1,3 +1,32 @@
+# tidybreed 0.24.1 (2026-05-16)
+
+## Naming consistency fixes
+
+* `index_meta.economic_value` renamed to `index_meta.economic_weight` to match
+  the `index_weight` column and the `{prefix}_weight` convention. Existing
+  databases are migrated automatically.
+* `define_index()` parameter `economic_values` renamed to `economic_wts` to
+  match the `index_wts` parameter naming convention.
+* `CLAUDE.md` updated: `index_meta` and `ind_index` table schemas documented;
+  `define_index()` / `add_index()` added to the Implemented Functions section.
+
+# tidybreed 0.24.0 (2026-05-16)
+
+## New features
+
+* `index_meta` gains an `economic_value DOUBLE` column. Existing databases are
+  migrated automatically on the next call to `ensure_trait_tables()`.
+* `add_trait()` now writes a global economic-value entry to `index_meta`
+  (`index_name = NULL`) alongside its `trait_meta` row. When `overwrite = FALSE`
+  (the default), an existing entry is preserved. When `overwrite = TRUE`, the
+  `economic_value` is updated in place.
+* `define_index()` gains two new parameters:
+  - `economic_values` — optional numeric vector (same length as `trait_names`)
+    written to the `index_meta.economic_value` column. Some values may be `0`.
+  - `overwrite = FALSE` — re-calling for an existing `(index_name, trait_name)`
+    pair is now a no-op by default. Set `overwrite = TRUE` to update weights
+    and economic values in place (the previous unconditional-upsert behaviour).
+
 # tidybreed 0.23.0 (2026-05-15)
 
 ## Breaking changes — genome_effects table replaces genome_meta effect columns

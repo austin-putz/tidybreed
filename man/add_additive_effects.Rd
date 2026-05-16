@@ -5,79 +5,92 @@
 \title{Sample or assign additive QTL effects for a trait}
 \usage{
 add_additive_effects(
-  x,
+  tbl,
   trait_name,
   effects = NULL,
   distribution = c("normal", "gamma"),
   base = c("founder_haplotypes", "current_pop"),
+  base_tbl = NULL,
+  line_name = NULL,
   scale_to_target = TRUE,
   seed = NULL
 )
 }
 \arguments{
-\item{x}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} (from
-\code{\link[=get_table]{get_table()}} plus optional \code{\link[=filter]{filter()}}) when \code{base = "current_pop"} to
-specify which individuals define the base allele frequencies.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}\code{("genome_meta")} (with an
+optional \code{\link[=filter]{filter()}}). The filtered rows determine which loci are QTL.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{trait_name}{Character. Name of an existing trait in \code{trait_meta}.}
 
-\item{effects}{Optional numeric vector of length \code{n_qtl} (manual mode).}
+\item{effects}{Optional numeric vector of length \code{n_qtl} (manual mode), in
+ascending \code{locus_id} order.}
 
-\item{distribution}{Character. \code{"normal"} (default) or \code{"gamma"}, used
-when \code{effects} is \code{NULL}.}
+\item{distribution}{Character. \code{"normal"} (default) or \code{"gamma"}, used when
+\code{effects} is \code{NULL}.}
 
-\item{base}{Character. \code{"founder_haplotypes"} (default) or \code{"current_pop"}.
-Determines which allele frequencies are used for Falconer variance scaling
-and TBV centering.}
+\item{base}{Character. \code{"founder_haplotypes"} (default) or \code{"current_pop"}.}
+
+\item{base_tbl}{Optional \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} on any table
+with an \code{id_ind} column) used when \code{base = "current_pop"} to restrict
+which individuals define the base allele frequencies. When \code{NULL}, all
+individuals in \code{genome_haplotype} are used.}
+
+\item{line_name}{Optional character. When set, effects are tagged to this
+genetic line (for future line-specific TBV). \code{NULL} (default) means
+population-wide effects.}
 
 \item{scale_to_target}{Logical. If \code{TRUE}, rescale sampled effects using the
-Falconer formula so the expected additive variance equals
-\code{trait_meta$target_add_var}.}
+Falconer formula so the expected additive variance equals the stored
+\code{target_add_var}.}
 
-\item{seed}{Optional integer. Passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.}
+\item{seed}{Optional integer for reproducibility.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Writes the \verb{add_\{trait\}} and \verb{base_allele_freq_\{trait\}} columns in
-\code{genome_meta}. Two modes:
+Selects QTL from a filtered \code{genome_meta} table and writes additive effects
+to the \code{genome_effects} table. This function absorbs the role previously
+played by \code{define_qtl()}: the filtered \code{tidybreed_table} determines which
+loci become QTL, and the effects are written in a single step.
+
+Two modes:
 \itemize{
-\item \strong{Manual}: pass \code{effects}, a numeric vector of length equal to the
-number of QTL for this trait (loci where \verb{is_QTL_\{trait\}} is \code{TRUE}), in
-ascending \code{locus_id} order.
-\item \strong{Sampled}: draw effects from \code{distribution} (\code{"normal"} or
-\code{"gamma"}). If \code{scale_to_target = TRUE}, effects are rescaled using the
-Falconer formula so that the expected additive variance in the base
-population equals \code{trait_meta$target_add_var}.
+\item \strong{Manual}: pass \code{effects}, a numeric vector of length \code{n_qtl} (number of
+filtered loci) in ascending \code{locus_id} order.
+\item \strong{Sampled}: draw effects from \code{distribution} (\code{"normal"} or \code{"gamma"}).
+If \code{scale_to_target = TRUE}, effects are rescaled using the Falconer
+formula so the expected additive variance in the base population equals
+the \code{target_add_var} stored for this trait.
 }
 
-The \code{base} argument controls which allele frequencies are used for effect
-scaling and TBV centering:
+The \code{base} argument controls which allele frequencies are used:
 \itemize{
 \item \code{"founder_haplotypes"} (default) — uses \code{founder_allele_freq} from
 \code{genome_meta} (requires \code{initialize_genome()} was called with
 \code{n_haplotypes}).
 \item \code{"current_pop"} — computes allele frequencies from the current
-\code{genome_haplotype} table. Pass a filtered \code{tidybreed_table} as the first
-argument to restrict which individuals define the base population.
+\code{genome_haplotype} table. Pass a filtered \code{tidybreed_table} via
+\code{base_tbl} to restrict which individuals define the base population.
 }
 
-Requires \code{\link[=define_qtl]{define_qtl()}} has been called for \code{trait}.
+Calling this function again for the same \verb{(trait_name, genome_effect_type, line_name)} replaces the existing rows in \code{genome_effects}.
 }
 \examples{
 \dontrun{
-# Default: scale using founder haplotype allele frequencies
+# Default: all loci on chr 1-5 become QTL; scale to target variance
 pop <- pop |>
   add_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
-  define_qtl("ADG", n = 100) |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr \%in\% 1:5) |>
   add_additive_effects("ADG", distribution = "normal")
 
-# current_pop: use only generation-0 animals to define base frequencies
+# current_pop: use generation-0 individuals to define base allele frequencies
+gen0_tbl <- get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L)
 pop <- pop |>
-  get_table("ind_meta") |>
-  dplyr::filter(gen == 0L) |>
-  add_additive_effects("ADG", base = "current_pop", distribution = "normal")
+  get_table("genome_meta") |>
+  dplyr::filter(chr \%in\% 1:5) |>
+  add_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
 }
 }
 \seealso{

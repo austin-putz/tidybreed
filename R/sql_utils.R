@@ -85,7 +85,7 @@ TABLE_RESERVED_COLS <- list(
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value"),
   trait_effect_cov = c("id_trait_effect_cov", "effect_name", "trait_name_1", "trait_name_2", "cov_value"),
-  index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight"),
+  index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight", "economic_weight"),
   ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value")
 )
 

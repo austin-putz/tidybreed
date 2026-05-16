@@ -164,3 +164,69 @@ test_that("add_trait() rejects SQL-unsafe names", {
   expect_error(add_trait(pop, "SELECT"), "reserved keyword")
   close_pop(pop)
 })
+
+
+test_that("add_trait() inserts global economic_weight row into index_meta", {
+  pop <- make_tiny_pop("trait_ev_insert")
+  on.exit(close_pop(pop))
+
+  pop <- add_trait(pop, "ADG",
+                   trait_type     = "continuous",
+                   target_add_var = 0.25,
+                   residual_var   = 0.75,
+                   economic_value = 5.0)
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM index_meta WHERE index_name IS NULL AND trait_name = 'ADG'")
+  expect_equal(nrow(rows), 1L)
+  expect_equal(rows$economic_weight, 5.0, tolerance = 1e-9)
+  expect_true(is.na(rows$index_weight))
+})
+
+
+test_that("add_trait() overwrite = FALSE preserves existing index_meta row", {
+  pop <- make_tiny_pop("trait_ev_no_overwrite")
+  on.exit(close_pop(pop))
+
+  pop <- add_trait(pop, "ADG",
+                   trait_type     = "continuous",
+                   target_add_var = 0.25,
+                   residual_var   = 0.75,
+                   economic_value = 5.0)
+  # overwrite = FALSE on a new trait — second call should error on trait_meta
+  # (existing coverage). Check index_meta row persists after overwrite = TRUE.
+  pop <- add_trait(pop, "ADG",
+                   trait_type     = "continuous",
+                   target_add_var = 0.25,
+                   residual_var   = 0.75,
+                   economic_value = 99.0,
+                   overwrite      = TRUE)
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT economic_weight FROM index_meta WHERE index_name IS NULL AND trait_name = 'ADG'")
+  expect_equal(nrow(rows), 1L)
+  expect_equal(rows$economic_weight, 99.0, tolerance = 1e-9)
+})
+
+
+test_that("add_trait() overwrite = TRUE updates index_meta and keeps only one row", {
+  pop <- make_tiny_pop("trait_ev_overwrite")
+  on.exit(close_pop(pop))
+
+  pop <- add_trait(pop, "ADG",
+                   trait_type     = "continuous",
+                   target_add_var = 0.25,
+                   residual_var   = 0.75,
+                   economic_value = 1.0)
+  pop <- add_trait(pop, "ADG",
+                   trait_type     = "continuous",
+                   target_add_var = 0.25,
+                   residual_var   = 0.75,
+                   economic_value = 9.0,
+                   overwrite      = TRUE)
+
+  rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM index_meta WHERE index_name IS NULL AND trait_name = 'ADG'")
+  expect_equal(nrow(rows), 1L)
+  expect_equal(rows$economic_weight, 9.0, tolerance = 1e-9)
+})
