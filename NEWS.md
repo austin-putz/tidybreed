@@ -1,3 +1,15 @@
+# tidybreed 0.25.0 (2026-05-16)
+
+## New features
+
+* `extract_genotypes()` gains an `effects_tbl` argument. Pass a filtered
+  `tidybreed_table` from `get_table(pop, "genome_effects")` to extract
+  genotypes at QTL loci (selected by trait, effect type, effect size, line,
+  or any other filter). `chip_name` and `effects_tbl` may be used together;
+  locus sets are unioned and deduplicated. `chip_name` now has a `NULL`
+  default (backward compatible — positional calls like
+  `extract_genotypes(tbl, "50k")` are unchanged).
+
 # tidybreed 0.24.1 (2026-05-16)
 
 ## Naming consistency fixes
