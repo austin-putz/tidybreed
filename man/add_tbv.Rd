@@ -4,7 +4,14 @@
 \alias{add_tbv}
 \title{Compute and store true breeding values without writing phenotypes}
 \usage{
-add_tbv(tbl, trait_name = NULL, ...)
+add_tbv(
+  tbl,
+  trait_name = NULL,
+  index_names = NULL,
+  type = c("index", "economic", "both"),
+  overwrite_index = FALSE,
+  ...
+)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
@@ -12,6 +19,26 @@ through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind
 
 \item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
 all traits currently in \code{trait_meta} are used (in \code{id_trait} order).}
+
+\item{index_names}{Character vector of named index(es) from \code{index_meta} for
+which true index values should be computed from TBVs and written to
+\code{ind_true_index}. When \code{NULL} (default), no true index computation is
+performed. All index traits must be included in \code{trait_name} (or all traits
+when \code{trait_name = NULL}).}
+
+\item{type}{Which weight column from \code{index_meta} to use: \code{"index"} uses
+\code{index_weight}, \code{"economic"} uses \code{economic_weight}, \code{"both"} computes and
+stores both (distinguished by the \code{weight_type} column in \code{ind_true_index}).
+Defaults to \code{"index"}.}
+
+\item{overwrite_index}{Logical. When \code{FALSE} (default), individuals that
+already have a true index value in \code{ind_true_index} for the given
+\verb{(index_name, weight_type)} combination are skipped — avoids redundant
+recomputation across generations. When \code{TRUE}, existing rows are deleted
+and recomputed (use when index weights have changed).}
+
+\item{...}{Optional extra columns written to \code{ind_tbv} (scalars only;
+broadcast to all records).}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -28,6 +55,10 @@ same math as the TBV step inside \code{\link[=add_phenotype]{add_phenotype()}}:
 where \code{dose_i} is the 0/1/2 genotype for non-imprinted traits, or the 0/1
 haplotype dose from the relevant parent for imprinted traits.
 
+Optionally computes true selection index values by multiplying per-trait TBVs
+by weights from named indices defined with \code{\link[=define_index]{define_index()}}, and writes them
+to \code{ind_true_index}.
+
 Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[=filter]{filter()}}) as
 the first argument to select individuals. The \code{expressed_sex} rule from
 \code{trait_meta} is applied on top.
@@ -37,12 +68,19 @@ phenotypes.
 }
 \examples{
 \dontrun{
+# TBVs only
 pop |>
   get_table("ind_meta") |>
   dplyr::filter(gen == 2L) |>
   add_tbv(c("ADG", "BW"))
+
+# TBVs + true index values (index weights)
+pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen == 2L) |>
+  add_tbv(c("ADG", "BW"), index_names = "terminal", type = "both")
 }
 }
 \seealso{
-\code{\link[=add_phenotype]{add_phenotype()}}
+\code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_index]{define_index()}}, \code{\link[=add_index]{add_index()}}
 }

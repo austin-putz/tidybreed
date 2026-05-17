@@ -153,6 +153,17 @@ next_int_id <- function(conn, table, id_col) {
 }
 
 
+#' System-managed tables that users must not overwrite with `define_table()`
+#'
+#' @keywords internal
+SYSTEM_TABLES <- c(
+  "genome_meta", "genome_haplotype", "genome_genotype", "genome_effects",
+  "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
+  "trait_meta", "trait_effects", "trait_effect_cov",
+  "index_meta", "ind_index", "ind_true_index"
+)
+
+
 #' Tables that contain the `id_ind` column (used for cross-table deletion)
 #'
 #' @keywords internal

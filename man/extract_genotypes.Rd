@@ -2,42 +2,62 @@
 % Please edit documentation in R/extract_genotypes.R
 \name{extract_genotypes}
 \alias{extract_genotypes}
-\title{Extract genotype data for genotyped animals on a SNP chip}
+\title{Extract genotype data for individuals, by chip and/or QTL loci}
 \usage{
-extract_genotypes(tbl, chip_name, col_name = paste0("has_", chip_name))
+extract_genotypes(tbl, chip_name = NULL, effects_tbl = NULL, col_name = NULL)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
 through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column when a
 filter is applied.}
 
-\item{chip_name}{Character. Name of a chip previously defined via
-\code{\link[=define_chip]{define_chip()}} and applied to animals via \code{\link[=add_genotypes]{add_genotypes()}}.}
+\item{chip_name}{Character or \code{NULL}. Name of a chip previously defined via
+\code{\link[=define_chip]{define_chip()}} and applied to animals via \code{\link[=add_genotypes]{add_genotypes()}}. When \code{NULL}
+the chip path is skipped.}
+
+\item{effects_tbl}{A \code{tidybreed_table} from
+\code{get_table(pop, "genome_effects")} (optionally filtered), or \code{NULL}.
+The collected table must contain a \code{locus_name} column. Use
+\code{\link[dplyr:filter]{dplyr::filter()}} to restrict by \code{trait_name}, \code{genome_effect_type},
+\code{genome_value}, \code{line_name}, etc. When \code{NULL} the QTL path is skipped.}
 
 \item{col_name}{Character. Name of the BOOLEAN column in \code{ind_meta} that
-records genotyping status. Default: \code{paste0("has_", chip_name)}.}
+records chip genotyping status. Default: \code{paste0("has_", chip_name)}.
+Ignored when \code{chip_name} is \code{NULL}.}
 }
 \value{
-A tibble with one row per genotyped animal and one column per chip
+A tibble with one row per individual and one column per selected
 locus (\code{id_ind} + \code{locus_N} columns). Locus columns use 0/1/2 integer
 encoding and are ordered by \code{locus_id}.
 }
 \description{
-Returns a tibble of genotypes (0/1/2 encoding) for animals that have been
-marked as genotyped via \code{\link[=add_genotypes]{add_genotypes()}}, restricted to loci on the named
-chip. Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally
-\code{\link[=filter]{filter()}}) as the first argument to restrict which animals are included.
+Returns a tibble of genotypes (0/1/2 encoding) for a set of individuals,
+restricted to loci selected by a chip definition, a filtered
+\code{genome_effects} table, or both. Pipe a \code{tidybreed_table} (from
+\code{\link[=get_table]{get_table()}} and optionally \code{\link[=filter]{filter()}}) as the first argument to restrict
+which individuals are included.
 
-The returned set is the \strong{intersection} of:
+At least one of \code{chip_name} or \code{effects_tbl} must be provided. When both
+are given the locus sets are \strong{unioned} (deduplicated, ordered by
+\code{locus_id}).
+
+\strong{Chip path} — the returned individual set is the intersection of:
 \itemize{
 \item Animals with \verb{has_<chip_name> == TRUE} in \code{ind_meta}
-\item Animals matching any pending \code{filter()} predicates
+\item Animals matching any pending \code{filter()} predicates on \code{tbl}
 \item Loci with \verb{is_<chip_name> == TRUE} in \code{genome_meta}
+}
+
+\strong{QTL path (\code{effects_tbl})} — the returned individual set is:
+\itemize{
+\item Animals matching any pending \code{filter()} predicates on \code{tbl}
+(or all individuals in \code{genome_genotype} when no filter is applied)
+\item Loci whose \code{locus_name} appears in the collected \code{effects_tbl}
 }
 }
 \examples{
 \dontrun{
-# All genotyped animals on the 50k chip
+# All genotyped animals on the 50k chip (unchanged usage)
 geno <- pop |> get_table("ind_meta") |> extract_genotypes("50k")
 
 # Only females genotyped on the HD chip
@@ -45,5 +65,31 @@ geno <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F") |>
   extract_genotypes("HD")
+
+# QTL loci for a trait (all individuals)
+geno <- pop |>
+  get_table("ind_meta") |>
+  extract_genotypes(
+    effects_tbl = get_table(pop, "genome_effects") |>
+      dplyr::filter(trait_name == "ADG")
+  )
+
+# Large-effect QTL only, females only
+geno <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(sex == "F") |>
+  extract_genotypes(
+    effects_tbl = get_table(pop, "genome_effects") |>
+      dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.5)
+  )
+
+# Chip loci + QTL loci unioned
+geno <- pop |>
+  get_table("ind_meta") |>
+  extract_genotypes(
+    chip_name   = "50k",
+    effects_tbl = get_table(pop, "genome_effects") |>
+      dplyr::filter(trait_name == "ADG")
+  )
 }
 }

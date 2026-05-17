@@ -1,3 +1,15 @@
+# tidybreed 0.27.0 (2026-05-16)
+
+## New features
+
+* New `define_table()` function. Creates a user-defined custom table inside
+  the tidybreed DuckDB database and registers it in `pop$tables` so that
+  `get_table()` and `mutate_table()` work on it immediately. Column names and
+  types are declared with named typed-NA `...` arguments (same convention as
+  `mutate_table()` schema pre-declaration). Optional `primary_key` argument
+  names a column as the `PRIMARY KEY`. Use `DBI::dbAppendTable()` to insert
+  rows after creation.
+
 # tidybreed 0.26.0 (2026-05-16)
 
 ## New features
