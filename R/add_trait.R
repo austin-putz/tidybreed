@@ -397,6 +397,15 @@ ensure_trait_tables <- function(pop) {
         index_number INTEGER,
         index_value  DOUBLE
       )
+    ",
+    ind_true_index = "
+      CREATE TABLE ind_true_index (
+        id_true_index    INTEGER PRIMARY KEY,
+        id_ind           VARCHAR NOT NULL,
+        index_name       VARCHAR NOT NULL,
+        weight_type      VARCHAR NOT NULL,
+        true_index_value DOUBLE
+      )
     "
   )
 

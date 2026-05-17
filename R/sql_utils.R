@@ -86,7 +86,8 @@ TABLE_RESERVED_COLS <- list(
                        "center", "value"),
   trait_effect_cov = c("id_trait_effect_cov", "effect_name", "trait_name_1", "trait_name_2", "cov_value"),
   index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight", "economic_weight"),
-  ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value")
+  ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value"),
+  ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "true_index_value")
 )
 
 
@@ -103,7 +104,8 @@ TABLE_PRIMARY_KEYS <- list(
   trait_meta       = "id_trait",
   trait_effect_cov = "id_trait_effect_cov",
   index_meta       = "id_index_name",
-  ind_index        = "id_index"
+  ind_index        = "id_index",
+  ind_true_index   = "id_true_index"
 )
 
 
@@ -123,6 +125,7 @@ TABLE_ROW_KEYS <- list(
   ind_tbv          = c("id_ind", "trait_name"),
   ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
   ind_index        = c("id_ind", "index_name", "index_number"),
+  ind_true_index   = c("id_ind", "index_name", "weight_type"),
   genome_haplotype = c("id_ind", "parent_origin"),
   genome_genotype  = "id_ind",
   trait_effects    = c("trait_name", "effect_name"),

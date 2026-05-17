@@ -282,6 +282,25 @@ Populated by `add_index()`.
 | index_value  | DOUBLE  | Computed index value                           |
 | *user cols*  | any     | Added via `...` in `add_index()`               |
 
+### `ind_true_index`
+
+True selection index values computed from TBVs (simulation ground truth).
+Populated by `add_tbv()` when `index_names` is supplied.
+
+| Column           | Type    | Notes                                                        |
+|------------------|---------|--------------------------------------------------------------|
+| id_true_index    | INTEGER | Primary key (auto-incrementing)                              |
+| id_ind           | VARCHAR |                                                              |
+| index_name       | VARCHAR | FK to `index_meta.index_name`                                |
+| weight_type      | VARCHAR | `"index"` (uses `index_weight`) or `"economic"` (uses `economic_weight`) |
+| true_index_value | DOUBLE  | Weighted sum: `sum(weight_i * tbv_i)` across index traits    |
+
+**Reserved**: all columns (managed exclusively by `add_tbv()` when `index_names` is supplied).
+
+Logical row key `(id_ind, index_name, weight_type)` — one true index value per
+individual × index × weight type. No SQL `UNIQUE` constraint; uniqueness enforced
+in R via DELETE + INSERT when `overwrite_index = TRUE`.
+
 ## Implemented Functions (Phase 1 Complete)
 
 ### `initialize_genome()`
@@ -539,7 +558,16 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
 - `add_tbv()` — TBV-only; no phenotype records. Reads additive effects from
   `genome_effects` (where `genome_effect_type = "additive"` and
   `line_name IS NULL`). `trait_name` also defaults to all traits in `trait_meta`
-  when omitted.
+  when omitted. Optional arguments for true index computation:
+  - `index_names` — character vector of named indices; when supplied, multiplies
+    per-trait TBVs by the index weights and writes results to `ind_true_index`.
+    `NULL` (default) skips index computation.
+  - `type` — `"index"` (default, uses `index_weight`), `"economic"` (uses
+    `economic_weight`), or `"both"` (writes two rows per individual distinguished
+    by `weight_type`).
+  - `overwrite_index = FALSE` — when `FALSE`, skips individuals that already have
+    a value in `ind_true_index` for the given `(index_name, weight_type)`. Set
+    `TRUE` to recompute (e.g. after updating index weights).
 
 ### `add_trait_simple()`
 

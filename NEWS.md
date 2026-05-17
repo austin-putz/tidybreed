@@ -1,3 +1,25 @@
+# tidybreed 0.26.0 (2026-05-16)
+
+## New features
+
+* `add_tbv()` gains three new arguments for computing true selection index
+  values from TBVs:
+  - `index_names`: character vector of named indices (from `define_index()`) for
+    which a true index value should be computed. When `NULL` (default), only
+    `ind_tbv` is written — existing behaviour is unchanged.
+  - `type`: which weight column from `index_meta` to use — `"index"` (default,
+    `index_weight`), `"economic"` (`economic_weight`), or `"both"` (writes two
+    rows per individual distinguished by the `weight_type` column).
+  - `overwrite_index`: when `FALSE` (default), individuals already present in
+    `ind_true_index` for a given `(index_name, weight_type)` are skipped —
+    avoids redundant recomputation across generations. Set to `TRUE` to
+    recompute when index weights change.
+* New table `ind_true_index` (`id_true_index`, `id_ind`, `index_name`,
+  `weight_type`, `true_index_value`). Created automatically by
+  `ensure_trait_tables()` on the next call that triggers it (e.g.,
+  `add_trait()`, `initialize_genome()`). Existing databases are migrated
+  transparently.
+
 # tidybreed 0.25.0 (2026-05-16)
 
 ## New features
