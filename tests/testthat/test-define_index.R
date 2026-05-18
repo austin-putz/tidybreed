@@ -293,15 +293,16 @@ test_that("add_index() supports extra user columns", {
 })
 
 
-test_that("add_index() errors when tbl is not ind_ebv", {
+test_that("add_index() errors when tbl lacks required columns", {
   pop <- make_index_pop("ai_err_tbl")
   on.exit(close_pop(pop))
 
   pop <- define_index(pop, "terminal", trait_names = "ADG", index_wts = 1.0)
 
+  # ind_meta has no trait_name; pass explicit value_col to reach column check
   expect_error(
-    pop |> get_table("ind_meta") |> add_index("terminal"),
-    regexp = "ind_ebv"
+    pop |> get_table("ind_meta") |> add_index("terminal", value_col = "ebv_value"),
+    regexp = "missing required column"
   )
 })
 
@@ -341,7 +342,7 @@ test_that("add_index() errors when a required trait has no EBVs for some individ
       get_table("ind_ebv") |>
       dplyr::filter(model == "test_model") |>
       add_index("terminal"),
-    regexp = "missing EBVs for required traits"
+    regexp = "missing values for required traits"
   )
 })
 
@@ -369,14 +370,210 @@ test_that("add_index() errors when duplicate (id_ind, trait_name) rows remain", 
 
   pop <- define_index(pop, "terminal", trait_names = "ADG", index_wts = 1.0)
 
-  # No filter — auto-select latest should still give 1 per (id_ind, trait_name)
-  # since both have eval_number = 1. This should fail because 2 models tie.
+  # No filter — two models for ADG means duplicate (id_ind, trait_name) rows
   expect_error(
     suppressWarnings(
       pop |> get_table("ind_ebv") |> add_index("terminal")
     ),
-    regexp = "more than one EBV row"
+    regexp = "more than one row"
   )
+})
+
+
+# ============================================================
+# add_index() — generalized table support
+# ============================================================
+
+test_that("add_index() auto-detects tbv_value for ind_tbv", {
+  pop <- make_index_pop("ai_tbv")
+  on.exit(close_pop(pop))
+
+  # Write TBVs directly
+  ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
+  tbv_adg <- data.frame(
+    id_ind     = ind_ids,
+    trait_name = "ADG",
+    tbv_value  = seq(50, 140, length.out = length(ind_ids)),
+    stringsAsFactors = FALSE
+  )
+  tbv_fcr <- data.frame(
+    id_ind     = ind_ids,
+    trait_name = "FCR",
+    tbv_value  = seq(1.0, 1.9, length.out = length(ind_ids)),
+    stringsAsFactors = FALSE
+  )
+  combined <- rbind(tbv_adg, tbv_fcr)
+  combined$id_tbv <- seq_len(nrow(combined))
+  DBI::dbWriteTable(pop$db_conn, "ind_tbv", combined, append = TRUE)
+
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(1.0, -1.0))
+
+  # ind_tbv has one row per (id_ind, trait_name) by design; suppress advisory warning
+  suppressWarnings(
+    pop <- pop |> get_table("ind_tbv") |> add_index("terminal")
+  )
+
+  result <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM ind_index ORDER BY id_ind")
+  expect_equal(nrow(result), 10L)
+
+  adg_v <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG' ORDER BY id_ind")
+  fcr_v <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'FCR' ORDER BY id_ind")
+  expected <- adg_v$tbv_value * 1.0 + fcr_v$tbv_value * (-1.0)
+  expect_equal(result$index_value, expected, tolerance = 1e-9)
+})
+
+
+test_that("add_index() works with ind_phenotype filtered to pheno_number == 1L", {
+  pop <- make_index_pop("ai_pheno")
+  on.exit(close_pop(pop))
+
+  ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
+  ph_adg <- data.frame(
+    id_ind       = ind_ids,
+    trait_name   = "ADG",
+    pheno_value  = seq(200, 290, length.out = length(ind_ids)),
+    pheno_number = 1L,
+    stringsAsFactors = FALSE
+  )
+  ph_fcr <- data.frame(
+    id_ind       = ind_ids,
+    trait_name   = "FCR",
+    pheno_value  = seq(2.0, 2.9, length.out = length(ind_ids)),
+    pheno_number = 1L,
+    stringsAsFactors = FALSE
+  )
+  combined <- rbind(ph_adg, ph_fcr)
+  combined$id_phenotype <- seq_len(nrow(combined))
+  DBI::dbWriteTable(pop$db_conn, "ind_phenotype", combined, append = TRUE)
+
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(1.0, -1.0))
+
+  expect_no_warning(
+    pop <- pop |>
+      get_table("ind_phenotype") |>
+      dplyr::filter(pheno_number == 1L) |>
+      add_index("terminal")
+  )
+
+  result <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM ind_index ORDER BY id_ind")
+  expect_equal(nrow(result), 10L)
+  adg_v <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE trait_name = 'ADG' ORDER BY id_ind")
+  fcr_v <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE trait_name = 'FCR' ORDER BY id_ind")
+  expected <- adg_v$pheno_value * 1.0 + fcr_v$pheno_value * (-1.0)
+  expect_equal(result$index_value, expected, tolerance = 1e-9)
+})
+
+
+test_that("add_index() errors on duplicates when ind_phenotype unfiltered with repeat records", {
+  pop <- make_index_pop("ai_pheno_dup")
+  on.exit(close_pop(pop))
+
+  ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
+  ph1 <- data.frame(
+    id_ind = ind_ids, trait_name = "ADG",
+    pheno_value = rnorm(length(ind_ids)), pheno_number = 1L,
+    stringsAsFactors = FALSE
+  )
+  ph2 <- data.frame(
+    id_ind = ind_ids, trait_name = "ADG",
+    pheno_value = rnorm(length(ind_ids)), pheno_number = 2L,
+    stringsAsFactors = FALSE
+  )
+  combined <- rbind(ph1, ph2)
+  combined$id_phenotype <- seq_len(nrow(combined))
+  DBI::dbWriteTable(pop$db_conn, "ind_phenotype", combined, append = TRUE)
+
+  pop <- define_index(pop, "terminal", trait_names = "ADG", index_wts = 1.0)
+
+  expect_error(
+    suppressWarnings(
+      pop |> get_table("ind_phenotype") |> add_index("terminal")
+    ),
+    regexp = "more than one row"
+  )
+})
+
+
+test_that("add_index() errors Cannot auto-detect for unknown table without value_col", {
+  pop <- make_index_pop("ai_unk_tbl")
+  on.exit(close_pop(pop))
+
+  pop <- define_index(pop, "terminal", trait_names = "ADG", index_wts = 1.0)
+
+  # define_table creates a user-defined table
+  pop <- define_table(pop, "my_scores",
+                      id_ind = NA_character_, trait_name = NA_character_,
+                      score  = NA_real_)
+
+  expect_error(
+    pop |> get_table("my_scores") |> add_index("terminal"),
+    regexp = "Cannot auto-detect value_col"
+  )
+})
+
+
+test_that("add_index() works with explicit value_col on a user-defined table", {
+  pop <- make_index_pop("ai_custom_col")
+  on.exit(close_pop(pop))
+
+  ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
+  pop <- define_table(pop, "my_scores",
+                      id_ind = NA_character_, trait_name = NA_character_,
+                      score  = NA_real_)
+  rows <- data.frame(
+    id_ind     = rep(ind_ids, 2),
+    trait_name = c(rep("ADG", length(ind_ids)), rep("FCR", length(ind_ids))),
+    score      = seq(1, 2 * length(ind_ids)),
+    stringsAsFactors = FALSE
+  )
+  DBI::dbWriteTable(pop$db_conn, "my_scores", rows, append = TRUE)
+
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(1.0, -1.0))
+
+  suppressWarnings(
+    pop <- pop |>
+      get_table("my_scores") |>
+      add_index("terminal", value_col = "score")
+  )
+
+  result <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM ind_index ORDER BY id_ind")
+  expect_equal(nrow(result), 10L)
+})
+
+
+
+test_that("add_index() backward compat: ind_ebv with filter works correctly", {
+  pop <- make_index_pop("ai_compat")
+  on.exit(close_pop(pop))
+
+  pop <- define_index(pop, "terminal",
+                      trait_names = c("ADG", "FCR"),
+                      index_wts   = c(1.0, -1.0))
+
+  expect_no_warning(
+    pop <- pop |>
+      get_table("ind_ebv") |>
+      dplyr::filter(model == "test_model", eval_number == 1L) |>
+      add_index("terminal")
+  )
+
+  result <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM ind_index ORDER BY id_ind")
+  expect_equal(nrow(result), 10L)
+  expect_equal(result$index_number, rep(1L, 10L))
 })
 
 

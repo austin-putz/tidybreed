@@ -1,31 +1,38 @@
-#' Compute a selection index from EBVs
+#' Compute a selection index from a tidybreed table
 #'
 #' @description
-#' Calculates a named selection index by multiplying each individual's EBVs by
+#' Calculates a named selection index by multiplying each individual's values by
 #' the index weights defined in [define_index()] and summing the products.
 #' Results are appended to the `ind_index` table with an auto-incrementing
 #' `index_number` so that successive runs are preserved.
 #'
-#' The first argument **must** be a `tidybreed_table` obtained from
-#' `get_table("ind_ebv")` (optionally filtered). This is the only function in
-#' the package that requires piping through `ind_ebv` rather than `ind_meta`.
+#' The first argument must be a `tidybreed_table` obtained from `get_table()`
+#' (optionally filtered). The table must contain `id_ind`, `trait_name`, and a
+#' numeric value column (`value_col`). Works with `ind_ebv` (EBVs),
+#' `ind_phenotype` (phenotypes), `ind_tbv` (TBVs), or any user-defined table
+#' with the same structure.
 #'
-#' ## EBV resolution
-#' If no filter is applied, `add_index()` automatically selects the row with the
-#' highest `eval_number` per `(id_ind, trait_name)` and issues a warning. After
-#' this auto-selection, if any `(id_ind, trait_name)` pair still has more than
-#' one row (e.g. because multiple models are present), an error is thrown — you
-#' must filter down to a single model first.
+#' ## Uniqueness requirement
+#' There must be exactly one row per `(id_ind, trait_name)` after any filter is
+#' applied. If duplicates remain, an error is thrown — filter the table down to
+#' a single model, evaluation, or phenotype record before calling `add_index()`.
 #'
 #' ## Completeness requirement
-#' Every individual must have an EBV for **every** trait in the index. If any
-#' individual is missing an EBV for any required trait, an error is thrown
+#' Every individual must have a value for **every** trait in the index. If any
+#' individual is missing a value for any required trait, an error is thrown
 #' before any rows are written.
 #'
-#' @param tbl A `tidybreed_table` from `get_table("ind_ebv")` (optionally
-#'   filtered). Must be the `ind_ebv` table.
+#' @param tbl A `tidybreed_table` from `get_table()` (optionally filtered).
+#'   Must contain `id_ind`, `trait_name`, and the column specified by
+#'   `value_col`. Any table with this structure is accepted: `ind_ebv`,
+#'   `ind_phenotype`, `ind_tbv`, or a custom table.
 #' @param index_name Character scalar. Name of the index to compute; must
 #'   already exist in `index_meta` (created via [define_index()]).
+#' @param value_col Character scalar or `NULL`. The column in `tbl` that holds
+#'   the numeric value to weight. When `NULL` (default), auto-detected from the
+#'   table name: `ind_ebv` → `"ebv_value"`, `ind_phenotype` → `"pheno_value"`,
+#'   `ind_tbv` → `"tbv_value"`. An error is thrown for unknown tables if
+#'   `value_col` is not supplied.
 #' @param overwrite_index Logical. If `TRUE`, all existing `ind_index` rows for
 #'   this `index_name` are deleted before inserting; new rows receive
 #'   `index_number = 1`. Default `FALSE`.
@@ -38,20 +45,32 @@
 #'
 #' @return The `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [define_index()], [get_table()], [add_ebv()]
+#' @seealso [define_index()], [get_table()], [add_ebv()], [add_phenotype()],
+#'   [add_tbv()]
 #'
 #' @examples
 #' \dontrun{
-#' # Compute index using latest EBVs (warning issued — no filter applied)
-#' pop <- pop |>
-#'   get_table("ind_ebv") |>
-#'   add_index("terminal")
-#'
-#' # Filter to a specific model and eval_number before computing (no warning)
+#' # Compute index from EBVs — filter to a specific model and eval_number
 #' pop <- pop |>
 #'   get_table("ind_ebv") |>
 #'   dplyr::filter(model == "blup_v1", eval_number == 1L) |>
 #'   add_index("terminal")
+#'
+#' # Compute phenotypic index — filter to first record per individual per trait
+#' pop <- pop |>
+#'   get_table("ind_phenotype") |>
+#'   dplyr::filter(pheno_number == 1L) |>
+#'   add_index("terminal")
+#'
+#' # Compute true-value index from TBVs (value_col auto-detected)
+#' pop <- pop |>
+#'   get_table("ind_tbv") |>
+#'   add_index("terminal")
+#'
+#' # Explicit value_col for a user-defined table
+#' pop <- pop |>
+#'   get_table("my_scores") |>
+#'   add_index("terminal", value_col = "composite_score")
 #'
 #' # Replace previous run with a fresh one
 #' pop <- pop |>
@@ -62,20 +81,13 @@
 #' @export
 add_index <- function(tbl,
                       index_name,
+                      value_col       = NULL,
                       overwrite_index = FALSE,
                       delete_all      = FALSE,
                       ...) {
 
   # ---- Input validation ----
   stopifnot(inherits(tbl, "tidybreed_table"))
-  if (tbl$table_name != "ind_ebv") {
-    stop(
-      "add_index() requires a tidybreed_table from get_table(\"ind_ebv\"). ",
-      "Got table '", tbl$table_name, "' instead. ",
-      "Pipe through get_table(\"ind_ebv\") (and optionally filter()) first.",
-      call. = FALSE
-    )
-  }
 
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
@@ -95,6 +107,42 @@ add_index <- function(tbl,
         call. = FALSE
       )
     }
+  }
+
+  # ---- Resolve value_col ----
+  known_value_cols <- c(
+    ind_ebv       = "ebv_value",
+    ind_phenotype = "pheno_value",
+    ind_tbv       = "tbv_value"
+  )
+
+  if (is.null(value_col)) {
+    auto <- known_value_cols[tbl$table_name]
+    if (is.na(auto)) {
+      stop(
+        "Cannot auto-detect value_col for table '", tbl$table_name, "'. ",
+        "Supply value_col explicitly (e.g. value_col = \"my_value\").",
+        call. = FALSE
+      )
+    }
+    value_col <- unname(auto)
+  } else {
+    stopifnot(is.character(value_col), length(value_col) == 1L)
+    validate_sql_identifier(value_col, what = "value_col")
+  }
+
+  # ---- Validate required columns exist ----
+  tbl_fields    <- DBI::dbListFields(pop$db_conn, tbl$table_name)
+  required_cols <- c("id_ind", "trait_name", value_col)
+  missing_cols  <- setdiff(required_cols, tbl_fields)
+  if (length(missing_cols) > 0) {
+    stop(
+      "Table '", tbl$table_name, "' is missing required column(s): ",
+      paste(missing_cols, collapse = ", "), ". ",
+      "add_index() requires id_ind, trait_name, and the value column ('",
+      value_col, "').",
+      call. = FALSE
+    )
   }
 
   # ---- Look up index weights ----
@@ -126,64 +174,54 @@ add_index <- function(tbl,
   )
   message("Computing index '", index_name, "': ", wt_str)
 
-  # ---- Resolve which EBV rows to use ----
-  no_filter <- length(tbl$pending_filter) == 0
-
-  if (no_filter) {
+  # ---- Collect value rows ----
+  if (length(tbl$pending_filter) == 0) {
     warning(
-      "No filter applied to ind_ebv. Assuming the latest eval_number per ",
-      "individual per trait. Supply a filter (e.g. dplyr::filter(model == ..., ",
-      "eval_number == ...)) if this is not intended.",
+      "No filter applied to '", tbl$table_name, "'. ",
+      "If this table can have multiple rows per (id_ind, trait_name) ",
+      "(e.g. ind_phenotype with pheno_number > 1, or ind_ebv with multiple ",
+      "eval_number values), filter first to ensure exactly one row per pair.",
       call. = FALSE
     )
-    # Auto-select latest eval_number per (id_ind, trait_name)
-    ebv_df <- DBI::dbGetQuery(
-      pop$db_conn,
-      "SELECT e.id_ind, e.trait_name, e.ebv_value
-       FROM ind_ebv e
-       INNER JOIN (
-         SELECT id_ind, trait_name, MAX(eval_number) AS max_eval
-         FROM ind_ebv
-         GROUP BY id_ind, trait_name
-       ) m ON e.id_ind = m.id_ind
-          AND e.trait_name = m.trait_name
-          AND e.eval_number = m.max_eval"
-    )
-  } else {
-    ebv_df <- dplyr::collect(tbl$tbl)[, c("id_ind", "trait_name", "ebv_value")]
   }
+  value_df <- dplyr::collect(tbl$tbl)[, c("id_ind", "trait_name", value_col),
+                                       drop = FALSE]
 
   # ---- Filter to only index traits ----
-  ebv_df <- ebv_df[ebv_df$trait_name %in% index_traits, , drop = FALSE]
+  value_df <- value_df[value_df$trait_name %in% index_traits, , drop = FALSE]
 
   # ---- Check for duplicate (id_ind, trait_name) rows ----
-  dup_check <- table(paste(ebv_df$id_ind, ebv_df$trait_name, sep = "\x1f"))
+  dup_check <- table(paste(value_df$id_ind, value_df$trait_name, sep = "\x1f"))
   if (any(dup_check > 1)) {
     n_dups <- sum(dup_check > 1)
     stop(
-      n_dups, " (id_ind, trait_name) combination(s) still have more than one ",
-      "EBV row after resolution. Filter ind_ebv to a single model and/or ",
-      "eval_number before calling add_index(). ",
-      "Example: dplyr::filter(model == \"blup_v1\", eval_number == 1L)",
+      n_dups, " (id_ind, trait_name) combination(s) have more than one row. ",
+      "Filter '", tbl$table_name, "' to a single row per (id_ind, trait_name) ",
+      "before calling add_index(). ",
+      "Example: dplyr::filter(model == \"blup_v1\", eval_number == 1L) for ind_ebv, ",
+      "or dplyr::filter(pheno_number == 1L) for ind_phenotype.",
       call. = FALSE
     )
   }
 
-  # ---- Check that all index traits have EBVs for all individuals ----
-  individuals <- unique(ebv_df$id_ind)
+  # ---- Check that all index traits have values for all individuals ----
+  individuals <- unique(value_df$id_ind)
   n_ind       <- length(individuals)
 
   if (n_ind == 0) {
-    stop("No EBV rows found for index traits after filtering.", call. = FALSE)
+    stop(
+      "No rows found for index traits in '", tbl$table_name, "' after filtering.",
+      call. = FALSE
+    )
   }
 
   missing_info <- character(0)
   for (tr in index_traits) {
-    tr_inds    <- ebv_df$id_ind[ebv_df$trait_name == tr]
-    n_missing  <- n_ind - length(tr_inds)
+    tr_inds   <- value_df$id_ind[value_df$trait_name == tr]
+    n_missing <- n_ind - length(tr_inds)
     if (n_missing > 0) {
       missing_info <- c(missing_info,
-        sprintf("  trait '%s': %d of %d individuals missing EBVs",
+        sprintf("  trait '%s': %d of %d individuals missing values",
                 tr, n_missing, n_ind))
     }
   }
@@ -191,9 +229,9 @@ add_index <- function(tbl,
   if (length(missing_info) > 0) {
     stop(
       "Cannot compute index '", index_name, "' — some individuals are missing ",
-      "EBVs for required traits:\n",
+      "values for required traits in '", tbl$table_name, "':\n",
       paste(missing_info, collapse = "\n"), "\n",
-      "Ensure all index traits have EBVs for all individuals before calling ",
+      "Ensure all index traits have values for all individuals before calling ",
       "add_index().",
       call. = FALSE
     )
@@ -202,15 +240,13 @@ add_index <- function(tbl,
   # ---- Pivot wide and compute index ----
   individuals_sorted <- sort(individuals)
 
-  # Build n_ind × n_traits EBV matrix via direct lookup — avoids stats::reshape()
-  # which behaves differently on tibbles (from dplyr::collect) vs plain data.frames,
-  # causing column name mangling that makes wide[[tr]] return NULL.
-  ebv_mat <- vapply(index_traits, function(tr) {
-    tr_rows <- ebv_df[ebv_df$trait_name == tr, , drop = FALSE]
-    tr_rows$ebv_value[match(individuals_sorted, tr_rows$id_ind)]
+  # Build n_ind × n_traits value matrix via direct lookup
+  value_mat <- vapply(index_traits, function(tr) {
+    tr_rows <- value_df[value_df$trait_name == tr, , drop = FALSE]
+    tr_rows[[value_col]][match(individuals_sorted, tr_rows$id_ind)]
   }, numeric(length(individuals_sorted)))
 
-  index_values <- as.numeric(ebv_mat %*% index_wts[index_traits])
+  index_values <- as.numeric(value_mat %*% index_wts[index_traits])
 
   # ---- Determine index_number ----
   conn <- pop$db_conn

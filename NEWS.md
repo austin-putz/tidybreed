@@ -1,3 +1,20 @@
+# tidybreed 0.28.0 (2026-05-18)
+
+## Enhancements
+
+* `add_index()` is now fully generalized: any `tidybreed_table` with `id_ind`,
+  `trait_name`, and a numeric value column can be passed as the first argument —
+  not just `ind_ebv`. This enables phenotypic indexes (`ind_phenotype`), TBV-based
+  indexes (`ind_tbv`), and user-defined tables.
+  - New `value_col` argument (default `NULL`): auto-detected from the table name
+    (`ind_ebv` → `"ebv_value"`, `ind_phenotype` → `"pheno_value"`,
+    `ind_tbv` → `"tbv_value"`). Pass explicitly for unknown or user-defined tables.
+  - A uniqueness check errors if any `(id_ind, trait_name)` combination has more
+    than one row after filtering, preventing silent mis-computation from repeat
+    phenotype records or multiple EBV evaluations.
+  - A warning is issued when no filter is applied, reminding users to narrow to a
+    single record per `(id_ind, trait_name)` before calling `add_index()`.
+
 # tidybreed 0.27.1 (2026-05-18)
 
 ## Administrative

@@ -589,11 +589,16 @@ add_additive_effects()`.
   updates weights and economic weights in place. `economic_wts` is an optional
   numeric vector (same length as `trait_names`; some values may be 0) written to
   `index_meta.economic_weight`. Extra `...` columns are broadcast or per-trait.
-- `add_index(tbl, index_name, overwrite_index = FALSE, delete_all = FALSE, ...)` —
-  accepts a `tidybreed_table` from `get_table("ind_ebv")` (optionally filtered).
-  Multiplies each individual's EBVs by the weights in `index_meta` and appends
-  to `ind_index`. Every individual must have an EBV for every index trait. Issues
-  a warning when no filter is applied (auto-selects latest `eval_number`).
+- `add_index(tbl, index_name, value_col = NULL, overwrite_index = FALSE, delete_all = FALSE, ...)` —
+  accepts a `tidybreed_table` from `get_table()` (optionally filtered). Any table
+  with `id_ind`, `trait_name`, and a numeric value column is accepted: `ind_ebv`,
+  `ind_phenotype`, `ind_tbv`, or a user-defined table. `value_col` is auto-detected
+  from the table name (`ind_ebv` → `"ebv_value"`, `ind_phenotype` → `"pheno_value"`,
+  `ind_tbv` → `"tbv_value"`); supply it explicitly for unknown tables.
+  Multiplies each individual's values by the index weights in `index_meta` and
+  appends to `ind_index`. Every individual must have exactly one value per index
+  trait — an error is thrown if duplicates are found (filter to a single model /
+  `eval_number` / `pheno_number` first). Issues a warning when no filter is applied.
   `overwrite_index = TRUE` clears prior runs for the named index; `delete_all = TRUE`
   clears all of `ind_index`.
 
