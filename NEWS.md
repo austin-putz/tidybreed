@@ -1,3 +1,11 @@
+# tidybreed 0.27.1 (2026-05-18)
+
+## Administrative
+
+* License changed from MIT to **GPL-3**. Any modifications or derivative works
+  distributed publicly must also be released under GPL-3, protecting the
+  project's open-source contributions.
+
 # tidybreed 0.27.0 (2026-05-16)
 
 ## New features

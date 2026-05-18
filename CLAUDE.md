@@ -606,6 +606,13 @@ add_additive_effects()`.
 - Visualization helpers
 - Dominance and epistasis effects (currently only additive)
 
+## License
+
+`tidybreed` is licensed under the **GNU General Public License v3 (GPL-3)**.
+This means any modified or derived version that is distributed publicly must
+also be released under GPL-3. Use `License: GPL-3` in `DESCRIPTION` — no
+`+ file LICENSE` suffix is needed (GPL-3 is a standard R license).
+
 ## Versioning Policy
 
 Use **three-part semantic versioning**: `MAJOR.MINOR.PATCH` (e.g. `0.0.1`).
