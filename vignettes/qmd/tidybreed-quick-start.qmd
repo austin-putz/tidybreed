@@ -5,7 +5,7 @@ date: today
 author: "Austin Putz"
 format:
   html:
-    theme: cosmo
+    theme: [cosmo, custom.scss]
     toc: true
     number-depth: 3
     html-math-method: katex
@@ -15,7 +15,7 @@ format:
     embed-resources: true
 ---
 
-<img src="../tidybreed_hex_logo_v2.png" align="right" height="175" style="margin: 0 0 12px 20px;" />
+<img src="../tidybreed_hex_logo_chatgpt_v1.png" align="right" height="175" style="margin: 0 0 12px 20px;" />
 
 ## Disclaimer!
 

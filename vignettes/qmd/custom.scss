@@ -1,0 +1,52 @@
+/*-- scss:defaults --*/
+
+// Brand colors sampled from the tidybreed hex logo
+$primary:          #F47920;   // logo orange
+$link-color:       #F47920;
+$link-hover-color: #C8601A;   // darker orange on hover
+$headings-color:   #2C2C2C;   // charcoal from logo text
+$code-color:       #C8601A;
+
+/*-- scss:rules --*/
+
+// H1 / H2 — orange with a light warm underline
+h1, h2 {
+  color: #F47920;
+  border-bottom: 2px solid #FAD5B0;
+  padding-bottom: 0.25em;
+  margin-top: 1.6em;
+}
+
+// H3 / H4 — slightly darker orange so hierarchy is clear
+h3, h4 {
+  color: #C8601A;
+}
+
+// Left accent bar on every code block
+div.sourceCode {
+  border-left: 3px solid #F47920;
+  padding-left: 0.4em;
+}
+
+// Inline code — warm tint to complement headings
+code:not(.sourceCode) {
+  color: #C8601A;
+  background-color: #FEF3EA;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+// Active TOC entry
+.sidebar nav[role=doc-toc] ul li a.active {
+  color: #F47920 !important;
+  font-weight: 600;
+  border-left: 3px solid #F47920;
+  padding-left: 0.4em;
+}
+
+// Blockquote left border
+blockquote {
+  border-left: 4px solid #F47920;
+  background-color: #FEF7F0;
+  padding: 0.5em 1em;
+}

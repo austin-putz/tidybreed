@@ -9,7 +9,7 @@ format:
     toc-depth: 3
     toc-location: left
     toc-title: "Contents"
-    theme: cosmo
+    theme: [cosmo, qmd/custom.scss]
     highlight-style: github
     code-fold: show
     code-tools: true
@@ -21,6 +21,8 @@ execute:
   eval: false
   echo: true
 ---
+
+<img src="tidybreed_hex_logo_chatgpt_v1.png" align="right" height="175" style="margin: 0 0 12px 20px;" />
 
 # Introduction
 

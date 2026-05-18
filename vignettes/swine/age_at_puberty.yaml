@@ -1,0 +1,50 @@
+scenario_name: "age_at_puberty"
+
+general:
+  n_reps: 5
+  start_date: "2026-01-01"
+  end_date: "2028-12-31"
+  start_date_selection: "2026-01-28"
+  start_date_evaluations: "2026-08-01"
+  cycle_len: 7
+  mean_puberty_age: 220
+  gest_len: 116
+  lact_len: 21
+  w2e_int: 4
+
+genome:
+  n_loci: 10000
+  n_chr: 18
+  chr_len: 50
+  n_haplotypes: 1000
+
+population: 
+  n_founder_male: 400
+  n_founder_female: 1600
+
+traits:
+  - name: "AP"
+  - name: "ADG"
+  - name: "BF"
+  - name: "NW"
+
+selection: 
+  n_sires: 10
+  n_dams_per_breeding: 25
+  male_selection_interval: 56
+  female_selection_interval: 28
+  genomic_selection: false
+  ebv_software: "blupf90"
+
+testing:
+  on_test_age: 70
+  off_test_age: 160
+
+culling:
+  gilt_cull_days_after_off_test: 130
+  boar_cull_days_after_off_test: 56
+
+output:
+  save_dir: "results/age_at_puberty/"
+  save_intermediate: true
+
