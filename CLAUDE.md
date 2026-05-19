@@ -102,7 +102,7 @@ or `base_allele_freq_{trait}` columns.
 ### `genome_effects`
 
 QTL effect data. One row per (locus × trait × effect type × line). Populated by
-`define_additive_effects()` and `set_qtl_effects_multi()`.
+`define_additive_effects()` (single or multi-trait).
 
 | Column             | Type    | Notes                                                      |
 |--------------------|---------|------------------------------------------------------------|
@@ -492,7 +492,7 @@ pop |>
   add_phenotype("ADG2")
 ```
 
-### `define_trait()` / `define_additive_effects()` / `set_qtl_effects_multi()`
+### `define_trait()` / `define_additive_effects()`
 
 `R/define_trait.R`, `R/define_additive_effects.R`
 
@@ -505,31 +505,32 @@ pop |>
   `trait_meta`).
 - `define_additive_effects()` — accepts a `tidybreed_table` from
   `get_table("genome_meta")` (optionally filtered) as its **first argument**.
-  The filtered rows determine which loci are QTL. Writes rows to `genome_effects`
-  with `genome_effect_type = "additive"`. Manual or sampled (normal/gamma) with
-  optional rescale. Reads `target_add_var` from `trait_effect_cov`.
+  `trait_name` accepts a scalar **or vector** of trait names:
+  - **Single trait** — manual (`effects` vector) or sampled (`distribution =
+    "normal"/"gamma"`) with optional Falconer rescale. Reads `target_add_var`
+    from `trait_effect_cov`.
+  - **Multiple traits** — draws correlated effects from `MVN(0, G)` via
+    `MASS::mvrnorm`. `G = NULL` reads from `trait_effect_cov`. `method =
+    "shared"` (all traits use the filtered loci) or `"union"` (per-trait QTL
+    sets from existing `genome_effects` rows, restricted to the filtered loci).
+
   Re-calling for the same trait replaces existing rows in `genome_effects`.
+
   ```r
-  # Single trait — filter defines QTL, effects are written in one step
+  # Single trait
   pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> define_additive_effects("ADG")
 
-  # Multiple traits with same QTL set
-  for (t in c("ADG", "BW")) {
-    pop <- pop |> get_table("genome_meta") |> filter(locus_name %in% sel) |>
-      define_additive_effects(t)
-  }
+  # Multiple correlated traits (shared QTL set)
+  G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
+              dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
+  pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |>
+    define_additive_effects(c("ADG", "BW"), G = G)
 
   # Use generation-0 animals to define base allele frequencies
   gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
   pop |> get_table("genome_meta") |> filter(...) |>
     define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
   ```
-- `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
-  multiple traits via `MASS::mvrnorm`. First argument is a `tidybreed_table`
-  from `get_table("genome_meta")` defining the candidate loci.
-  `G = NULL` reads from `trait_effect_cov`. `method = "shared"` (all listed
-  traits get effects at the filtered loci) or `"union"` (per-trait QTL sets
-  read from existing `genome_effects` rows, restricted to the filtered loci).
 
 ### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_int()`
 
