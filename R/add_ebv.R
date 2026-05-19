@@ -56,7 +56,7 @@
 #'   instead of accumulating them.
 #'
 #' @seealso [get_table()], [add_phenotype()], [define_chip()],
-#'   [add_effect_cov_matrix()]
+#'   [define_effect_cov_matrix()]
 #'
 #' @examples
 #' \dontrun{

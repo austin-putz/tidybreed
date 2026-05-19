@@ -10,7 +10,7 @@
            trait_name, "'")
   )$n
   if (n == 0) {
-    stop("Trait '", trait_name, "' not found. Call add_trait() first.",
+    stop("Trait '", trait_name, "' not found. Call define_trait() first.",
          call. = FALSE)
   }
   invisible(NULL)

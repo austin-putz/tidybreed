@@ -67,5 +67,5 @@ pop <- define_index(pop, "maternal",
 }
 }
 \seealso{
-\code{\link[=add_index]{add_index()}}, \code{\link[=add_trait]{add_trait()}}
+\code{\link[=add_index]{add_index()}}, \code{\link[=define_trait]{define_trait()}}
 }

@@ -1,4 +1,4 @@
-#' Add a trait definition to the population
+#' Define a trait in the population
 #'
 #' @description
 #' Creates one row in the `trait_meta` table describing a trait's genetic and
@@ -6,15 +6,15 @@
 #' trait type (continuous / count / binary / categorical), expression rules
 #' (sex-limited, parent-of-origin), and index / economic weights.
 #'
-#' `add_trait()` does not touch the genome or sample QTL. Those are separate
-#' steps handled by [add_additive_effects()] (pipe from a filtered
+#' `define_trait()` does not touch the genome or sample QTL. Those are separate
+#' steps handled by [define_additive_effects()] (pipe from a filtered
 #' `get_table("genome_meta")`). For the common one-off case, use
-#' [add_trait_simple()] which chains both together.
+#' [define_trait_simple()] which chains both together.
 #'
 #' On first call, creates the trait-layer tables (`trait_meta`, `trait_effects`,
 #' `trait_random_effects`, `ind_phenotype`, `ind_tbv`, `ind_ebv`).
 #' Variance and covariance data is stored in the separate `trait_effect_cov`
-#' table (created on first call to [add_effect_cov_matrix()] or when
+#' table (created on first call to [define_effect_cov_matrix()] or when
 #' `target_add_var` / `residual_var` are supplied here).
 #'
 #' @param pop A `tidybreed_pop` object.
@@ -41,11 +41,11 @@
 #'   0 so that `E[TBV] = 0` when TBV is centered on base allele frequencies.
 #' @param target_add_var Numeric. Target additive-genetic variance. When
 #'   provided, written to `trait_effect_cov` as a diagonal entry under
-#'   `effect_name = "gen_add"`. Used by [add_additive_effects()] to rescale effects.
-#'   If already set via [add_effect_cov_matrix()], leave `NULL`.
+#'   `effect_name = "gen_add"`. Used by [define_additive_effects()] to rescale effects.
+#'   If already set via [define_effect_cov_matrix()], leave `NULL`.
 #' @param residual_var Numeric. Residual variance. When provided, written to
 #'   `trait_effect_cov` under `effect_name = "residual"`. Used by
-#'   [add_phenotype()]. If already set via [add_effect_cov_matrix()], leave
+#'   [add_phenotype()]. If already set via [define_effect_cov_matrix()], leave
 #'   `NULL`.
 #' @param min_value,max_value Numeric. Clipping bounds for count traits. `NA`
 #'   means no limit.
@@ -78,14 +78,14 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [add_additive_effects()], [add_effect_fixed_class()],
-#'   [add_effect_fixed_cov()], [add_effect_random()], [add_phenotype()],
-#'   [add_trait_simple()]
+#' @seealso [define_additive_effects()], [define_effect_fixed_class()],
+#'   [define_effect_fixed_cov()], [define_effect_random()], [add_phenotype()],
+#'   [define_trait_simple()]
 #'
 #' @examples
 #' \dontrun{
 #' pop <- pop |>
-#'   add_trait(
+#'   define_trait(
 #'     trait_name     = "ADG",
 #'     trait_type     = "continuous",
 #'     units          = "g/day",
@@ -95,7 +95,7 @@
 #'   )
 #' }
 #' @export
-add_trait <- function(pop,
+define_trait <- function(pop,
                       trait_name,
                       description      = NA_character_,
                       units            = NA_character_,
@@ -290,7 +290,7 @@ add_trait <- function(pop,
 #' Creates `trait_meta`, `trait_effects`, `trait_random_effects`,
 #' `ind_phenotype`, `ind_tbv`, and `ind_ebv` if they are not already present.
 #' Idempotent: safe to call multiple times. Variance/covariance data lives in
-#' `trait_effect_cov`, created lazily by [add_effect_cov_matrix()].
+#' `trait_effect_cov`, created lazily by [define_effect_cov_matrix()].
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @return The `tidybreed_pop` object with `$tables` updated.

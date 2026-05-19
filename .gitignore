@@ -10,6 +10,7 @@ memory/
 # markdowns
 PACKAGE_OUTLINE.md
 IDEA_*.md
+#PLAN_*.md
 TODO.md
 PHENOTYPING_PLAN.md
 YAML_PLAN.md

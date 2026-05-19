@@ -189,7 +189,7 @@ extract_genotypes <- function(tbl,
     qtl_names <- unique(effects_df[["locus_name"]])
     if (length(qtl_names) == 0)
       stop("No QTL loci found in the filtered 'effects_tbl'. ",
-           "Call add_additive_effects() first.", call. = FALSE)
+           "Call define_additive_effects() first.", call. = FALSE)
     qtl_name_sql <- paste0("'", qtl_names, "'", collapse = ", ")
     qtl_ids <- DBI::dbGetQuery(
       pop$db_conn,

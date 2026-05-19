@@ -15,7 +15,7 @@
 #' * `TBV_i` = sum over additive effects in `genome_effects` * genotype dose
 #'   (or haplotype dose for imprinted traits).
 #' * `e_i` is residual: drawn from `MVN(0, R)` across traits when a residual
-#'   covariance matrix is stored (see [add_effect_cov_matrix()]) and multiple
+#'   covariance matrix is stored (see [define_effect_cov_matrix()]) and multiple
 #'   traits share the same subset; otherwise drawn independently.
 #'
 #' Trait-type specific output:
@@ -54,9 +54,9 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_trait()], [add_additive_effects()],
-#'   [add_effect_cov_matrix()], [add_effect_fixed_class()], [add_effect_fixed_cov()],
-#'   [add_effect_random()], [add_tbv()]
+#' @seealso [define_trait()], [define_additive_effects()],
+#'   [define_effect_cov_matrix()], [define_effect_fixed_class()],
+#'   [define_effect_fixed_cov()], [define_effect_random()], [add_tbv()]
 #'
 #' @examples
 #' \dontrun{
@@ -93,7 +93,7 @@ add_phenotype <- function(tbl,
       "SELECT trait_name FROM trait_meta ORDER BY id_trait"
     )$trait_name
     if (length(trait_name) == 0L)
-      stop("No traits found in trait_meta. Define traits with add_trait() first.",
+      stop("No traits found in trait_meta. Define traits with define_trait() first.",
            call. = FALSE)
   }
 
@@ -168,7 +168,7 @@ add_phenotype <- function(tbl,
     if (n_eff == 0L) {
       stop(
         "No additive effects found for trait '", t, "' in genome_effects. ",
-        "Call add_additive_effects() first.",
+        "Call define_additive_effects() first.",
         call. = FALSE
       )
     }
@@ -396,8 +396,8 @@ add_phenotype <- function(tbl,
       resid_var <- get_effect_var(pop, "residual", t)
       if (is.na(resid_var)) {
         stop("No residual variance found for trait '", t, "'. ",
-             "Specify via add_effect_cov_matrix(pop, 'residual', ...) or ",
-             "add_trait(pop, '", t, "', residual_var = ...).",
+             "Specify via define_effect_cov_matrix(pop, 'residual', ...) or ",
+             "define_trait(pop, '", t, "', residual_var = ...).",
              call. = FALSE)
       }
       resid <- stats::rnorm(n_ind, sd = sqrt(resid_var))

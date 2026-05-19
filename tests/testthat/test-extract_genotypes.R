@@ -21,14 +21,14 @@ make_qtl_pop <- function(pop_name = "qtl_test", n_males = 5, n_females = 5) {
     chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
   ) |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A") |>
-    add_trait("ADG", trait_type = "continuous", target_add_mean = 100,
+    define_trait("ADG", trait_type = "continuous", target_add_mean = 100,
               target_add_var = 400, residual_var = 100)
 
   # chr 1 loci are QTL (50 loci)
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::filter(chr == 1L) |>
-    add_additive_effects("ADG")
+    define_additive_effects("ADG")
 
   pop
 }

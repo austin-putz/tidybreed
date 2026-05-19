@@ -31,7 +31,7 @@
 #'
 #' @return The `tidybreed_pop` (invisibly). Assign the result back.
 #'
-#' @seealso [add_index()], [add_trait()]
+#' @seealso [add_index()], [define_trait()]
 #'
 #' @examples
 #' \dontrun{

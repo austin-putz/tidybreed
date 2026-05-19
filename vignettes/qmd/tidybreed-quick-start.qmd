@@ -470,7 +470,7 @@ very early in your script. Avoid adding them mid loop.
 - `genome_meta` - stores info per locus (like number/name/chr/position/SNP/etc)
     -  **1 line per loci**
 - `genome_effects` - QTL effect data (locus × trait × effect type); one row per QTL effect.
-    - Written by `add_additive_effects()`. A locus is a QTL for a trait if it has a row here.
+    - Written by `define_additive_effects()`. A locus is a QTL for a trait if it has a row here.
 - `genome_haplotype` - all 0/1 loci haplotypes for each individual
     - **2 rows per individual**
     - row 1: haplotype from parent 1 or "sire" in livestock
@@ -945,13 +945,13 @@ mat.res.vars <- matrix(c(8.10,   10.00,  0.65,
                       dimnames = list(c("NW", "ADG", "BF"), c("NW", "ADG", "BF")))
 ```
 
-Now, we use `add_effect_cov_matrix()` to add the **genetic (co)variances** to a
+Now, we use `define_effect_cov_matrix()` to add the **genetic (co)variances** to a
 table.
 
 ```{r}
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
-  add_effect_cov_matrix(
+  define_effect_cov_matrix(
     effect_name = "gen_add",              # gen_add is a keyword, be careful
     cov_matrix  = mat.add.gen.vars
   )
@@ -979,7 +979,7 @@ Now add the **residual (co)variance** matrix:
 ```{r}
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
-  add_effect_cov_matrix(
+  define_effect_cov_matrix(
     effect_name = "residual",        # residual is a keyword, be careful
     cov_matrix  = mat.res.vars
   )
@@ -1003,7 +1003,7 @@ pop %>%
 
 # add ADG as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name  = "ADG",
     description = "Average Daily Gain",
     units       = "g/d",                  # grams per day during testing period
@@ -1036,7 +1036,7 @@ pop %>%
 **Step 3:** Define which loci in the genome are QTL for this trait and set effects
 in one combined step.
 
-As of v0.23.0, `add_additive_effects()` takes a `tidybreed_table` from
+As of v0.23.0, `define_additive_effects()` takes a `tidybreed_table` from
 `get_table("genome_meta")` as its first argument. The `filter()` or
 `slice_sample()` step determines which loci are QTL — no separate `define_qtl()`
 call is needed. Effects are written to the `genome_effects` table (not as columns
@@ -1050,7 +1050,7 @@ to define these yourselves. You don't need to rely on these helper functions.
 pop <- pop |>
   get_table("genome_meta") |>
   slice_sample(n = 10) |>          # these 10 randomly sampled loci become QTL for ADG
-  add_additive_effects(
+  define_additive_effects(
     trait_name    = "ADG",         # trait name
     distribution  = "normal",      # distribution of QTL effects
     scale_to_target = TRUE,        # scale to meet additive variance target
@@ -1071,7 +1071,7 @@ pop %>%
 
 Key points about the new design:
 
-- `add_additive_effects()` takes a filtered `tidybreed_table` from `get_table("genome_meta")` — the filtered rows define the QTL set
+- `define_additive_effects()` takes a filtered `tidybreed_table` from `get_table("genome_meta")` — the filtered rows define the QTL set
 - Effects are written to `genome_effects` with `genome_effect_type = "additive"`
 - QTL membership is **implicit**: a locus is a QTL if it has a row in `genome_effects` for that trait
 - No `is_QTL_ADG` or `add_ADG` columns are added to `genome_meta`
@@ -1162,7 +1162,7 @@ First, add an **overall mean** for ADG:
 ```{r}
 # add overall mean
 pop %>%
-  add_effect_int(
+  define_effect_int(
     trait_name = "ADG",              # trait (need to change to "trait_name")
     mean = 1000
   )
@@ -1173,7 +1173,7 @@ Second, add 'sex' as a fixed effect for ADG:
 ```{r}
 # add sex effect for ADG
 pop %>%
-  add_effect_fixed_class(
+  define_effect_fixed_class(
     trait_name = "ADG",
     effect_name = "sex",
     source_column = "sex",
@@ -1279,7 +1279,7 @@ Let's add **Backfat (BF)** as a second trait to this simulation:
 
 # add BF as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name = "BF",        # name of trait
     description = "Ultrasound  Backfat",   # what exactly is this trait?
     units = "mm",                          # grams per day during testing period
@@ -1309,7 +1309,7 @@ Now add loci as QTL and sample effects (with standardization).
 pop <- pop |>
   get_table("genome_meta") |>
   slice_sample(n = 10) |>          # 10 randomly sampled loci become QTL for BF
-  add_additive_effects(
+  define_additive_effects(
     trait_name    = "BF",          # trait name
     distribution  = "normal",      # distribution of QTL effects
     scale_to_target = TRUE,        # scale to meet additive variance target
@@ -1321,7 +1321,7 @@ Add overall mean for BF:
 
 ```{r}
 pop %>%
-  add_effect_int(
+  define_effect_int(
     trait_name = "BF",      # name of trait
     mean = 10               # mm
   )
@@ -1805,7 +1805,7 @@ the population of offspring contingent on litter size in simulation.
 
 # add NW as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name  = "NW",
     description = "Number Weaned",
     units       = "count",                # total piglets weaned
@@ -1828,7 +1828,7 @@ Set QTL loci and effects for NW in one pipe:
 pop <- pop |>
   get_table("genome_meta") |>
   slice_sample(n = 50) |>          # 50 randomly sampled loci become QTL for NW
-  add_additive_effects(
+  define_additive_effects(
     trait_name    = "NW",
     distribution  = "normal",
     base          = "current_pop",
@@ -1840,7 +1840,7 @@ Set overall mean:
 
 ```{r}
 pop %>%
-  add_effect_int(
+  define_effect_int(
     "NW",
     mean = 10
   )

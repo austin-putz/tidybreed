@@ -253,11 +253,11 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
   if (is.null(R_mat))
     stop("Residual covariance matrix not found for traits: ",
          paste(trait, collapse = ", "),
-         ". Call add_effect_cov_matrix(pop, 'residual', ...) first.", call. = FALSE)
+         ". Call define_effect_cov_matrix(pop, 'residual', ...) first.", call. = FALSE)
   if (is.null(G_mat))
     stop("Additive genetic covariance matrix not found for traits: ",
          paste(trait, collapse = ", "),
-         ". Call add_effect_cov_matrix(pop, 'gen_add', ...) first.", call. = FALSE)
+         ". Call define_effect_cov_matrix(pop, 'gen_add', ...) first.", call. = FALSE)
 
   # Format matrix rows: one line per row
   fmt_mat <- function(mat) {
@@ -512,6 +512,6 @@ parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
 update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
   message("VCE writeback: automated parsing not yet implemented. ",
           "Inspect blupf90.out and update trait_effect_cov manually via ",
-          "add_effect_cov_matrix().")
+          "define_effect_cov_matrix().")
   invisible(NULL)
 }

@@ -2,16 +2,31 @@
 % Please edit documentation in R/add_index.R
 \name{add_index}
 \alias{add_index}
-\title{Compute a selection index from EBVs}
+\title{Compute a selection index from a tidybreed table}
 \usage{
-add_index(tbl, index_name, overwrite_index = FALSE, delete_all = FALSE, ...)
+add_index(
+  tbl,
+  index_name,
+  value_col = NULL,
+  overwrite_index = FALSE,
+  delete_all = FALSE,
+  ...
+)
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} from \code{get_table("ind_ebv")} (optionally
-filtered). Must be the \code{ind_ebv} table.}
+\item{tbl}{A \code{tidybreed_table} from \code{get_table()} (optionally filtered).
+Must contain \code{id_ind}, \code{trait_name}, and the column specified by
+\code{value_col}. Any table with this structure is accepted: \code{ind_ebv},
+\code{ind_phenotype}, \code{ind_tbv}, or a custom table.}
 
 \item{index_name}{Character scalar. Name of the index to compute; must
 already exist in \code{index_meta} (created via \code{\link[=define_index]{define_index()}}).}
+
+\item{value_col}{Character scalar or \code{NULL}. The column in \code{tbl} that holds
+the numeric value to weight. When \code{NULL} (default), auto-detected from the
+table name: \code{ind_ebv} → \code{"ebv_value"}, \code{ind_phenotype} → \code{"pheno_value"},
+\code{ind_tbv} → \code{"tbv_value"}. An error is thrown for unknown tables if
+\code{value_col} is not supplied.}
 
 \item{overwrite_index}{Logical. If \code{TRUE}, all existing \code{ind_index} rows for
 this \code{index_name} are deleted before inserting; new rows receive
@@ -29,42 +44,53 @@ over \code{overwrite_index}. Default \code{FALSE}.}
 The \code{tidybreed_pop} (invisibly). Assign the result back.
 }
 \description{
-Calculates a named selection index by multiplying each individual's EBVs by
+Calculates a named selection index by multiplying each individual's values by
 the index weights defined in \code{\link[=define_index]{define_index()}} and summing the products.
 Results are appended to the \code{ind_index} table with an auto-incrementing
 \code{index_number} so that successive runs are preserved.
 
-The first argument \strong{must} be a \code{tidybreed_table} obtained from
-\code{get_table("ind_ebv")} (optionally filtered). This is the only function in
-the package that requires piping through \code{ind_ebv} rather than \code{ind_meta}.
-\subsection{EBV resolution}{
+The first argument must be a \code{tidybreed_table} obtained from \code{get_table()}
+(optionally filtered). The table must contain \code{id_ind}, \code{trait_name}, and a
+numeric value column (\code{value_col}). Works with \code{ind_ebv} (EBVs),
+\code{ind_phenotype} (phenotypes), \code{ind_tbv} (TBVs), or any user-defined table
+with the same structure.
+\subsection{Uniqueness requirement}{
 
-If no filter is applied, \code{add_index()} automatically selects the row with the
-highest \code{eval_number} per \verb{(id_ind, trait_name)} and issues a warning. After
-this auto-selection, if any \verb{(id_ind, trait_name)} pair still has more than
-one row (e.g. because multiple models are present), an error is thrown — you
-must filter down to a single model first.
+There must be exactly one row per \verb{(id_ind, trait_name)} after any filter is
+applied. If duplicates remain, an error is thrown — filter the table down to
+a single model, evaluation, or phenotype record before calling \code{add_index()}.
 }
 
 \subsection{Completeness requirement}{
 
-Every individual must have an EBV for \strong{every} trait in the index. If any
-individual is missing an EBV for any required trait, an error is thrown
+Every individual must have a value for \strong{every} trait in the index. If any
+individual is missing a value for any required trait, an error is thrown
 before any rows are written.
 }
 }
 \examples{
 \dontrun{
-# Compute index using latest EBVs (warning issued — no filter applied)
-pop <- pop |>
-  get_table("ind_ebv") |>
-  add_index("terminal")
-
-# Filter to a specific model and eval_number before computing (no warning)
+# Compute index from EBVs — filter to a specific model and eval_number
 pop <- pop |>
   get_table("ind_ebv") |>
   dplyr::filter(model == "blup_v1", eval_number == 1L) |>
   add_index("terminal")
+
+# Compute phenotypic index — filter to first record per individual per trait
+pop <- pop |>
+  get_table("ind_phenotype") |>
+  dplyr::filter(pheno_number == 1L) |>
+  add_index("terminal")
+
+# Compute true-value index from TBVs (value_col auto-detected)
+pop <- pop |>
+  get_table("ind_tbv") |>
+  add_index("terminal")
+
+# Explicit value_col for a user-defined table
+pop <- pop |>
+  get_table("my_scores") |>
+  add_index("terminal", value_col = "composite_score")
 
 # Replace previous run with a fresh one
 pop <- pop |>
@@ -74,5 +100,6 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_index]{define_index()}}, \code{\link[=get_table]{get_table()}}, \code{\link[=add_ebv]{add_ebv()}}
+\code{\link[=define_index]{define_index()}}, \code{\link[=get_table]{get_table()}}, \code{\link[=add_ebv]{add_ebv()}}, \code{\link[=add_phenotype]{add_phenotype()}},
+\code{\link[=add_tbv]{add_tbv()}}
 }

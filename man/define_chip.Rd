@@ -60,5 +60,5 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=add_additive_effects]{add_additive_effects()}}, \code{\link[=add_genotypes]{add_genotypes()}}, \code{\link[=extract_genotypes]{extract_genotypes()}}
+\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=add_genotypes]{add_genotypes()}}, \code{\link[=extract_genotypes]{extract_genotypes()}}
 }

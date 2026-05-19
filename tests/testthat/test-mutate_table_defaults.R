@@ -328,7 +328,7 @@ test_that("DEFAULT works with add_phenotype()", {
 
   # Add trait and founders
   pop <- pop |>
-    add_trait_simple("ADG", n_qtl = 10, target_add_var = 100, residual_var = 50)
+    define_trait_simple("ADG", n_qtl = 10, target_add_var = 100, residual_var = 50)
 
   pop <- pop |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")

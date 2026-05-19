@@ -23,7 +23,7 @@ apply_random_qtl <- function(pop, trait_names, n_qtl, seed = NULL) {
     pop <- pop |>
       get_table("genome_meta") |>
       dplyr::filter(locus_name %in% sel) |>
-      add_additive_effects(t)
+      define_additive_effects(t)
   }
   pop
 }
@@ -32,12 +32,12 @@ apply_random_qtl <- function(pop, trait_names, n_qtl, seed = NULL) {
 test_that("add_phenotype() writes records and TBVs for continuous trait", {
   set.seed(99)
   pop <- make_pheno_pop("ph_cont")
-  pop <- pop |> add_trait("ADG", target_add_var = 0.25, residual_var = 0.75,
+  pop <- pop |> define_trait("ADG", target_add_var = 0.25, residual_var = 0.75,
                            target_add_mean = 10)
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::slice_sample(n = 80) |>
-    add_additive_effects("ADG", seed = 1)
+    define_additive_effects("ADG", seed = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
@@ -54,7 +54,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
 
 test_that("get_table() |> filter() restricts phenotyped subset", {
   pop <- make_pheno_pop("ph_filter")
-  pop <- pop |> add_trait("ADG", target_add_var = 1, residual_var = 1)
+  pop <- pop |> define_trait("ADG", target_add_var = 1, residual_var = 1)
   pop <- apply_random_qtl(pop, "ADG", n_qtl = 50)
 
   pop <- pop |>
@@ -84,7 +84,7 @@ test_that("categorical trait with prevalence respects target rate approximately"
   )
   pop <- add_founders(pop, n_males = 500, n_females = 500, line_name = "A")
   pop <- pop |>
-    add_trait("mort", trait_type = "categorical",
+    define_trait("mort", trait_type = "categorical",
               prevalence      = 0.1,
               cat_values      = c(0, 1),
               cat_names       = c("Alive", "Dead"),
@@ -118,7 +118,7 @@ test_that("categorical trait with explicit thresholds produces correct categorie
   )
   pop <- add_founders(pop, n_males = 250, n_females = 250, line_name = "A")
   pop <- pop |>
-    add_trait("body_score", trait_type = "categorical",
+    define_trait("body_score", trait_type = "categorical",
               thresholds      = c(-1, 0, 1),
               cat_values      = c(1, 2, 3, 4),
               cat_names       = c("thin", "fair", "good", "excellent"),
@@ -141,7 +141,7 @@ test_that("count trait clips to min/max", {
   set.seed(3)
   pop <- make_pheno_pop("ph_count", n_ind = 200)
   pop <- pop |>
-    add_trait("litter", trait_type = "count",
+    define_trait("litter", trait_type = "count",
               min_value = 0, max_value = 20,
               target_add_var = 4, residual_var = 8, target_add_mean = 10)
   pop <- apply_random_qtl(pop, "litter", n_qtl = 60)
@@ -158,7 +158,7 @@ test_that("count trait clips to min/max", {
 
 test_that("user_values override bypasses the model", {
   pop <- make_pheno_pop("ph_user", n_ind = 20)
-  pop <- pop |> add_trait("ADG", target_add_var = 1, residual_var = 1)
+  pop <- pop |> define_trait("ADG", target_add_var = 1, residual_var = 1)
   pop <- apply_random_qtl(pop, "ADG", n_qtl = 10)
 
   ids    <- dplyr::pull(dplyr::collect(get_table(pop, "ind_meta")), id_ind)
@@ -184,10 +184,10 @@ test_that("fixed-effect covariate shifts phenotype by level", {
   set.seed(11)
   pop <- make_pheno_pop("ph_covariate", n_ind = 400)
   pop <- pop |>
-    add_trait("ADG", target_add_var = 0.01, residual_var = 0.01)
+    define_trait("ADG", target_add_var = 0.01, residual_var = 0.01)
   pop <- apply_random_qtl(pop, "ADG", n_qtl = 20)
   pop <- pop |>
-    add_effect_fixed_class("ADG", "sex",
+    define_effect_fixed_class("ADG", "sex",
                            source_column = "sex",
                            levels = c(M = 10, F = -10))
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
@@ -209,11 +209,11 @@ test_that("fixed-effect covariate shifts phenotype by level", {
 make_pheno_pop_with_trait <- function() {
   set.seed(42)
   pop <- make_pheno_pop("ph_extra", n_ind = 20, n_loci = 100)
-  pop <- pop |> add_trait("ADG", target_add_var = 0.25, residual_var = 0.75)
+  pop <- pop |> define_trait("ADG", target_add_var = 0.25, residual_var = 0.75)
   pop |>
     get_table("genome_meta") |>
     dplyr::slice_sample(n = 20) |>
-    add_additive_effects("ADG", seed = 1)
+    define_additive_effects("ADG", seed = 1)
 }
 
 test_that("add_phenotype() accepts scalar ... fields and writes to ind_phenotype", {
@@ -245,8 +245,8 @@ test_that("add_phenotype() defaults trait_name to all traits in trait_meta", {
   set.seed(5)
   pop <- make_pheno_pop("ph_default_trait", n_ind = 40, n_loci = 200)
   pop <- pop |>
-    add_trait("ADG", target_add_var = 1, residual_var = 1) |>
-    add_trait("BW",  target_add_var = 2, residual_var = 2)
+    define_trait("ADG", target_add_var = 1, residual_var = 1) |>
+    define_trait("BW",  target_add_var = 2, residual_var = 2)
   pop <- apply_random_qtl(pop, c("ADG", "BW"), n_qtl = 30)
 
   pop <- pop |> get_table("ind_meta") |> add_phenotype()  # no trait_name

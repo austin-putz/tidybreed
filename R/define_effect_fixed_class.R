@@ -1,4 +1,4 @@
-#' Add a discrete fixed-class effect to a trait's phenotype model
+#' Define a discrete fixed-class effect in a trait's phenotype model
 #'
 #' @description
 #' Inserts a row into `trait_effects` representing a discrete fixed effect:
@@ -21,24 +21,24 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_effect_int()], [add_effect_fixed_cov()], [add_effect_random()],
-#'   [add_phenotype()]
+#' @seealso [define_effect_int()], [define_effect_fixed_cov()],
+#'   [define_effect_random()], [add_phenotype()]
 #'
 #' @examples
 #' \dontrun{
 #' pop <- pop |>
-#'   add_effect_fixed_class("ADG", "sex",
+#'   define_effect_fixed_class("ADG", "sex",
 #'     source_column = "sex",
 #'     levels = c(M = 30, F = 0))
 #' }
 #' @export
-add_effect_fixed_class <- function(pop,
-                                   trait_name,
-                                   effect_name,
-                                   source_column,
-                                   levels,
-                                   source_table = "ind_meta",
-                                   overwrite    = FALSE) {
+define_effect_fixed_class <- function(pop,
+                                      trait_name,
+                                      effect_name,
+                                      source_column,
+                                      levels,
+                                      source_table = "ind_meta",
+                                      overwrite    = FALSE) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
@@ -48,7 +48,7 @@ add_effect_fixed_class <- function(pop,
   stopifnot(is.character(source_table), nzchar(source_table))
 
   if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call add_trait() first.", call. = FALSE)
+    stop("No trait tables exist. Call define_trait() first.", call. = FALSE)
   }
 
   .check_trait_exists(pop, trait_name)

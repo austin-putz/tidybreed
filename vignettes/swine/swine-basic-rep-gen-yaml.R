@@ -195,14 +195,14 @@ mat.res.vars <- matrix(c(8.10,   10.00,  0.65,
 
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
-  add_effect_cov_matrix(
+  define_effect_cov_matrix(
     effect_name = "gen_add",          # fixed term for additive genetic (co)variance matrix
     cov_matrix  = mat.add.gen.vars    # name of matrix with row/col names
   )
 
 # add this residual covariance matrix to a table with function
 pop <- pop %>%
-  add_effect_cov_matrix(
+  define_effect_cov_matrix(
     effect_name = "residual",      # fixed term for residual (co)variance matrix
     cov_matrix  = mat.res.vars     # name for matrix with row/col names
   )
@@ -232,7 +232,7 @@ warning("Define ADG")
 
 # add ADG as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name  = "ADG",
     description = "Average Daily Gain", 
     units       = "g/d",                  # grams per day during testing period
@@ -256,7 +256,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -273,7 +273,7 @@ pop %>% get_table("ind_tbv")
 
 # add overall mean for ADG
 pop %>%
-  add_effect_int(
+  define_effect_int(
     trait_name = "ADG",              # trait (need to change to "trait_name")
     mean = 1000
   )
@@ -298,7 +298,7 @@ warning("Define BF")
 
 # add ADG as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name  = "BF",
     description = "Ultrasound Backfat", 
     units       = "mm",                  # grams per day during testing period
@@ -323,7 +323,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -341,7 +341,7 @@ pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
 
 # add overall mean for ADG
 pop %>%
-  add_effect_int(
+  define_effect_int(
     trait_name = "BF",              # trait (need to change to "trait_name")
     mean = 10
   )
@@ -367,7 +367,7 @@ warning("Define NW")
 
 # add ADG as a trait
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name  = "NW",
     description = "Number Weaned", 
     units       = "count",                  # grams per day during testing period
@@ -392,7 +392,7 @@ pop %>%
     method = "random"           # allocate to loci randomly
   ) %>%
   # set QTL effects
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -409,7 +409,7 @@ pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
 
 # add overall mean for ADG
 pop %>%
-  add_effect_int(
+  define_effect_int(
     trait_name = "NW",              # trait (need to change to "trait_name")
     mean = 10
   )

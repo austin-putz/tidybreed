@@ -14,10 +14,10 @@ make_tiny_pop <- function(pop_name = "t") {
 }
 
 
-test_that("add_trait() creates the trait tables and inserts the row", {
+test_that("define_trait() creates the trait tables and inserts the row", {
   pop <- make_tiny_pop("trait_basic")
 
-  pop <- add_trait(pop,
+  pop <- define_trait(pop,
                    trait_name      = "ADG",
                    units           = "g/day",
                    trait_type      = "continuous",
@@ -45,14 +45,14 @@ test_that("add_trait() creates the trait tables and inserts the row", {
 })
 
 
-test_that("add_trait() refuses duplicate names without overwrite", {
+test_that("define_trait() refuses duplicate names without overwrite", {
   pop <- make_tiny_pop("trait_dup")
-  pop <- add_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75)
+  pop <- define_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75)
 
-  expect_error(add_trait(pop, "ADG"), "already exists")
+  expect_error(define_trait(pop, "ADG"), "already exists")
 
   # overwrite = TRUE replaces the row; variances update in trait_effect_cov
-  pop <- add_trait(pop, "ADG", target_add_var = 0.1, residual_var = 0.9,
+  pop <- define_trait(pop, "ADG", target_add_var = 0.1, residual_var = 0.9,
                    overwrite = TRUE)
   expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.1)
   expect_equal(get_effect_var(pop, "residual", "ADG"), 0.9)
@@ -61,22 +61,22 @@ test_that("add_trait() refuses duplicate names without overwrite", {
 })
 
 
-test_that("add_trait() validates trait_type-specific args", {
+test_that("define_trait() validates trait_type-specific args", {
   pop <- make_tiny_pop("trait_validate")
 
   # binary is removed — should error with helpful message
   expect_error(
-    add_trait(pop, "mort", trait_type = "binary"),
+    define_trait(pop, "mort", trait_type = "binary"),
     "removed"
   )
   # categorical requires thresholds OR prevalence
   expect_error(
-    add_trait(pop, "score", trait_type = "categorical"),
+    define_trait(pop, "score", trait_type = "categorical"),
     "thresholds"
   )
   # cannot supply both
   expect_error(
-    add_trait(pop, "score", trait_type = "categorical",
+    define_trait(pop, "score", trait_type = "categorical",
               thresholds = c(0), prevalence = 0.1),
     "not both"
   )
@@ -85,10 +85,10 @@ test_that("add_trait() validates trait_type-specific args", {
 })
 
 
-test_that("add_trait() accepts categorical with prevalence (2-category)", {
+test_that("define_trait() accepts categorical with prevalence (2-category)", {
   pop <- make_tiny_pop("trait_cat_prev")
 
-  pop <- add_trait(pop, "mort",
+  pop <- define_trait(pop, "mort",
                    trait_type      = "categorical",
                    prevalence      = 0.10,
                    cat_values      = c(0, 1),
@@ -109,10 +109,10 @@ test_that("add_trait() accepts categorical with prevalence (2-category)", {
 })
 
 
-test_that("add_trait() accepts categorical with explicit thresholds", {
+test_that("define_trait() accepts categorical with explicit thresholds", {
   pop <- make_tiny_pop("trait_cat_thresh")
 
-  pop <- add_trait(pop, "score",
+  pop <- define_trait(pop, "score",
                    trait_type  = "categorical",
                    thresholds  = c(-1, 0, 1),
                    cat_values  = c(1, 2, 3, 4),
@@ -130,25 +130,25 @@ test_that("add_trait() accepts categorical with explicit thresholds", {
 })
 
 
-test_that("add_trait() validates cat_values and cat_names lengths", {
+test_that("define_trait() validates cat_values and cat_names lengths", {
   pop <- make_tiny_pop("trait_cat_len")
 
   # 1 threshold → 2 categories; cat_values must be length 2
   expect_error(
-    add_trait(pop, "x", trait_type = "categorical",
+    define_trait(pop, "x", trait_type = "categorical",
               thresholds = c(0), cat_values = c(1, 2, 3)),
     "length 2"
   )
   # cat_names same length as cat_values
   expect_error(
-    add_trait(pop, "x", trait_type = "categorical",
+    define_trait(pop, "x", trait_type = "categorical",
               thresholds = c(0), cat_values = c(0, 1),
               cat_names = c("No")),
     "length 2"
   )
   # cat_names cannot contain commas
   expect_error(
-    add_trait(pop, "x", trait_type = "categorical",
+    define_trait(pop, "x", trait_type = "categorical",
               thresholds = c(0),
               cat_names = c("Yes, really", "No")),
     "commas"
@@ -158,19 +158,19 @@ test_that("add_trait() validates cat_values and cat_names lengths", {
 })
 
 
-test_that("add_trait() rejects SQL-unsafe names", {
+test_that("define_trait() rejects SQL-unsafe names", {
   pop <- make_tiny_pop("trait_names")
-  expect_error(add_trait(pop, "3bad"), "Invalid trait name")
-  expect_error(add_trait(pop, "SELECT"), "reserved keyword")
+  expect_error(define_trait(pop, "3bad"), "Invalid trait name")
+  expect_error(define_trait(pop, "SELECT"), "reserved keyword")
   close_pop(pop)
 })
 
 
-test_that("add_trait() inserts global economic_weight row into index_meta", {
+test_that("define_trait() inserts global economic_weight row into index_meta", {
   pop <- make_tiny_pop("trait_ev_insert")
   on.exit(close_pop(pop))
 
-  pop <- add_trait(pop, "ADG",
+  pop <- define_trait(pop, "ADG",
                    trait_type     = "continuous",
                    target_add_var = 0.25,
                    residual_var   = 0.75,
@@ -184,18 +184,18 @@ test_that("add_trait() inserts global economic_weight row into index_meta", {
 })
 
 
-test_that("add_trait() overwrite = FALSE preserves existing index_meta row", {
+test_that("define_trait() overwrite = FALSE preserves existing index_meta row", {
   pop <- make_tiny_pop("trait_ev_no_overwrite")
   on.exit(close_pop(pop))
 
-  pop <- add_trait(pop, "ADG",
+  pop <- define_trait(pop, "ADG",
                    trait_type     = "continuous",
                    target_add_var = 0.25,
                    residual_var   = 0.75,
                    economic_value = 5.0)
   # overwrite = FALSE on a new trait — second call should error on trait_meta
   # (existing coverage). Check index_meta row persists after overwrite = TRUE.
-  pop <- add_trait(pop, "ADG",
+  pop <- define_trait(pop, "ADG",
                    trait_type     = "continuous",
                    target_add_var = 0.25,
                    residual_var   = 0.75,
@@ -209,16 +209,16 @@ test_that("add_trait() overwrite = FALSE preserves existing index_meta row", {
 })
 
 
-test_that("add_trait() overwrite = TRUE updates index_meta and keeps only one row", {
+test_that("define_trait() overwrite = TRUE updates index_meta and keeps only one row", {
   pop <- make_tiny_pop("trait_ev_overwrite")
   on.exit(close_pop(pop))
 
-  pop <- add_trait(pop, "ADG",
+  pop <- define_trait(pop, "ADG",
                    trait_type     = "continuous",
                    target_add_var = 0.25,
                    residual_var   = 0.75,
                    economic_value = 1.0)
-  pop <- add_trait(pop, "ADG",
+  pop <- define_trait(pop, "ADG",
                    trait_type     = "continuous",
                    target_add_var = 0.25,
                    residual_var   = 0.75,

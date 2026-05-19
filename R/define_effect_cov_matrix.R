@@ -1,4 +1,4 @@
-#' Store a variance-covariance matrix for any named effect
+#' Define a variance-covariance matrix for any named effect
 #'
 #' @description
 #' Writes a symmetric variance-covariance matrix into the unified
@@ -9,15 +9,15 @@
 #' Common `effect_name` values:
 #'
 #' * `"gen_add"` — additive genetic (co)variances (G matrix). Used by
-#'   [add_additive_effects()] when rescaling to target variance and by
-#'   [set_qtl_effects_multi()] as the sampling distribution.
+#'   [define_additive_effects()] when rescaling to target variance and by
+#'   [define_additive_effects()] as the sampling distribution for multi-trait draws.
 #' * `"residual"` — residual (co)variances (R matrix). Used by [add_phenotype()]
 #'   when drawing residuals.
 #' * Any named random effect (`"litter"`, `"herd"`, `"dam"`, …) — must match
-#'   the `effect_name` used in [add_effect_random()].
+#'   the `effect_name` used in [define_effect_random()].
 #'
-#' `add_effect_cov_matrix()` can be called **before** [add_trait()] or
-#' [add_effect_random()] — no prior setup is required. Intended to be called
+#' `define_effect_cov_matrix()` can be called **before** [define_trait()] or
+#' [define_effect_random()] — no prior setup is required. Intended to be called
 #' early in a simulation so that downstream functions can look up stored
 #' variances automatically.
 #'
@@ -37,7 +37,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_trait()], [add_effect_random()], [set_qtl_effects_multi()],
+#' @seealso [define_trait()], [define_effect_random()], [define_additive_effects()],
 #'   [add_phenotype()]
 #'
 #' @examples
@@ -46,20 +46,20 @@
 #' G <- matrix(c(100, -20, -20, 50), 2, 2,
 #'             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 #' pop <- pop |>
-#'   add_effect_cov_matrix("gen_add", G)
+#'   define_effect_cov_matrix("gen_add", G)
 #'
 #' R <- matrix(c(30, 5, 5, 10), 2, 2,
 #'             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 #' pop <- pop |>
-#'   add_effect_cov_matrix("residual", R)
+#'   define_effect_cov_matrix("residual", R)
 #'
 #' # Single-trait variance (1x1 matrix)
 #' pop <- pop |>
-#'   add_effect_cov_matrix("gen_add",
+#'   define_effect_cov_matrix("gen_add",
 #'     matrix(100, 1, 1, dimnames = list("ADG", "ADG")))
 #' }
 #' @export
-add_effect_cov_matrix <- function(pop,
+define_effect_cov_matrix <- function(pop,
                                    effect_name,
                                    cov_matrix,
                                    trait_names = NULL,
@@ -208,7 +208,7 @@ load_effect_cov <- function(pop, effect_name, trait_names) {
 
 #' Write a single diagonal entry to trait_effect_cov
 #'
-#' Used internally by add_trait() and add_effect_random() to write a
+#' Used internally by define_trait() and define_effect_random() to write a
 #' per-trait variance as a 1x1 diagonal entry. Uses dbExecute() instead of
 #' dbWriteTable() to avoid consuming R's RNG (DuckDB's dbWriteTable touches it).
 #'

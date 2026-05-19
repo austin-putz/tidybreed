@@ -59,7 +59,7 @@ tidybreed is built around six principles that shape every design decision:
 | `tidybreed_pop` | `initialize_genome()` | Carries the DuckDB connection and table registry |
 | `tidybreed_table` | `get_table()` | A lazy reference to one table, with optional pending filter |
 
-Most functions return `tidybreed_pop` invisibly, enabling pipe chains. `tidybreed_table` is the input to all action functions (`add_phenotype`, `add_tbv`, `add_genotypes`, `add_additive_effects`, `define_chip`, etc.) and supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, and `count()` directly.
+Most functions return `tidybreed_pop` invisibly, enabling pipe chains. `tidybreed_table` is the input to all action functions (`add_phenotype`, `add_tbv`, `add_genotypes`, `define_additive_effects`, `define_chip`, etc.) and supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, and `count()` directly.
 
 ---
 
@@ -76,7 +76,7 @@ flowchart TB
         POP["tidybreed_pop<br/>(DuckDB connection +<br/>table registry)"]
         TBL["tidybreed_table<br/>(lazy tbl + pending filter)"]
         POP -->|"get_table()"| TBL
-        TBL -->|"mutate_table()<br/>add_phenotype()<br/>add_tbv()<br/>add_additive_effects()<br/>define_chip()<br/>extract_genotypes()"| POP
+        TBL -->|"mutate_table()<br/>add_phenotype()<br/>add_tbv()<br/>define_additive_effects()<br/>define_chip()<br/>extract_genotypes()"| POP
     end
 
     subgraph DuckDB["DuckDB (Storage Layer — on disk)"]
@@ -249,14 +249,13 @@ flowchart TD
     end
 
     subgraph P3["Phase 3 — Traits"]
-        F3["add_trait()<br/>trait_name, trait_type,<br/>target_add_var, residual_var"]
-        F3B["add_effect_fixed_class()<br/>add_effect_fixed_cov()<br/>add_effect_random()"]
+        F3["define_trait()<br/>trait_name, trait_type,<br/>target_add_var, residual_var"]
+        F3B["define_effect_fixed_class()<br/>define_effect_fixed_cov()<br/>define_effect_random()"]
         F3 --> F3B
     end
 
     subgraph P4["Phase 4 — Genetic Architecture"]
-        F4["get_table('genome_meta') |><br/>  filter(chr %in% 1:5) |><br/>  add_additive_effects(trait_name)"]
-        F4B["set_qtl_effects_multi()<br/>(correlated multi-trait)"]
+        F4["get_table('genome_meta') |><br/>  filter(chr %in% 1:5) |><br/>  define_additive_effects(trait_name)<br/>(scalar or vector for correlated traits)"]
     end
 
     subgraph P5["Phase 5 — Phenotypes & TBVs"]
@@ -409,7 +408,7 @@ pop <- pop |>
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr %in% 1:5) |>
-  add_additive_effects("ADG")
+  define_additive_effects("ADG")
 
 # Define a chip from a random sample of loci
 sel <- pop |>
@@ -467,13 +466,13 @@ pop <- pop |>
 # Define G matrix (genetic covariance across traits)
 G <- matrix(c(100, 40, 40, 25), nrow = 2,
             dimnames = list(c("ADG","BW"), c("ADG","BW")))
-pop <- pop |> add_effect_cov_matrix("gen_add", G)
+pop <- pop |> define_effect_cov_matrix("gen_add", G)
 
 # Assign correlated QTL effects
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr %in% 1:10) |>
-  set_qtl_effects_multi(trait_names = c("ADG", "BW"))
+  define_additive_effects(c("ADG", "BW"))
 ```
 
 ---
@@ -507,7 +506,7 @@ pop <- pop |>
 
 # 3. Define a trait with additive genetic and residual variance
 pop <- pop |>
-  add_trait(
+  define_trait(
     trait_name     = "ADG",
     trait_type     = "continuous",
     target_add_var = 100,
@@ -523,7 +522,7 @@ qtl_loci <- get_table(pop, "genome_meta") |>
 pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% qtl_loci) |>
-  add_additive_effects("ADG")
+  define_additive_effects("ADG")
 
 # 5. Simulate phenotypes for all founders
 pop <- pop |>
@@ -557,17 +556,17 @@ mindmap
     add_
       add_founders
       add_offspring
-      add_trait
-      add_trait_simple
-      add_additive_effects
+      define_trait
+      define_trait_simple
+      define_additive_effects
       add_phenotype
       add_tbv
       add_ebv
       add_index
-      add_effect_fixed_class
-      add_effect_fixed_cov
-      add_effect_random
-      add_effect_cov_matrix
+      define_effect_fixed_class
+      define_effect_fixed_cov
+      define_effect_random
+      define_effect_cov_matrix
     define_
       define_chip
       define_index
@@ -576,8 +575,6 @@ mindmap
       mutate_table
     get_
       get_table
-    set_
-      set_qtl_effects_multi
     extract_
       extract_genotypes
     restore_
@@ -593,7 +590,6 @@ mindmap
 | `mutate_` | Add or update columns in an existing table | `mutate_table()` |
 | `define_` | Convenience wrapper for common mutate/metadata tasks | `define_chip()`, `define_index()`, `define_table()` |
 | `get_` | Access a table as a lazy `tidybreed_table` | `get_table()` |
-| `set_` | Replace/overwrite existing values | `set_qtl_effects_multi()` |
 | `extract_` | Pull data in a specialized format | `extract_genotypes()` |
 | `restore_` | Reconnect to an existing database file | `restore_pop()` |
 

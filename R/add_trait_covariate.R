@@ -60,8 +60,8 @@ add_trait_covariate <- function(pop,  # nolint: object_name_linter
   .Deprecated(
     msg = paste0(
       "add_trait_covariate() is deprecated. ",
-      "Use add_effect_fixed_class(), add_effect_fixed_cov(), or ",
-      "add_effect_random() instead."
+      "Use define_effect_fixed_class(), define_effect_fixed_cov(), or ",
+      "define_effect_random() instead."
     )
   )
   stopifnot(inherits(pop, "tidybreed_pop"))
@@ -75,7 +75,7 @@ add_trait_covariate <- function(pop,  # nolint: object_name_linter
   }
 
   if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call add_trait() first.", call. = FALSE)
+    stop("No trait tables exist. Call define_trait() first.", call. = FALSE)
   }
 
   trait_exists <- DBI::dbGetQuery(

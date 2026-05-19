@@ -49,9 +49,9 @@ pop <- add_offspring(pop, matings)
 G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2)
 R <- matrix(c(0.75, 0.20, 0.20, 0.70), 2, 2)
 
-pop <- add_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75,
+pop <- define_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75,
                  mean = 850)
-pop <- add_trait(pop, "BW",  target_add_var = 0.30, residual_var = 0.70,
+pop <- define_trait(pop, "BW",  target_add_var = 0.30, residual_var = 0.70,
                  mean = 450)
 
 sel_qtl <- get_table(pop, "genome_meta") |> collect() |>
@@ -59,12 +59,10 @@ sel_qtl <- get_table(pop, "genome_meta") |> collect() |>
 pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_qtl) |>
-  define_qtl(c("ADG", "BW"))
+  define_additive_effects(c("ADG", "BW"), G = G, seed = 42)
+pop <- define_effect_cov_matrix(pop, "residual", R)
 
-pop <- set_qtl_effects_multi(pop, c("ADG", "BW"), G = G, seed = 42)
-pop <- add_effect_cov_matrix(pop, "residual", R)
-
-pop <- add_effect_fixed_class(pop, "ADG", "sex",
+pop <- define_effect_fixed_class(pop, "ADG", "sex",
   source_column = "sex",
   levels = c(M = 30, F = 0))
 
@@ -75,7 +73,7 @@ pop <- pop |>
 
 # ---- 3. Binary trait (mortality) ------------------------------------------
 
-pop <- add_trait(pop, "mort", trait_type = "binary", prevalence = 0.08,
+pop <- define_trait(pop, "mort", trait_type = "binary", prevalence = 0.08,
                  target_add_var = 1, residual_var = 1)
 sel_mort <- get_table(pop, "genome_meta") |> collect() |>
   slice_sample(n = 60) |> pull(locus_name)
@@ -83,7 +81,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_mort) |>
   define_qtl("mort") |>
-  add_additive_effects("mort")
+  define_additive_effects("mort")
 pop <- pop |>
   get_table("ind_meta") |>
   filter(gen == 1L) |>

@@ -283,7 +283,7 @@ We can first add basic trait information, can be used later by other functions f
 
 ```r
 pop <- pop %>%
-  add_trait(
+  define_trait(
     trait_name = "ADG",
 	description = "Average Daily Gain",
 	units = "g/d",
@@ -312,7 +312,7 @@ pop <- pop |>
 	method = "random"        # randomly select from genome_meta table
   ) |>
   # set QTL effects in genome for ADG
-  add_additive_effects(
+  define_additive_effects(
     trait_name = "ADG", 
 	distribution = "normal",   # effects sampled from normal distribution
 	scale_to_target = TRUE,    # scale to target additive var (set above)
@@ -366,22 +366,22 @@ pop %>% get_table("ind_tbv") %>% print()
 
 **Add Overall Mean**
 
-Use `add_effect_int()` for overall mean of phenotype: 
+Use `define_effect_int()` for overall mean of phenotype: 
 
 ```r
 pop %>%
-  add_effect_int(
+  define_effect_int(
     "ADG",
 	mean = 1000
   )
 ```
 
-**Add fixed effect** with `add_effect_fixed_class()`:
+**Add fixed effect** with `define_effect_fixed_class()`:
 
 ```r
 # add sex effect for ADG
 pop %>%
-  add_effect_fixed_class(
+  define_effect_fixed_class(
     trait_name = "ADG",
     effect_name = "sex",
     source_column = "sex", 
@@ -475,7 +475,7 @@ pop %>%
 | `add_founders()`      | Add founder individuals with haplotypes/genotypes    |
 | `define_chip()`       | Mark loci as on a named SNP chip                     |
 | `define_qtl()`        | set QTL loci by trait                                | 
-| `add_additive_effects()`   | set QTL effects by trait                             | 
+| `define_additive_effects()`   | set QTL effects by trait                             | 
 | `add_phenotype()`     | add phenotype by summing QTL + fixed/random + resid  | 
 | `add_tbv()`           | sum QTL effects for True Breeding Value              | 
 | `add_ebv()`           | run evaluation software or parent average            |

@@ -79,8 +79,8 @@ add_tbv <- function(tbl, trait_name = NULL,
       "SELECT trait_name FROM trait_meta ORDER BY id_trait"
     )$trait_name
     if (length(trait_name) == 0L)
-      stop("No traits found in trait_meta. Define traits with add_trait() first.",
-           call. = FALSE)
+      stop("No traits found in trait_meta. ",
+           "Define traits with define_trait() first.", call. = FALSE)
   }
 
   stopifnot(is.character(trait_name), length(trait_name) >= 1)
@@ -167,7 +167,7 @@ add_tbv <- function(tbl, trait_name = NULL,
     if (nrow(effects_df) == 0L) {
       stop(
         "No additive effects found for trait '", t, "' in genome_effects. ",
-        "Call add_additive_effects() first.",
+        "Call define_additive_effects() first.",
         call. = FALSE
       )
     }

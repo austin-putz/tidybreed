@@ -3,7 +3,7 @@
 #' @description
 #' Serialises a named numeric vector (e.g. `c(M = 30, F = 0)`) into a
 #' JSON-style string `{"M":30,"F":0}` that fits a VARCHAR column. Used by
-#' [add_effect_fixed_class()] to persist fixed-effect level maps.
+#' [define_effect_fixed_class()] to persist fixed-effect level maps.
 #'
 #' Keys containing `"`, `,`, or `:` are not supported (fixed-effect levels in
 #' breeding programs are typically short tokens like `"M"`, `"A"`, `"gen1"`).
@@ -187,7 +187,7 @@ compute_covariate_contribution <- function(pop, trait_name, subset_df) {
         stop("Effect '", e$effect_name, "': the following levels in column '",
              e$source_column, "' have no shift defined: ",
              paste(missing_lvls, collapse = ", "),
-             ". Update add_effect_fixed_class() to include all levels.",
+             ". Update define_effect_fixed_class() to include all levels.",
              call. = FALSE)
       }
       total <- total + shifts
@@ -221,8 +221,8 @@ compute_covariate_contribution <- function(pop, trait_name, subset_df) {
         if (is.na(effect_var)) {
           stop("No variance stored for random effect '", e$effect_name,
                "' / trait '", trait, "'. ",
-               "Call add_effect_cov_matrix(pop, '", e$effect_name,
-               "', ...) or add_effect_random(..., variance = ...) first.",
+               "Call define_effect_cov_matrix(pop, '", e$effect_name,
+               "', ...) or define_effect_random(..., variance = ...) first.",
                call. = FALSE)
         }
         new_draws <- switch(

@@ -1,4 +1,4 @@
-#' Add a continuous covariate (regression) effect to a trait's phenotype model
+#' Define a continuous covariate (regression) effect in a trait's phenotype model
 #'
 #' @description
 #' Inserts a row into `trait_effects` representing a linear regression term.
@@ -23,19 +23,19 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_effect_int()], [add_effect_fixed_class()], [add_effect_random()],
-#'   [add_phenotype()]
+#' @seealso [define_effect_int()], [define_effect_fixed_class()],
+#'   [define_effect_random()], [add_phenotype()]
 #'
 #' @examples
 #' \dontrun{
 #' # center auto-computed from current ind_meta$age_days
 #' pop <- pop |>
-#'   add_effect_fixed_cov("ADG", "age",
+#'   define_effect_fixed_cov("ADG", "age",
 #'     source_column = "age_days",
 #'     slope = 2.5)
 #' }
 #' @export
-add_effect_fixed_cov <- function(pop,
+define_effect_fixed_cov <- function(pop,
                                  trait_name,
                                  effect_name,
                                  source_column,
@@ -53,7 +53,7 @@ add_effect_fixed_cov <- function(pop,
   stopifnot(is.numeric(slope), length(slope) == 1, !is.na(slope))
 
   if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call add_trait() first.", call. = FALSE)
+    stop("No trait tables exist. Call define_trait() first.", call. = FALSE)
   }
 
   .check_trait_exists(pop, trait_name)

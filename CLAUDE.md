@@ -17,8 +17,8 @@ and mating cycles.
    `collect()`-ing into R
 4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
    return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tbv`,
-   `add_genotypes`, `extract_genotypes`, `define_chip`, `define_qtl`) accept
-   a `tidybreed_table` from `get_table()` and return `tidybreed_pop`
+   `add_genotypes`, `extract_genotypes`, `define_chip`, `define_additive_effects`)
+   accept a `tidybreed_table` from `get_table()` and return `tidybreed_pop`
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
    columns are inferred via `infer_duckdb_type()`
 6. **Disdain and intolerance for storing metadata** - storing data such as
@@ -62,9 +62,19 @@ given as options again.
 | Prefix        | Meaning                                        |
 |---------------|------------------------------------------------|
 | `initialize_` | Creates the DuckDB database and core tables    |
-| `add_`        | Inserts new rows (individuals, traits, etc.)   |
+| `add_`        | Inserts simulation output rows                 |
+| `define_`     | Writes model configuration / metadata          |
 | `mutate_`     | Adds or updates columns in an existing table   |
-| `define_`     | Convenience wrapper for common `mutate_` tasks |
+
+**`add_*` vs `define_*` rule**: if the function writes rows that represent
+simulation *output* (data produced by running the model), use `add_`. If the
+function writes rows that configure *how* the model runs (parameters, weights,
+effect definitions), use `define_`.
+
+Examples: `add_founders()`, `add_phenotype()`, `add_tbv()`, `add_ebv()`,
+`add_index()` — all write simulation output.  
+`define_trait()`, `define_additive_effects()`, `define_effect_cov_matrix()`,
+`define_chip()`, `define_index()` — all write model configuration.
 
 ## Database Schema
 
@@ -92,7 +102,7 @@ or `base_allele_freq_{trait}` columns.
 ### `genome_effects`
 
 QTL effect data. One row per (locus × trait × effect type × line). Populated by
-`add_additive_effects()` and `set_qtl_effects_multi()`.
+`define_additive_effects()` and `set_qtl_effects_multi()`.
 
 | Column             | Type    | Notes                                                      |
 |--------------------|---------|------------------------------------------------------------|
@@ -104,7 +114,7 @@ QTL effect data. One row per (locus × trait × effect type × line). Populated 
 | genome_value       | DOUBLE  | Effect size                                                |
 | base_allele_freq   | DOUBLE  | Base allele frequency used for TBV centering (Falconer)    |
 
-**Reserved**: all columns (the table is managed exclusively by `add_additive_effects()`).
+**Reserved**: all columns (the table is managed exclusively by `define_additive_effects()`).
 
 QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
 `genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
@@ -150,7 +160,7 @@ populated by `add_founders()` and `add_offspring()`.
 
 ### `trait_meta`
 
-One row per trait. Populated by `add_trait()`.
+One row per trait. Populated by `define_trait()`.
 
 | Column             | Type    | Notes                                                         |
 |--------------------|---------|---------------------------------------------------------------|
@@ -193,8 +203,8 @@ random effects). One row per (trait × effect).
 
 Unified variance/covariance table for all random effects (additive genetic,
 residual, and named random effects). One row per (effect_name, trait_name_1, trait_name_2).
-Both `(i,j)` and `(j,i)` pairs stored. Populated by `add_effect_cov_matrix()`,
-`add_trait()`, and `add_effect_random()`.
+Both `(i,j)` and `(j,i)` pairs stored. Populated by `define_effect_cov_matrix()`,
+`define_trait()`, and `define_effect_random()`.
 
 Reserved `effect_name` values: `"gen_add"` (additive genetic G matrix),
 `"residual"` (residual R matrix). Any other name maps to a user-defined random
@@ -253,12 +263,12 @@ Estimated breeding values from external BLUP / GBLUP runs. Logical key
 
 Selection index definitions. One row per (index × trait). Populated by
 `define_index()`. A special row with `index_name = NULL` is written by
-`add_trait()` to record the global economic weight for each trait.
+`define_trait()` to record the global economic weight for each trait.
 
 | Column          | Type    | Notes                                                         |
 |-----------------|---------|---------------------------------------------------------------|
 | id_index_name   | INTEGER | Primary key (auto-incrementing)                               |
-| index_name      | VARCHAR | NULL = global/default entry written by `add_trait()`; named index written by `define_index()` |
+| index_name      | VARCHAR | NULL = global/default entry written by `define_trait()`; named index written by `define_index()` |
 | trait_name      | VARCHAR | FK to `trait_meta.trait_name`                                 |
 | index_weight    | DOUBLE  | Selection index weight (NULL for global rows)                 |
 | economic_weight | DOUBLE  | Economic value per unit of the trait                          |
@@ -482,18 +492,18 @@ pop |>
   add_phenotype("ADG2")
 ```
 
-### `add_trait()` / `add_additive_effects()` / `set_qtl_effects_multi()`
+### `define_trait()` / `define_additive_effects()` / `set_qtl_effects_multi()`
 
-`R/add_trait.R`, `R/add_additive_effects.R`
+`R/define_trait.R`, `R/define_additive_effects.R`
 
-- `add_trait()` — one row in `trait_meta`. Also writes a global
+- `define_trait()` — one row in `trait_meta`. Also writes a global
   `(index_name = NULL, trait_name, economic_weight)` entry to `index_meta` so
   each trait has a default economic weight without needing `define_index()` first.
   `overwrite = FALSE` (default) errors if the trait already exists in `trait_meta`;
   the existing `index_meta` row is preserved. `overwrite = TRUE` replaces both.
   `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
   `trait_meta`).
-- `add_additive_effects()` — accepts a `tidybreed_table` from
+- `define_additive_effects()` — accepts a `tidybreed_table` from
   `get_table("genome_meta")` (optionally filtered) as its **first argument**.
   The filtered rows determine which loci are QTL. Writes rows to `genome_effects`
   with `genome_effect_type = "additive"`. Manual or sampled (normal/gamma) with
@@ -501,18 +511,18 @@ pop |>
   Re-calling for the same trait replaces existing rows in `genome_effects`.
   ```r
   # Single trait — filter defines QTL, effects are written in one step
-  pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> add_additive_effects("ADG")
+  pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> define_additive_effects("ADG")
 
   # Multiple traits with same QTL set
   for (t in c("ADG", "BW")) {
     pop <- pop |> get_table("genome_meta") |> filter(locus_name %in% sel) |>
-      add_additive_effects(t)
+      define_additive_effects(t)
   }
 
   # Use generation-0 animals to define base allele frequencies
   gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
   pop |> get_table("genome_meta") |> filter(...) |>
-    add_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
+    define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
   ```
 - `set_qtl_effects_multi()` — correlated effects from `MVN(0, G)` across
   multiple traits via `MASS::mvrnorm`. First argument is a `tidybreed_table`
@@ -521,25 +531,25 @@ pop |>
   traits get effects at the filtered loci) or `"union"` (per-trait QTL sets
   read from existing `genome_effects` rows, restricted to the filtered loci).
 
-### `add_effect_cov_matrix()` / `add_effect_random()` / `add_effect_fixed_class()` / `add_effect_fixed_cov()` / `add_effect_int()`
+### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_int()`
 
-`R/add_effect_cov_matrix.R`, `R/add_effect_random.R`, `R/add_effect_fixed_class.R`, `R/add_effect_fixed_cov.R`, `R/add_effect_int.R`
+`R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_int.R`
 
-- `add_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
+- `define_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
   point for all variance/covariance data**. Stores symmetric matrix in
   `trait_effect_cov`. Use `effect_name = "gen_add"` or `"residual"` for
-  reserved effects. Can be called before `add_trait()` or `add_effect_random()`.
-- `add_effect_random()` — `variance` optional if already in `trait_effect_cov`.
-- `add_effect_fixed_class()` — discrete level → shift mapping.
-- `add_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
-- `add_effect_int()` — sets intercept (`target_add_mean`) for a trait.
+  reserved effects. Can be called before `define_trait()` or `define_effect_random()`.
+- `define_effect_random()` — `variance` optional if already in `trait_effect_cov`.
+- `define_effect_fixed_class()` — discrete level → shift mapping.
+- `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
+- `define_effect_int()` — sets intercept (`target_add_mean`) for a trait.
 
 ### `add_trait_covariate()` *(deprecated)*
 
 `R/add_trait_covariate.R`
 
-- Deprecated since v0.6.0. Use `add_effect_fixed_class()`, `add_effect_fixed_cov()`,
-  or `add_effect_random()` instead.
+- Deprecated since v0.6.0. Use `define_effect_fixed_class()`, `define_effect_fixed_cov()`,
+  or `define_effect_random()` instead.
 
 ### `add_phenotype()` / `add_tbv()`
 
@@ -569,15 +579,15 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
     a value in `ind_true_index` for the given `(index_name, weight_type)`. Set
     `TRUE` to recompute (e.g. after updating index weights).
 
-### `add_trait_simple()`
+### `define_trait_simple()`
 
-`R/add_trait_simple.R`
+`R/define_trait_simple.R`
 
-Convenience wrapper that chains `add_trait()` and `add_additive_effects()` for
+Convenience wrapper that chains `define_trait()` and `define_additive_effects()` for
 a single uncorrelated trait. QTL are always placed randomly (n = `n_qtl`).
 For non-random QTL placement or correlated multi-trait effects, use the
 functions individually with `get_table("genome_meta") |> filter(...)  |>
-add_additive_effects()`.
+define_additive_effects()`.
 
 ### `define_index()` / `add_index()`
 

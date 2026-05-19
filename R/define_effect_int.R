@@ -1,10 +1,10 @@
-#' Set the intercept (overall mean) for a trait
+#' Define the intercept (overall mean) for a trait
 #'
 #' @description
 #' Updates `target_add_mean` in `trait_meta` for the named trait. This value
 #' is the intercept added to every individual's liability before residuals and
 #' fixed/random shifts. It can also be set at trait-definition time via
-#' [add_trait()]; `add_effect_int()` lets you update it without redefining
+#' [define_trait()]; `define_effect_int()` lets you update it without redefining
 #' the whole trait.
 #'
 #' @param pop A `tidybreed_pop` object.
@@ -13,15 +13,15 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_trait()], [add_effect_fixed_class()], [add_effect_fixed_cov()],
-#'   [add_effect_random()]
+#' @seealso [define_trait()], [define_effect_fixed_class()],
+#'   [define_effect_fixed_cov()], [define_effect_random()]
 #'
 #' @examples
 #' \dontrun{
-#' pop <- pop |> add_effect_int("ADG", mean = 850)
+#' pop <- pop |> define_effect_int("ADG", mean = 850)
 #' }
 #' @export
-add_effect_int <- function(pop, trait_name, mean) {
+define_effect_int <- function(pop, trait_name, mean) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
@@ -29,7 +29,7 @@ add_effect_int <- function(pop, trait_name, mean) {
   stopifnot(is.numeric(mean), length(mean) == 1, !is.na(mean))
 
   if (!"trait_meta" %in% pop$tables) {
-    stop("No trait tables exist. Call add_trait() first.", call. = FALSE)
+    stop("No trait tables exist. Call define_trait() first.", call. = FALSE)
   }
 
   existing <- DBI::dbGetQuery(

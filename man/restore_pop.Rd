@@ -41,7 +41,7 @@ pop <- initialize_genome(
   n_haplotypes = 200,
   db_path      = "cattle_sim.duckdb"
 )
-pop <- add_trait(pop, trait_name = "milk", ...)
+pop <- define_trait(pop, trait_name = "milk", ...)
 close_pop(pop)
 
 # Each replicate

@@ -49,7 +49,7 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 \item \code{TBV_i} = sum over additive effects in \code{genome_effects} * genotype dose
 (or haplotype dose for imprinted traits).
 \item \code{e_i} is residual: drawn from \code{MVN(0, R)} across traits when a residual
-covariance matrix is stored (see \code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}) and multiple
+covariance matrix is stored (see \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}) and multiple
 traits share the same subset; otherwise drawn independently.
 }
 
@@ -97,7 +97,7 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=add_trait]{add_trait()}}, \code{\link[=add_additive_effects]{add_additive_effects()}},
-\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}, \code{\link[=add_effect_fixed_class]{add_effect_fixed_class()}}, \code{\link[=add_effect_fixed_cov]{add_effect_fixed_cov()}},
-\code{\link[=add_effect_random]{add_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
+\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
+\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}},
+\code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}}, \code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

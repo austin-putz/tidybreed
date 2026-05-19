@@ -1,4 +1,4 @@
-#' Add a random group effect to a trait's phenotype model
+#' Define a random group effect in a trait's phenotype model
 #'
 #' @description
 #' Inserts a row into `trait_effects` for a random effect. One value is drawn
@@ -8,7 +8,7 @@
 #' requiring a fixed `seed`.
 #'
 #' To correlate this effect across multiple traits (e.g. the same herd affects
-#' both ADG and BW), call [add_effect_cov_matrix()] with the appropriate
+#' both ADG and BW), call [define_effect_cov_matrix()] with the appropriate
 #' `effect_name` — either before or after this call.
 #'
 #' @param pop A `tidybreed_pop` object.
@@ -17,7 +17,7 @@
 #' @param source_column Character. Column in `source_table` whose distinct
 #'   values define the groups (e.g. `"herd_id"`, `"litter"`).
 #' @param variance Numeric scalar. Variance of the random effect distribution.
-#'   Optional if a variance has already been stored via [add_effect_cov_matrix()]
+#'   Optional if a variance has already been stored via [define_effect_cov_matrix()]
 #'   for this `effect_name` and `trait_name`. Required otherwise.
 #' @param distribution Character. Sampling distribution: `"normal"` (default),
 #'   `"gamma"`, or `"uniform"`.
@@ -27,18 +27,18 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_effect_cov_matrix()], [add_effect_fixed_class()],
-#'   [add_effect_fixed_cov()], [add_phenotype()]
+#' @seealso [define_effect_cov_matrix()], [define_effect_fixed_class()],
+#'   [define_effect_fixed_cov()], [add_phenotype()]
 #'
 #' @examples
 #' \dontrun{
 #' pop <- pop |>
-#'   add_effect_random("ADG", "herd",
+#'   define_effect_random("ADG", "herd",
 #'     source_column = "herd_id",
 #'     variance = 150)
 #' }
 #' @export
-add_effect_random <- function(pop,
+define_effect_random <- function(pop,
                               trait_name,
                               effect_name,
                               source_column,
@@ -63,7 +63,7 @@ add_effect_random <- function(pop,
     if (is.null(variance)) {
       stop("No variance found in trait_effect_cov for effect '", effect_name,
            "' / trait '", trait_name, "'. ",
-           "Either call add_effect_cov_matrix() first or supply `variance`.",
+           "Either call define_effect_cov_matrix() first or supply `variance`.",
            call. = FALSE)
     }
     if (!is.numeric(variance) || length(variance) != 1 ||
@@ -75,7 +75,7 @@ add_effect_random <- function(pop,
   }
 
   if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call add_trait() first.", call. = FALSE)
+    stop("No trait tables exist. Call define_trait() first.", call. = FALSE)
   }
 
   .check_trait_exists(pop, trait_name)

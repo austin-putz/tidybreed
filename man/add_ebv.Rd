@@ -126,5 +126,5 @@ pop <- pop |>
 }
 \seealso{
 \code{\link[=get_table]{get_table()}}, \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_chip]{define_chip()}},
-\code{\link[=add_effect_cov_matrix]{add_effect_cov_matrix()}}
+\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}
 }

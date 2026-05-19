@@ -65,7 +65,7 @@ cat(sprintf("Founders: %d total (%d M + %d F)\n\n", N_MALES + N_FEMALES, N_MALES
 # prevalence controls the threshold: threshold = qnorm(1 - prevalence) * sqrt(VA + VR)
 # (when target_add_mean = 0, which is the default).
 pop <- pop |>
-  add_trait(
+  define_trait(
     "mortality",
     trait_type      = "categorical",
     prevalence      = PREV,
@@ -82,7 +82,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_mort) |>
   define_qtl("mortality") |>
-  add_additive_effects("mortality")
+  define_additive_effects("mortality")
 
 # ---- Simulate phenotypes ----------------------------------------------
 pop <- pop |>

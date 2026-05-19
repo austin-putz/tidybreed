@@ -1,3 +1,52 @@
+# tidybreed 0.30.0 (2026-05-19)
+
+## Breaking changes
+
+* `set_qtl_effects_multi()` is removed from the public API. Pass a character
+  vector to `define_additive_effects()` instead.
+
+  ```r
+  # old
+  tbl |> set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
+
+  # new
+  tbl |> define_additive_effects(c("ADG", "BW"), G = G)
+  ```
+
+  A deprecated wrapper remains and will forward calls with a warning, but will
+  be fully removed in a future release.
+
+## Enhancements
+
+* `define_additive_effects()` now accepts `trait_name` as a character vector
+  (length >= 2) for correlated multi-trait effect sampling. New parameters:
+  * `G` — additive-genetic (co)variance matrix; `NULL` reads from
+    `trait_effect_cov`.
+  * `method` — `"shared"` (default, all traits share the filtered QTL set) or
+    `"union"` (per-trait QTL sets from existing `genome_effects` rows).
+  Single-trait behaviour is unchanged.
+
+# tidybreed 0.29.0 (2026-05-19)
+
+## Breaking changes — rename `add_*` configuration functions to `define_*`
+
+Eight functions renamed from `add_*` to `define_*` to match their
+metadata/configuration semantics (pre-v1 API cleanup):
+
+* `add_trait()` → `define_trait()`
+* `add_additive_effects()` → `define_additive_effects()`
+* `add_trait_simple()` → `define_trait_simple()`
+* `add_effect_fixed_class()` → `define_effect_fixed_class()`
+* `add_effect_fixed_cov()` → `define_effect_fixed_cov()`
+* `add_effect_random()` → `define_effect_random()`
+* `add_effect_cov_matrix()` → `define_effect_cov_matrix()`
+* `add_effect_int()` → `define_effect_int()`
+
+The rule: `add_*` now exclusively means inserting simulation output rows
+(individuals, phenotypes, TBVs, EBVs, index values). `define_*` means writing
+model configuration that shapes how the simulation runs (trait specs, effect
+definitions, variance matrices).
+
 # tidybreed 0.28.0 (2026-05-18)
 
 ## Enhancements

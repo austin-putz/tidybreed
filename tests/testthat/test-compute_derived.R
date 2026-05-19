@@ -15,7 +15,7 @@ make_ap_pop <- function() {
   pop <- get_table(pop, "ind_meta") |>
     mutate_table(birth_date = as.Date("2024-01-01"))
   pop <- pop |>
-    add_trait(
+    define_trait(
       "AP",
       trait_type     = "count",
       target_add_var = 1,
@@ -30,7 +30,7 @@ make_ap_pop <- function() {
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
-    add_additive_effects("AP")
+    define_additive_effects("AP")
   pop <- get_table(pop, "ind_meta") |>
     dplyr::filter(sex == "F") |>
     add_phenotype("AP")
