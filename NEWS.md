@@ -1,3 +1,12 @@
+# tidybreed 0.30.1 (2026-05-19)
+
+## New
+
+* Added `inst/CITATION` with two entries: an `@Manual` entry for the R package
+  and an `@Misc` entry for the Quarto quick-start manual. Users can retrieve
+  them with `citation("tidybreed")` or `toBibtex(citation("tidybreed"))`.
+  A formal DOI will be assigned at v1.0.0.
+
 # tidybreed 0.30.0 (2026-05-19)
 
 ## Breaking changes
