@@ -1,3 +1,54 @@
+# tidybreed 0.31.0 (2026-05-19)
+
+## Breaking changes
+
+* `define_trait()` no longer accepts phenotype-level arguments (`trait_type`,
+  `residual_var`, `expressed_sex`, `mean`, `min_value`, `max_value`,
+  `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`,
+  `index_weight`, `economic_value`, `recorded_on`). Pass these to the new
+  `define_phenotype()` function instead.
+
+* `ind_phenotype.trait_name` is renamed to `phenotype_name`. SQL queries and
+  direct table writes against `ind_phenotype` must use the new column name.
+  Same rename applies to `trait_effects.phenotype_name` and
+  `trait_random_effects.phenotype_name`.
+
+* `add_tbv()` no longer applies `expressed_sex` filtering (that column was
+  removed from `trait_meta`). Sex filtering is now handled by `add_phenotype()`
+  via `phenotype_meta.expressed_sex`.
+
+## New functions
+
+* `define_phenotype()` — registers an observed phenotype in the new
+  `phenotype_meta` table. Accepts all phenotype-level metadata (mean,
+  `expressed_sex`, `trait_type`, `repeatable`, categorical thresholds,
+  prevalence, etc.) and an optional `residual_var` that writes to the new
+  `phenotype_residual_cov` table.
+
+* `add_residual_cov()` — writes conditional or unconditional residual
+  (co)variance entries to `phenotype_residual_cov`, enabling heterogeneous
+  residuals by sex, herd, or any `ind_meta` group.
+
+## New database tables
+
+* `phenotype_meta` — one row per observed phenotype (decoupled from
+  `trait_meta`).
+* `phenotype_components` — assembly rules for composite phenotypes
+  (maternal, social, reaction-norm). Supports `contributor_type` values
+  `"self"`, `"dam"`, and `"sire"`.
+* `phenotype_residual_cov` — residual (co)variance store; replaces the
+  `"residual"` rows formerly in `trait_effect_cov` for phenotype residuals.
+
+## Changes
+
+* `define_effect_cov_matrix(pop, "residual", R)` now routes to
+  `phenotype_residual_cov` via `add_residual_cov()`.
+* `define_trait_simple()` chains through `define_phenotype()` automatically.
+* `add_phenotype()` reads all phenotype metadata from `phenotype_meta` and
+  assembles composite TBVs from `phenotype_components` when present.
+* `add_index()` detects `phenotype_name` column in `ind_phenotype`
+  automatically (no user action required).
+
 # tidybreed 0.30.1 (2026-05-19)
 
 ## New

@@ -434,17 +434,17 @@ test_that("add_index() works with ind_phenotype filtered to pheno_number == 1L",
 
   ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   ph_adg <- data.frame(
-    id_ind       = ind_ids,
-    trait_name   = "ADG",
-    pheno_value  = seq(200, 290, length.out = length(ind_ids)),
-    pheno_number = 1L,
+    id_ind         = ind_ids,
+    phenotype_name = "ADG",
+    pheno_value    = seq(200, 290, length.out = length(ind_ids)),
+    pheno_number   = 1L,
     stringsAsFactors = FALSE
   )
   ph_fcr <- data.frame(
-    id_ind       = ind_ids,
-    trait_name   = "FCR",
-    pheno_value  = seq(2.0, 2.9, length.out = length(ind_ids)),
-    pheno_number = 1L,
+    id_ind         = ind_ids,
+    phenotype_name = "FCR",
+    pheno_value    = seq(2.0, 2.9, length.out = length(ind_ids)),
+    pheno_number   = 1L,
     stringsAsFactors = FALSE
   )
   combined <- rbind(ph_adg, ph_fcr)
@@ -466,9 +466,9 @@ test_that("add_index() works with ind_phenotype filtered to pheno_number == 1L",
     "SELECT * FROM ind_index ORDER BY id_ind")
   expect_equal(nrow(result), 10L)
   adg_v <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE trait_name = 'ADG' ORDER BY id_ind")
+    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE phenotype_name = 'ADG' ORDER BY id_ind")
   fcr_v <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE trait_name = 'FCR' ORDER BY id_ind")
+    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE phenotype_name = 'FCR' ORDER BY id_ind")
   expected <- adg_v$pheno_value * 1.0 + fcr_v$pheno_value * (-1.0)
   expect_equal(result$index_value, expected, tolerance = 1e-9)
 })
@@ -480,12 +480,12 @@ test_that("add_index() errors on duplicates when ind_phenotype unfiltered with r
 
   ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   ph1 <- data.frame(
-    id_ind = ind_ids, trait_name = "ADG",
+    id_ind = ind_ids, phenotype_name = "ADG",
     pheno_value = rnorm(length(ind_ids)), pheno_number = 1L,
     stringsAsFactors = FALSE
   )
   ph2 <- data.frame(
-    id_ind = ind_ids, trait_name = "ADG",
+    id_ind = ind_ids, phenotype_name = "ADG",
     pheno_value = rnorm(length(ind_ids)), pheno_number = 2L,
     stringsAsFactors = FALSE
   )

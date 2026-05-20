@@ -8,6 +8,12 @@ define_trait_simple(
   pop,
   trait_name,
   n_qtl,
+  target_add_var,
+  mean = 0,
+  residual_var,
+  trait_type = "continuous",
+  expressed_sex = "both",
+  repeatable = FALSE,
   effect_distribution = "normal",
   scale_to_target = TRUE,
   seed = NULL,
@@ -21,38 +27,58 @@ define_trait_simple(
 
 \item{n_qtl}{Integer. Number of QTL to randomly select from \code{genome_meta}.}
 
-\item{effect_distribution}{Character. \code{"normal"} or \code{"gamma"}.}
+\item{target_add_var}{Numeric. Additive genetic variance target. Passed to
+\code{\link[=define_trait]{define_trait()}}.}
 
-\item{scale_to_target}{Logical. Passed to \code{\link[=define_additive_effects]{define_additive_effects()}}.}
+\item{mean}{Numeric. Phenotypic population mean. Passed to
+\code{\link[=define_phenotype]{define_phenotype()}} as the \code{mean} argument. Default \code{0}.}
 
-\item{seed}{Optional integer for reproducibility (applied before both the
-QTL random draw and the effect sampling).}
+\item{residual_var}{Numeric. Residual variance. Passed to \code{\link[=define_phenotype]{define_phenotype()}}.}
 
-\item{...}{Additional arguments forwarded to \code{\link[=define_trait]{define_trait()}} (e.g.
-\code{trait_type}, \code{target_add_var}, \code{residual_var}, \code{target_add_mean},
-\code{prevalence}, \code{expressed_sex}).}
+\item{trait_type}{Character. One of \code{"continuous"} (default), \code{"count"},
+\code{"categorical"}. Passed to \code{\link[=define_phenotype]{define_phenotype()}}.}
+
+\item{expressed_sex}{Character. \code{"both"} (default), \code{"M"}, or \code{"F"}.
+Passed to \code{\link[=define_phenotype]{define_phenotype()}}.}
+
+\item{repeatable}{Logical. Whether the trait allows repeated records.
+Passed to \code{\link[=define_phenotype]{define_phenotype()}}. Default \code{FALSE}.}
+
+\item{effect_distribution}{Character. \code{"normal"} (default) or \code{"gamma"}.
+Passed to \code{\link[=define_additive_effects]{define_additive_effects()}}.}
+
+\item{scale_to_target}{Logical. Passed to \code{\link[=define_additive_effects]{define_additive_effects()}}.
+Default \code{TRUE}.}
+
+\item{seed}{Optional integer for reproducibility (applied before QTL draw
+and effect sampling).}
+
+\item{...}{Additional arguments forwarded to \code{\link[=define_phenotype]{define_phenotype()}} (e.g.
+\code{prevalence}, \code{thresholds}, \code{cat_values}, \code{cat_names}, \code{min_value},
+\code{max_value}, \code{store_liability}).}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Convenience wrapper that chains \code{\link[=define_trait]{define_trait()}} and \code{\link[=define_additive_effects]{define_additive_effects()}}
-for a single uncorrelated trait using random QTL placement. For correlated
-multi-trait simulations, or to control QTL placement (e.g. by chromosome
-or position), use the functions individually with
+Convenience wrapper that chains \code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
+and \code{\link[=define_phenotype]{define_phenotype()}} for a single uncorrelated trait using random QTL
+placement. For correlated multi-trait simulations or custom QTL placement,
+use the functions individually with
 \code{get_table("genome_meta") |> filter(...) |> define_additive_effects()}.
 }
 \examples{
 \dontrun{
 pop <- pop |>
   define_trait_simple(
-    trait_name          = "ADG",
-    trait_type          = "continuous",
-    n_qtl               = 100,
-    target_add_var      = 0.25,
-    residual_var        = 0.75,
-    target_add_mean     = 850,
-    effect_distribution = "normal"
+    trait_name     = "ADG",
+    n_qtl          = 100,
+    target_add_var = 100,
+    mean           = 850,
+    residual_var   = 120
   )
 }
+}
+\seealso{
+\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=define_phenotype]{define_phenotype()}}
 }

@@ -7,11 +7,10 @@
 decode_levels_json(s)
 }
 \arguments{
-\item{s}{Character scalar (one of the encoded strings, or \code{NA}).}
+\item{s}{Character scalar, or \code{NA}.}
 }
 \value{
-Named numeric vector (possibly length 0), or \code{NULL} if input is
-missing / empty.
+Named numeric vector (possibly length 0), or \code{NULL} if missing/empty.
 }
 \description{
 Decode a level-map JSON string produced by \code{encode_levels_json()}

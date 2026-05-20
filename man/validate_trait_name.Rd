@@ -2,7 +2,7 @@
 % Please edit documentation in R/define_trait.R
 \name{validate_trait_name}
 \alias{validate_trait_name}
-\title{Validate a trait name for use as SQL identifier and column suffix}
+\title{Validate a trait name for use as SQL identifier}
 \usage{
 validate_trait_name(name)
 }
@@ -10,6 +10,6 @@ validate_trait_name(name)
 \item{name}{Character trait name.}
 }
 \description{
-Validate a trait name for use as SQL identifier and column suffix
+Validate a trait name for use as SQL identifier
 }
 \keyword{internal}

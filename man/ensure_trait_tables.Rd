@@ -13,9 +13,7 @@ ensure_trait_tables(pop)
 The \code{tidybreed_pop} object with \verb{$tables} updated.
 }
 \description{
-Creates \code{trait_meta}, \code{trait_effects}, \code{trait_random_effects},
-\code{ind_phenotype}, \code{ind_tbv}, and \code{ind_ebv} if they are not already present.
-Idempotent: safe to call multiple times. Variance/covariance data lives in
-\code{trait_effect_cov}, created lazily by \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}.
+Creates all core trait / phenotype / individual tables if they do not already
+exist, and runs any necessary schema migrations on older databases. Idempotent.
 }
 \keyword{internal}

@@ -15,89 +15,76 @@ add_phenotype(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column; unique
-values in that column determine which individuals are phenotyped.}
+through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column.}
 
-\item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
-all traits currently in \code{trait_meta} are used (in \code{id_trait} order).}
+\item{trait_name}{Character vector of phenotype name(s) (accepts phenotype
+names — the argument is named \code{trait_name} for backward compatibility).
+When \code{NULL} (default), all phenotypes in \code{phenotype_meta} are used in
+\code{id_phenotype_meta} order.}
 
 \item{user_residual}{Optional override for residual draws. Numeric vector
-of length \code{n_subset} for single trait, or a named list keyed by trait
-for multi-trait.}
+of length \code{n_subset} for single phenotype, or a named list keyed by
+phenotype name for multi-phenotype.}
 
 \item{user_values}{Optional override for the full phenotype value. If
-supplied, the model is not evaluated — these values are written
-directly (but TBVs are still computed and stored).}
+supplied, the model is not evaluated (TBVs are still computed and stored).}
 
 \item{seed}{Optional integer for reproducibility.}
+
+\item{...}{Optional scalar extra columns written to \code{ind_phenotype}
+(broadcast to all records). Supply per-record vectors with
+\code{\link[=mutate_table]{mutate_table()}} after the call.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Simulates phenotype values for one or more traits and writes them to
+Simulates phenotype values for one or more phenotypes and writes them to
 \code{ind_phenotype}. Also computes and stores the underlying true breeding
 value (TBV) per individual per trait in \code{ind_tbv}.
 
-\strong{Model} (per trait, on the liability / continuous scale):
+\strong{Model} (per phenotype, on the liability / continuous scale):
 \preformatted{
-  y_i = target_add_mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+  y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
 }
 \itemize{
-\item \code{target_add_mean} comes from \code{trait_meta}.
+\item \code{mean} comes from \code{phenotype_meta.mean}.
 \item Fixed and random shifts come from \code{trait_effects} rows.
-\item \code{TBV_i} = sum over additive effects in \code{genome_effects} * genotype dose
-(or haplotype dose for imprinted traits).
-\item \code{e_i} is residual: drawn from \code{MVN(0, R)} across traits when a residual
-covariance matrix is stored (see \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}) and multiple
-traits share the same subset; otherwise drawn independently.
-}
-
-Trait-type specific output:
-\itemize{
-\item \code{"continuous"}: liability written verbatim.
-\item \code{"count"}: liability rounded and clipped to \verb{[min_value, max_value]}.
-\item \code{"categorical"}: category value via \code{thresholds} cutpoints (or \code{prevalence}
-for a 2-category trait). Mapped to \code{cat_values} if set; otherwise \verb{1..K}.
-Raw liability stored in \code{liability_value} column when \code{store_liability = TRUE}.
-Category labels stored in \code{cat_name} column when \code{cat_names} is defined.
+\item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{TBV_i} is the
+standard additive TBV from \code{genome_effects}.
+\item For \strong{composite} phenotypes (rows in \code{phenotype_components}), \code{TBV_i} is
+the weighted sum of contributor TBVs (self, dam, sire, or group).
+\item \code{e_i} is residual: drawn from \code{MVN(0, R)} across phenotypes when a
+covariance matrix is stored in \code{phenotype_residual_cov} and multiple
+phenotypes share the same subset; otherwise drawn independently.
 }
 
 \strong{Subset selection}: pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and
-optionally \code{\link[=filter]{filter()}}) as the first argument. The unique \code{id_ind} values in
-the collected table are the candidate individuals. The candidate set is then
-intersected with \code{trait_meta$expressed_sex} (e.g. \code{"F"}-only traits skip
-males).
+optionally \code{\link[=filter]{filter()}}) as the first argument.
 
 \strong{Escape hatches}:
 \itemize{
-\item \code{user_values}: skip model computation and write these values as
-phenotype records for the subset. For multi-trait calls, supply a
-named list keyed by trait.
-\item \code{user_residual}: supply a numeric vector (or named list for multi-trait)
-to override the residual draw.
+\item \code{user_values}: skip model computation and write these values as phenotype
+records for the subset.
+\item \code{user_residual}: supply a numeric vector (or named list) to override the
+residual draw.
 }
 }
 \examples{
 \dontrun{
-# All individuals
-pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+# All individuals — all phenotypes
+pop <- pop |> get_table("ind_meta") |> add_phenotype()
 
-# Filtered subset
+# Named phenotype, filtered subset
 pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
   add_phenotype("ADG")
-
-# Pre-select by phenotype record value from another table
-pop <- pop |>
-  get_table("ind_phenotype") |>
-  dplyr::filter(pheno_value > 500) |>
-  add_phenotype("ADG2")
 }
 }
 \seealso{
-\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
-\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}},
-\code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}}, \code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
+\code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
+\code{\link[=add_residual_cov]{add_residual_cov()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}},
+\code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
+\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

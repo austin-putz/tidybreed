@@ -13,11 +13,6 @@ encode_levels_json(x)
 A single character string, or \code{NA_character_} if \code{x} is empty.
 }
 \description{
-Serialises a named numeric vector (e.g. \code{c(M = 30, F = 0)}) into a
-JSON-style string \verb{\{"M":30,"F":0\}} that fits a VARCHAR column. Used by
-\code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}} to persist fixed-effect level maps.
-
-Keys containing \verb{"}, \verb{,}, or \code{:} are not supported (fixed-effect levels in
-breeding programs are typically short tokens like \code{"M"}, \code{"A"}, \code{"gen1"}).
+Encode a named numeric vector as a small JSON string
 }
 \keyword{internal}

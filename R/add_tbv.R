@@ -124,7 +124,7 @@ add_tbv <- function(tbl, trait_name = NULL,
 
   meta_rows <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_name, expressed_sex, expressed_parent ",
+    paste0("SELECT trait_name, expressed_parent ",
            "FROM trait_meta WHERE trait_name IN (",
            paste0("'", trait, "'", collapse = ", "), ")")
   )
@@ -145,12 +145,8 @@ add_tbv <- function(tbl, trait_name = NULL,
   geno_mat_full <- get_genotype_matrix(pop, subset_ids = subset_ids)
 
   for (t in trait) {
-    m <- meta_rows[meta_rows$trait_name == t, ]
-    if (m$expressed_sex != "both") {
-      ids_t <- ind_meta_subset$id_ind[ind_meta_subset$sex == m$expressed_sex]
-    } else {
-      ids_t <- ind_meta_subset$id_ind
-    }
+    m     <- meta_rows[meta_rows$trait_name == t, ]
+    ids_t <- ind_meta_subset$id_ind
     if (length(ids_t) == 0) next
 
     # Load additive effects from genome_effects (population-wide: line_name IS NULL)

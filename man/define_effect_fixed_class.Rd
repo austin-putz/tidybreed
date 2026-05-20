@@ -2,35 +2,47 @@
 % Please edit documentation in R/define_effect_fixed_class.R
 \name{define_effect_fixed_class}
 \alias{define_effect_fixed_class}
-\title{Define a discrete fixed-class effect in a trait's phenotype model}
+\title{Define a discrete fixed-class effect in a phenotype model}
 \usage{
 define_effect_fixed_class(
   pop,
-  trait_name,
+  phenotype_name,
   effect_name,
   source_column,
   levels,
   source_table = "ind_meta",
+  null_class_action = c("skip", "error", "zero"),
   overwrite = FALSE
 )
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{phenotype_name}{Character. Name of an existing phenotype in
+\code{phenotype_meta}.}
 
-\item{effect_name}{Character. Unique label for this effect within the trait.
-Must be a valid SQL identifier.}
+\item{effect_name}{Character. Unique label for this effect within the
+phenotype. Must be a valid SQL identifier.}
 
-\item{source_column}{Character. Column in \code{source_table} that holds the
-group membership for each individual. Must be a valid SQL identifier.}
+\item{source_column}{Character. Column in \code{source_table} holding the group
+membership. Must be a valid SQL identifier.}
 
 \item{levels}{Named numeric vector mapping level strings to shifts, e.g.
 \code{c(M = 30, F = 0)}. Every level present in the data at phenotyping time
 must appear here.}
 
-\item{source_table}{Character. Database table that contains \code{source_column}.
-Defaults to \code{"ind_meta"}. Must contain an \code{id_ind} column.}
+\item{source_table}{Character. Database table containing \code{source_column}.
+Default \code{"ind_meta"}.}
+
+\item{null_class_action}{Character. Behaviour when \code{source_column} is \code{NULL}
+for an individual:
+\itemize{
+\item \code{"skip"} (default) — individual is excluded from \code{ind_phenotype} for
+this phenotype; a warning lists the count.
+\item \code{"error"} — hard stop when any \code{NULL} is encountered. Use for effects
+like \code{sex} that should never be missing.
+\item \code{"zero"} — treat \code{NULL} as a zero-shift contribution (reference level).
+}}
 
 \item{overwrite}{Logical. Replace an existing effect with the same name.}
 }
@@ -39,9 +51,9 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Inserts a row into \code{trait_effects} representing a discrete fixed effect:
-each level of \code{source_column} in \code{source_table} maps to a numeric shift on
-the trait scale. At phenotyping time, an individual whose level is not in
-\code{levels} causes an error (the user must supply a complete map).
+each level of \code{source_column} maps to a numeric shift on the phenotype
+scale. The \code{null_class_action} argument controls what happens when an
+individual has a \code{NULL} value for \code{source_column} at phenotyping time.
 }
 \examples{
 \dontrun{

@@ -14,8 +14,7 @@ get_haplotype_matrix(pop, parent_origin, id_ind)
 \item{id_ind}{Character vector of individuals to pull.}
 }
 \value{
-Numeric matrix, rows in the order of \code{id_ind}, columns in
-\code{locus_id} order.
+Numeric matrix, rows in \code{id_ind} order.
 }
 \description{
 Pull the haplotype for a single parent origin, as individuals x loci matrix

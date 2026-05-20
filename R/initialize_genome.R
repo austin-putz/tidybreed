@@ -269,9 +269,66 @@ initialize_genome <- function(pop_name,
     )
   ")
 
+  # Create new phenotype-layer tables (eagerly, empty)
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE phenotype_meta (
+      id_phenotype_meta INTEGER PRIMARY KEY,
+      phenotype_name    VARCHAR UNIQUE NOT NULL,
+      trait_type        VARCHAR,
+      mean              DOUBLE DEFAULT 0,
+      expressed_sex     VARCHAR DEFAULT 'both',
+      repeatable        BOOLEAN DEFAULT FALSE,
+      min_value         DOUBLE,
+      max_value         DOUBLE,
+      prevalence        DOUBLE,
+      thresholds        VARCHAR,
+      cat_values        VARCHAR,
+      cat_names         VARCHAR,
+      store_liability   BOOLEAN DEFAULT FALSE
+    )
+  ")
+
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE phenotype_components (
+      id_phenotype_comp   INTEGER PRIMARY KEY,
+      phenotype_name      VARCHAR NOT NULL,
+      source_trait_name   VARCHAR NOT NULL,
+      contributor_type    VARCHAR NOT NULL,
+      group_column        VARCHAR,
+      group_table         VARCHAR DEFAULT 'ind_meta',
+      aggregation         VARCHAR DEFAULT 'sum',
+      weight              DOUBLE  DEFAULT 1.0,
+      weight_type         VARCHAR DEFAULT 'fixed',
+      covariate_name      VARCHAR,
+      covariate_table     VARCHAR,
+      poly_order          INTEGER,
+      poly_scale_min      DOUBLE,
+      poly_scale_max      DOUBLE,
+      genome_effect_types VARCHAR DEFAULT 'additive',
+      missing_action      VARCHAR DEFAULT 'skip',
+      contributor_filter  VARCHAR
+    )
+  ")
+
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE phenotype_residual_cov (
+      id_residual_cov  INTEGER PRIMARY KEY,
+      phenotype_name_1 VARCHAR NOT NULL,
+      phenotype_name_2 VARCHAR NOT NULL,
+      cov_value        DOUBLE  NOT NULL,
+      condition_column VARCHAR,
+      condition_table  VARCHAR DEFAULT 'ind_meta',
+      condition_level  VARCHAR,
+      weight_type      VARCHAR DEFAULT 'fixed',
+      poly_order       INTEGER
+    )
+  ")
+
   # Generate founder haplotypes if requested
   tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype",
-                      "ind_meta", "trait_effect_cov", "genome_effects")
+                      "ind_meta", "trait_effect_cov", "genome_effects",
+                      "phenotype_meta", "phenotype_components",
+                      "phenotype_residual_cov")
 
   if (!is.null(n_haplotypes)) {
     message("Generating ", n_haplotypes, " founder haplotypes...")

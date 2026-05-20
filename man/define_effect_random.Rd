@@ -2,11 +2,11 @@
 % Please edit documentation in R/define_effect_random.R
 \name{define_effect_random}
 \alias{define_effect_random}
-\title{Define a random group effect in a trait's phenotype model}
+\title{Define a random group effect in a phenotype model}
 \usage{
 define_effect_random(
   pop,
-  trait_name,
+  phenotype_name,
   effect_name,
   source_column,
   variance = NULL,
@@ -18,22 +18,23 @@ define_effect_random(
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{phenotype_name}{Character. Name of an existing phenotype in
+\code{phenotype_meta}.}
 
-\item{effect_name}{Character. Unique label for this effect within the trait.}
+\item{effect_name}{Character. Unique label for this effect within the
+phenotype.}
 
 \item{source_column}{Character. Column in \code{source_table} whose distinct
-values define the groups (e.g. \code{"herd_id"}, \code{"litter"}).}
+values define the groups (e.g. \code{"herd_id"}, \code{"litter"}, \code{"id_ind"} for PE).}
 
-\item{variance}{Numeric scalar. Variance of the random effect distribution.
-Optional if a variance has already been stored via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}
-for this \code{effect_name} and \code{trait_name}. Required otherwise.}
+\item{variance}{Numeric scalar. Variance of the random effect. Optional if
+already stored via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}; required otherwise.}
 
 \item{distribution}{Character. Sampling distribution: \code{"normal"} (default),
 \code{"gamma"}, or \code{"uniform"}.}
 
-\item{source_table}{Character. Database table that contains \code{source_column}.
-Defaults to \code{"ind_meta"}. Must contain an \code{id_ind} column.}
+\item{source_table}{Character. Table containing \code{source_column}. Default
+\code{"ind_meta"}.}
 
 \item{overwrite}{Logical. Replace an existing effect with the same name.}
 }
@@ -47,16 +48,23 @@ receive the same shift. Drawn values are stored in \code{trait_random_effects}
 so they are reproducible across repeated calls to \code{\link[=add_phenotype]{add_phenotype()}} without
 requiring a fixed \code{seed}.
 
-To correlate this effect across multiple traits (e.g. the same herd affects
-both ADG and BW), call \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} with the appropriate
-\code{effect_name} — either before or after this call.
+To correlate this effect across multiple phenotypes (e.g. the same herd
+affects both ADG and BW), call \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} with the
+appropriate \code{effect_name} — either before or after this call.
 }
 \examples{
 \dontrun{
+# Herd random effect
 pop <- pop |>
   define_effect_random("ADG", "herd",
     source_column = "herd_id",
     variance = 150)
+
+# Permanent environment (PE) for repeatability — one draw per animal
+pop <- pop |>
+  define_effect_random("litter_size", "pe",
+    source_column = "id_ind",
+    variance = 0.3)
 }
 }
 \seealso{

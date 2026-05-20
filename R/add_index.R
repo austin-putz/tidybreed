@@ -132,14 +132,19 @@ add_index <- function(tbl,
   }
 
   # ---- Validate required columns exist ----
-  tbl_fields    <- DBI::dbListFields(pop$db_conn, tbl$table_name)
-  required_cols <- c("id_ind", "trait_name", value_col)
+  # ind_phenotype uses phenotype_name; all other value tables use trait_name
+  tbl_fields <- DBI::dbListFields(pop$db_conn, tbl$table_name)
+  name_col   <- if (tbl$table_name == "ind_phenotype" &&
+                    "phenotype_name" %in% tbl_fields) "phenotype_name"
+                else "trait_name"
+
+  required_cols <- c("id_ind", name_col, value_col)
   missing_cols  <- setdiff(required_cols, tbl_fields)
   if (length(missing_cols) > 0) {
     stop(
       "Table '", tbl$table_name, "' is missing required column(s): ",
       paste(missing_cols, collapse = ", "), ". ",
-      "add_index() requires id_ind, trait_name, and the value column ('",
+      "add_index() requires id_ind, ", name_col, ", and the value column ('",
       value_col, "').",
       call. = FALSE
     )
@@ -184,8 +189,13 @@ add_index <- function(tbl,
       call. = FALSE
     )
   }
-  value_df <- dplyr::collect(tbl$tbl)[, c("id_ind", "trait_name", value_col),
+  raw_df   <- dplyr::collect(tbl$tbl)[, c("id_ind", name_col, value_col),
                                        drop = FALSE]
+  # Normalise to 'trait_name' internally (index_meta always uses trait_name)
+  value_df <- raw_df
+  if (name_col != "trait_name") {
+    names(value_df)[names(value_df) == name_col] <- "trait_name"
+  }
 
   # ---- Filter to only index traits ----
   value_df <- value_df[value_df$trait_name %in% index_traits, , drop = FALSE]
@@ -195,8 +205,8 @@ add_index <- function(tbl,
   if (any(dup_check > 1)) {
     n_dups <- sum(dup_check > 1)
     stop(
-      n_dups, " (id_ind, trait_name) combination(s) have more than one row. ",
-      "Filter '", tbl$table_name, "' to a single row per (id_ind, trait_name) ",
+      n_dups, " (id_ind, ", name_col, ") combination(s) have more than one row. ",
+      "Filter '", tbl$table_name, "' to a single row per (id_ind, ", name_col, ") ",
       "before calling add_index(). ",
       "Example: dplyr::filter(model == \"blup_v1\", eval_number == 1L) for ind_ebv, ",
       "or dplyr::filter(pheno_number == 1L) for ind_phenotype.",

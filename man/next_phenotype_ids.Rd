@@ -12,7 +12,7 @@ next_phenotype_ids(pop, n)
 \item{n}{Number of IDs to generate.}
 }
 \value{
-Integer vector of length \code{n} with unique sequential ids.
+Integer vector of length \code{n}.
 }
 \description{
 Generate next global integer IDs for ind_phenotype

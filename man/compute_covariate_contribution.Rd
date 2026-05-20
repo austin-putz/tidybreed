@@ -2,26 +2,28 @@
 % Please edit documentation in R/phenotype_helpers.R
 \name{compute_covariate_contribution}
 \alias{compute_covariate_contribution}
-\title{Compute the covariate contribution (fixed + random shifts) for each
-individual in a subset, for a single trait}
+\title{Compute the covariate contribution for each individual for a single phenotype}
 \usage{
-compute_covariate_contribution(pop, trait_name, subset_df)
+compute_covariate_contribution(pop, phenotype_name, subset_df)
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object (connection used for queries).}
+\item{pop}{A \code{tidybreed_pop} object.}
 
-\item{subset_df}{Data frame: the per-trait subset of \code{ind_meta} (already
+\item{phenotype_name}{Character. Phenotype name to look up in \code{trait_effects}.}
+
+\item{subset_df}{Data frame: the per-phenotype subset of \code{ind_meta} (already
 sex-filtered). Must contain \code{id_ind} and any \code{ind_meta} columns referenced
-by effects. Effects from other tables are fetched from the DB directly.}
-
-\item{trait}{Trait name.}
+by effects.}
 }
 \value{
-Numeric vector of length \code{nrow(subset_df)} giving the summed
-covariate contribution per individual.
+A list:
+\itemize{
+\item \code{contribution}: numeric vector of length \code{nrow(subset_df)}. \code{NA} for
+individuals excluded by \code{null_class_action = "skip"}.
+\item \code{n_skipped}: integer count of NAs introduced.
+}
 }
 \description{
-Compute the covariate contribution (fixed + random shifts) for each
-individual in a subset, for a single trait
+Compute the covariate contribution for each individual for a single phenotype
 }
 \keyword{internal}

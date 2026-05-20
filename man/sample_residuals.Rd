@@ -2,26 +2,23 @@
 % Please edit documentation in R/phenotype_helpers.R
 \name{sample_residuals}
 \alias{sample_residuals}
-\title{Sample residuals for one or more traits}
+\title{Sample residuals for one or more phenotypes}
 \usage{
 sample_residuals(n_ind, residual_var, R = NULL)
 }
 \arguments{
-\item{n_ind}{Integer, number of individuals.}
+\item{n_ind}{Integer. Number of individuals.}
 
-\item{residual_var}{Numeric vector of per-trait residual variances, named
-by trait.}
+\item{residual_var}{Named numeric vector of per-phenotype residual variances.}
 
 \item{R}{Optional covariance matrix with row/col names matching
 \code{names(residual_var)}.}
 }
 \value{
-Numeric matrix of shape \verb{n_ind x length(residual_var)}, columns
-named by trait.
+Numeric matrix of shape \verb{n_ind × length(residual_var)}, columns
+named by phenotype.
 }
 \description{
-Draws a length-\code{n_ind} residual vector per trait. When \code{R} is supplied,
-draws from \code{MVN(0, R)}; otherwise draws independently from
-\code{N(0, residual_var[k])} for each trait.
+Sample residuals for one or more phenotypes
 }
 \keyword{internal}

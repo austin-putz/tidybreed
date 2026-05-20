@@ -2,148 +2,84 @@
 % Please edit documentation in R/define_trait.R
 \name{define_trait}
 \alias{define_trait}
-\title{Define a trait in the population}
+\title{Define a genetic component trait}
 \usage{
 define_trait(
   pop,
   trait_name,
-  description = NA_character_,
-  units = NA_character_,
-  trait_type = c("continuous", "count", "categorical"),
-  repeatable = FALSE,
-  recorded_on = c("self", "dam", "sire", "offspring_mean"),
-  expressed_sex = c("both", "M", "F"),
-  expressed_parent = c("both", "parent_1", "parent_2"),
-  target_add_mean = 0,
   target_add_var = NULL,
-  residual_var = NULL,
-  min_value = NA_real_,
-  max_value = NA_real_,
-  prevalence = NA_real_,
-  thresholds = NULL,
-  cat_values = NULL,
-  cat_names = NULL,
-  store_liability = FALSE,
-  index_weight = 0,
-  economic_value = 0,
+  target_add_mean = 0,
+  expressed_parent = c("both", "parent_1", "parent_2"),
+  description = NULL,
+  units = NULL,
   overwrite = FALSE
 )
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Trait name; used as the primary key and as the
-Used as the primary key in \code{trait_meta}.
-Must be a valid SQL identifier.}
+\item{trait_name}{Character. Unique identifier for this genetic component
+trait. Must be a valid SQL identifier.}
+
+\item{target_add_var}{Numeric. Target additive genetic variance. Written to
+\code{trait_effect_cov} as a diagonal entry under \code{effect_name = "gen_add"}.
+Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to rescale effects. If already set via
+\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave \code{NULL}.}
+
+\item{target_add_mean}{Numeric. TBV centering mean for the base population.
+Default \code{0}; \code{E[TBV] = 0} when TBVs are centered on base allele
+frequencies. The phenotypic population mean (intercept) is set separately
+in \code{\link[=define_phenotype]{define_phenotype()}}.}
+
+\item{expressed_parent}{Character. Parent-of-origin expression: \code{"both"}
+(default), \code{"parent_1"} (paternal), or \code{"parent_2"} (maternal). Imprinted
+traits use only the haplotype from the specified parent when computing TBVs.}
 
 \item{description}{Character. Free-text description of the trait.}
 
 \item{units}{Character. Measurement units, e.g. \code{"kg"}, \code{"count"}.}
 
-\item{trait_type}{Character. One of \code{"continuous"}, \code{"count"},
-\code{"categorical"}. (\code{"binary"} has been removed — use \code{"categorical"} with
-one threshold or \code{prevalence}, and \code{cat_values = c(0, 1)} for 0/1
-encoding.)}
-
-\item{repeatable}{Logical. Whether an individual can have multiple records
-for this trait (e.g. test-day yield).}
-
-\item{recorded_on}{Character. Which animal records the trait:
-\code{"self"}, \code{"dam"}, \code{"sire"}, or \code{"offspring_mean"}.}
-
-\item{expressed_sex}{Character. Sex that expresses the trait: \code{"both"},
-\code{"M"}, or \code{"F"}.}
-
-\item{expressed_parent}{Character. Parent-of-origin expression:
-\code{"both"}, \code{"parent_1"} (paternal), \code{"parent_2"} (maternal). Imprinted
-traits use only the haplotype from the specified parent.}
-
-\item{target_add_mean}{Numeric. Target mean additive genetic value for the
-base population. Used as the intercept in the phenotype model. Defaults to
-0 so that \code{E[TBV] = 0} when TBV is centered on base allele frequencies.}
-
-\item{target_add_var}{Numeric. Target additive-genetic variance. When
-provided, written to \code{trait_effect_cov} as a diagonal entry under
-\code{effect_name = "gen_add"}. Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to rescale effects.
-If already set via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave \code{NULL}.}
-
-\item{residual_var}{Numeric. Residual variance. When provided, written to
-\code{trait_effect_cov} under \code{effect_name = "residual"}. Used by
-\code{\link[=add_phenotype]{add_phenotype()}}. If already set via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave
-\code{NULL}.}
-
-\item{min_value, max_value}{Numeric. Clipping bounds for count traits. \code{NA}
-means no limit.}
-
-\item{prevalence}{Numeric between 0 and 1. For categorical traits with a
-single threshold (two categories), the fraction expected above the
-threshold. The threshold is computed at phenotype time as
-\code{target_add_mean + qnorm(1 - prevalence) * sqrt(VA + VR)}.
-Mutually exclusive with \code{thresholds}.}
-
-\item{thresholds}{Numeric vector of length K−1 for K ordered categories.
-Liability cutpoints in ascending order separating the categories. Stored
-as a comma-separated string in \code{trait_meta}. Mutually exclusive with
-\code{prevalence}.}
-
-\item{cat_values}{Numeric vector of length K (one per category) giving the
-phenotype value stored in \code{ind_phenotype} for each category. E.g.
-\code{c(0, 1)} for standard binary encoding. Defaults to \verb{1, 2, ..., K} when
-\code{NULL}.}
-
-\item{cat_names}{Character vector of length K. Human-readable label per
-category, e.g. \code{c("Alive", "Dead")}. Written to the reserved
-\code{cat_name} column in \code{ind_phenotype}. Must not contain commas.}
-
-\item{store_liability}{Logical. When \code{TRUE}, the underlying liability value
-is written to the reserved \code{liability_value} column in \code{ind_phenotype}
-alongside the observed category value.}
-
-\item{index_weight}{Numeric. Weight in a downstream selection index.}
-
-\item{economic_value}{Numeric. Economic value per unit of the trait.}
-
 \item{overwrite}{Logical. If \code{TRUE} and a trait with the same name already
 exists, replace its \code{trait_meta} row and clear associated \code{trait_effects}
-rows. Also updates the global \code{index_meta} entry (\code{index_name = NULL}) for
-the trait. Default \code{FALSE} errors if the trait already exists in
-\code{trait_meta}; the \code{index_meta} entry is left unchanged.}
+rows. Default \code{FALSE} errors if the trait already exists.}
 }
 \value{
-The modified \code{tidybreed_pop} (invisibly). Assign the result back.
+The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Creates one row in the \code{trait_meta} table describing a trait's genetic and
-phenotypic architecture. The row captures target variance components,
-trait type (continuous / count / binary / categorical), expression rules
-(sex-limited, parent-of-origin), and index / economic weights.
+Creates one row in \code{trait_meta} describing a \strong{genetic component trait}: a
+quantity with QTL effects in \code{genome_effects}, TBVs in \code{ind_tbv}, and
+additive genetic variance in \code{trait_effect_cov}. Contains no
+phenotype-level information.
 
-\code{define_trait()} does not touch the genome or sample QTL. Those are separate
-steps handled by \code{\link[=define_additive_effects]{define_additive_effects()}} (pipe from a filtered
-\code{get_table("genome_meta")}). For the common one-off case, use
-\code{\link[=define_trait_simple]{define_trait_simple()}} which chains both together.
-
-On first call, creates the trait-layer tables (\code{trait_meta}, \code{trait_effects},
-\code{trait_random_effects}, \code{ind_phenotype}, \code{ind_tbv}, \code{ind_ebv}).
-Variance and covariance data is stored in the separate \code{trait_effect_cov}
-table (created on first call to \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} or when
-\code{target_add_var} / \code{residual_var} are supplied here).
+To register the \strong{observed phenotype} that individuals receive records for,
+call \code{\link[=define_phenotype]{define_phenotype()}} after this function. For the common one-off case
+use \code{\link[=define_trait_simple]{define_trait_simple()}}, which chains both steps together.
 }
 \examples{
 \dontrun{
+# Simple genetic component trait:
 pop <- pop |>
-  define_trait(
-    trait_name     = "ADG",
-    trait_type     = "continuous",
-    units          = "g/day",
-    target_add_mean = 0,
-    target_add_var = 0.25,
-    residual_var   = 0.75
-  )
+  define_trait("ADG", target_add_var = 100, units = "g/day")
+
+# Maternal component traits (no define_phenotype call needed for WWD/WWM):
+pop <- pop |>
+  define_trait("WWD", target_add_var = 200) |>
+  define_trait("WWM", target_add_var = 80)
+
+# Then define the observed composite phenotype:
+pop <- pop |>
+  define_phenotype("WW", trait_type = "continuous", mean = 230,
+    residual_var = 180,
+    components = tibble::tribble(
+      ~source_trait_name, ~contributor_type,
+      "WWD", "self",
+      "WWM", "dam"
+    ))
 }
 }
 \seealso{
-\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}},
-\code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}}, \code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}},
-\code{\link[=define_trait_simple]{define_trait_simple()}}
+\code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
+\code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
+\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_trait_simple]{define_trait_simple()}}
 }

@@ -11,8 +11,12 @@
 #' * `"gen_add"` — additive genetic (co)variances (G matrix). Used by
 #'   [define_additive_effects()] when rescaling to target variance and by
 #'   [define_additive_effects()] as the sampling distribution for multi-trait draws.
-#' * `"residual"` — residual (co)variances (R matrix). Used by [add_phenotype()]
-#'   when drawing residuals.
+#' * `"residual"` — residual (co)variances (R matrix). **Routed to
+#'   `phenotype_residual_cov`** (not `trait_effect_cov`). Matrix row/column
+#'   names are treated as `phenotype_name` values. Equivalent to calling
+#'   [add_residual_cov()] with `condition_column = NULL`. Use this for a
+#'   multi-phenotype correlated residual matrix; for a single scalar residual
+#'   use `residual_var` in [define_phenotype()] instead.
 #' * Any named random effect (`"litter"`, `"herd"`, `"dam"`, …) — must match
 #'   the `effect_name` used in [define_effect_random()].
 #'
@@ -66,6 +70,17 @@ define_effect_cov_matrix <- function(pop,
                                    tol         = 1e-9) {
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
+
+  # Residuals route to phenotype_residual_cov (keyed by phenotype_name, not trait_name)
+  if (identical(effect_name, "residual")) {
+    pn <- if (!is.null(dimnames(cov_matrix))) rownames(cov_matrix) else NULL
+    if (!is.null(attr(cov_matrix, "dimnames"))) pn <- rownames(cov_matrix)
+    return(add_residual_cov(pop,
+      phenotype_names  = pn,
+      cov_matrix       = cov_matrix,
+      condition_column = NULL))
+  }
+
   validate_sql_identifier(effect_name, what = "effect name")
 
   if (!is.matrix(cov_matrix) || !is.numeric(cov_matrix)) {

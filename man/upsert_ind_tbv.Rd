@@ -8,6 +8,6 @@ upsert_ind_tbv(pop, tbv_df)
 }
 \description{
 Only the columns present in tbv_df are updated on conflict; all other
-columns (user-defined extras like 'rep') are left untouched in existing rows.
+columns (user-defined extras) are left untouched in existing rows.
 }
 \keyword{internal}

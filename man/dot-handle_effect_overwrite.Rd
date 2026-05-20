@@ -4,12 +4,12 @@
 \alias{.handle_effect_overwrite}
 \title{Handle duplicate effect_name: stop or delete existing row}
 \usage{
-.handle_effect_overwrite(pop, trait_name, effect_name, overwrite)
+.handle_effect_overwrite(pop, phenotype_name, effect_name, overwrite)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character scalar.}
+\item{phenotype_name}{Character scalar.}
 
 \item{effect_name}{Character scalar.}
 

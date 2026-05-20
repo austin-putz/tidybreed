@@ -18,7 +18,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   set.seed(42)
   pop <- make_effects_pop("eff_scale", n_ind = 600, n_loci = 600)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 0.5, residual_var = 0.5)
+  pop <- define_trait(pop, "ADG", target_add_var = 0.5)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -50,8 +50,7 @@ test_that("TBV mean is approximately 0 for founder population", {
   set.seed(7)
   pop <- make_effects_pop("eff_mean", n_ind = 500, n_loci = 500)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 100, residual_var = 100,
-                   target_add_mean = 0)
+  pop <- define_trait(pop, "ADG", target_add_var = 100, target_add_mean = 0)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 200) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -76,7 +75,7 @@ test_that("TBV mean is approximately 0 for founder population", {
 test_that("base_allele_freq written to genome_effects, not genome_meta", {
   pop <- make_effects_pop("eff_base_col")
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 50) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -104,7 +103,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
   pop <- make_effects_pop("eff_currpop", n_ind = 200, n_loci = 300)
 
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
-  pop <- define_trait(pop, "ADG", target_add_var = 50, residual_var = 50)
+  pop <- define_trait(pop, "ADG", target_add_var = 50)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
 
@@ -130,7 +129,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
 
 test_that("define_additive_effects() accepts manual effects", {
   pop <- make_effects_pop("eff_manual")
-  pop <- define_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -149,7 +148,7 @@ test_that("define_additive_effects() accepts manual effects", {
 
 test_that("re-calling define_additive_effects() replaces existing rows", {
   pop <- make_effects_pop("eff_replace")
-  pop <- define_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
 
@@ -185,8 +184,8 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
   set.seed(123)
   pop <- make_effects_pop("eff_multi", n_ind = 800, n_loci = 600)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 0.25, residual_var = 0.75)
-  pop <- define_trait(pop, "BW",  target_add_var = 0.50, residual_var = 0.50)
+  pop <- define_trait(pop, "ADG", target_add_var = 0.25)
+  pop <- define_trait(pop, "BW",  target_add_var = 0.50)
 
   # Same QTL for both traits (full pleiotropy via method = "shared")
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
@@ -232,7 +231,7 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
 
 test_that("define_additive_effects() errors on bare tidybreed_pop", {
   pop <- make_effects_pop("eff_err_pop")
-  pop <- define_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
 
   expect_error(
     define_additive_effects(pop, "ADG"),
@@ -244,7 +243,7 @@ test_that("define_additive_effects() errors on bare tidybreed_pop", {
 
 test_that("define_additive_effects() errors when filter returns zero rows", {
   pop <- make_effects_pop("eff_err_empty")
-  pop <- define_trait(pop, "ADG", target_add_var = 1, residual_var = 1)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
 
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(locus_name == "NONEXISTENT") |>

@@ -2,21 +2,21 @@
 % Please edit documentation in R/phenotype_helpers.R
 \name{next_pheno_numbers}
 \alias{next_pheno_numbers}
-\title{Compute the next pheno_number for each individual for a given trait}
+\title{Compute the next pheno_number for each individual for a given phenotype}
 \usage{
-next_pheno_numbers(pop, trait_name, ids)
+next_pheno_numbers(pop, phenotype_name, ids)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{ids}{Character vector of individual IDs (unique within call).}
+\item{phenotype_name}{Character. Phenotype name.}
 
-\item{trait}{Trait name.}
+\item{ids}{Character vector of individual IDs.}
 }
 \value{
 Integer vector, same length and order as \code{ids}.
 }
 \description{
-Compute the next pheno_number for each individual for a given trait
+Compute the next pheno_number for each individual for a given phenotype
 }
 \keyword{internal}

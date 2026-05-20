@@ -2,15 +2,16 @@
 % Please edit documentation in R/define_effect_fixed_cov.R
 \name{define_effect_fixed_cov}
 \alias{define_effect_fixed_cov}
-\title{Define a continuous covariate (regression) effect in a trait's phenotype model}
+\title{Define a continuous covariate (regression) effect in a phenotype model}
 \usage{
 define_effect_fixed_cov(
   pop,
-  trait_name,
+  phenotype_name,
   effect_name,
   source_column,
   slope,
   center = NULL,
+  poly_order = 1L,
   source_table = "ind_meta",
   overwrite = FALSE
 )
@@ -18,22 +19,25 @@ define_effect_fixed_cov(
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{phenotype_name}{Character. Name of an existing phenotype in
+\code{phenotype_meta}.}
 
-\item{effect_name}{Character. Unique label for this effect within the trait.}
+\item{effect_name}{Character. Unique label for this effect within the
+phenotype.}
 
 \item{source_column}{Character. Column in \code{source_table} holding the
 continuous predictor values.}
 
-\item{slope}{Numeric scalar. Regression coefficient (change in trait per
-unit of the predictor).}
+\item{slope}{Numeric scalar. Regression coefficient.}
 
-\item{center}{Numeric scalar or \code{NULL}. The value subtracted from
-\code{source_column} before multiplying by \code{slope}. If \code{NULL}, the column mean
-is computed from \code{source_table} at definition time and stored.}
+\item{center}{Numeric scalar or \code{NULL}. Value subtracted before raising to
+\code{poly_order}. If \code{NULL}, auto-computed as the column mean.}
 
-\item{source_table}{Character. Database table that contains \code{source_column}.
-Defaults to \code{"ind_meta"}. Must contain an \code{id_ind} column.}
+\item{poly_order}{Integer ≥ 1. Polynomial order. Default \code{1} gives the
+standard linear \code{slope * (x - center)} term. Use \code{2} for quadratic, etc.}
+
+\item{source_table}{Character. Database table containing \code{source_column}.
+Default \code{"ind_meta"}.}
 
 \item{overwrite}{Logical. Replace an existing effect with the same name.}
 }
@@ -41,19 +45,26 @@ Defaults to \code{"ind_meta"}. Must contain an \code{id_ind} column.}
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Inserts a row into \code{trait_effects} representing a linear regression term.
+Inserts a row into \code{trait_effects} representing a polynomial regression term.
 At phenotyping time the contribution per individual is
-\code{slope * (source_column_value - center)}. When \code{center} is \code{NULL} the mean
-of \code{source_column} across all rows currently in \code{source_table} is computed
-and stored automatically.
+\code{slope * (source_column_value - center)^poly_order}. When \code{center} is \code{NULL}
+the mean of \code{source_column} is computed and stored automatically.
 }
 \examples{
 \dontrun{
-# center auto-computed from current ind_meta$age_days
+# Linear regression on age (center auto-computed)
 pop <- pop |>
   define_effect_fixed_cov("ADG", "age",
     source_column = "age_days",
     slope = 2.5)
+
+# Quadratic regression on DIM (dairy)
+pop <- pop |>
+  define_effect_fixed_cov("milk_td", "dim_sq",
+    source_column = "dim",
+    slope  = -0.02,
+    center = 150,
+    poly_order = 2L)
 }
 }
 \seealso{

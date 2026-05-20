@@ -6,8 +6,8 @@
 \usage{
 write_user_phenotype_values(
   pop,
-  trait,
-  subset_by_trait,
+  phenos,
+  subset_by_pheno,
   user_values,
   extra_cols = list()
 )

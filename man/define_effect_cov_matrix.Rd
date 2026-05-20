@@ -41,8 +41,12 @@ Common \code{effect_name} values:
 \item \code{"gen_add"} — additive genetic (co)variances (G matrix). Used by
 \code{\link[=define_additive_effects]{define_additive_effects()}} when rescaling to target variance and by
 \code{\link[=define_additive_effects]{define_additive_effects()}} as the sampling distribution for multi-trait draws.
-\item \code{"residual"} — residual (co)variances (R matrix). Used by \code{\link[=add_phenotype]{add_phenotype()}}
-when drawing residuals.
+\item \code{"residual"} — residual (co)variances (R matrix). \strong{Routed to
+\code{phenotype_residual_cov}} (not \code{trait_effect_cov}). Matrix row/column
+names are treated as \code{phenotype_name} values. Equivalent to calling
+\code{\link[=add_residual_cov]{add_residual_cov()}} with \code{condition_column = NULL}. Use this for a
+multi-phenotype correlated residual matrix; for a single scalar residual
+use \code{residual_var} in \code{\link[=define_phenotype]{define_phenotype()}} instead.
 \item Any named random effect (\code{"litter"}, \code{"herd"}, \code{"dam"}, …) — must match
 the \code{effect_name} used in \code{\link[=define_effect_random]{define_effect_random()}}.
 }

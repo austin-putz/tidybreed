@@ -2,7 +2,7 @@
 % Please edit documentation in R/phenotype_helpers.R
 \name{clip_count}
 \alias{clip_count}
-\title{Clip a count vector to \link{min_value, max_value} (NA = no bound)}
+\title{Clip a count vector to \link{min_value, max_value}}
 \usage{
 clip_count(x, min_value = NA_real_, max_value = NA_real_)
 }
@@ -12,9 +12,9 @@ clip_count(x, min_value = NA_real_, max_value = NA_real_)
 \item{min_value, max_value}{Numeric scalars or \code{NA}.}
 }
 \value{
-Integer vector (rounded from \code{x}) clipped to bounds.
+Integer vector (rounded) clipped to bounds.
 }
 \description{
-Clip a count vector to \link{min_value, max_value} (NA = no bound)
+Clip a count vector to \link{min_value, max_value}
 }
 \keyword{internal}

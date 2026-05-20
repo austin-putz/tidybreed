@@ -2,26 +2,27 @@
 % Please edit documentation in R/define_effect_int.R
 \name{define_effect_int}
 \alias{define_effect_int}
-\title{Define the intercept (overall mean) for a trait}
+\title{Set the intercept (population mean) for a phenotype}
 \usage{
-define_effect_int(pop, trait_name, mean)
+define_effect_int(pop, phenotype_name, mean)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{trait_name}{Character. Name of an existing trait.}
+\item{phenotype_name}{Character. Name of an existing phenotype in
+\code{phenotype_meta}.}
 
-\item{mean}{Numeric scalar. The new intercept value.}
+\item{mean}{Numeric scalar. The new population mean / intercept value.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Updates \code{target_add_mean} in \code{trait_meta} for the named trait. This value
-is the intercept added to every individual's liability before residuals and
-fixed/random shifts. It can also be set at trait-definition time via
-\code{\link[=define_trait]{define_trait()}}; \code{define_effect_int()} lets you update it without redefining
-the whole trait.
+Updates \code{mean} in \code{phenotype_meta} for the named phenotype. This value is
+the overall population mean added to every individual's liability before
+residuals and fixed/random shifts. It can also be set at definition time via
+the \code{mean} argument in \code{\link[=define_phenotype]{define_phenotype()}}; \code{define_effect_int()} lets you
+update it without redefining the whole phenotype.
 }
 \examples{
 \dontrun{
@@ -29,6 +30,6 @@ pop <- pop |> define_effect_int("ADG", mean = 850)
 }
 }
 \seealso{
-\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}},
+\code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}},
 \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}}, \code{\link[=define_effect_random]{define_effect_random()}}
 }

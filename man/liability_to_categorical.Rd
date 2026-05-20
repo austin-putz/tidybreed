@@ -7,14 +7,12 @@
 liability_to_categorical(liability, thresholds)
 }
 \arguments{
-\item{liability}{Numeric vector on the continuous scale.}
+\item{liability}{Numeric vector.}
 
-\item{thresholds}{Numeric vector of cutpoints (length = n_categories - 1),
-in ascending order.}
+\item{thresholds}{Numeric vector of cutpoints (ascending).}
 }
 \value{
-Integer vector: 1 for liability <= thresholds\link{1}, 2 for next,
-..., \code{length(thresholds) + 1} for above all.
+Integer vector of category indices (1-based).
 }
 \description{
 Convert a liability vector to ordered integer categories
