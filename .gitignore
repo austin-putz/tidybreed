@@ -7,13 +7,10 @@ inst/doc
 .claude/*
 memory/
 
+# plans
+plans/*
+
 # markdowns
-PACKAGE_OUTLINE.md
-IDEA_*.md
-#PLAN_*.md
-TODO.md
-PHENOTYPING_PLAN.md
-YAML_PLAN.md
 
 # and duckdb files
 *.duckdb
@@ -27,4 +24,7 @@ vignettes/qmd/*.duckdb
 vignettes/qmd/*.duckdb.wal
 vignettes/qmd/eval_blup_*/
 vignettes/R/*.png
+
+# lint
+.markdownlint*
 
