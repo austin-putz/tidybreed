@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Species Phenotype Simulation Capability
+Matrix — tidybreed</title>
+  <link rel="stylesheet" href="tidybreed.css">
+  <style>
+    /* Inline TOC overrides so anchor links work */
+    nav#toc > ul > li > a { font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <nav id="toc">
+    <div style="font-weight:800;font-size:.95rem;margin-bottom:1.25rem;color:var(--brand);">
+      tidybreed
+    </div>
+        <ul>
+        <li><a href="#species-phenotype-simulation-capability-matrix"
+        id="toc-species-phenotype-simulation-capability-matrix">Species
+        Phenotype Simulation Capability Matrix</a>
+        <ul>
+        <li><a href="#swine" id="toc-swine">Swine</a></li>
+        <li><a href="#layer-poultry-egg-producers"
+        id="toc-layer-poultry-egg-producers">Layer Poultry (Egg
+        Producers)</a></li>
+        <li><a href="#turkey-meat-breeder-egg-traits"
+        id="toc-turkey-meat-breeder-egg-traits">Turkey (Meat + Breeder
+        Egg Traits)</a></li>
+        <li><a href="#broiler-traditional-poultry-meat-birds"
+        id="toc-broiler-traditional-poultry-meat-birds">Broiler
+        (Traditional Poultry — Meat Birds)</a></li>
+        <li><a href="#trout-rainbow-trout"
+        id="toc-trout-rainbow-trout">Trout (Rainbow Trout)</a></li>
+        <li><a href="#salmon-atlantic-salmon"
+        id="toc-salmon-atlantic-salmon">Salmon (Atlantic
+        Salmon)</a></li>
+        <li><a href="#shrimp-pacific-white-shrimp-black-tiger-shrimp"
+        id="toc-shrimp-pacific-white-shrimp-black-tiger-shrimp">Shrimp
+        (Pacific White Shrimp / Black Tiger Shrimp)</a></li>
+        <li><a href="#black-soldier-fly-bsf-hermetia-illucens"
+        id="toc-black-soldier-fly-bsf-hermetia-illucens">Black Soldier
+        Fly (BSF — Hermetia illucens)</a></li>
+        <li><a href="#dairy-cattle" id="toc-dairy-cattle">Dairy
+        Cattle</a></li>
+        <li><a href="#beef-cattle" id="toc-beef-cattle">Beef
+        Cattle</a></li>
+        <li><a href="#summary-of-known-limitations"
+        id="toc-summary-of-known-limitations">Summary of Known
+        Limitations</a></li>
+        </ul></li>
+        </ul>
+      </nav>
+
+  <main>
+    <div class="doc-header">
+      <span class="badge">Design Document</span>
+      <h1>Species Phenotype Simulation Capability Matrix</h1>
+      <p class="subtitle">Trait coverage by species across Hendrix
+Genetics programmes</p>
+    </div>
+
+    <h1 id="species-phenotype-simulation-capability-matrix">Species
+    Phenotype Simulation Capability Matrix</h1>
+    <p><strong>Status codes</strong> -
+    <strong><span class="badge-Y">Y</span></strong> — Fully supported by
+    the planned system (PLAN_GENERAL_PHENOTYPE.md) -
+    <strong><span class="badge-M">M</span></strong> — Mostly supported;
+    caveat or workaround noted -
+    <strong><span class="badge-N">N</span></strong> — Not planned; would
+    require new design work</p>
+    <p><strong>Model type abbreviations used in tables</strong></p>
+    <div class="table-wrap">
+    <table>
+    <thead>
+    <tr>
+    <th>Code</th>
+    <th>Meaning</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Add</td>
+    <td>Simple additive + fixed effects + residual</td>
+    </tr>
+    <tr>
+    <td>Add+Rep</td>
+    <td>Repeatability (additive + PE + residual)</td>
+    </tr>
+    <tr>
+    <td>Comp</td>
+    <td>Composite phenotype via <code>phenotype_components</code></td>
+    </tr>
+    <tr>
+    <td>RR</td>
+    <td>Random regression / Legendre polynomial reaction norm</td>
+    </tr>
+    <tr>
+    <td>Bin</td>
+    <td>Binary threshold trait</td>
+    </tr>
+    <tr>
+    <td>Ord</td>
+    <td>Ordinal categorical threshold trait</td>
+    </tr>
+    <tr>
+    <td>Cnt</td>
+    <td>Count trait (rounded, clipped)</td>
+    </tr>
+    <tr>
+    <td>Group</td>
+    <td>Group/social genetic effect via
+    <code>contributor_type = "group"</code></td>
+    </tr>
+    <tr>
+    <td>Multi</td>
+    <td>Multi-trait joint model</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h2 id="swine">Swine</h2>
+    <p>Swine programmes typically select on growth, feed efficiency,
+    carcass, reproductive, and maternal traits simultaneously. Key
+    modelling notes: litter size requires a repeatability model (PE per
+    sow); piglet birth weight has a maternal component (dam uterine
+    capacity / milk); pen growth and competition benefit from SGE
+    models.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Average Daily Gain (ADG)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Standard; <code>define_trait</code> +
+    <code>define_phenotype</code></td>
+    </tr>
+    <tr>
+    <td>Feed Conversion Ratio (FCR)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Derived ratio or pre-computed column</td>
+    </tr>
+    <tr>
+    <td>Residual Feed Intake (RFI)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Regress DMI on ADG + metabolic BW via
+    <code>define_effect_fixed_cov</code></td>
+    </tr>
+    <tr>
+    <td>Backfat thickness (BF)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Typically at 100 kg, age as fixed covariate</td>
+    </tr>
+    <tr>
+    <td>Loin Eye Area (LEA)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with BF</td>
+    </tr>
+    <tr>
+    <td>Lean meat percentage</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Can be composite of BF + LEA + BW if needed</td>
+    </tr>
+    <tr>
+    <td>NBA (litter size born alive)</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="count"</code>, <code>repeatable=TRUE</code>,
+    PE via <code>source_column="id_ind"</code></td>
+    </tr>
+    <tr>
+    <td>Total born (TB)</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Same as NBA</td>
+    </tr>
+    <tr>
+    <td>Litter size at weaning</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Same pattern</td>
+    </tr>
+    <tr>
+    <td>Piglet birth weight (individual)</td>
+    <td>Comp</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Direct (self) + maternal dam component via
+    <code>contributor_type="dam"</code></td>
+    </tr>
+    <tr>
+    <td>Litter birth weight (total)</td>
+    <td>Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Sow-level; PE model</td>
+    </tr>
+    <tr>
+    <td>Age at first farrowing</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Sex-limited (<code>expressed_sex="F"</code>)</td>
+    </tr>
+    <tr>
+    <td>Wean-to-estrus interval</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Sex-limited, repeatable</td>
+    </tr>
+    <tr>
+    <td>Inter-farrowing interval</td>
+    <td>Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Repeatability; PE per sow</td>
+    </tr>
+    <tr>
+    <td>Sow longevity / survival</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code>, <code>prevalence=</code> based
+    on culling rate</td>
+    </tr>
+    <tr>
+    <td>Meat pH (pH1, pHu)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Fixed effect for time-post-slaughter via
+    <code>define_effect_fixed_cov</code></td>
+    </tr>
+    <tr>
+    <td>Drip loss</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Intramuscular fat (IMF)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with BF</td>
+    </tr>
+    <tr>
+    <td>Meat colour (L<em>, a</em>, b*)</td>
+    <td>Multi</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Three-trait joint model</td>
+    </tr>
+    <tr>
+    <td>Leg score / locomotion</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code> with ordered levels</td>
+    </tr>
+    <tr>
+    <td>Social genetic effect (pen ADG)</td>
+    <td>Group</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="group"</code>,
+    <code>group_column="pen_id"</code>,
+    <code>aggregation="sum"</code></td>
+    </tr>
+    <tr>
+    <td>Tail biting susceptibility</td>
+    <td>Bin/Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Threshold model</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Litter size — repeatability model</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;NBA&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">define_additive_effects</span>(<span class="st">&quot;NBA&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;NBA&quot;</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;count&quot;</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">12</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">min_value    =</span> <span class="dv">0</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">max_value    =</span> <span class="dv">22</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="fl">0.6</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">repeatable   =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_random</span>(<span class="st">&quot;NBA&quot;</span>, <span class="st">&quot;pe&quot;</span>, <span class="at">source_column =</span> <span class="st">&quot;id_ind&quot;</span>, <span class="at">variance =</span> <span class="fl">0.25</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Piglet birth weight — direct + maternal composite</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;BW_direct&quot;</span>,   <span class="at">target_add_var =</span> <span class="fl">0.08</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;BW_maternal&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.04</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;BW_piglet&quot;</span>,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="fl">1.4</span>,</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="fl">0.05</span>,</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type,</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;BW_direct&quot;</span>,        <span class="st">&quot;self&quot;</span>,</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;BW_maternal&quot;</span>,      <span class="st">&quot;dam&quot;</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+    <hr />
+    <h2 id="layer-poultry-egg-producers">Layer Poultry (Egg
+    Producers)</h2>
+    <p>Layers are among the most complex species to simulate because (1)
+    the laying curve is naturally modelled as a reaction norm over weeks
+    of production, (2) many egg quality traits are correlated, (3)
+    sex-limited production traits require careful handling, and (4)
+    broodiness and persistency are key selection targets. This is one of
+    the two most profitable Hendrix BUs — complete coverage is
+    critical.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Hen-housed egg number (total period)</td>
+    <td>Cnt + Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="count"</code>, total eggs per laying
+    period</td>
+    </tr>
+    <tr>
+    <td>Laying rate / hen-day production</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion; continuous or as count per week</td>
+    </tr>
+    <tr>
+    <td>Laying persistency curve</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Legendre RR; covariate = production week;
+    <code>weight_type="legendre"</code></td>
+    </tr>
+    <tr>
+    <td>Age at first egg (AFE)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Egg weight (EW)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with shell, albumen traits</td>
+    </tr>
+    <tr>
+    <td>Shell breaking strength</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with EW and shell thickness</td>
+    </tr>
+    <tr>
+    <td>Shell thickness</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Shell colour</td>
+    <td>Ord / Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Continuous deposition score or ordinal</td>
+    </tr>
+    <tr>
+    <td>Haugh units (albumen height)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Yolk weight / yolk ratio</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Yolk colour score</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>Blood spot incidence</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code>, <code>prevalence=</code></td>
+    </tr>
+    <tr>
+    <td>Meat spot incidence</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Same</td>
+    </tr>
+    <tr>
+    <td>Body weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Correlated with egg production traits</td>
+    </tr>
+    <tr>
+    <td>Feed intake</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>FCR (eggs/feed)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Pre-computed or ratio</td>
+    </tr>
+    <tr>
+    <td>Livability / survival</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Keel bone damage</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code>; important welfare
+    trait</td>
+    </tr>
+    <tr>
+    <td>Broodiness</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code>,
+    <code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Fertility</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Hatchability</td>
+    <td>Cnt / Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion or count per clutch</td>
+    </tr>
+    <tr>
+    <td>Feather pecking susceptibility</td>
+    <td>Bin/Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Threshold model; can add fixed class for light colour</td>
+    </tr>
+    <tr>
+    <td>Feather coverage score</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ordinal categories</td>
+    </tr>
+    <tr>
+    <td>Fearfulness / docility</td>
+    <td>Ord</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Ordinal threshold; environmental effects complex</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Laying persistency — Legendre RR over 40 production weeks</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L0_eggs&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.15</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L1_eggs&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.05</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L2_eggs&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.02</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;L0_eggs&quot;</span>, <span class="st">&quot;L1_eggs&quot;</span>, <span class="st">&quot;L2_eggs&quot;</span>), <span class="at">G =</span> G_rr_eggs) <span class="sc">|&gt;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;egg_production&quot;</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type    =</span> <span class="st">&quot;count&quot;</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean          =</span> <span class="dv">0</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var  =</span> <span class="fl">0.8</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">expressed_sex =</span> <span class="st">&quot;F&quot;</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">repeatable    =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">components    =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type, <span class="sc">~</span>weight_type, <span class="sc">~</span>covariate_name, <span class="sc">~</span>poly_order, <span class="sc">~</span>poly_scale_min, <span class="sc">~</span>poly_scale_max,</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L0_eggs&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;week&quot;</span>, <span class="dv">0</span><span class="dt">L</span>, <span class="dv">1</span>, <span class="dv">40</span>,</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L1_eggs&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;week&quot;</span>, <span class="dv">1</span><span class="dt">L</span>, <span class="dv">1</span>, <span class="dv">40</span>,</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L2_eggs&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;week&quot;</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">1</span>, <span class="dv">40</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Sample one record per hen per week</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (wk <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">40</span>) {</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">get_table</span>(<span class="st">&quot;ind_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(sex <span class="sc">==</span> <span class="st">&quot;F&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_phenotype</span>(<span class="st">&quot;egg_production&quot;</span>, <span class="at">covariate_values =</span> <span class="fu">list</span>(<span class="at">week =</span> wk))</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Correlated egg quality traits (EW, HU, SS) — multi-trait joint model</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>R_quality <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">c</span>(<span class="fl">4.0</span>, <span class="fl">1.2</span>, <span class="fl">0.8</span>,</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>                      <span class="fl">1.2</span>, <span class="fl">2.5</span>, <span class="fl">0.6</span>,</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>                      <span class="fl">0.8</span>, <span class="fl">0.6</span>, <span class="fl">1.0</span>), <span class="dv">3</span>, <span class="dv">3</span>,</span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>                    <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">&quot;EW&quot;</span>,<span class="st">&quot;HU&quot;</span>,<span class="st">&quot;SS&quot;</span>), <span class="fu">c</span>(<span class="st">&quot;EW&quot;</span>,<span class="st">&quot;HU&quot;</span>,<span class="st">&quot;SS&quot;</span>)))</span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span> <span class="fu">define_effect_cov_matrix</span>(<span class="st">&quot;residual&quot;</span>, R_quality)</span></code></pre></div>
+    <hr />
+    <h2 id="turkey-meat-breeder-egg-traits">Turkey (Meat + Breeder Egg
+    Traits)</h2>
+    <p>Turkey is unique in combining heavy selection for breast meat
+    yield (meat division) with laying performance and egg quality in the
+    breeder/multiplier tier. Female fertility through AI is standard.
+    This is the second most profitable Hendrix BU.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Body weight (BW at 8, 12, 16 wk)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait; age as fixed covariate or separate traits</td>
+    </tr>
+    <tr>
+    <td>Average Daily Gain (ADG)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>FCR</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Feed intake (DMI)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Breast meat yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Most economically important carcass trait</td>
+    </tr>
+    <tr>
+    <td>Breast meat weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Composite of BW × yield % or direct measurement</td>
+    </tr>
+    <tr>
+    <td>Total carcass yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Leg quarter yield</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Hen-housed egg production</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code>,
+    <code>repeatable=TRUE</code></td>
+    </tr>
+    <tr>
+    <td>Age at first egg</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Egg weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Correlated with breeder BW</td>
+    </tr>
+    <tr>
+    <td>Shell breaking strength</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Shell thickness</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Haugh units</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Hatchability</td>
+    <td>Cnt / Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Embryo mortality (early/late)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Fertility (AI)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code> (AI success rate)</td>
+    </tr>
+    <tr>
+    <td>Sperm motility / concentration (males)</td>
+    <td>Multi + Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="M"</code></td>
+    </tr>
+    <tr>
+    <td>Footpad dermatitis (FPD)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ordinal 0-4 scale</td>
+    </tr>
+    <tr>
+    <td>Hock burn</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Locomotion / gait score</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Livability / survival</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Separate for male/female lines</td>
+    </tr>
+    <tr>
+    <td>Cardiovascular health (ascites)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Sex-specific body weight (very dimorphic)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Separate <code>expressed_sex</code> or sex as fixed class effect
+    with large coefficient</td>
+    </tr>
+    <tr>
+    <td>Heterogeneous residual by sex</td>
+    <td>Add + Het resid</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>add_residual_cov("BW", ..., condition_column="sex", condition_level="M/F")</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb3"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Turkey BW — very large sex effect + heterogeneous residual variance</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;BW_turkey&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">400</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">define_additive_effects</span>(<span class="st">&quot;BW_turkey&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;BW_turkey&quot;</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">8000</span>,           <span class="co"># overall mean (g) — males ~12 kg, females ~7 kg</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">600</span>) <span class="sc">|&gt;</span>         <span class="co"># unconditional default</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_fixed_class</span>(<span class="st">&quot;BW_turkey&quot;</span>, <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">levels        =</span> <span class="fu">c</span>(<span class="at">M =</span> <span class="dv">2500</span>, <span class="at">F =</span> <span class="dv">0</span>)) <span class="sc">|&gt;</span>   <span class="co"># large sex shift</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;BW_turkey&quot;</span>,              <span class="co"># males have larger residual</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">900</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;BW_turkey&quot;</span>,<span class="st">&quot;BW_turkey&quot;</span>)),</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;sex&quot;</span>, <span class="at">condition_level =</span> <span class="st">&quot;M&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;BW_turkey&quot;</span>,</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">400</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;BW_turkey&quot;</span>,<span class="st">&quot;BW_turkey&quot;</span>)),</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;sex&quot;</span>, <span class="at">condition_level =</span> <span class="st">&quot;F&quot;</span>)</span></code></pre></div>
+    <hr />
+    <h2 id="broiler-traditional-poultry-meat-birds">Broiler (Traditional
+    Poultry — Meat Birds)</h2>
+    <p>Broilers are selected heavily on growth, efficiency, and breast
+    meat yield. Welfare traits (footpad, gait, ascites) are increasingly
+    selected. Breeder-tier egg production and fertility are also
+    important.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Body weight (BW21, BW35, BW42)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait or separate; age as covariate</td>
+    </tr>
+    <tr>
+    <td>Average Daily Gain</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>FCR</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Breast meat yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Primary economic trait</td>
+    </tr>
+    <tr>
+    <td>Breast meat weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Leg quarter yield</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Carcass yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Footpad dermatitis (FPD)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ordinal 0-4; <code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>Hock burn</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Gait score (walking ability)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Ascites incidence</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Sudden death syndrome</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>White striping</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Myopathy; ordinal scoring</td>
+    </tr>
+    <tr>
+    <td>Wooden breast</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Myopathy</td>
+    </tr>
+    <tr>
+    <td>Meat colour (L<em>, a</em>, b*)</td>
+    <td>Multi</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Three-trait joint residual</td>
+    </tr>
+    <tr>
+    <td>pH ultimate</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Water holding capacity</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Breeder egg production</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code>,
+    <code>repeatable=TRUE</code></td>
+    </tr>
+    <tr>
+    <td>Breeder hatchability</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Breeder fertility</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Livability</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Sex-specific BW (dimorphic)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Fixed sex effect + heterogeneous residual</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h2 id="trout-rainbow-trout">Trout (Rainbow Trout)</h2>
+    <p>Growth, feed efficiency, disease resistance, and fillet quality
+    are primary targets. Maturation timing (precocious males) is a key
+    management issue. Group tank effects matter since fish share water
+    and compete for feed.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Body weight at various ages</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait or RR for growth curve</td>
+    </tr>
+    <tr>
+    <td>Growth curve (SGR, TGC)</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Covariate = degree-days or age</td>
+    </tr>
+    <tr>
+    <td>Fillet weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Fillet yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Correlated with BW and fat</td>
+    </tr>
+    <tr>
+    <td>Flesh fat content</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Flesh colour (SalmoFan)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>Flesh firmness</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>IHN virus resistance (survival)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code>,
+    <code>prevalence=0.4</code></td>
+    </tr>
+    <tr>
+    <td>VHS virus resistance</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>PKD resistance</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Precocious maturation (males)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="M"</code></td>
+    </tr>
+    <tr>
+    <td>Age at maturity</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Fecundity (egg number)</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Egg size</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Egg survival rate</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion; continuous</td>
+    </tr>
+    <tr>
+    <td>Skin colour / pattern</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ordinal scoring</td>
+    </tr>
+    <tr>
+    <td>Tank competition (SGE)</td>
+    <td>Group</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="group"</code>,
+    <code>group_column="tank_id"</code></td>
+    </tr>
+    <tr>
+    <td>Heterogeneous residual by temperature</td>
+    <td>Add + Het resid</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>condition_column</code> on water temperature group</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h2 id="salmon-atlantic-salmon">Salmon (Atlantic Salmon)</h2>
+    <p>Salmon has some unique features: a known major QTL for IPN
+    resistance (very large additive effect at the INHA locus), grilsing
+    is a binary early-maturation trait under strong selection, and sea
+    lice resistance is increasingly important. Multi-environment
+    (freshwater vs. sea) reaction norms are used.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Body weight at various ages</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait at smolt, harvest</td>
+    </tr>
+    <tr>
+    <td>Growth curve (TGC)</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Covariate = degree-days</td>
+    </tr>
+    <tr>
+    <td>Fillet yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Fillet fat content</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Flesh colour (SalmoFan)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Flesh firmness</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Omega-3 content</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Correlated with fat</td>
+    </tr>
+    <tr>
+    <td>IPN resistance (binary + major QTL)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Large-effect QTL via <code>define_additive_effects</code>;
+    <code>effects = c(very_large_val, ...)</code> at INHA locus</td>
+    </tr>
+    <tr>
+    <td>Sea lice resistance (score)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>AGD (amoebic gill disease) resistance</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Bacterial resistance (furunculosis)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Grilsing (early maturation)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code>, <code>expressed_sex="M"</code>
+    typically</td>
+    </tr>
+    <tr>
+    <td>Smolt quality / smoltification</td>
+    <td>Bin/Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Cataract score</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Survival (grow-out)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Deformity incidence</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Fecundity</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Sperm quality (motility, volume)</td>
+    <td>Multi</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="M"</code></td>
+    </tr>
+    <tr>
+    <td>Freshwater vs. sea G×E reaction norm</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Covariate = environment index;
+    <code>covariate_table="ind_meta"</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb4"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># IPN resistance — large single-locus QTL (INHA region)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Assign near-Mendelian effect to one locus, polygenic background to rest</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>inha_locus <span class="ot">&lt;-</span> <span class="st">&quot;Locus_5423&quot;</span>   <span class="co"># the known QTL locus</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(locus_name <span class="sc">==</span> inha_locus) <span class="sc">|&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="st">&quot;IPN_resist&quot;</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">effects =</span> <span class="fl">2.5</span>) <span class="sc">|&gt;</span>     <span class="co"># very large effect allele substitution</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(locus_name <span class="sc">!=</span> inha_locus, chr <span class="sc">%in%</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">29</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="st">&quot;IPN_resist&quot;</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">distribution =</span> <span class="st">&quot;normal&quot;</span>) <span class="sc">|&gt;</span>   <span class="co"># polygenic background</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;IPN_resist&quot;</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;binary&quot;</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">prevalence   =</span> <span class="fl">0.40</span>)          <span class="co"># ~40% mortality in challenge test</span></span></code></pre></div>
+    <hr />
+    <h2 id="shrimp-pacific-white-shrimp-black-tiger-shrimp">Shrimp
+    (Pacific White Shrimp / Black Tiger Shrimp)</h2>
+    <p>Shrimp presents the most significant simulation challenge:
+    individual tagging is difficult (PIT tags cause mortality, fin clips
+    require killing), so most commercial programmes rely on family
+    selection with tank-level phenotypes. The framework handles the
+    genetics correctly; the phenotype side requires workarounds for
+    truly anonymous individuals.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Body weight (individually tagged)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Full support if PIT-tagged</td>
+    </tr>
+    <tr>
+    <td>Body weight (family/tank mean)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Use <code>contributor_type="group"</code>,
+    <code>group_column="tank_id"</code> for family mean; individual IDs
+    still needed for TBV computation</td>
+    </tr>
+    <tr>
+    <td>Specific growth rate</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Pre-computed from two weight observations</td>
+    </tr>
+    <tr>
+    <td>Survival — WSSV (binary per individual)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Survival — tank level (% survival)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Can model as group phenotype; all-dead-all-alive scenarios
+    harder</td>
+    </tr>
+    <tr>
+    <td>EMS/AHPND resistance</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Challenge test binary</td>
+    </tr>
+    <tr>
+    <td>NHP-B resistance</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Female fecundity (nauplii count)</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Spawning frequency</td>
+    <td>Cnt + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>repeatable=TRUE</code></td>
+    </tr>
+    <tr>
+    <td>Egg hatching rate</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion</td>
+    </tr>
+    <tr>
+    <td>Larval survival</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion</td>
+    </tr>
+    <tr>
+    <td>Head-off yield (%)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>FCR (tank level)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Requires tank-level phenotype workaround</td>
+    </tr>
+    <tr>
+    <td>Coloration / quality</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Anonymised batch growth (no individual ID)</td>
+    <td><span class="badge-N">N</span></td>
+    <td><span class="badge-N">N</span></td>
+    <td>Requires a new “family phenotype” model not yet designed</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h2 id="black-soldier-fly-bsf-hermetia-illucens">Black Soldier Fly
+    (BSF — Hermetia illucens)</h2>
+    <p>BSF is the most challenging species from a simulation standpoint.
+    Larvae in a production batch cannot be individually identified, so
+    nearly all economically important traits are batch-level
+    measurements. The framework can simulate the genetics if individuals
+    are tracked (e.g. in a nucleus with individual larval tracking), but
+    true commercial batch phenotypes without individual IDs require
+    additional design work.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Individual larva weight (nucleus, if tracked)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Full support; requires individual ID</td>
+    </tr>
+    <tr>
+    <td>Prepupae weight (individually tracked)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Batch yield (total weight of larvae)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Sum of all individual TBVs in batch via
+    <code>contributor_type="group"</code>; individual IDs must
+    exist</td>
+    </tr>
+    <tr>
+    <td>Bioconversion rate (waste reduction %)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Same limitation; can model as group mean</td>
+    </tr>
+    <tr>
+    <td>Development time (egg → prepupae)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>If individually tracked at nucleus level</td>
+    </tr>
+    <tr>
+    <td>Larval period length</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>If tracked</td>
+    </tr>
+    <tr>
+    <td>Fat content of larvae (batch)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td>Batch measurement; group phenotype workaround</td>
+    </tr>
+    <tr>
+    <td>Protein content (batch)</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Dry matter content</td>
+    <td>Group</td>
+    <td><span class="badge-M">M</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Female fecundity (egg clutch size)</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code>,
+    <code>trait_type="count"</code></td>
+    </tr>
+    <tr>
+    <td>Egg number per female</td>
+    <td>Cnt</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Hatching rate</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Proportion</td>
+    </tr>
+    <tr>
+    <td>Larval survival</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Adult longevity</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Mating success</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>True anonymous batch phenotype (no ind. ID)</td>
+    <td><span class="badge-N">N</span></td>
+    <td><span class="badge-N">N</span></td>
+    <td>Not yet designed; needs family-phenotype model</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb5"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># BSF batch yield — modelled as sum of individual TBVs in a rearing bin</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Requires individuals to have IDs and be assigned to bins (group_column = &quot;bin_id&quot;)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;larva_weight&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.05</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">define_additive_effects</span>(<span class="st">&quot;larva_weight&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;batch_yield&quot;</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">500</span>,            <span class="co"># grams per bin</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">20</span>,</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type, <span class="sc">~</span>group_column, <span class="sc">~</span>aggregation,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;larva_weight&quot;</span>,     <span class="st">&quot;group&quot;</span>,           <span class="st">&quot;bin_id&quot;</span>,      <span class="st">&quot;sum&quot;</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="co"># </span><span class="al">NOTE</span><span class="co">: This requires each larva to have an id_ind and a bin_id in ind_meta.</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="co"># True anonymous batch production (no individual IDs) is not yet supported.</span></span></code></pre></div>
+    <hr />
+    <h2 id="dairy-cattle">Dairy Cattle</h2>
+    <p>Dairy is the archetype for random regression models (test-day
+    milk yield). Multiple lactations, repeated measures, and large
+    contemporary group (herd×year×season) effects are standard. Calving
+    ease and stillbirth have direct and maternal genetic components.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>305-day milk yield</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Aggregate; or derive from RR</td>
+    </tr>
+    <tr>
+    <td>Test-day milk yield (lactation curve)</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Legendre over DIM; <code>covariate_name="dim"</code>,
+    <code>poly_order=0,1,2</code></td>
+    </tr>
+    <tr>
+    <td>Fat yield / fat %</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with milk yield</td>
+    </tr>
+    <tr>
+    <td>Protein yield / protein %</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>SCC (log somatic cell count)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Log-transform pre-analysis; continuous</td>
+    </tr>
+    <tr>
+    <td>Energy-corrected milk (ECM)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Pre-computed composite</td>
+    </tr>
+    <tr>
+    <td>Non-return rate (NRR)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Conception rate</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Days open</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Calving interval</td>
+    <td>Add + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Repeatability across parities</td>
+    </tr>
+    <tr>
+    <td>Age at first calving</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Calving ease — direct</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code> with ordered levels
+    1-5</td>
+    </tr>
+    <tr>
+    <td>Calving ease — maternal</td>
+    <td>Comp + Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code> with ordinal threshold;
+    joint model</td>
+    </tr>
+    <tr>
+    <td>Stillbirth (direct)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Stillbirth (maternal)</td>
+    <td>Comp + Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code></td>
+    </tr>
+    <tr>
+    <td>Body condition score (BCS)</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ordinal; repeatability across lactation</td>
+    </tr>
+    <tr>
+    <td>Lameness</td>
+    <td>Bin/Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Mastitis (clinical)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Ketosis</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Productive life / longevity</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Survival model approximated as binary per parity</td>
+    </tr>
+    <tr>
+    <td>Milkability (flow rate)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Gestation length</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Teat length / conformation</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Multi-parity lactation curve</td>
+    <td>RR + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Repeat
+    <code>add_phenotype("milk", covariate_values=list(dim=d))</code>
+    each parity</td>
+    </tr>
+    <tr>
+    <td>G×E across herds (reaction norm)</td>
+    <td>RR</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Covariate = herd production level from
+    <code>ind_meta</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Multi-lactation test-day model (305-day, 3 lactations, recorded on 10 test days)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Legendre RR with covariate = DIM, separate component traits per lactation possible</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co"># or shared random regression coefficients across lactations</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L0_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">350</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L1_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">80</span>)  <span class="sc">|&gt;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L2_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">20</span>)  <span class="sc">|&gt;</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;L0_milk&quot;</span>,<span class="st">&quot;L1_milk&quot;</span>,<span class="st">&quot;L2_milk&quot;</span>), <span class="at">G =</span> G_rr) <span class="sc">|&gt;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;milk_td&quot;</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type    =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean          =</span> <span class="dv">0</span>,</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var  =</span> <span class="dv">25</span>,</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">expressed_sex =</span> <span class="st">&quot;F&quot;</span>,</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">repeatable    =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">components    =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type, <span class="sc">~</span>weight_type, <span class="sc">~</span>covariate_name, <span class="sc">~</span>poly_order, <span class="sc">~</span>poly_scale_min, <span class="sc">~</span>poly_scale_max,</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L0_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">0</span><span class="dt">L</span>,  <span class="dv">5</span>, <span class="dv">305</span>,</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L1_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">1</span><span class="dt">L</span>,  <span class="dv">5</span>, <span class="dv">305</span>,</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L2_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">2</span><span class="dt">L</span>,  <span class="dv">5</span>, <span class="dv">305</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_random</span>(<span class="st">&quot;milk_td&quot;</span>, <span class="st">&quot;herd_year&quot;</span>,</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;herd_year_id&quot;</span>,</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">variance      =</span> <span class="dv">40</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_fixed_class</span>(<span class="st">&quot;milk_td&quot;</span>, <span class="st">&quot;parity&quot;</span>,</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;parity&quot;</span>,</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">levels        =</span> <span class="fu">c</span>(<span class="st">&quot;1&quot;</span> <span class="ot">=</span> <span class="dv">0</span>, <span class="st">&quot;2&quot;</span> <span class="ot">=</span> <span class="dv">300</span>, <span class="st">&quot;3&quot;</span> <span class="ot">=</span> <span class="dv">500</span>))</span></code></pre></div>
+    <hr />
+    <h2 id="beef-cattle">Beef Cattle</h2>
+    <p>Beef is the canonical example for maternal traits — weaning
+    weight (WW) is the flagship composite in the plan. Multiple growth
+    stages, carcass merit, fertility, and calving ease (direct +
+    maternal) are all important selection criteria.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 16%" />
+    <col style="width: 26%" />
+    <col style="width: 40%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Trait</th>
+    <th>Model</th>
+    <th>Supported</th>
+    <th>Notes / Key API</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Birth weight — direct</td>
+    <td>Comp</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="self"</code> for direct component</td>
+    </tr>
+    <tr>
+    <td>Birth weight — maternal</td>
+    <td>Comp</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code> for maternal uterine
+    effect</td>
+    </tr>
+    <tr>
+    <td>Weaning weight (WW = WWD + WWM)</td>
+    <td>Comp</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>The flagship plan example; direct + maternal dam</td>
+    </tr>
+    <tr>
+    <td>Post-weaning gain (PWG)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Yearling weight (YW)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Multi-trait with WW</td>
+    </tr>
+    <tr>
+    <td>Average Daily Gain</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Dry matter intake (DMI)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Residual Feed Intake (RFI)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Regress DMI on ADG + metabolic BW via
+    <code>define_effect_fixed_cov</code></td>
+    </tr>
+    <tr>
+    <td>Ribeye area (REA)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Ultrasound at yearling; multi-trait</td>
+    </tr>
+    <tr>
+    <td>Backfat (BF)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Marbling (IMF)</td>
+    <td>Ord / Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>USDA marbling score ordinal or continuous</td>
+    </tr>
+    <tr>
+    <td>Yield grade</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>Quality grade</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Hot carcass weight</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Heifer pregnancy rate</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Age at puberty (heifers)</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code></td>
+    </tr>
+    <tr>
+    <td>Calving ease — direct</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code> 1-5</td>
+    </tr>
+    <tr>
+    <td>Calving ease — maternal</td>
+    <td>Comp + Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code> in components</td>
+    </tr>
+    <tr>
+    <td>Stillbirth — direct</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Stillbirth — maternal</td>
+    <td>Comp + Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code></td>
+    </tr>
+    <tr>
+    <td>Scrotal circumference</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="M"</code></td>
+    </tr>
+    <tr>
+    <td>Docility score</td>
+    <td>Ord</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>trait_type="categorical"</code></td>
+    </tr>
+    <tr>
+    <td>Body condition score</td>
+    <td>Ord + Add+Rep</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td>Repeat measurements</td>
+    </tr>
+    <tr>
+    <td>Stayability (6-yr survival)</td>
+    <td>Bin</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>expressed_sex="F"</code>,
+    <code>trait_type="binary"</code></td>
+    </tr>
+    <tr>
+    <td>Hip height</td>
+    <td>Add</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>Cow milk EPD (indirect maternal)</td>
+    <td>Comp</td>
+    <td><span class="badge-Y">Y</span></td>
+    <td><code>contributor_type="dam"</code> weight on calf weaning
+    gain</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <div class="sourceCode" id="cb7"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Weaning weight — direct + maternal (the plan&#39;s flagship example)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>G_ww <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">40</span>, <span class="dv">40</span>, <span class="dv">80</span>), <span class="dv">2</span>, <span class="dv">2</span>,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>               <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">&quot;WWD&quot;</span>,<span class="st">&quot;WWM&quot;</span>), <span class="fu">c</span>(<span class="st">&quot;WWD&quot;</span>,<span class="st">&quot;WWM&quot;</span>)))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;WWD&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">200</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;WWM&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">80</span>)  <span class="sc">|&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;WWD&quot;</span>,<span class="st">&quot;WWM&quot;</span>), <span class="at">G =</span> G_ww) <span class="sc">|&gt;</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;WW&quot;</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">230</span>,         <span class="co"># kg</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">180</span>,</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type,</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;WWD&quot;</span>,              <span class="st">&quot;self&quot;</span>,</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;WWM&quot;</span>,              <span class="st">&quot;dam&quot;</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Calving ease — ordinal threshold + maternal composite</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>pop <span class="sc">|&gt;</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;CE_direct&quot;</span>,   <span class="at">target_add_var =</span> <span class="fl">0.05</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;CE_maternal&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.03</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;CE&quot;</span>,</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;categorical&quot;</span>,</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">thresholds   =</span> <span class="st">&quot;-1.5,-0.5,0.5,1.5&quot;</span>,   <span class="co"># 5 ordered categories</span></span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">0</span>,</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type,</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;CE_direct&quot;</span>,        <span class="st">&quot;self&quot;</span>,</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;CE_maternal&quot;</span>,      <span class="st">&quot;dam&quot;</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+    <hr />
+    <h2 id="summary-of-known-limitations">Summary of Known
+    Limitations</h2>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 35%" />
+    <col style="width: 26%" />
+    <col style="width: 38%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Limitation</th>
+    <th>Affects</th>
+    <th>Planned Fix</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Anonymous batch phenotypes (no individual ID)</td>
+    <td>Shrimp (tank survival), BSF (batch yield)</td>
+    <td>Not yet designed; needs family-phenotype model</td>
+    </tr>
+    <tr>
+    <td>Covariate-continuous heterogeneous residuals</td>
+    <td>RR traits (Var(e) varying with DIM)</td>
+    <td>Noted in Q5; requires extending
+    <code>phenotype_residual_cov</code> with poly columns</td>
+    </tr>
+    <tr>
+    <td>Dominance effects</td>
+    <td>All species with inbreeding or crossbreeding</td>
+    <td>Planned; depends on <code>genome_effects</code> extension</td>
+    </tr>
+    <tr>
+    <td>Epistasis effects</td>
+    <td>All</td>
+    <td>Planned; further out</td>
+    </tr>
+    <tr>
+    <td>Higher-order polynomial fixed covariates</td>
+    <td>Growth curves, dose-response</td>
+    <td>Q10: add <code>poly_order</code> to
+    <code>trait_effects</code></td>
+    </tr>
+    <tr>
+    <td>Spline basis functions</td>
+    <td>Complex reaction norms</td>
+    <td>Not planned</td>
+    </tr>
+    <tr>
+    <td>Time-to-event / survival analysis</td>
+    <td>Disease challenge survival time</td>
+    <td>Not planned; binary threshold approximation available</td>
+    </tr>
+    <tr>
+    <td>Social dominance rank (competitive hierarchy)</td>
+    <td>Poultry pen, fish rank</td>
+    <td>Not planned; complex ordering phenotype</td>
+    </tr>
+    <tr>
+    <td>Multi-environment GxE (formal reaction norm index)</td>
+    <td>Salmon sea vs. freshwater</td>
+    <td>M: can use covariate-based RR as approximation</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+  </main>
+
+</div>
+
+<script>
+/* Highlight active TOC link on scroll */
+(function () {
+  var headings = document.querySelectorAll('main h1,main h2,main h3');
+  var links    = document.querySelectorAll('nav#toc a');
+  if (!links.length) return;
+
+  function onScroll() {
+    var scrollY = window.scrollY + 90;
+    var active  = links[0];
+    headings.forEach(function (h) {
+      if (h.getBoundingClientRect().top + window.scrollY <= scrollY) {
+        var id   = h.id;
+        var link = document.querySelector('nav#toc a[href="#' + id + '"]');
+        if (link) active = link;
+      }
+    });
+    links.forEach(function (l) { l.classList.remove('active'); });
+    if (active) active.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

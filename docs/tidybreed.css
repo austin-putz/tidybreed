@@ -1,0 +1,283 @@
+/* tidybreed documentation stylesheet */
+
+:root {
+  --brand:       #2563eb;
+  --brand-dark:  #1d4ed8;
+  --brand-light: #dbeafe;
+  --accent:      #0ea5e9;
+  --success:     #16a34a;
+  --warn:        #ca8a04;
+  --danger:      #dc2626;
+  --neutral:     #f8fafc;
+  --border:      #e2e8f0;
+  --text:        #1e293b;
+  --text-muted:  #64748b;
+  --code-bg:     #f1f5f9;
+  --code-border: #cbd5e1;
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow:      0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --radius:      6px;
+  --font-sans:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:   "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", "Consolas", "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  line-height: 1.7;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+
+.page-wrapper {
+  display: flex;
+  min-height: 100vh;
+}
+
+nav#toc {
+  width: 260px;
+  min-width: 260px;
+  background: var(--neutral);
+  border-right: 1px solid var(--border);
+  padding: 2rem 1.25rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  font-size: .875rem;
+}
+
+nav#toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+nav#toc li { margin: .15rem 0; }
+
+nav#toc a {
+  display: block;
+  padding: .25rem .5rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: background .15s, color .15s;
+}
+
+nav#toc a:hover,
+nav#toc a.active {
+  background: var(--brand-light);
+  color: var(--brand-dark);
+}
+
+nav#toc .toc-h1 { font-weight: 700; color: var(--text); margin-top: .75rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+nav#toc .toc-h2 { padding-left: .75rem; }
+nav#toc .toc-h3 { padding-left: 1.5rem; font-size: .8rem; }
+
+main {
+  flex: 1;
+  max-width: 900px;
+  padding: 3rem 3.5rem;
+}
+
+/* ── Header bar ─────────────────────────────────────────────────────── */
+
+.doc-header {
+  border-bottom: 3px solid var(--brand);
+  padding-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.doc-header .badge {
+  display: inline-block;
+  background: var(--brand);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  margin-bottom: .75rem;
+}
+
+.doc-header h1 {
+  margin: 0 0 .5rem;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.doc-header .subtitle {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ── Headings ───────────────────────────────────────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2rem;
+  margin-bottom: .6rem;
+  color: var(--text);
+}
+
+h1 { font-size: 1.75rem; border-bottom: 2px solid var(--border); padding-bottom: .4rem; }
+h2 { font-size: 1.35rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+h3 { font-size: 1.1rem;  color: var(--brand-dark); }
+h4 { font-size: 1rem;    color: var(--text-muted); font-weight: 600; }
+
+/* ── Paragraphs & lists ─────────────────────────────────────────────── */
+
+p { margin: .75rem 0; }
+
+ul, ol {
+  padding-left: 1.5rem;
+  margin: .5rem 0;
+}
+
+li { margin: .3rem 0; }
+
+strong { color: var(--text); }
+
+/* ── Horizontal rule ────────────────────────────────────────────────── */
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2.5rem 0;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .9rem;
+  min-width: 520px;
+}
+
+thead {
+  background: var(--brand);
+  color: #fff;
+}
+
+thead th {
+  padding: .7rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: .8rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+tbody tr:nth-child(even) { background: var(--neutral); }
+tbody tr:hover { background: var(--brand-light); }
+
+tbody td {
+  padding: .6rem 1rem;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+
+/* Status badge cells */
+tbody td:nth-child(3) { white-space: nowrap; }
+
+/* Y / M / N coloured badges */
+td .badge-Y, td .badge-M, td .badge-N {
+  display: inline-block;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+td .badge-Y { background: #dcfce7; color: var(--success); }
+td .badge-M { background: #fef9c3; color: var(--warn); }
+td .badge-N { background: #fee2e2; color: var(--danger); }
+
+/* ── Code ───────────────────────────────────────────────────────────── */
+
+code {
+  font-family: var(--font-mono);
+  font-size: .85em;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 3px;
+  padding: .1em .4em;
+  color: #be185d;
+}
+
+pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  font-size: .82rem;
+  line-height: 1.65;
+  margin: 1rem 0;
+  box-shadow: var(--shadow);
+}
+
+pre code {
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* ── Blockquotes / callouts ─────────────────────────────────────────── */
+
+blockquote {
+  border-left: 4px solid var(--brand);
+  margin: 1rem 0;
+  padding: .75rem 1.25rem;
+  background: var(--brand-light);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--brand-dark);
+}
+
+blockquote p { margin: 0; }
+
+/* ── Scrollbar (webkit) ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--neutral); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  nav#toc { display: none; }
+  main { padding: 2rem 1.5rem; }
+}
+
+@media print {
+  nav#toc { display: none; }
+  main { max-width: 100%; padding: 0; }
+}

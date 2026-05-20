@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generalized Phenotype Composition — tidybreed</title>
+  <link rel="stylesheet" href="tidybreed.css">
+  <style>
+    /* Inline TOC overrides so anchor links work */
+    nav#toc > ul > li > a { font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <nav id="toc">
+    <div style="font-weight:800;font-size:.95rem;margin-bottom:1.25rem;color:var(--brand);">
+      tidybreed
+    </div>
+        <ul>
+        <li><a href="#plan-generalized-phenotype-composition"
+        id="toc-plan-generalized-phenotype-composition">Plan:
+        Generalized Phenotype Composition</a>
+        <ul>
+        <li><a href="#motivation"
+        id="toc-motivation">Motivation</a></li>
+        <li><a href="#refactor-summary-what-changes"
+        id="toc-refactor-summary-what-changes">Refactor Summary: What
+        Changes</a>
+        <ul>
+        <li><a href="#new-tables" id="toc-new-tables">New
+        Tables</a></li>
+        <li><a href="#tables-modified" id="toc-tables-modified">Tables
+        Modified</a></li>
+        <li><a href="#new-functions" id="toc-new-functions">New
+        Functions</a></li>
+        <li><a href="#functions-modified"
+        id="toc-functions-modified">Functions Modified</a></li>
+        <li><a href="#unchanged-no-modifications-required"
+        id="toc-unchanged-no-modifications-required">Unchanged (No
+        Modifications Required)</a></li>
+        <li><a href="#deferred-not-in-first-refactor"
+        id="toc-deferred-not-in-first-refactor">Deferred — Not in First
+        Refactor</a></li>
+        </ul></li>
+        <li><a href="#capability-summary"
+        id="toc-capability-summary">Capability Summary</a></li>
+        <li><a href="#naming-convention"
+        id="toc-naming-convention">Naming Convention</a></li>
+        <li><a href="#core-concept" id="toc-core-concept">Core
+        Concept</a></li>
+        <li><a href="#proposed-new-table-phenotype_components"
+        id="toc-proposed-new-table-phenotype_components">Proposed New
+        Table: <code>phenotype_components</code></a>
+        <ul>
+        <li><a href="#core-columns-all-cases"
+        id="toc-core-columns-all-cases">Core columns (all
+        cases)</a></li>
+        <li><a href="#weight-columns" id="toc-weight-columns">Weight
+        columns</a></li>
+        <li><a href="#genome-effect-type-column"
+        id="toc-genome-effect-type-column">Genome effect type
+        column</a></li>
+        </ul></li>
+        <li><a href="#how-the-key-examples-map"
+        id="toc-how-the-key-examples-map">How the Key Examples Map</a>
+        <ul>
+        <li><a href="#weaning-weight-maternal-trait"
+        id="toc-weaning-weight-maternal-trait">Weaning weight (maternal
+        trait)</a></li>
+        <li><a href="#social-competition-trait-group-based-aggregation"
+        id="toc-social-competition-trait-group-based-aggregation">Social
+        / competition trait (group-based aggregation)</a></li>
+        <li><a href="#linear-random-regression-on-age"
+        id="toc-linear-random-regression-on-age">Linear random
+        regression on age</a></li>
+        <li><a href="#legendre-polynomial-rr-on-days-in-milk-dim"
+        id="toc-legendre-polynomial-rr-on-days-in-milk-dim">Legendre
+        polynomial RR on days-in-milk (DIM)</a></li>
+        </ul></li>
+        <li><a
+        href="#proposed-function-api-define_trait-and-define_phenotype"
+        id="toc-proposed-function-api-define_trait-and-define_phenotype">Proposed
+        Function API: <code>define_trait()</code> and
+        <code>define_phenotype()</code></a>
+        <ul>
+        <li><a href="#define_trait-genetic-component-traits-revised"
+        id="toc-define_trait-genetic-component-traits-revised"><code>define_trait()</code>
+        — Genetic Component Traits (Revised)</a></li>
+        <li><a href="#define_phenotype-observed-phenotypes-new"
+        id="toc-define_phenotype-observed-phenotypes-new"><code>define_phenotype()</code>
+        — Observed Phenotypes (New)</a></li>
+        <li><a href="#complete-worked-examples"
+        id="toc-complete-worked-examples">Complete Worked
+        Examples</a></li>
+        <li><a href="#define_trait_simple-updated-convenience-wrapper"
+        id="toc-define_trait_simple-updated-convenience-wrapper"><code>define_trait_simple()</code>
+        — Updated Convenience Wrapper</a></li>
+        </ul></li>
+        <li><a href="#how-add_phenotype-would-use-this"
+        id="toc-how-add_phenotype-would-use-this">How
+        <code>add_phenotype()</code> Would Use This</a></li>
+        <li><a href="#relationship-to-existing-tables"
+        id="toc-relationship-to-existing-tables">Relationship to
+        Existing Tables</a></li>
+        <li><a href="#residual-variance-naming-and-heterogeneity"
+        id="toc-residual-variance-naming-and-heterogeneity">Residual
+        Variance: Naming and Heterogeneity</a>
+        <ul>
+        <li><a href="#the-naming-problem"
+        id="toc-the-naming-problem">The Naming Problem</a></li>
+        <li><a href="#design-options" id="toc-design-options">Design
+        Options</a></li>
+        <li><a href="#proposed-new-table-phenotype_residual_cov"
+        id="toc-proposed-new-table-phenotype_residual_cov">Proposed New
+        Table: <code>phenotype_residual_cov</code></a></li>
+        <li><a href="#lookup-hierarchy-in-add_phenotype"
+        id="toc-lookup-hierarchy-in-add_phenotype">Lookup Hierarchy in
+        <code>add_phenotype()</code></a></li>
+        <li><a href="#examples" id="toc-examples">Examples</a></li>
+        <li><a href="#api" id="toc-api">API</a></li>
+        </ul></li>
+        <li><a href="#implementation-gaps-and-refactoring-notes"
+        id="toc-implementation-gaps-and-refactoring-notes">Implementation
+        Gaps and Refactoring Notes</a>
+        <ul>
+        <li><a
+        href="#g1-add_phenotype-genome_effects-validation-must-become-conditional"
+        id="toc-g1-add_phenotype-genome_effects-validation-must-become-conditional">G1
+        — <code>add_phenotype()</code> genome_effects validation must
+        become conditional</a></li>
+        <li><a
+        href="#g2-add_tbv-inside-add_phenotype-must-use-component-trait-names"
+        id="toc-g2-add_tbv-inside-add_phenotype-must-use-component-trait-names">G2
+        — <code>add_tbv()</code> inside <code>add_phenotype()</code>
+        must use component trait names</a></li>
+        <li><a
+        href="#g3-residual-lookup-must-shift-from-trait_effect_cov-to-phenotype_residual_cov"
+        id="toc-g3-residual-lookup-must-shift-from-trait_effect_cov-to-phenotype_residual_cov">G3
+        — Residual lookup must shift from <code>trait_effect_cov</code>
+        to <code>phenotype_residual_cov</code></a></li>
+        <li><a
+        href="#g4-null-in-source-column-behaves-differently-for-fixed_class-vs-random-effects"
+        id="toc-g4-null-in-source-column-behaves-differently-for-fixed_class-vs-random-effects">G4
+        — NULL in source column behaves differently for
+        <code>fixed_class</code> vs <code>random</code> effects</a></li>
+        <li><a
+        href="#g5-multi-phenotype-joint-residual-draw-must-handle-phenotype_residual_cov-and-heterogeneous-groups"
+        id="toc-g5-multi-phenotype-joint-residual-draw-must-handle-phenotype_residual_cov-and-heterogeneous-groups">G5
+        — Multi-phenotype joint residual draw must handle
+        <code>phenotype_residual_cov</code> and heterogeneous
+        groups</a></li>
+        <li><a
+        href="#g6-higher-order-polynomial-fixed-covariates-are-not-natively-supported"
+        id="toc-g6-higher-order-polynomial-fixed-covariates-are-not-natively-supported">G6
+        — Higher-order polynomial fixed covariates are not natively
+        supported</a></li>
+        </ul></li>
+        <li><a href="#design-decisions" id="toc-design-decisions">Design
+        Decisions</a></li>
+        </ul></li>
+        </ul>
+      </nav>
+
+  <main>
+    <div class="doc-header">
+      <span class="badge">Design Document</span>
+      <h1>Generalized Phenotype Composition</h1>
+      <p class="subtitle">Design plan for phenotype_components,
+composite traits, RR, and heterogeneous residuals</p>
+    </div>
+
+    <h1 id="plan-generalized-phenotype-composition">Plan: Generalized
+    Phenotype Composition</h1>
+    <h2 id="motivation">Motivation</h2>
+    <p>Some traits recorded on individuals are not a direct function of
+    that individual’s own genotype alone. Three key classes:</p>
+    <ul>
+    <li><strong>Maternal traits</strong> (e.g. weaning weight in beef
+    cattle): the calf’s phenotype is a function of the calf’s own direct
+    genetic effect <em>and</em> the dam’s maternal genetic effect
+    (MILK). Both contribute to the same observed record.</li>
+    <li><strong>Social / competition traits</strong> (e.g. competition
+    in livestock pens, neighbor effects in forestry): an individual’s
+    phenotype depends on its own genetic effect plus the summed (or
+    averaged) genetic effects of others sharing its environment (pen,
+    plot, cage, spatial neighborhood).</li>
+    <li><strong>Random regression / reaction norm traits</strong>
+    (e.g. test-day milk yield, growth curves, reaction to temperature):
+    the phenotype at covariate value <code>t</code> is a linear
+    combination of multiple genetic component TBVs (intercept, slope,
+    higher-order terms) each weighted by a basis function of
+    <code>t</code> (raw polynomial or Legendre polynomial).</li>
+    </ul>
+    <p>The current <code>add_phenotype()</code> assumes a single trait
+    with a single TBV sourced from the focal individual. This plan
+    describes a generalized composition system that decouples
+    <strong>genetic component traits</strong> (things with QTL effects
+    and TBVs) from <strong>observed phenotypic traits</strong> (things
+    recorded in <code>ind_phenotype</code>, assembled from one or more
+    component TBVs potentially sourced from different individuals and
+    weighted by potentially dynamic functions of a covariate).</p>
+    <hr />
+    <h2 id="refactor-summary-what-changes">Refactor Summary: What
+    Changes</h2>
+    <p><em>Authoritative checklist of every table and function touched
+    by this refactor. Read this before the detailed sections below.
+    Items marked <strong>[deferred]</strong> are explicitly out of scope
+    for the first implementation pass.</em></p>
+    <hr />
+    <h3 id="new-tables">New Tables</h3>
+    <p>All three tables are created <strong>eagerly and empty by
+    <code>initialize_genome()</code></strong>, exactly like
+    <code>ind_meta</code>, <code>ind_phenotype</code>, and the other
+    core tables. This means <code>mutate_table()</code> can be called on
+    any of them immediately after initialization, before any
+    <code>define_*</code> call, allowing users to pre-declare typed
+    custom columns.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 18%" />
+    <col style="width: 55%" />
+    <col style="width: 25%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Table</th>
+    <th>Rows written by</th>
+    <th>Purpose</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>phenotype_meta</code></td>
+    <td><code>define_phenotype()</code></td>
+    <td>One row per observed phenotype. Stores all phenotype-level
+    metadata: <code>trait_type</code>, <code>repeatable</code>,
+    <code>expressed_sex</code>, <code>mean</code> (phenotypic
+    intercept), <code>min_value</code>, <code>max_value</code>,
+    <code>prevalence</code>, <code>thresholds</code>. Does
+    <strong>not</strong> store <code>index_weight</code> or
+    <code>economic_value</code> — those belong exclusively in
+    <code>index_meta</code> where per-index per-trait weights are
+    defined. Replaces the phenotype columns currently in
+    <code>trait_meta</code>.</td>
+    </tr>
+    <tr>
+    <td><code>phenotype_components</code></td>
+    <td><code>define_phenotype(components =)</code></td>
+    <td>One row per (phenotype × component trait × contributor × weight
+    rule). Defines how <code>add_phenotype()</code> assembles a
+    composite genetic value from one or more <code>trait_name</code>
+    TBVs. Empty for simple single-self traits.</td>
+    </tr>
+    <tr>
+    <td><code>phenotype_residual_cov</code></td>
+    <td><code>define_effect_cov_matrix(pop, "residual", R)</code>,
+    <code>define_phenotype(residual_var =)</code>,
+    <code>add_residual_cov()</code></td>
+    <td>Residual (co)variances keyed by <code>phenotype_name_1</code> /
+    <code>phenotype_name_2</code>. Supports unconditional defaults
+    (<code>condition_column = NULL</code>) and group-heterogeneous
+    residuals (<code>condition_column</code>,
+    <code>condition_level</code>). Includes <code>weight_type</code> and
+    <code>poly_order</code> columns for future RR covariate-continuous
+    residuals (schema reserved now; lookup logic deferred).</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h3 id="tables-modified">Tables Modified</h3>
+    <p><strong><code>trait_meta</code></strong> — reduced to
+    genetic-component-only rows (written only by
+    <code>define_trait()</code>).</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 50%" />
+    <col style="width: 50%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Change</th>
+    <th>Detail</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Columns removed (move to <code>phenotype_meta</code>)</td>
+    <td><code>trait_type</code>, <code>repeatable</code>,
+    <code>expressed_sex</code>, <code>min_value</code>,
+    <code>max_value</code>, <code>prevalence</code>,
+    <code>thresholds</code></td>
+    </tr>
+    <tr>
+    <td>Columns removed entirely</td>
+    <td><code>index_weight</code>, <code>economic_value</code> — these
+    belong only in <code>index_meta</code> (per-index per-trait
+    weights). A single global weight in <code>trait_meta</code> is
+    ambiguous when a trait participates in multiple indices with
+    different weights.</td>
+    </tr>
+    <tr>
+    <td>Column deprecated and removed</td>
+    <td><code>recorded_on</code> — superseded by
+    <code>phenotype_components</code></td>
+    </tr>
+    <tr>
+    <td>Column retained, role clarified</td>
+    <td><code>mean</code> — stores TBV centering value
+    (<code>target_add_mean</code>; default 0) for component traits
+    only</td>
+    </tr>
+    <tr>
+    <td>Columns unchanged</td>
+    <td><code>id_trait</code>, <code>trait_name</code>,
+    <code>description</code>, <code>units</code>,
+    <code>expressed_parent</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong><code>trait_effects</code></strong> — two new
+    columns:</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 25%" />
+    <col style="width: 16%" />
+    <col style="width: 29%" />
+    <col style="width: 29%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Default</th>
+    <th>Purpose</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>poly_order</code></td>
+    <td>INTEGER</td>
+    <td><code>1</code></td>
+    <td>Enables <code>slope × (x − center)^poly_order</code> for
+    <code>fixed_cov</code> effects. <code>poly_order = 1</code>
+    preserves current linear behaviour.</td>
+    </tr>
+    <tr>
+    <td><code>null_class_action</code></td>
+    <td>VARCHAR</td>
+    <td><code>"skip"</code></td>
+    <td>Controls behaviour when a <code>fixed_class</code> source column
+    is NULL. Values: <code>"skip"</code> (omit individual + warn),
+    <code>"error"</code> (hard stop), <code>"zero"</code> (treat as
+    reference level).</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong><code>phenotype_components</code></strong> — two columns
+    reserved for future use (always <code>NULL</code> in first
+    refactor):</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 35%" />
+    <col style="width: 23%" />
+    <col style="width: 41%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Purpose</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>missing_action</code></td>
+    <td>VARCHAR</td>
+    <td>Per-row override for missing-contributor behaviour
+    (<code>"skip"</code> default or <code>"error"</code>).</td>
+    </tr>
+    <tr>
+    <td><code>contributor_filter</code></td>
+    <td>VARCHAR</td>
+    <td>Reserved for spatial / neighborhood contributor lookup. Do not
+    implement in first refactor.</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h3 id="new-functions">New Functions</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 33%" />
+    <col style="width: 37%" />
+    <col style="width: 29%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Function</th>
+    <th>Writes to</th>
+    <th>Purpose</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>define_phenotype()</code></td>
+    <td><code>phenotype_meta</code>, optionally
+    <code>phenotype_components</code> and
+    <code>phenotype_residual_cov</code></td>
+    <td>Registers an observed phenotype with its full model
+    specification. The only way to create <code>phenotype_meta</code>
+    rows.</td>
+    </tr>
+    <tr>
+    <td><code>add_residual_cov()</code></td>
+    <td><code>phenotype_residual_cov</code></td>
+    <td>Adds conditional residual variance rows after
+    <code>define_phenotype()</code> — e.g. farm-specific or sex-specific
+    variance.</td>
+    </tr>
+    <tr>
+    <td><code>add_gv()</code> <strong>[deferred]</strong></td>
+    <td><code>ind_gv</code> (new table, not yet created)</td>
+    <td>Full genotypic value (<code>A + D + I</code>). Calls
+    <code>add_tbv()</code> internally. Schema must not block this
+    addition.</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h3 id="functions-modified">Functions Modified</h3>
+    <p><strong><code>define_trait()</code></strong> — remove all
+    phenotype-level arguments.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 50%" />
+    <col style="width: 50%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Change</th>
+    <th>Detail</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Arguments removed</td>
+    <td><code>trait_type</code>, <code>repeatable</code>,
+    <code>expressed_sex</code>, <code>mean</code>,
+    <code>min_value</code>, <code>max_value</code>,
+    <code>prevalence</code>, <code>thresholds</code>,
+    <code>residual_var</code>, <code>index_weight</code>,
+    <code>economic_value</code> (last two removed entirely — use
+    <code>define_index()</code>)</td>
+    </tr>
+    <tr>
+    <td>Argument removed (deprecated)</td>
+    <td><code>recorded_on</code></td>
+    </tr>
+    <tr>
+    <td>Arguments remaining</td>
+    <td><code>trait_name</code>, <code>target_add_var</code>,
+    <code>target_add_mean</code> (default 0),
+    <code>expressed_parent</code>, <code>description</code>,
+    <code>units</code>, <code>overwrite</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong><code>define_trait_simple()</code></strong> — updated
+    convenience wrapper to chain <code>define_trait()</code> →
+    random-loci <code>define_additive_effects()</code> →
+    <code>define_phenotype()</code>. Signature gains
+    <code>residual_var</code>, <code>trait_type</code>,
+    <code>expressed_sex</code>, <code>repeatable</code> which are
+    forwarded to <code>define_phenotype()</code> instead of
+    <code>define_trait()</code>.</p>
+    <p><strong><code>define_effect_fixed_class()</code></strong> — add
+    <code>null_class_action</code> argument (<code>"skip"</code> /
+    <code>"error"</code> / <code>"zero"</code>; default
+    <code>"skip"</code>). Stored in
+    <code>trait_effects.null_class_action</code>.</p>
+    <p><strong><code>define_effect_fixed_cov()</code></strong> — add
+    <code>poly_order</code> argument (integer ≥ 1; default 1). Stored in
+    <code>trait_effects.poly_order</code>.</p>
+    <p><strong><code>add_phenotype()</code></strong> — major internal
+    refactor; public signature largely unchanged. Internal changes
+    correspond to implementation gaps G1–G5:</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 33%" />
+    <col style="width: 66%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Gap</th>
+    <th>Change</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>G1</td>
+    <td>Skip additive-effects validation when
+    <code>phenotype_components</code> rows exist for the phenotype</td>
+    </tr>
+    <tr>
+    <td>G2</td>
+    <td>Call <code>add_tbv()</code> for the component
+    <code>source_trait_name</code> values (<code>WWD</code>,
+    <code>WWM</code>), not the composite phenotype name
+    (<code>WW</code>)</td>
+    </tr>
+    <tr>
+    <td>G3</td>
+    <td>Read residuals from <code>phenotype_residual_cov</code> (not
+    <code>trait_effect_cov</code>); fall back to unconditional row with
+    a warning</td>
+    </tr>
+    <tr>
+    <td>G4</td>
+    <td>Apply <code>null_class_action</code> from
+    <code>trait_effects</code> when source column is NULL</td>
+    </tr>
+    <tr>
+    <td>G5</td>
+    <td>Split joint residual draw by condition group; assemble per-group
+    R sub-matrix; recombine draws</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong><code>add_tbv()</code></strong> — minor: must accept a
+    caller-supplied set of trait names derived from
+    <code>phenotype_components</code> rather than always computing from
+    the phenotype name.</p>
+    <p><strong><code>initialize_genome()</code></strong> — creates three
+    additional empty tables alongside the existing core tables:
+    <code>phenotype_meta</code>, <code>phenotype_components</code>,
+    <code>phenotype_residual_cov</code>. No other behavioural change.
+    The tables are registered in <code>pop$tables</code> immediately, so
+    <code>get_table()</code> and <code>mutate_table()</code> work on
+    them before any <code>define_*</code> call.</p>
+    <p><strong><code>define_effect_cov_matrix()</code></strong> —
+    routing change based on <code>effect_name</code>:</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 31%" />
+    <col style="width: 41%" />
+    <col style="width: 26%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>effect_name</code></th>
+    <th>Destination table</th>
+    <th>Key columns</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>"residual"</code></td>
+    <td><code>phenotype_residual_cov</code></td>
+    <td>Matrix rownames treated as <code>phenotype_name_1</code> /
+    <code>phenotype_name_2</code>; <code>condition_column = NULL</code>,
+    <code>condition_level = NULL</code> (unconditional default row)</td>
+    </tr>
+    <tr>
+    <td>anything else (<code>"gen_add"</code>, <code>"litter"</code>,
+    <code>"herd"</code>, …)</td>
+    <td><code>trait_effect_cov</code></td>
+    <td>Matrix rownames treated as <code>trait_name_1</code> /
+    <code>trait_name_2</code> — unchanged behaviour</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>This routing is the mechanism that lets users call
+    <code>define_effect_cov_matrix()</code> <strong>before</strong>
+    <code>define_trait()</code> or <code>define_phenotype()</code> to
+    pre-load the full residual covariance matrix.
+    <code>define_phenotype(residual_var = ...)</code> writes only the
+    single diagonal entry for that phenotype to
+    <code>phenotype_residual_cov</code>; off-diagonal covariances
+    between phenotypes are always zero unless the user explicitly calls
+    <code>define_effect_cov_matrix(pop, "residual", R)</code> with the
+    full multi-phenotype matrix.</p>
+    <hr />
+    <h3 id="unchanged-no-modifications-required">Unchanged (No
+    Modifications Required)</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 40%" />
+    <col style="width: 60%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Item</th>
+    <th>Reason</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>trait_effect_cov</code></td>
+    <td>Stays for genetic additive (G) and named random-effect
+    covariances keyed by <code>trait_name</code>. Residuals move out to
+    <code>phenotype_residual_cov</code>.</td>
+    </tr>
+    <tr>
+    <td><code>genome_effects</code>, <code>genome_meta</code>,
+    <code>genome_haplotype</code>, <code>genome_genotype</code></td>
+    <td>No changes to the genome layer</td>
+    </tr>
+    <tr>
+    <td><code>ind_meta</code>, <code>ind_phenotype</code>,
+    <code>ind_tbv</code>, <code>ind_ebv</code></td>
+    <td>Schema unchanged; <code>ind_tbv</code> stores component trait
+    TBVs only (no composite rows)</td>
+    </tr>
+    <tr>
+    <td><code>index_meta</code>, <code>ind_index</code>,
+    <code>ind_true_index</code></td>
+    <td>Unchanged</td>
+    </tr>
+    <tr>
+    <td><code>define_additive_effects()</code></td>
+    <td>Unchanged</td>
+    </tr>
+    <tr>
+    <td><code>define_effect_random()</code></td>
+    <td>Unchanged</td>
+    </tr>
+    <tr>
+    <td><code>define_index()</code>, <code>add_index()</code></td>
+    <td>Unchanged</td>
+    </tr>
+    <tr>
+    <td><code>add_founders()</code>, <code>add_offspring()</code></td>
+    <td>Unchanged</td>
+    </tr>
+    <tr>
+    <td><code>get_table()</code>, <code>mutate_table()</code>,
+    <code>close_pop()</code></td>
+    <td>Unchanged</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h3 id="deferred-not-in-first-refactor">Deferred — Not in First
+    Refactor</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 40%" />
+    <col style="width: 60%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Item</th>
+    <th>Status</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>ind_gv</code> table and <code>add_gv()</code></td>
+    <td>Schema must not block it; implementation deferred</td>
+    </tr>
+    <tr>
+    <td>Dominance and epistasis in <code>genome_effects</code></td>
+    <td>Planned; <code>genome_effect_types</code> column in
+    <code>phenotype_components</code> ready to consume them</td>
+    </tr>
+    <tr>
+    <td>Spatial / neighborhood contributors</td>
+    <td><code>contributor_filter</code> column reserved in
+    <code>phenotype_components</code>; no lookup logic</td>
+    </tr>
+    <tr>
+    <td>Covariate-continuous RR residual variance</td>
+    <td><code>weight_type</code> + <code>poly_order</code> columns added
+    to <code>phenotype_residual_cov</code>; lookup logic deferred</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <hr />
+    <h2 id="capability-summary">Capability Summary</h2>
+    <p>The table below maps twelve target modelling scenarios to their
+    current implementation status. <strong>Implemented</strong> =
+    working code today. <strong>Planned</strong> = covered by this
+    design but not yet coded. <strong>Partial</strong> = partially
+    working with documented limitations.</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 2%" />
+    <col style="width: 21%" />
+    <col style="width: 34%" />
+    <col style="width: 15%" />
+    <col style="width: 26%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>#</th>
+    <th>Scenario</th>
+    <th>Key API today</th>
+    <th>Status</th>
+    <th>Gap / Note</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>1</td>
+    <td>Simple additive + residual</td>
+    <td><code>define_trait()</code> +
+    <code>define_additive_effects()</code> +
+    <code>add_phenotype()</code></td>
+    <td>Implemented</td>
+    <td>Default path; no <code>phenotype_components</code> needed</td>
+    </tr>
+    <tr>
+    <td>2</td>
+    <td>Repeatability model (additive + PE + residual)</td>
+    <td><code>define_effect_random(source_column = "id_ind")</code></td>
+    <td>Implemented</td>
+    <td><code>id_ind</code> as source column = one draw per animal = PE.
+    Draws persist across repeated <code>add_phenotype()</code> calls so
+    the same PE value is reused.</td>
+    </tr>
+    <tr>
+    <td>3</td>
+    <td>Maternal trait (WW = WWD + WWM)</td>
+    <td><code>phenotype_components</code> with
+    <code>contributor_type = "dam"</code></td>
+    <td>Planned</td>
+    <td>Requires <code>phenotype_components</code> table + refactored
+    <code>add_phenotype()</code></td>
+    </tr>
+    <tr>
+    <td>4</td>
+    <td>Social / competition (individual + pen-mates)</td>
+    <td><code>phenotype_components</code> with
+    <code>contributor_type = "group"</code></td>
+    <td>Planned</td>
+    <td>Group resolved via <code>group_column</code> in
+    <code>ind_meta</code> (or other table)</td>
+    </tr>
+    <tr>
+    <td>5</td>
+    <td>Random regression / reaction norm</td>
+    <td><code>phenotype_components</code> with
+    <code>weight_type = "legendre"</code> or
+    <code>"raw_poly"</code></td>
+    <td>Planned</td>
+    <td>Covariate supplied at call time via
+    <code>covariate_values = list(dim = 150)</code> or read from DB</td>
+    </tr>
+    <tr>
+    <td>6</td>
+    <td>Heterogeneous residual variance by group</td>
+    <td><code>phenotype_residual_cov</code> with
+    <code>condition_column</code></td>
+    <td>Planned</td>
+    <td>Warn + count individuals falling back to unconditional row; see
+    G3 and Design Decision 9</td>
+    </tr>
+    <tr>
+    <td>7</td>
+    <td>Dominance effects</td>
+    <td><code>genome_effect_types = "additive,dominance"</code> in
+    <code>phenotype_components</code></td>
+    <td>Planned</td>
+    <td>Depends on <code>genome_effects</code> rows with
+    <code>genome_effect_type = "dominance"</code> (not yet
+    implemented)</td>
+    </tr>
+    <tr>
+    <td>8</td>
+    <td>Epistasis effects</td>
+    <td><code>genome_effect_types = "additive,dominance,epistasis"</code>
+    in <code>phenotype_components</code></td>
+    <td>Planned</td>
+    <td>Depends on <code>genome_effects</code> rows with
+    <code>genome_effect_type = "epistasis"</code> (not yet
+    implemented)</td>
+    </tr>
+    <tr>
+    <td>9</td>
+    <td>Intercept (overall mean) per trait</td>
+    <td><code>define_effect_int()</code> → <code>target_add_mean</code>
+    in <code>trait_meta</code></td>
+    <td>Implemented</td>
+    <td>Per-trait; zero by default</td>
+    </tr>
+    <tr>
+    <td>10</td>
+    <td>Fixed covariate (continuous regression)</td>
+    <td><code>define_effect_fixed_cov(slope, center)</code></td>
+    <td>Partial</td>
+    <td>Linear only (<code>slope * (x - center)</code>). Quadratic or
+    higher = workaround via pre-computed columns or see Q14</td>
+    </tr>
+    <tr>
+    <td>11</td>
+    <td>Fixed class effect (e.g. sex, herd)</td>
+    <td><code>define_effect_fixed_class(levels = c(M = 30, F = 0))</code></td>
+    <td>Implemented</td>
+    <td>Errors on unknown levels; NULL source value errors (see Q15 and
+    G4)</td>
+    </tr>
+    <tr>
+    <td>12</td>
+    <td>Random iid effect (litter, dam env., herd)</td>
+    <td><code>define_effect_random(source_column, variance, distribution)</code></td>
+    <td>Implemented</td>
+    <td>Normal / gamma / uniform. Correlated across traits via
+    <code>define_effect_cov_matrix()</code>.</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong>Repeatability model recipe (scenario 2):</strong></p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;litter_size&quot;</span>, ..., <span class="at">repeatable =</span> <span class="cn">TRUE</span>, <span class="at">residual_var =</span> <span class="fl">0.5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_random</span>(<span class="st">&quot;litter_size&quot;</span>, <span class="st">&quot;pe&quot;</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;id_ind&quot;</span>,    <span class="co"># one PE draw per animal</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">variance =</span> <span class="fl">0.3</span>)</span></code></pre></div>
+    <p>Each successive call to <code>add_phenotype("litter_size")</code>
+    for the same sow reuses her stored PE draw and adds an independent
+    residual, reproducing the classical repeatability model
+    <code>y_ij = mu + TBV_i + PE_i + e_ij</code>.</p>
+    <hr />
+    <h2 id="naming-convention">Naming Convention</h2>
+    <p>Two distinct namespaces are used throughout this plan and must
+    not be conflated:</p>
+    <ul>
+    <li><p><strong><code>trait_name</code></strong> — a genetic
+    component trait. Has QTL effects in <code>genome_effects</code>, a
+    TBV in <code>ind_tbv</code>, and a (co)variance in
+    <code>trait_effect_cov</code>. Examples: <code>WWD</code>,
+    <code>WWM</code>, <code>RR_intercept</code>,
+    <code>RR_slope_age</code>, <code>L0_milk</code>, <code>SGE</code>.
+    Always registered in <code>trait_meta</code>.</p></li>
+    <li><p><strong><code>phenotype_name</code></strong> — the observed
+    phenotype written to <code>ind_phenotype</code>. For simple
+    (non-composite) traits, <code>phenotype_name == trait_name</code>.
+    For composite traits the names differ:
+    <code>phenotype_name = "WW"</code> is assembled from
+    <code>trait_name = "WWD"</code> and <code>trait_name = "WWM"</code>.
+    The <code>phenotype_components</code> table provides the assembly
+    rules.</p></li>
+    </ul>
+    <p>The <code>add_phenotype()</code> argument refers to
+    <code>phenotype_name</code>. The TBVs it pulls internally are
+    identified by <code>trait_name</code> via
+    <code>phenotype_components</code>. When no rows exist in
+    <code>phenotype_components</code> for a given
+    <code>phenotype_name</code>, the fallback assumes
+    <code>phenotype_name == trait_name</code> (current single-trait
+    behavior is preserved).</p>
+    <hr />
+    <h2 id="core-concept">Core Concept</h2>
+    <p><code>WWD</code> (weaning weight direct) and <code>WWM</code>
+    (weaning weight maternal) are defined as <strong>regular
+    traits</strong> in tidybreed — they have QTL effects in
+    <code>genome_effects</code>, variances in
+    <code>trait_effect_cov</code>, and TBVs in <code>ind_tbv</code>.
+    Nothing special about them.</p>
+    <p><code>WW</code> (the observed weaning weight phenotype) is
+    defined by a <strong>composition rule</strong> stored in a new table
+    <code>phenotype_components</code>:</p>
+    <pre class="text"><code>pheno(WW, calf_i) = TBV(WWD, self) + TBV(WWM, dam_of_i) + residual(WW)</code></pre>
+    <p>For social / competition traits:</p>
+    <pre class="text"><code>pheno(Competition, individual_i) = TBV(CompetitionDirect, self)
+                                 + sum(TBV(SGE, penmate_j) for j in pen_of_i)
+                                 + residual(Competition)</code></pre>
+    <p>For a linear random regression on age:</p>
+    <pre class="text"><code>pheno(milk, i, age) = TBV(RR_intercept, i) * 1.0
+                    + TBV(RR_slope,     i) * age
+                    + residual(milk)</code></pre>
+    <p>For a Legendre polynomial random regression on days-in-milk
+    (DIM):</p>
+    <pre class="text"><code>pheno(milk, i, dim) = TBV(L0_milk, i) * phi_0(dim)
+                    + TBV(L1_milk, i) * phi_1(dim)
+                    + TBV(L2_milk, i) * phi_2(dim)
+                    + residual(milk, dim)</code></pre>
+    <p>where <code>phi_k(dim)</code> is the k-th Legendre polynomial
+    evaluated at <code>dim</code>, scaled to <code>[-1, 1]</code> over
+    <code>[dim_min, dim_max]</code>.</p>
+    <p><code>add_phenotype("WW")</code> checks
+    <code>phenotype_components</code> for rows where
+    <code>phenotype_name = "WW"</code>. If none exist, it falls back to
+    current single-trait behavior. If rows exist, it resolves each
+    contributor, fetches TBVs, computes weights (fixed or dynamic),
+    aggregates, and adds a residual drawn from
+    <code>trait_effect_cov</code> for
+    <code>phenotype_name = "WW"</code>.</p>
+    <hr />
+    <h2 id="proposed-new-table-phenotype_components">Proposed New Table:
+    <code>phenotype_components</code></h2>
+    <p>One row per (observed phenotype × component trait × contributor ×
+    weight rule).</p>
+    <h3 id="core-columns-all-cases">Core columns (all cases)</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 7%" />
+    <col style="width: 75%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>id_phenotype_comp</code></td>
+    <td>INTEGER</td>
+    <td>Primary key (auto-incrementing)</td>
+    </tr>
+    <tr>
+    <td><code>phenotype_name</code></td>
+    <td>VARCHAR</td>
+    <td>The observed phenotype name written to
+    <code>ind_phenotype</code></td>
+    </tr>
+    <tr>
+    <td><code>source_trait_name</code></td>
+    <td>VARCHAR</td>
+    <td>FK to <code>trait_meta.trait_name</code> - which component TBV
+    to pull</td>
+    </tr>
+    <tr>
+    <td><code>contributor_type</code></td>
+    <td>VARCHAR</td>
+    <td><code>"self"</code>, <code>"dam"</code>, <code>"sire"</code>,
+    <code>"group"</code></td>
+    </tr>
+    <tr>
+    <td><code>group_column</code></td>
+    <td>VARCHAR</td>
+    <td>NULL unless <code>contributor_type = "group"</code>; column
+    defining group membership (e.g. <code>"pen_id"</code>)</td>
+    </tr>
+    <tr>
+    <td><code>group_table</code></td>
+    <td>VARCHAR</td>
+    <td>Table containing <code>group_column</code>; default
+    <code>"ind_meta"</code></td>
+    </tr>
+    <tr>
+    <td><code>aggregation</code></td>
+    <td>VARCHAR</td>
+    <td><code>"sum"</code> or <code>"mean"</code>; relevant when
+    <code>contributor_type = "group"</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <h3 id="weight-columns">Weight columns</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 17%" />
+    <col style="width: 7%" />
+    <col style="width: 74%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>weight</code></td>
+    <td>DOUBLE</td>
+    <td>Scalar multiplier applied after the dynamic weight; default
+    <code>1.0</code></td>
+    </tr>
+    <tr>
+    <td><code>weight_type</code></td>
+    <td>VARCHAR</td>
+    <td><code>"fixed"</code>, <code>"covariate"</code>,
+    <code>"legendre"</code>, or <code>"raw_poly"</code>; see
+    descriptions below</td>
+    </tr>
+    <tr>
+    <td><code>covariate_name</code></td>
+    <td>VARCHAR</td>
+    <td>Covariate key; column in <code>covariate_table</code> or a key
+    in <code>covariate_values</code></td>
+    </tr>
+    <tr>
+    <td><code>covariate_table</code></td>
+    <td>VARCHAR</td>
+    <td>Table to read from (default <code>"ind_meta"</code>); NULL =
+    value supplied at call time</td>
+    </tr>
+    <tr>
+    <td><code>poly_order</code></td>
+    <td>INTEGER</td>
+    <td>Basis order (0=intercept, 1=slope, 2=quadratic); NULL when
+    <code>weight_type = "fixed"</code></td>
+    </tr>
+    <tr>
+    <td><code>poly_scale_min</code></td>
+    <td>DOUBLE</td>
+    <td>Covariate value mapping to -1 for Legendre scaling; NULL = use
+    observed minimum</td>
+    </tr>
+    <tr>
+    <td><code>poly_scale_max</code></td>
+    <td>DOUBLE</td>
+    <td>Covariate value mapping to +1 for Legendre scaling; NULL = use
+    observed maximum</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><code>weight_type</code> values:</p>
+    <ul>
+    <li><code>"fixed"</code>: effective weight = <code>weight</code>
+    scalar (current default behavior)</li>
+    <li><code>"covariate"</code>: effective weight =
+    <code>covariate_value * weight</code></li>
+    <li><code>"legendre"</code>: effective weight =
+    <code>phi_{poly_order}(scale(covariate_value)) * weight</code></li>
+    <li><code>"raw_poly"</code>: effective weight =
+    <code>covariate_value ^ poly_order * weight</code></li>
+    </ul>
+    <h3 id="genome-effect-type-column">Genome effect type column</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 25%" />
+    <col style="width: 9%" />
+    <col style="width: 65%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>genome_effect_types</code></td>
+    <td>VARCHAR</td>
+    <td>Effect types to include; default <code>"additive"</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>Comma-separated. Valid values now: <code>"additive"</code>.
+    Future: <code>"additive,dominance"</code>,
+    <code>"additive,dominance,epistasis"</code>. Controls which rows in
+    <code>genome_effects</code> are summed when computing the TBV for
+    this component.</p>
+    <hr />
+    <h2 id="how-the-key-examples-map">How the Key Examples Map</h2>
+    <h3 id="weaning-weight-maternal-trait">Weaning weight (maternal
+    trait)</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 16%" />
+    <col style="width: 19%" />
+    <col style="width: 18%" />
+    <col style="width: 14%" />
+    <col style="width: 9%" />
+    <col style="width: 21%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name</code></th>
+    <th><code>source_trait_name</code></th>
+    <th><code>contributor_type</code></th>
+    <th><code>weight_type</code></th>
+    <th><code>weight</code></th>
+    <th><code>genome_effect_types</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>WW</td>
+    <td>WWD</td>
+    <td>self</td>
+    <td>fixed</td>
+    <td>1.0</td>
+    <td>additive</td>
+    </tr>
+    <tr>
+    <td>WW</td>
+    <td>WWM</td>
+    <td>dam</td>
+    <td>fixed</td>
+    <td>1.0</td>
+    <td>additive</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><code>WWD</code> and <code>WWM</code> are defined independently
+    with their own QTL effects and variances. <code>WW</code> only needs
+    a residual variance in <code>trait_effect_cov</code> and a
+    <code>trait_type</code> in <code>trait_meta</code>. No
+    <code>genome_effects</code> rows needed for <code>WW</code>
+    itself.</p>
+    <h3 id="social-competition-trait-group-based-aggregation">Social /
+    competition trait (group-based aggregation)</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 13%" />
+    <col style="width: 15%" />
+    <col style="width: 14%" />
+    <col style="width: 11%" />
+    <col style="width: 10%" />
+    <col style="width: 10%" />
+    <col style="width: 7%" />
+    <col style="width: 16%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name</code></th>
+    <th><code>source_trait_name</code></th>
+    <th><code>contributor_type</code></th>
+    <th><code>group_column</code></th>
+    <th><code>aggregation</code></th>
+    <th><code>weight_type</code></th>
+    <th><code>weight</code></th>
+    <th><code>genome_effect_types</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Competition</td>
+    <td>CompetitionDirect</td>
+    <td>self</td>
+    <td>NULL</td>
+    <td>sum</td>
+    <td>fixed</td>
+    <td>1.0</td>
+    <td>additive</td>
+    </tr>
+    <tr>
+    <td>Competition</td>
+    <td>SGE</td>
+    <td>group</td>
+    <td>pen_id</td>
+    <td>sum</td>
+    <td>fixed</td>
+    <td>1.0</td>
+    <td>additive</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>The <code>pen_id</code> column must exist in
+    <code>ind_meta</code> (or the specified <code>group_table</code>).
+    At phenotype time, <code>add_phenotype()</code> finds all
+    individuals sharing the same <code>pen_id</code> as the focal
+    individual and sums their <code>SGE</code> TBVs.</p>
+    <h3 id="linear-random-regression-on-age">Linear random regression on
+    age</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 12%" />
+    <col style="width: 14%" />
+    <col style="width: 13%" />
+    <col style="width: 10%" />
+    <col style="width: 12%" />
+    <col style="width: 12%" />
+    <col style="width: 9%" />
+    <col style="width: 15%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name</code></th>
+    <th><code>source_trait_name</code></th>
+    <th><code>contributor_type</code></th>
+    <th><code>weight_type</code></th>
+    <th><code>covariate_name</code></th>
+    <th><code>covariate_table</code></th>
+    <th><code>poly_order</code></th>
+    <th><code>genome_effect_types</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>milk_at_age</td>
+    <td>RR_intercept</td>
+    <td>self</td>
+    <td>fixed</td>
+    <td>NULL</td>
+    <td>NULL</td>
+    <td>NULL</td>
+    <td>additive</td>
+    </tr>
+    <tr>
+    <td>milk_at_age</td>
+    <td>RR_slope</td>
+    <td>self</td>
+    <td>covariate</td>
+    <td>age</td>
+    <td>NULL (call-time)</td>
+    <td>NULL</td>
+    <td>additive</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><code>covariate_table = NULL</code> signals that the covariate
+    value is supplied at <code>add_phenotype()</code> call time
+    (e.g. <code>add_phenotype("milk_at_age", covariate_values = list(age = 365))</code>).
+    The value is written into <code>ind_phenotype</code> as a user
+    column so the record is self-describing. Alternatively,
+    <code>covariate_table = "ind_meta"</code> reads <code>age</code>
+    from <code>ind_meta</code> at computation time — suitable when each
+    individual has a single fixed covariate value.</p>
+    <h3 id="legendre-polynomial-rr-on-days-in-milk-dim">Legendre
+    polynomial RR on days-in-milk (DIM)</h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 10%" />
+    <col style="width: 12%" />
+    <col style="width: 12%" />
+    <col style="width: 9%" />
+    <col style="width: 10%" />
+    <col style="width: 8%" />
+    <col style="width: 10%" />
+    <col style="width: 10%" />
+    <col style="width: 13%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name</code></th>
+    <th><code>source_trait_name</code></th>
+    <th><code>contributor_type</code></th>
+    <th><code>weight_type</code></th>
+    <th><code>covariate_name</code></th>
+    <th><code>poly_order</code></th>
+    <th><code>poly_scale_min</code></th>
+    <th><code>poly_scale_max</code></th>
+    <th><code>genome_effect_types</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>milk</td>
+    <td>L0_milk</td>
+    <td>self</td>
+    <td>legendre</td>
+    <td>dim</td>
+    <td>0</td>
+    <td>5</td>
+    <td>305</td>
+    <td>additive</td>
+    </tr>
+    <tr>
+    <td>milk</td>
+    <td>L1_milk</td>
+    <td>self</td>
+    <td>legendre</td>
+    <td>dim</td>
+    <td>1</td>
+    <td>5</td>
+    <td>305</td>
+    <td>additive</td>
+    </tr>
+    <tr>
+    <td>milk</td>
+    <td>L2_milk</td>
+    <td>self</td>
+    <td>legendre</td>
+    <td>dim</td>
+    <td>2</td>
+    <td>5</td>
+    <td>305</td>
+    <td>additive</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>Called once per DIM point:</p>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (day <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">150</span>, <span class="dv">200</span>, <span class="dv">250</span>, <span class="dv">305</span>)) {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">get_table</span>(<span class="st">&quot;ind_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(sex <span class="sc">==</span> <span class="st">&quot;F&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_phenotype</span>(<span class="st">&quot;milk&quot;</span>, <span class="at">covariate_values =</span> <span class="fu">list</span>(<span class="at">dim =</span> day))</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+    <p>Each call writes one record per cow to <code>ind_phenotype</code>
+    with <code>trait_name = "milk"</code> and <code>dim = day</code>
+    stored as a user column.</p>
+    <hr />
+    <h2
+    id="proposed-function-api-define_trait-and-define_phenotype">Proposed
+    Function API: <code>define_trait()</code> and
+    <code>define_phenotype()</code></h2>
+    <p>These two functions own completely separate concerns and must not
+    overlap.</p>
+    <h3
+    id="define_trait-genetic-component-traits-revised"><code>define_trait()</code>
+    — Genetic Component Traits (Revised)</h3>
+    <p>Registers a <strong>QTL component trait</strong>: a genetic
+    quantity with effects in <code>genome_effects</code>, TBVs in
+    <code>ind_tbv</code>, and additive genetic variance in
+    <code>trait_effect_cov</code>. Contains no phenotype-level
+    information whatsoever.</p>
+    <p>Writes one row to <code>trait_meta</code> (genetic columns
+    only).</p>
+    <p><strong>Arguments:</strong></p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 19%" />
+    <col style="width: 8%" />
+    <col style="width: 72%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Argument</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>trait_name</code></td>
+    <td>VARCHAR</td>
+    <td>Unique identifier for this genetic component trait</td>
+    </tr>
+    <tr>
+    <td><code>target_add_var</code></td>
+    <td>DOUBLE</td>
+    <td>Target additive genetic variance; written to
+    <code>trait_effect_cov[gen_add]</code></td>
+    </tr>
+    <tr>
+    <td><code>target_add_mean</code></td>
+    <td>DOUBLE</td>
+    <td>TBV centering mean; default <code>0</code></td>
+    </tr>
+    <tr>
+    <td><code>expressed_parent</code></td>
+    <td>VARCHAR</td>
+    <td>Imprinting: <code>"both"</code> (default),
+    <code>"parent_1"</code>, <code>"parent_2"</code></td>
+    </tr>
+    <tr>
+    <td><code>description</code></td>
+    <td>VARCHAR</td>
+    <td>Optional free text</td>
+    </tr>
+    <tr>
+    <td><code>units</code></td>
+    <td>VARCHAR</td>
+    <td>Optional (e.g. <code>"kg"</code>)</td>
+    </tr>
+    <tr>
+    <td><code>overwrite</code></td>
+    <td>LOGICAL</td>
+    <td>Replace an existing row; default <code>FALSE</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong>Removed from <code>define_trait()</code></strong> — these
+    move to <code>define_phenotype()</code>: <code>trait_type</code>,
+    <code>repeatable</code>, <code>expressed_sex</code>,
+    <code>mean</code>, <code>min_value</code>, <code>max_value</code>,
+    <code>prevalence</code>, <code>thresholds</code>,
+    <code>residual_var</code>. <code>index_weight</code> and
+    <code>economic_value</code> are <strong>removed entirely</strong> —
+    they belong only in <code>index_meta</code> where per-index
+    per-trait weights are defined. Use <code>define_index()</code>.
+    <code>recorded_on</code> is <strong>deprecated</strong> — superseded
+    by the <code>components</code> argument in
+    <code>define_phenotype()</code>.</p>
+    <h3
+    id="define_phenotype-observed-phenotypes-new"><code>define_phenotype()</code>
+    — Observed Phenotypes (New)</h3>
+    <p>Registers an <strong>observed phenotype</strong>: the quantity
+    written to <code>ind_phenotype</code> and drawn by
+    <code>add_phenotype()</code>. For simple traits
+    <code>phenotype_name == trait_name</code> and
+    <code>define_trait()</code> must already exist for that name. For
+    composite traits no <code>define_trait()</code> call is needed for
+    the composite name — <code>define_phenotype()</code> creates its own
+    row in <code>phenotype_meta</code> (or <code>trait_meta</code>; see
+    open question Q7).</p>
+    <p>Writes to <code>phenotype_meta</code> and, if
+    <code>components</code> is supplied, to
+    <code>phenotype_components</code>. If <code>residual_var</code> is
+    supplied, writes one unconditional row to
+    <code>phenotype_residual_cov</code>
+    (<code>condition_column = NULL</code>). For heterogeneous residuals,
+    call <code>add_residual_cov()</code> afterwards.</p>
+    <p><strong>Arguments:</strong></p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 14%" />
+    <col style="width: 9%" />
+    <col style="width: 75%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Argument</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>phenotype_name</code></td>
+    <td>VARCHAR</td>
+    <td>Name of the observed phenotype; equals <code>trait_name</code>
+    for simple traits</td>
+    </tr>
+    <tr>
+    <td><code>trait_type</code></td>
+    <td>VARCHAR</td>
+    <td><code>"continuous"</code>, <code>"count"</code>,
+    <code>"binary"</code>, <code>"categorical"</code></td>
+    </tr>
+    <tr>
+    <td><code>mean</code></td>
+    <td>DOUBLE</td>
+    <td>Phenotypic intercept (population mean); stored as
+    <code>target_add_mean</code>; default <code>0</code></td>
+    </tr>
+    <tr>
+    <td><code>expressed_sex</code></td>
+    <td>VARCHAR</td>
+    <td>Who receives a record: <code>"both"</code> (default),
+    <code>"M"</code>, <code>"F"</code></td>
+    </tr>
+    <tr>
+    <td><code>repeatable</code></td>
+    <td>BOOLEAN</td>
+    <td>Multiple records per individual allowed; default
+    <code>FALSE</code></td>
+    </tr>
+    <tr>
+    <td><code>min_value</code></td>
+    <td>DOUBLE</td>
+    <td>Lower clip bound for count traits</td>
+    </tr>
+    <tr>
+    <td><code>max_value</code></td>
+    <td>DOUBLE</td>
+    <td>Upper clip bound for count traits</td>
+    </tr>
+    <tr>
+    <td><code>prevalence</code></td>
+    <td>DOUBLE</td>
+    <td>Threshold prevalence for binary traits</td>
+    </tr>
+    <tr>
+    <td><code>thresholds</code></td>
+    <td>VARCHAR</td>
+    <td>Comma-separated cutpoints for categorical traits</td>
+    </tr>
+    <tr>
+    <td><code>residual_var</code></td>
+    <td>DOUBLE</td>
+    <td>Scalar residual variance; writes to
+    <code>phenotype_residual_cov</code>,
+    <code>condition_column = NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>components</code></td>
+    <td>data.frame</td>
+    <td>One row per component; maps to
+    <code>phenotype_components</code>. <code>NULL</code> = simple
+    single-self.</td>
+    </tr>
+    <tr>
+    <td><code>overwrite</code></td>
+    <td>LOGICAL</td>
+    <td>Replace existing rows; default <code>FALSE</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong><code>components</code> column spec</strong> —
+    unspecified columns get the listed defaults:</p>
+    <div class="table-wrap">
+    <table>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Required</th>
+    <th>Default</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>source_trait_name</code></td>
+    <td>Yes</td>
+    <td>—</td>
+    </tr>
+    <tr>
+    <td><code>contributor_type</code></td>
+    <td>Yes</td>
+    <td>—</td>
+    </tr>
+    <tr>
+    <td><code>weight</code></td>
+    <td>No</td>
+    <td><code>1.0</code></td>
+    </tr>
+    <tr>
+    <td><code>weight_type</code></td>
+    <td>No</td>
+    <td><code>"fixed"</code></td>
+    </tr>
+    <tr>
+    <td><code>covariate_name</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>covariate_table</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>poly_order</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>poly_scale_min</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>poly_scale_max</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>genome_effect_types</code></td>
+    <td>No</td>
+    <td><code>"additive"</code></td>
+    </tr>
+    <tr>
+    <td><code>group_column</code></td>
+    <td>No</td>
+    <td><code>NULL</code></td>
+    </tr>
+    <tr>
+    <td><code>group_table</code></td>
+    <td>No</td>
+    <td><code>"ind_meta"</code></td>
+    </tr>
+    <tr>
+    <td><code>aggregation</code></td>
+    <td>No</td>
+    <td><code>"sum"</code></td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <h3 id="complete-worked-examples">Complete Worked Examples</h3>
+    <p><strong>1 — Simple trait (ADG):</strong></p>
+    <div class="sourceCode" id="cb7"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;ADG&quot;</span>,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">target_add_var =</span> <span class="dv">100</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">units          =</span> <span class="st">&quot;g/day&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(chr <span class="sc">%in%</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="st">&quot;ADG&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;ADG&quot;</span>,</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">500</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">120</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_fixed_class</span>(<span class="st">&quot;ADG&quot;</span>, <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">levels        =</span> <span class="fu">c</span>(<span class="at">M =</span> <span class="dv">20</span>, <span class="at">F =</span> <span class="dv">0</span>))</span></code></pre></div>
+    <p><strong>2 — Repeatability model (litter size, scenario
+    2):</strong></p>
+    <div class="sourceCode" id="cb8"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;litter_size&quot;</span>, <span class="at">target_add_var =</span> <span class="fl">0.3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="st">&quot;litter_size&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;litter_size&quot;</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;count&quot;</span>,</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">11</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="fl">0.5</span>,</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">repeatable   =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_effect_random</span>(<span class="st">&quot;litter_size&quot;</span>, <span class="st">&quot;pe&quot;</span>,</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">source_column =</span> <span class="st">&quot;id_ind&quot;</span>,</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">variance      =</span> <span class="fl">0.3</span>)</span></code></pre></div>
+    <p><code>source_column = "id_ind"</code> gives each sow her own
+    permanent-environment draw, reused across all subsequent
+    <code>add_phenotype("litter_size")</code> calls.</p>
+    <p><strong>3 — Maternal trait (WW = WWD + WWM, scenario
+    3):</strong></p>
+    <div class="sourceCode" id="cb9"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;WWD&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">100</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;WWM&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">40</span>)  <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;WWD&quot;</span>, <span class="st">&quot;WWM&quot;</span>), <span class="at">G =</span> G_ww) <span class="sc">|&gt;</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;WW&quot;</span>,           <span class="co"># no define_trait(&quot;WW&quot;) needed</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">200</span>,</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">80</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type,</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;WWD&quot;</span>,              <span class="st">&quot;self&quot;</span>,</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;WWM&quot;</span>,              <span class="st">&quot;dam&quot;</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+    <p><strong>4 — Social / competition trait (scenario 4):</strong></p>
+    <div class="sourceCode" id="cb10"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;CompDirect&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">60</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;SGE&quot;</span>,        <span class="at">target_add_var =</span> <span class="dv">10</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;CompDirect&quot;</span>, <span class="st">&quot;SGE&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;Competition&quot;</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">0</span>,</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">30</span>,</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type, <span class="sc">~</span>group_column, <span class="sc">~</span>aggregation,</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;CompDirect&quot;</span>,       <span class="st">&quot;self&quot;</span>,             <span class="cn">NA</span>,            <span class="st">&quot;sum&quot;</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;SGE&quot;</span>,              <span class="st">&quot;group&quot;</span>,            <span class="st">&quot;pen_id&quot;</span>,      <span class="st">&quot;sum&quot;</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+    <p><strong>5 — Legendre RR on DIM (milk yield, scenario
+    5):</strong></p>
+    <div class="sourceCode" id="cb11"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L0_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">8</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L1_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_trait</span>(<span class="st">&quot;L2_milk&quot;</span>, <span class="at">target_add_var =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">get_table</span>(<span class="st">&quot;genome_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_additive_effects</span>(<span class="fu">c</span>(<span class="st">&quot;L0_milk&quot;</span>, <span class="st">&quot;L1_milk&quot;</span>, <span class="st">&quot;L2_milk&quot;</span>), <span class="at">G =</span> G_rr) <span class="sc">|&gt;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;milk&quot;</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type    =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean          =</span> <span class="dv">0</span>,</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var  =</span> <span class="dv">50</span>,</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">expressed_sex =</span> <span class="st">&quot;F&quot;</span>,</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">repeatable    =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">components    =</span> tibble<span class="sc">::</span><span class="fu">tribble</span>(</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span>source_trait_name, <span class="sc">~</span>contributor_type, <span class="sc">~</span>weight_type, <span class="sc">~</span>covariate_name, <span class="sc">~</span>poly_order, <span class="sc">~</span>poly_scale_min, <span class="sc">~</span>poly_scale_max,</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L0_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">0</span><span class="dt">L</span>, <span class="dv">5</span>, <span class="dv">305</span>,</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L1_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">1</span><span class="dt">L</span>, <span class="dv">5</span>, <span class="dv">305</span>,</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;L2_milk&quot;</span>, <span class="st">&quot;self&quot;</span>, <span class="st">&quot;legendre&quot;</span>, <span class="st">&quot;dim&quot;</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">5</span>, <span class="dv">305</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (day <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">150</span>, <span class="dv">200</span>, <span class="dv">250</span>, <span class="dv">305</span>)) {</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">get_table</span>(<span class="st">&quot;ind_meta&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(sex <span class="sc">==</span> <span class="st">&quot;F&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_phenotype</span>(<span class="st">&quot;milk&quot;</span>, <span class="at">covariate_values =</span> <span class="fu">list</span>(<span class="at">dim =</span> day))</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+    <p><strong>6 — Heterogeneous residual variance by farm (added after
+    <code>define_phenotype()</code>):</strong></p>
+    <div class="sourceCode" id="cb12"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">define_phenotype</span>(<span class="st">&quot;WW&quot;</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">trait_type   =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean         =</span> <span class="dv">200</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">residual_var =</span> <span class="dv">120</span>,    <span class="co"># unconditional default</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">components   =</span> ...) <span class="sc">|&gt;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;WW&quot;</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">95</span>,  <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;WW&quot;</span>, <span class="st">&quot;WW&quot;</span>)),</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;farm_id&quot;</span>,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_level  =</span> <span class="st">&quot;Farm_A&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;WW&quot;</span>,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">145</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;WW&quot;</span>, <span class="st">&quot;WW&quot;</span>)),</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;farm_id&quot;</span>,</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_level  =</span> <span class="st">&quot;Farm_B&quot;</span>)</span></code></pre></div>
+    <h3
+    id="define_trait_simple-updated-convenience-wrapper"><code>define_trait_simple()</code>
+    — Updated Convenience Wrapper</h3>
+    <p><code>define_trait_simple()</code> is updated to chain all three
+    setup steps for simple non-composite traits:</p>
+    <div class="sourceCode" id="cb13"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">define_trait_simple</span>(pop, trait_name, n_qtl,</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>                    target_add_var,</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">mean          =</span> <span class="dv">0</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                    residual_var,</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">trait_type    =</span> <span class="st">&quot;continuous&quot;</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>                    <span class="at">expressed_sex =</span> <span class="st">&quot;both&quot;</span>,</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>                    <span class="at">repeatable    =</span> <span class="cn">FALSE</span>, ...)</span></code></pre></div>
+    <p>Internally: <code>define_trait()</code> → sample
+    <code>n_qtl</code> random loci →
+    <code>define_additive_effects()</code> →
+    <code>define_phenotype()</code>.</p>
+    <hr />
+    <h2 id="how-add_phenotype-would-use-this">How
+    <code>add_phenotype()</code> Would Use This</h2>
+    <ol type="1">
+    <li>Query <code>phenotype_components</code> for rows matching
+    <code>phenotype_name</code>.</li>
+    <li>If no rows → current behavior (single-trait, self,
+    <code>weight_type = "fixed"</code>,
+    <code>genome_effect_types = "additive"</code>).</li>
+    <li>If rows exist:
+    <ol type="a">
+    <li>Resolve covariate value(s) needed for dynamic weights: check
+    <code>covariate_table</code> (look up from DB) or
+    <code>covariate_values</code> argument (supplied at call time).</li>
+    <li>For each component row, resolve the contributing individual(s):
+    <ul>
+    <li><code>"self"</code> → focal individual</li>
+    <li><code>"dam"</code> → <code>ind_meta.id_parent_2</code> of focal
+    individual</li>
+    <li><code>"sire"</code> → <code>ind_meta.id_parent_1</code> of focal
+    individual</li>
+    <li><code>"group"</code> → all individuals where
+    <code>{group_table}.{group_column}</code> matches focal individual’s
+    value</li>
+    </ul></li>
+    <li>Fetch TBVs for <code>source_trait_name</code> from
+    <code>ind_tbv</code> for the resolved set, filtered to the
+    <code>genome_effect_types</code> specified in that row.</li>
+    <li>Aggregate (<code>sum</code> or <code>mean</code>) across group
+    members when <code>contributor_type = "group"</code>.</li>
+    <li>Compute the effective weight for this component:
+    <ul>
+    <li><code>"fixed"</code>: use <code>weight</code> scalar
+    directly</li>
+    <li><code>"covariate"</code>: weight =
+    <code>covariate_value * weight</code></li>
+    <li><code>"legendre"</code>: weight =
+    <code>phi_{poly_order}(scale(covariate_value)) * weight</code></li>
+    <li><code>"raw_poly"</code>: weight =
+    <code>covariate_value^poly_order * weight</code></li>
+    </ul></li>
+    <li>Multiply aggregated TBV by effective weight.</li>
+    <li>Sum all components to get the composite genetic value.</li>
+    </ol></li>
+    <li>Add fixed/random covariate contributions (same as current logic,
+    sourced from <code>trait_effects</code> for
+    <code>phenotype_name</code>).</li>
+    <li>Draw residual from <code>trait_effect_cov</code> under
+    <code>effect_name = "residual"</code> for
+    <code>phenotype_name</code>. (For RR traits with heterogeneous
+    residual variance, see open question 8.)</li>
+    <li>Write record to <code>ind_phenotype</code> under
+    <code>phenotype_name</code>. If <code>covariate_values</code> were
+    supplied, write them as additional user columns on the record.</li>
+    </ol>
+    <hr />
+    <h2 id="relationship-to-existing-tables">Relationship to Existing
+    Tables</h2>
+    <ul>
+    <li><strong><code>trait_meta</code></strong>: All
+    <code>trait_name</code>s (component traits <code>WWD</code>,
+    <code>WWM</code>, <code>L0_milk</code>, …) AND all
+    <code>phenotype_name</code>s (<code>WW</code>, <code>milk</code>)
+    live here. Composite phenotypes need a <code>trait_type</code> and a
+    residual variance but have no <code>genome_effects</code> rows.
+    Consider adding <code>is_composite BOOLEAN</code> to make this
+    explicit; alternatively, the presence of rows in
+    <code>phenotype_components</code> is a sufficient implicit
+    signal.</li>
+    <li><strong><code>trait_effect_cov</code></strong>: Home for genetic
+    additive (G) and named random-effect covariances, all keyed by
+    <code>trait_name_1</code>/<code>trait_name_2</code>. Residual (R)
+    covariances move to the new <code>phenotype_residual_cov</code>
+    table so that <code>trait_name</code> and
+    <code>phenotype_name</code> namespaces remain strictly distinct (see
+    Residual Variance section).</li>
+    <li><strong><code>genome_effects</code></strong>: No changes
+    required. Each component <code>trait_name</code> has its own rows
+    with the appropriate <code>genome_effect_type</code>
+    (<code>"additive"</code> now; <code>"dominance"</code> and
+    <code>"epistasis"</code> later). The
+    <code>genome_effect_types</code> column in
+    <code>phenotype_components</code> controls which rows are summed
+    when computing the TBV for that component.</li>
+    <li><strong><code>ind_tbv</code></strong>: Component trait TBVs
+    (<code>WWD</code>, <code>WWM</code>, <code>L0_milk</code>, etc.) are
+    stored here as usual, keyed by <code>trait_name</code>. Storing the
+    composite genetic value
+    (e.g. <code>WW_TBV(self) = WWD_TBV + WWM_TBV</code>) under
+    <code>phenotype_name</code> is an open question (see Q2). Currently
+    <code>ind_tbv</code> holds strictly additive TBVs; a future
+    <code>genome_effect_types</code> expansion may require
+    distinguishing rows by effect type.</li>
+    <li><strong><code>recorded_on</code> in
+    <code>trait_meta</code></strong>: <strong>Deprecated.</strong>
+    <code>phenotype_components</code> (populated by
+    <code>define_phenotype(components = ...)</code>) is a strict
+    superset. The column will be removed in a future schema
+    migration.</li>
+    </ul>
+    <hr />
+    <h2 id="residual-variance-naming-and-heterogeneity">Residual
+    Variance: Naming and Heterogeneity</h2>
+    <h3 id="the-naming-problem">The Naming Problem</h3>
+    <p>In the current implementation, <code>trait_effect_cov</code>
+    stores residual entries as
+    <code>(effect_name = "residual", trait_name_1 = "WWD", trait_name_2 = "WWD")</code>.
+    This is semantically wrong once composite phenotypes are introduced:
+    <code>WWD</code> is a genetic component trait that is never directly
+    observed and has no residual of its own. Only <code>WW</code> (the
+    observed phenotype) has a residual. Residuals belong to the
+    <strong>phenotype</strong> namespace (<code>phenotype_name</code>),
+    not the <strong>genetic component</strong> namespace
+    (<code>trait_name</code>).</p>
+    <p>The same applies to simple non-composite traits. A trait such as
+    <code>ADG</code> can have a residual variance that differs by farm,
+    sex, or contemporary group — none of which has anything to do with
+    the trait’s QTL structure. Separating residual storage into its own
+    table with <code>phenotype_name</code> keys makes this distinction
+    explicit.</p>
+    <h3 id="design-options">Design Options</h3>
+    <p><strong>Option A — New <code>phenotype_residual_cov</code> table
+    (Recommended)</strong></p>
+    <p>Keep <code>trait_effect_cov</code> unchanged for genetic additive
+    (G) and named random-effect covariances, all keyed by
+    <code>trait_name_1</code>/<code>trait_name_2</code>. Add a separate
+    table for residual (R) covariances keyed by
+    <code>phenotype_name_1</code>/<code>phenotype_name_2</code>, with
+    optional conditioning columns for heterogeneous variance by
+    group.</p>
+    <p><strong>Option B — Rename columns in
+    <code>trait_effect_cov</code></strong></p>
+    <p>Rename <code>trait_name_1</code>/<code>trait_name_2</code> to
+    neutral <code>name_1</code>/<code>name_2</code> and add conditioning
+    columns directly. Convention: <code>gen_add</code> rows use
+    <code>trait_name</code> values; <code>residual</code> rows use
+    <code>phenotype_name</code> values. Fewer tables, but semantically
+    mixed and the convention is implicit rather than enforced by
+    schema.</p>
+    <h3 id="proposed-new-table-phenotype_residual_cov">Proposed New
+    Table: <code>phenotype_residual_cov</code></h3>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 19%" />
+    <col style="width: 8%" />
+    <col style="width: 72%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Column</th>
+    <th>Type</th>
+    <th>Notes</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>id_residual_cov</code></td>
+    <td>INTEGER</td>
+    <td>Primary key (auto-incrementing)</td>
+    </tr>
+    <tr>
+    <td><code>phenotype_name_1</code></td>
+    <td>VARCHAR</td>
+    <td>FK to <code>trait_meta</code> (phenotype namespace)</td>
+    </tr>
+    <tr>
+    <td><code>phenotype_name_2</code></td>
+    <td>VARCHAR</td>
+    <td>FK to <code>trait_meta</code> (phenotype namespace)</td>
+    </tr>
+    <tr>
+    <td><code>cov_value</code></td>
+    <td>DOUBLE</td>
+    <td>Variance (diagonal) or covariance (off-diagonal)</td>
+    </tr>
+    <tr>
+    <td><code>condition_column</code></td>
+    <td>VARCHAR</td>
+    <td>Column in <code>condition_table</code> defining the group; NULL
+    = unconditional default</td>
+    </tr>
+    <tr>
+    <td><code>condition_table</code></td>
+    <td>VARCHAR</td>
+    <td>Table containing <code>condition_column</code>; default
+    <code>"ind_meta"</code></td>
+    </tr>
+    <tr>
+    <td><code>condition_level</code></td>
+    <td>VARCHAR</td>
+    <td>Specific group level/value this row applies to; NULL = default
+    fallback</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>Both <code>(i, j)</code> and <code>(j, i)</code> directions are
+    stored for off-diagonal entries, matching the
+    <code>trait_effect_cov</code> convention.</p>
+    <h3 id="lookup-hierarchy-in-add_phenotype">Lookup Hierarchy in
+    <code>add_phenotype()</code></h3>
+    <p>For each individual at phenotype time:</p>
+    <ol type="1">
+    <li>Determine the individual’s value of
+    <code>condition_column</code> from
+    <code>condition_table</code>.</li>
+    <li>Look for a row matching
+    <code>(phenotype_name, condition_column, condition_level)</code>.</li>
+    <li>Fall back to the unconditional row
+    (<code>condition_column = NULL</code>) if no exact match.</li>
+    <li>Warn and use the unconditional default row if neither a
+    group-specific nor an unconditional row is found (see Design
+    Decision 9).</li>
+    </ol>
+    <h3 id="examples">Examples</h3>
+    <p><strong>Farm-heterogeneous residual variance for WW:</strong></p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 21%" />
+    <col style="width: 21%" />
+    <col style="width: 14%" />
+    <col style="width: 21%" />
+    <col style="width: 20%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name_1</code></th>
+    <th><code>phenotype_name_2</code></th>
+    <th><code>cov_value</code></th>
+    <th><code>condition_column</code></th>
+    <th><code>condition_level</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>WW</td>
+    <td>WW</td>
+    <td>120.0</td>
+    <td>NULL</td>
+    <td>NULL</td>
+    </tr>
+    <tr>
+    <td>WW</td>
+    <td>WW</td>
+    <td>95.0</td>
+    <td>farm_id</td>
+    <td>Farm_A</td>
+    </tr>
+    <tr>
+    <td>WW</td>
+    <td>WW</td>
+    <td>145.0</td>
+    <td>farm_id</td>
+    <td>Farm_B</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>Individuals on Farm_A use Var(e) = 95; Farm_B use 145; any other
+    farm falls back to 120.</p>
+    <p><strong>Sex-specific residual variance for ADG:</strong></p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 21%" />
+    <col style="width: 21%" />
+    <col style="width: 14%" />
+    <col style="width: 21%" />
+    <col style="width: 20%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th><code>phenotype_name_1</code></th>
+    <th><code>phenotype_name_2</code></th>
+    <th><code>cov_value</code></th>
+    <th><code>condition_column</code></th>
+    <th><code>condition_level</code></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>ADG</td>
+    <td>ADG</td>
+    <td>80.0</td>
+    <td>NULL</td>
+    <td>NULL</td>
+    </tr>
+    <tr>
+    <td>ADG</td>
+    <td>ADG</td>
+    <td>70.0</td>
+    <td>sex</td>
+    <td><span class="badge-M">M</span></td>
+    </tr>
+    <tr>
+    <td>ADG</td>
+    <td>ADG</td>
+    <td>90.0</td>
+    <td>sex</td>
+    <td>F</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p><strong>Correlated residuals with heterogeneous variance (two
+    traits):</strong></p>
+    <p>All four entries — <code>(WW, WW)</code>, <code>(WW, BW)</code>,
+    <code>(BW, WW)</code>, <code>(BW, BW)</code> — are stored per
+    condition group. <code>add_phenotype()</code> assembles the
+    sub-matrix R for the individuals sharing a condition group and draws
+    jointly from <code>MVN(0, R)</code>.</p>
+    <h3 id="api">API</h3>
+    <p>Three entry points write to <code>phenotype_residual_cov</code>,
+    in order of typical use:</p>
+    <p><strong>1.
+    <code>define_effect_cov_matrix(pop, "residual", R)</code> — primary
+    multi-trait path.</strong> When
+    <code>effect_name = "residual"</code>, the function routes to
+    <code>phenotype_residual_cov</code> instead of
+    <code>trait_effect_cov</code>. Matrix row/column names are treated
+    as <code>phenotype_name_1</code> / <code>phenotype_name_2</code>.
+    Both <code>(i, j)</code> and <code>(j, i)</code> directions are
+    stored. <code>condition_column = NULL</code> and
+    <code>condition_level = NULL</code> (unconditional default row).
+    This is the recommended path when two or more phenotypes share
+    correlated residuals, and can be called <strong>before</strong>
+    <code>define_trait()</code> or <code>define_phenotype()</code>.</p>
+    <div class="sourceCode" id="cb14"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>R <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">c</span>(<span class="dv">120</span>, <span class="dv">30</span>, <span class="dv">30</span>, <span class="dv">80</span>), <span class="dv">2</span>, <span class="dv">2</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">&quot;WW&quot;</span>, <span class="st">&quot;BW&quot;</span>), <span class="fu">c</span>(<span class="st">&quot;WW&quot;</span>, <span class="st">&quot;BW&quot;</span>)))</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span> <span class="fu">define_effect_cov_matrix</span>(<span class="st">&quot;residual&quot;</span>, R)</span></code></pre></div>
+    <p><strong>2.
+    <code>define_phenotype(pop, phenotype_name, residual_var = ...)</code>
+    — single-trait shorthand.</strong> Writes one diagonal entry to
+    <code>phenotype_residual_cov</code> for this phenotype
+    (<code>condition_column = NULL</code>,
+    <code>condition_level = NULL</code>). Off-diagonal covariances
+    between this phenotype and others are not touched; they default to 0
+    unless <code>define_effect_cov_matrix()</code> has already set them.
+    Use this shorthand when phenotypes are modelled independently (no
+    joint residual draw needed).</p>
+    <p><strong>3.
+    <code>add_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, condition_table = "ind_meta", condition_level = NULL)</code>
+    — conditional / heterogeneous residuals.</strong> Adds
+    group-specific rows after <code>define_phenotype()</code> or
+    <code>define_effect_cov_matrix()</code> has written the
+    unconditional default. Each call writes one condition group’s
+    covariance matrix.</p>
+    <div class="sourceCode" id="cb15"><pre
+    class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;BW_turkey&quot;</span>,</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">900</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;BW_turkey&quot;</span>, <span class="st">&quot;BW_turkey&quot;</span>)),</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_level  =</span> <span class="st">&quot;M&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_residual_cov</span>(<span class="st">&quot;BW_turkey&quot;</span>,</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix       =</span> <span class="fu">matrix</span>(<span class="dv">400</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="st">&quot;BW_turkey&quot;</span>, <span class="st">&quot;BW_turkey&quot;</span>)),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_column =</span> <span class="st">&quot;sex&quot;</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition_level  =</span> <span class="st">&quot;F&quot;</span>)</span></code></pre></div>
+    <hr />
+    <h2 id="implementation-gaps-and-refactoring-notes">Implementation
+    Gaps and Refactoring Notes</h2>
+    <p>These are specific code paths that must change when
+    <code>phenotype_components</code> and
+    <code>phenotype_residual_cov</code> are introduced. Documented here
+    to prevent surprises during the refactor.</p>
+    <h3
+    id="g1-add_phenotype-genome_effects-validation-must-become-conditional">G1
+    — <code>add_phenotype()</code> genome_effects validation must become
+    conditional</h3>
+    <p><code>add_phenotype.R:158-175</code> errors if a trait has zero
+    additive effect rows in <code>genome_effects</code>. For composite
+    phenotypes (e.g. <code>WW</code>) this will always fire:
+    <code>WW</code> has no own QTL — its genetics come from
+    <code>WWD</code> and <code>WWM</code>.</p>
+    <p>Fix: before the validation loop, check whether
+    <code>phenotype_components</code> has any rows for
+    <code>phenotype_name = t</code>. If yes, skip the additive-effects
+    guard entirely. The component traits (<code>WWD</code>,
+    <code>WWM</code>) will be validated when their TBVs are fetched.</p>
+    <h3
+    id="g2-add_tbv-inside-add_phenotype-must-use-component-trait-names">G2
+    — <code>add_tbv()</code> inside <code>add_phenotype()</code> must
+    use component trait names</h3>
+    <p><code>add_phenotype.R:217</code>:
+    <code>pop &lt;- add_tbv(tbl, trait_name = trait)</code> is called
+    with the observed phenotype name. For composites,
+    <code>add_tbv()</code> must be called for the <em>component</em>
+    <code>source_trait_name</code> values (<code>"WWD"</code>,
+    <code>"WWM"</code>), not <code>"WW"</code>. The refactored code
+    should query <code>phenotype_components</code> for all distinct
+    <code>source_trait_name</code> values across the requested
+    phenotypes, union them, and call <code>add_tbv()</code> once for
+    that combined set. Component traits have
+    <code>target_add_mean = 0</code> (TBVs are Falconer-centered at base
+    allele frequencies); the composite phenotype <code>WW</code> carries
+    its own <code>target_add_mean</code> (population mean of the
+    observed phenotype) in <code>trait_meta</code> — no change to that
+    lookup is needed.</p>
+    <h3
+    id="g3-residual-lookup-must-shift-from-trait_effect_cov-to-phenotype_residual_cov">G3
+    — Residual lookup must shift from <code>trait_effect_cov</code> to
+    <code>phenotype_residual_cov</code></h3>
+    <p><code>add_phenotype.R:396</code>:
+    <code>resid_var &lt;- get_effect_var(pop, "residual", t)</code>
+    queries <code>trait_effect_cov</code> using <code>trait_name</code>.
+    After the plan is implemented:</p>
+    <ol type="1">
+    <li>For the unconditional case (no heterogeneity),
+    <code>phenotype_residual_cov</code> with
+    <code>condition_column = NULL</code> replaces the existing
+    <code>trait_effect_cov</code> lookup.</li>
+    <li>For the conditional case, a new helper
+    (e.g. <code>get_residual_cov(pop, phenotype_name, ind_row)</code>)
+    queries <code>phenotype_residual_cov</code> for the individual’s
+    group value, falls back to the unconditional row, warns and counts
+    individuals using the fallback.</li>
+    </ol>
+    <p>The existing <code>get_effect_var()</code> /
+    <code>load_effect_cov()</code> functions remain unchanged for
+    genetic and named random-effect covariances.</p>
+    <h3
+    id="g4-null-in-source-column-behaves-differently-for-fixed_class-vs-random-effects">G4
+    — NULL in source column behaves differently for
+    <code>fixed_class</code> vs <code>random</code> effects</h3>
+    <p>In <code>compute_covariate_contribution()</code>
+    (phenotype_helpers.R):</p>
+    <ul>
+    <li><strong><code>fixed_class</code></strong>: <code>NULL</code>
+    source value → <code>as.character(NA)</code> = <code>"NA"</code> →
+    not in <code>levels_json</code> → <strong>hard error</strong>.
+    Correct strict behaviour for fixed effects where every individual
+    must have a known level.</li>
+    <li><strong><code>random</code></strong>: <code>NULL</code> source
+    value → <code>existing_map["NA"]</code> → <code>NA</code> → silently
+    replaced by 0 (line 252). The individual contributes nothing for
+    this effect with no warning.</li>
+    </ul>
+    <p>These asymmetries should be documented in function roxygen; see
+    Q15 for resolution.</p>
+    <h3
+    id="g5-multi-phenotype-joint-residual-draw-must-handle-phenotype_residual_cov-and-heterogeneous-groups">G5
+    — Multi-phenotype joint residual draw must handle
+    <code>phenotype_residual_cov</code> and heterogeneous groups</h3>
+    <p>The joint residual sampling block
+    (<code>add_phenotype.R:354-372</code>) calls
+    <code>load_effect_cov(pop, "residual", trait)</code> where
+    <code>trait</code> is the vector of requested phenotype names. After
+    the plan, residuals live in <code>phenotype_residual_cov</code>.</p>
+    <p>The refactored block must:</p>
+    <ol type="1">
+    <li>Query <code>phenotype_residual_cov</code> for the requested
+    phenotypes.</li>
+    <li>Split individuals by condition group (e.g. all Farm_A
+    individuals share one R matrix, Farm_B individuals share
+    another).</li>
+    <li>For each condition-group batch, assemble the appropriate R
+    sub-matrix and draw from <code>MVN(0, R_group)</code> for that
+    batch.</li>
+    <li>Combine batch draws back into a single matrix ordered by
+    <code>id_ind</code>.</li>
+    </ol>
+    <p>If individuals fall back to the unconditional row (mixed-group
+    scenario), warn and count them. This is a meaningfully more complex
+    joint-draw than the current single-pass <code>MASS::mvrnorm()</code>
+    call.</p>
+    <h3
+    id="g6-higher-order-polynomial-fixed-covariates-are-not-natively-supported">G6
+    — Higher-order polynomial fixed covariates are not natively
+    supported</h3>
+    <p><code>define_effect_fixed_cov()</code> stores one
+    <code>slope × (x − center)</code> term. There is no
+    <code>poly_order</code> column in <code>trait_effects</code>. To fit
+    a quadratic on age today a user must:</p>
+    <ol type="1">
+    <li>Pre-compute <code>age_sq</code> as a column in
+    <code>ind_meta</code> via <code>mutate_table()</code>.</li>
+    <li>Call <code>define_effect_fixed_cov()</code> twice: once on
+    <code>age</code> and once on <code>age_sq</code>.</li>
+    </ol>
+    <p>This is a workable workaround but requires the user to manage
+    derived columns. See Q14 for a proposed schema extension.</p>
+    <hr />
+    <h2 id="design-decisions">Design Decisions</h2>
+    <p>The questions below were reviewed and resolved. Each entry states
+    the decision and the rationale so implementers do not need to
+    re-open them.</p>
+    <ol type="1">
+    <li><p><strong>Composite genetic value in <code>ind_tbv</code>:
+    No.</strong> <code>ind_tbv</code> is strictly keyed by
+    <code>trait_name</code> (genetic component trait). No composite row
+    is written under a <code>phenotype_name</code>. The individual
+    component TBVs (<code>WWD</code>, <code>WWM</code>) are stored
+    there; the composite phenotype <code>WW</code> is assembled at
+    phenotype time and written only to <code>ind_phenotype</code>.
+    Storing a composite TBV would be fabricated — it blurs the genetic /
+    phenotypic distinction the decoupled API is designed to
+    preserve.</p></li>
+    <li><p><strong>Missing contributor handling: skip (default) +
+    warning.</strong> When a contributor cannot be resolved (no dam
+    record, no <code>pen_id</code>, etc.), <code>add_phenotype()</code>
+    omits that individual from <code>ind_phenotype</code> and emits a
+    warning with a count of affected individuals. A second mode,
+    <code>"error"</code>, is available per
+    <code>phenotype_components</code> row via a
+    <code>missing_action VARCHAR</code> column (values:
+    <code>"skip"</code> (default) or <code>"error"</code>). This is the
+    expected behaviour for founders in a maternal-composite scenario —
+    WW for beef cows without dams simply produces no WW phenotype, which
+    is biologically correct. Users who filter
+    <code>add_phenotype()</code> to a broad group (e.g. all of
+    generation 1) and only some individuals qualify (e.g. only on-test
+    animals have a <code>pen_id</code>) will naturally receive
+    phenotypes only for those that qualify, with a warning explaining
+    the rest.</p>
+    <p>For standard random effects such as PE — where no draw exists yet
+    for an animal — the contribution defaults to 0 with a warning
+    (existing behaviour preserved).</p></li>
+    <li><p><strong>Spatial / neighborhood contributors: reserved for
+    later.</strong> The schema reserves a
+    <code>contributor_filter VARCHAR</code> column in
+    <code>phenotype_components</code> (initialized to <code>NULL</code>,
+    never read in the first refactor). Spatial lookup (adjacent
+    rows/columns, radius-based neighbors) is deferred until a concrete
+    use case is defined. Do not implement in the first
+    refactor.</p></li>
+    <li><p><strong>Ordering of composites in
+    <code>add_phenotype()</code> with no argument: simple
+    sequential.</strong> When <code>add_phenotype()</code> is called
+    without a <code>phenotype_name</code>, it first computes and stores
+    TBVs for <em>all</em> traits in <code>trait_meta</code> for the
+    filtered individuals, then assembles all phenotypes registered in
+    <code>phenotype_meta</code> in row order. Since all component TBVs
+    are available before phenotype assembly begins, there are no
+    dependency conflicts and no topological sort is needed.</p>
+    <p>Example — beef cattle with WWD, WWM, IMF as component traits and
+    WW + IMF as observed phenotypes: <code>add_phenotype()</code> with
+    no arg computes three TBVs per animal, then produces two phenotypic
+    records per animal (WW and IMF).</p></li>
+    <li><p><strong>Residual heterogeneity for RR traits: implement the
+    schema now.</strong> Covariate-continuous heterogeneous residuals
+    (where <code>Var(e)</code> varies smoothly with a value such as DIM
+    or production week) are important for test-day and laying-curve
+    models. The <code>phenotype_residual_cov</code> schema must include
+    <code>weight_type VARCHAR</code> and <code>poly_order INTEGER</code>
+    columns from the first refactor so that a Legendre expansion of
+    residual variance over a covariate can be stored alongside the
+    group-based <code>condition_column</code> /
+    <code>condition_level</code> rows. The lookup logic in
+    <code>add_phenotype()</code> for covariate-continuous residuals may
+    be implemented in a later phase, but the schema must not require
+    migration to accommodate it.</p></li>
+    <li><p><strong><code>ind_tbv</code> and non-additive effects — plan
+    <code>ind_gv</code> for later.</strong> <code>ind_tbv</code> remains
+    strictly for additive breeding values. A future <code>ind_gv</code>
+    table (full genotypic value: <code>A + D</code> or
+    <code>A + D + I</code>) will be added with a dedicated
+    <code>add_gv()</code> function that calls <code>add_tbv()</code>
+    internally. For now, <code>ind_gv</code> is not implemented, but the
+    current schema must not block it. When built, <code>add_gv()</code>
+    will initially produce additive-only genotypic values (identical to
+    TBV until dominance is implemented), giving users the
+    <code>ind_gv</code> table infrastructure without computational
+    overhead for the common additive-only case. Crossbreeding programmes
+    that need dominance deviations will use <code>ind_gv</code> once
+    dominance effects are supported in
+    <code>genome_effects</code>.</p></li>
+    <li><p><strong><code>phenotype_meta</code> vs
+    <code>trait_meta</code>: new <code>phenotype_meta</code>
+    table.</strong> <code>define_phenotype()</code> writes to a separate
+    <code>phenotype_meta</code> table. <code>trait_meta</code> remains
+    purely genetic. <code>add_phenotype()</code> with no arg iterates
+    <code>phenotype_meta</code> only, trivially excluding
+    component-trait rows.</p></li>
+    <li><p><strong>Split tables vs neutral rename for residual
+    covariances: Option A.</strong> <code>trait_effect_cov</code> is
+    unchanged (keyed by <code>trait_name_1</code> /
+    <code>trait_name_2</code>) for genetic additive and named random
+    effect covariances. Residual (co)variances move to a new
+    <code>phenotype_residual_cov</code> table (keyed by
+    <code>phenotype_name_1</code> / <code>phenotype_name_2</code>) with
+    <code>condition_column</code>, <code>condition_table</code>,
+    <code>condition_level</code>, <code>weight_type</code>, and
+    <code>poly_order</code> columns for heterogeneous and RR residuals.
+    This is semantically clean and avoids mixing genetic and phenotypic
+    namespaces.</p></li>
+    <li><p><strong>Fallback when no matching row in
+    <code>phenotype_residual_cov</code>: warn and use default.</strong>
+    When an individual’s group value has no specific row in
+    <code>phenotype_residual_cov</code>, <code>add_phenotype()</code>
+    falls back to the unconditional row
+    (<code>condition_column = NULL</code>) and emits a clear warning
+    stating the phenotype name, condition column, unmatched levels, and
+    the count of affected individuals. No per-phenotype configurability
+    is needed for the initial implementation.</p></li>
+    <li><p><strong>Higher-order polynomial fixed covariates: add
+    <code>poly_order</code> to <code>trait_effects</code>.</strong> A
+    <code>poly_order INTEGER</code> column is added to
+    <code>trait_effects</code> (default <code>1</code>). The
+    contribution of a <code>fixed_cov</code> effect becomes
+    <code>slope × (x − center)^poly_order</code>, so
+    <code>poly_order = 1</code> preserves the current linear behaviour
+    with no user-visible change. Spline basis functions are not
+    planned.</p></li>
+    <li><p><strong>NULL handling for <code>fixed_class</code> source
+    column: user-controlled via <code>null_class_action</code>.</strong>
+    <code>define_effect_fixed_class()</code> gains a
+    <code>null_class_action</code> argument (stored in
+    <code>trait_effects</code>). Available values:</p>
+    <div class="table-wrap">
+    <table>
+    <colgroup>
+    <col style="width: 35%" />
+    <col style="width: 64%" />
+    </colgroup>
+    <thead>
+    <tr>
+    <th>Value</th>
+    <th>Behaviour</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>"skip"</code> (default)</td>
+    <td>Individual is excluded from <code>ind_phenotype</code> for this
+    trait; a warning lists the count and sample <code>id_ind</code>
+    values</td>
+    </tr>
+    <tr>
+    <td><code>"error"</code></td>
+    <td>Hard stop when any NULL source value is encountered; use for
+    effects like <code>sex</code> that should never be missing</td>
+    </tr>
+    <tr>
+    <td><code>"zero"</code></td>
+    <td>Treat NULL as a zero-shift contribution (equivalent to the
+    reference level); individual receives a phenotype</td>
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    <p>The default <code>"skip"</code> is safest: if a user filters a
+    broad group and only some animals have the required column
+    populated, only those animals receive a phenotype, and the warning
+    makes the gap visible without crashing the simulation.</p></li>
+    </ol>
+  </main>
+
+</div>
+
+<script>
+/* Highlight active TOC link on scroll */
+(function () {
+  var headings = document.querySelectorAll('main h1,main h2,main h3');
+  var links    = document.querySelectorAll('nav#toc a');
+  if (!links.length) return;
+
+  function onScroll() {
+    var scrollY = window.scrollY + 90;
+    var active  = links[0];
+    headings.forEach(function (h) {
+      if (h.getBoundingClientRect().top + window.scrollY <= scrollY) {
+        var id   = h.id;
+        var link = document.querySelector('nav#toc a[href="#' + id + '"]');
+        if (link) active = link;
+      }
+    });
+    links.forEach(function (l) { l.classList.remove('active'); });
+    if (active) active.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

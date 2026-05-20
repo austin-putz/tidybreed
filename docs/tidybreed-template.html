@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$if(title)$$title$ — $endif$tidybreed</title>
+  <link rel="stylesheet" href="tidybreed.css">
+  <style>
+    /* Inline TOC overrides so anchor links work */
+    nav#toc > ul > li > a { font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <nav id="toc">
+    <div style="font-weight:800;font-size:.95rem;margin-bottom:1.25rem;color:var(--brand);">
+      tidybreed
+    </div>
+    $if(toc)$
+    $toc$
+    $endif$
+  </nav>
+
+  <main>
+    <div class="doc-header">
+      <span class="badge">Design Document</span>
+      <h1>$if(title)$$title$$else$tidybreed$endif$</h1>
+      $if(subtitle)$<p class="subtitle">$subtitle$</p>$endif$
+    </div>
+
+    $body$
+  </main>
+
+</div>
+
+<script>
+/* Highlight active TOC link on scroll */
+(function () {
+  var headings = document.querySelectorAll('main h1,main h2,main h3');
+  var links    = document.querySelectorAll('nav#toc a');
+  if (!links.length) return;
+
+  function onScroll() {
+    var scrollY = window.scrollY + 90;
+    var active  = links[0];
+    headings.forEach(function (h) {
+      if (h.getBoundingClientRect().top + window.scrollY <= scrollY) {
+        var id   = h.id;
+        var link = document.querySelector('nav#toc a[href="#' + id + '"]');
+        if (link) active = link;
+      }
+    });
+    links.forEach(function (l) { l.classList.remove('active'); });
+    if (active) active.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+})();
+</script>
+</body>
+</html>
