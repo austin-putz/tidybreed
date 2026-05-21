@@ -264,3 +264,25 @@ test_that("define_effect_cov_matrix() with effect_name='residual' routes to phen
                              rcov$phenotype_name_2 == "ADG"]
   expect_equal(adg_var, 100)
 })
+
+
+test_that("missing_component_action stored in phenotype_meta, defaults to 'skip'", {
+  pop <- make_pheno_base_pop("dp_mca")
+  on.exit(close_pop(pop))
+
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  # Default: skip
+  pop <- define_phenotype(pop, "ADG", residual_var = 1)
+  row <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT missing_component_action FROM phenotype_meta WHERE phenotype_name = 'ADG'")
+  expect_equal(row$missing_component_action, "skip")
+
+  # Explicit: error
+  pop <- define_trait(pop, "BW", target_add_var = 1)
+  pop <- define_phenotype(pop, "BW", residual_var = 1,
+                          missing_component_action = "error")
+  row2 <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT missing_component_action FROM phenotype_meta WHERE phenotype_name = 'BW'")
+  expect_equal(row2$missing_component_action, "error")
+})

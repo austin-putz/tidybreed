@@ -276,19 +276,20 @@ ensure_trait_tables <- function(pop) {
 
     phenotype_meta = "
       CREATE TABLE phenotype_meta (
-        id_phenotype_meta INTEGER PRIMARY KEY,
-        phenotype_name    VARCHAR UNIQUE NOT NULL,
-        trait_type        VARCHAR,
-        mean              DOUBLE DEFAULT 0,
-        expressed_sex     VARCHAR DEFAULT 'both',
-        repeatable        BOOLEAN DEFAULT FALSE,
-        min_value         DOUBLE,
-        max_value         DOUBLE,
-        prevalence        DOUBLE,
-        thresholds        VARCHAR,
-        cat_values        VARCHAR,
-        cat_names         VARCHAR,
-        store_liability   BOOLEAN DEFAULT FALSE
+        id_phenotype_meta        INTEGER PRIMARY KEY,
+        phenotype_name           VARCHAR UNIQUE NOT NULL,
+        trait_type               VARCHAR,
+        mean                     DOUBLE DEFAULT 0,
+        expressed_sex            VARCHAR DEFAULT 'both',
+        repeatable               BOOLEAN DEFAULT FALSE,
+        min_value                DOUBLE,
+        max_value                DOUBLE,
+        prevalence               DOUBLE,
+        thresholds               VARCHAR,
+        cat_values               VARCHAR,
+        cat_names                VARCHAR,
+        store_liability          BOOLEAN DEFAULT FALSE,
+        missing_component_action VARCHAR DEFAULT 'skip'
       )
     ",
 
@@ -392,6 +393,14 @@ ensure_trait_tables <- function(pop) {
     if ("trait_name" %in% ip_cols && !"phenotype_name" %in% ip_cols)
       DBI::dbExecute(con,
         "ALTER TABLE ind_phenotype RENAME COLUMN trait_name TO phenotype_name")
+  }
+
+  # Add missing_component_action to phenotype_meta if not present (v0.31.x → v0.32.0)
+  if ("phenotype_meta" %in% DBI::dbListTables(con)) {
+    pm_cols <- DBI::dbListFields(con, "phenotype_meta")
+    if (!"missing_component_action" %in% pm_cols)
+      DBI::dbExecute(con,
+        "ALTER TABLE phenotype_meta ADD COLUMN missing_component_action VARCHAR DEFAULT 'skip'")
   }
 
   pop$tables <- unique(c(pop$tables, names(ddl)))

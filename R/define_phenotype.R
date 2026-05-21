@@ -65,6 +65,13 @@
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
 #'   written.
+#' @param missing_component_action Character. What to do when an individual is
+#'   missing one or more required components (e.g. no group assignment, missing
+#'   dam TBV, missing random effect draw). `"skip"` (default) excludes the
+#'   individual from `ind_phenotype` and emits a warning with a count.
+#'   `"error"` stops with an informative message listing affected individuals.
+#'   Stored in `phenotype_meta` so the behaviour is consistent across all
+#'   [add_phenotype()] calls for this phenotype.
 #' @param overwrite Logical. If `TRUE` and a phenotype with the same name
 #'   already exists, replace its rows in `phenotype_meta` and
 #'   `phenotype_components`. Default `FALSE` errors on duplicate.
@@ -101,20 +108,21 @@
 #' @export
 define_phenotype <- function(pop,
                              phenotype_name,
-                             trait_type      = c("continuous", "count", "categorical"),
-                             mean            = 0,
-                             expressed_sex   = c("both", "M", "F"),
-                             repeatable      = FALSE,
-                             min_value       = NULL,
-                             max_value       = NULL,
-                             prevalence      = NULL,
-                             thresholds      = NULL,
-                             cat_values      = NULL,
-                             cat_names       = NULL,
-                             store_liability = FALSE,
-                             residual_var    = NULL,
-                             components      = NULL,
-                             overwrite       = FALSE) {
+                             trait_type               = c("continuous", "count", "categorical"),
+                             mean                     = 0,
+                             expressed_sex            = c("both", "M", "F"),
+                             repeatable               = FALSE,
+                             min_value                = NULL,
+                             max_value                = NULL,
+                             prevalence               = NULL,
+                             thresholds               = NULL,
+                             cat_values               = NULL,
+                             cat_names                = NULL,
+                             store_liability          = FALSE,
+                             residual_var             = NULL,
+                             components               = NULL,
+                             missing_component_action = c("skip", "error"),
+                             overwrite                = FALSE) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
@@ -123,8 +131,9 @@ define_phenotype <- function(pop,
             nchar(phenotype_name) > 0)
   validate_sql_identifier(phenotype_name, what = "phenotype name")
 
-  trait_type    <- match.arg(trait_type)
-  expressed_sex <- match.arg(expressed_sex)
+  trait_type               <- match.arg(trait_type)
+  expressed_sex            <- match.arg(expressed_sex)
+  missing_component_action <- match.arg(missing_component_action)
 
   # ── Categorical validation ─────────────────────────────────────────────────
 
@@ -215,19 +224,20 @@ define_phenotype <- function(pop,
   new_id <- next_int_id(pop$db_conn, "phenotype_meta", "id_phenotype_meta")
 
   row <- tibble::tibble(
-    id_phenotype_meta = new_id,
-    phenotype_name    = phenotype_name,
-    trait_type        = trait_type,
-    mean              = as.numeric(mean),
-    expressed_sex     = expressed_sex,
-    repeatable        = as.logical(repeatable),
-    min_value         = if (is.null(min_value)) NA_real_ else as.numeric(min_value),
-    max_value         = if (is.null(max_value)) NA_real_ else as.numeric(max_value),
-    prevalence        = if (is.null(prevalence)) NA_real_ else as.numeric(prevalence),
-    thresholds        = thresholds_str,
-    cat_values        = cat_values_str,
-    cat_names         = cat_names_str,
-    store_liability   = as.logical(store_liability)
+    id_phenotype_meta        = new_id,
+    phenotype_name           = phenotype_name,
+    trait_type               = trait_type,
+    mean                     = as.numeric(mean),
+    expressed_sex            = expressed_sex,
+    repeatable               = as.logical(repeatable),
+    min_value                = if (is.null(min_value)) NA_real_ else as.numeric(min_value),
+    max_value                = if (is.null(max_value)) NA_real_ else as.numeric(max_value),
+    prevalence               = if (is.null(prevalence)) NA_real_ else as.numeric(prevalence),
+    thresholds               = thresholds_str,
+    cat_values               = cat_values_str,
+    cat_names                = cat_names_str,
+    store_liability          = as.logical(store_liability),
+    missing_component_action = missing_component_action
   )
 
   DBI::dbWriteTable(pop$db_conn, "phenotype_meta", row, append = TRUE)
@@ -265,6 +275,17 @@ define_phenotype <- function(pop,
            paste(unique(components$contributor_type[bad_ct]), collapse = ", "),
            ". Must be one of: ", paste(valid_contributor_types, collapse = ", "),
            call. = FALSE)
+    }
+
+    # group contributors require group_column
+    grp_rows <- components[components$contributor_type == "group", , drop = FALSE]
+    if (nrow(grp_rows) > 0) {
+      gcol <- if ("group_column" %in% names(grp_rows)) grp_rows$group_column
+              else rep(NA_character_, nrow(grp_rows))
+      bad_gc <- is.na(gcol) | !nzchar(as.character(gcol))
+      if (any(bad_gc))
+        stop("components with contributor_type = 'group' must specify group_column.",
+             call. = FALSE)
     }
 
     # Fill defaults for optional columns

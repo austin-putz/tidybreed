@@ -1,3 +1,28 @@
+# tidybreed 0.32.0 (2026-05-20)
+
+## New features
+
+* `contributor_type = "group"` is now fully implemented in composite phenotypes.
+  The SGE (Social Genetic Effects / Bijma) model is supported: each focal
+  individual's social component is the sum (or mean, via `aggregation`) of
+  pen-/cage-/litter-mates' social TBVs. Self is always excluded from the group
+  aggregation. Singletons (no group-mates) receive a social contribution of 0
+  and are not excluded. Relevant use-cases include pig ADG in nucleus pens,
+  poultry cage mortality, litter effects, and any competition/cooperation model.
+
+* `define_phenotype()` gains a `missing_component_action` argument
+  (`"skip"` by default, or `"error"`). This is stored in `phenotype_meta` and
+  applied uniformly across **all** missing composite components (group
+  assignment, dam/sire TBV, etc.) on every `add_phenotype()` call.
+  `"skip"` returns no phenotype record for the affected individual and emits a
+  warning with the count and up to 5 example IDs. `"error"` stops with an
+  informative message.
+
+## Schema changes
+
+* `phenotype_meta` gains a `missing_component_action VARCHAR DEFAULT 'skip'`
+  column. Existing databases are migrated automatically by `ensure_trait_tables()`.
+
 # tidybreed 0.31.0 (2026-05-19)
 
 ## Breaking changes

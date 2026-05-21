@@ -272,19 +272,20 @@ initialize_genome <- function(pop_name,
   # Create new phenotype-layer tables (eagerly, empty)
   DBI::dbExecute(db_conn, "
     CREATE TABLE phenotype_meta (
-      id_phenotype_meta INTEGER PRIMARY KEY,
-      phenotype_name    VARCHAR UNIQUE NOT NULL,
-      trait_type        VARCHAR,
-      mean              DOUBLE DEFAULT 0,
-      expressed_sex     VARCHAR DEFAULT 'both',
-      repeatable        BOOLEAN DEFAULT FALSE,
-      min_value         DOUBLE,
-      max_value         DOUBLE,
-      prevalence        DOUBLE,
-      thresholds        VARCHAR,
-      cat_values        VARCHAR,
-      cat_names         VARCHAR,
-      store_liability   BOOLEAN DEFAULT FALSE
+      id_phenotype_meta        INTEGER PRIMARY KEY,
+      phenotype_name           VARCHAR UNIQUE NOT NULL,
+      trait_type               VARCHAR,
+      mean                     DOUBLE DEFAULT 0,
+      expressed_sex            VARCHAR DEFAULT 'both',
+      repeatable               BOOLEAN DEFAULT FALSE,
+      min_value                DOUBLE,
+      max_value                DOUBLE,
+      prevalence               DOUBLE,
+      thresholds               VARCHAR,
+      cat_values               VARCHAR,
+      cat_names                VARCHAR,
+      store_liability          BOOLEAN DEFAULT FALSE,
+      missing_component_action VARCHAR DEFAULT 'skip'
     )
   ")
 

@@ -318,3 +318,281 @@ test_that("define_trait_simple() creates both trait_meta and phenotype_meta rows
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 60)
 })
+
+
+# ── SGE helper ─────────────────────────────────────────────────────────────────
+
+make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
+                         add_na_pen = FALSE) {
+  n_pigs <- n_pens * pen_size
+  pop <- initialize_genome(
+    pop_name          = pop_name,
+    n_loci            = 300,
+    n_chr             = 3,
+    chr_len_Mb        = 100,
+    n_haplotypes      = 100,
+    db_path           = ":memory:",
+    fixed_allele_freq = 0.5
+  )
+  # Half males, half females
+  pop <- add_founders(pop, n_males = n_pigs %/% 2L,
+                      n_females = n_pigs - n_pigs %/% 2L,
+                      line_name = "A")
+
+  # Assign pen_id to ind_meta
+  ids <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
+  pen_ids <- rep(paste0("pen", seq_len(n_pens)), each = pen_size)
+  if (add_na_pen) pen_ids[seq_len(3)] <- NA_character_
+  pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pen_ids)
+
+  # Define direct + social traits
+  G <- matrix(c(0.4, -0.1, -0.1, 0.15), 2, 2,
+              dimnames = list(c("ADG_direct","ADG_social"),
+                              c("ADG_direct","ADG_social")))
+  pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
+  pop <- define_trait(pop, "ADG_social", target_add_var = 0.15)
+  pop <- get_table(pop, "genome_meta") |>
+    define_additive_effects(c("ADG_direct","ADG_social"), G = G)
+
+  # Composite SGE phenotype
+  pop <- define_phenotype(pop, "ADG",
+    trait_type   = "continuous",
+    mean         = 850,
+    residual_var = 300,
+    components   = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column,
+      "ADG_direct",       "self",            NA_character_,
+      "ADG_social",       "group",           "pen_id"
+    )
+  )
+  pop
+}
+
+
+# ── 7. SGE pig ADG — basic end-to-end ─────────────────────────────────────────
+
+test_that("SGE pig ADG end-to-end: 40 phenotype rows, no 'ADG' in ind_tbv", {
+  set.seed(701)
+  pop <- make_sge_pop("sge_basic")
+  on.exit(close_pop(pop))
+
+  pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG")
+
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_equal(nrow(ph), 40L)
+  expect_true(all(ph$phenotype_name == "ADG"))
+
+  tbv_traits <- dplyr::collect(get_table(pop, "ind_tbv")) |>
+    dplyr::distinct(trait_name) |>
+    dplyr::pull(trait_name)
+  expect_true("ADG_direct" %in% tbv_traits)
+  expect_true("ADG_social" %in% tbv_traits)
+  expect_false("ADG" %in% tbv_traits)
+})
+
+
+# ── 8. aggregation = "sum" vs "mean" produce different values ─────────────────
+
+test_that("SGE aggregation sum vs mean differ when pen size > 1", {
+  set.seed(801)
+
+  # sum pop
+  pop_sum <- make_sge_pop("sge_sum")
+  on.exit({ close_pop(pop_sum); close_pop(pop_mean) }, add = TRUE)
+  pop_sum <- get_table(pop_sum, "ind_meta") |> add_phenotype("ADG")
+
+  # mean pop — redefine with aggregation="mean"
+  pop_mean <- make_sge_pop("sge_mean")
+  DBI::dbExecute(pop_mean$db_conn,
+    "DELETE FROM phenotype_meta WHERE phenotype_name = 'ADG'")
+  DBI::dbExecute(pop_mean$db_conn,
+    "DELETE FROM phenotype_components WHERE phenotype_name = 'ADG'")
+  pop_mean <- define_phenotype(pop_mean, "ADG",
+    trait_type   = "continuous",
+    mean         = 850,
+    residual_var = 300,
+    components   = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column, ~aggregation,
+      "ADG_direct",       "self",            NA_character_, "sum",
+      "ADG_social",       "group",           "pen_id",      "mean"
+    )
+  )
+  pop_mean <- get_table(pop_mean, "ind_meta") |> add_phenotype("ADG")
+
+  ph_sum  <- dplyr::collect(get_table(pop_sum,  "ind_phenotype"))$pheno_value
+  ph_mean <- dplyr::collect(get_table(pop_mean, "ind_phenotype"))$pheno_value
+  expect_false(isTRUE(all.equal(ph_sum, ph_mean)))
+})
+
+
+# ── 9. Singleton group contributes 0, not NA ──────────────────────────────────
+
+test_that("Singleton pen (no pen-mates) gets social = 0, individual phenotyped", {
+  set.seed(901)
+  pop <- make_sge_pop("sge_single", n_pens = 1, pen_size = 1)
+  on.exit(close_pop(pop))
+
+  pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG")
+
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_equal(nrow(ph), 1L)
+  expect_false(is.na(ph$pheno_value))
+})
+
+
+# ── 10. Missing pen_id → excluded with warning + count (skip) ─────────────────
+
+test_that("Missing pen_id excluded with warning and count (missing_component_action=skip)", {
+  set.seed(1001)
+  pop <- make_sge_pop("sge_skip", add_na_pen = TRUE)
+  on.exit(close_pop(pop))
+
+  expect_warning(
+    pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG"),
+    "3 individual"
+  )
+
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_equal(nrow(ph), 37L)
+})
+
+
+# ── 11. Missing pen_id with error action stops ────────────────────────────────
+
+test_that("Missing pen_id with missing_component_action='error' stops", {
+  set.seed(1101)
+  pop <- make_sge_pop("sge_err", add_na_pen = TRUE)
+  on.exit(close_pop(pop))
+
+  # Redefine with error action
+  DBI::dbExecute(pop$db_conn,
+    "DELETE FROM phenotype_meta WHERE phenotype_name = 'ADG'")
+  DBI::dbExecute(pop$db_conn,
+    "DELETE FROM phenotype_components WHERE phenotype_name = 'ADG'")
+  pop <- define_phenotype(pop, "ADG",
+    trait_type               = "continuous",
+    mean                     = 850,
+    residual_var             = 300,
+    missing_component_action = "error",
+    components   = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column,
+      "ADG_direct",       "self",            NA_character_,
+      "ADG_social",       "group",           "pen_id"
+    )
+  )
+
+  expect_error(
+    get_table(pop, "ind_meta") |> add_phenotype("ADG"),
+    "3 individual"
+  )
+})
+
+
+# ── 12. group_column omitted errors at define_phenotype ───────────────────────
+
+test_that("group_column omitted for group contributor errors in define_phenotype()", {
+  set.seed(1201)
+  pop <- make_sge_pop("sge_nogrp")
+  on.exit(close_pop(pop))
+
+  expect_error(
+    define_phenotype(pop, "ADG2",
+      trait_type = "continuous",
+      components = tibble::tribble(
+        ~source_trait_name, ~contributor_type,
+        "ADG_direct",       "group"
+      )),
+    "group_column"
+  )
+})
+
+
+# ── 13. Poultry binary mortality with cage-level SGE ─────────────────────────
+
+test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in {0,1}", {
+  set.seed(1301)
+  pop <- initialize_genome(
+    pop_name          = "poultry",
+    n_loci            = 200,
+    n_chr             = 2,
+    chr_len_Mb        = 100,
+    n_haplotypes      = 80,
+    db_path           = ":memory:",
+    fixed_allele_freq = 0.5
+  )
+  n_birds <- 40L
+  pop <- add_founders(pop, n_males = n_birds %/% 2L,
+                      n_females = n_birds - n_birds %/% 2L,
+                      line_name = "B")
+
+  cage_ids <- rep(paste0("cage", 1:4), each = 10)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(cage_id = cage_ids)
+
+  pop <- define_trait(pop, "mort_direct", target_add_var = 0.05)
+  pop <- define_trait(pop, "mort_social", target_add_var = 0.01)
+  pop <- get_table(pop, "genome_meta") |>
+    define_additive_effects(c("mort_direct", "mort_social"),
+      G = matrix(c(0.05, 0, 0, 0.01), 2, 2,
+                 dimnames = list(c("mort_direct","mort_social"),
+                                 c("mort_direct","mort_social"))))
+
+  pop <- define_phenotype(pop, "mortality",
+    trait_type   = "categorical",
+    prevalence   = 0.1,
+    residual_var = 1,
+    components   = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column,
+      "mort_direct",      "self",            NA_character_,
+      "mort_social",      "group",           "cage_id"
+    )
+  )
+  pop <- get_table(pop, "ind_meta") |> add_phenotype("mortality")
+
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_equal(nrow(ph), n_birds)
+  expect_true(all(ph$pheno_value %in% c(1, 2)))
+})
+
+
+# ── 14. Variable group sizes work correctly ───────────────────────────────────
+
+test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpected NAs", {
+  set.seed(1401)
+  pop <- initialize_genome(
+    pop_name          = "varpens",
+    n_loci            = 300,
+    n_chr             = 3,
+    chr_len_Mb        = 100,
+    n_haplotypes      = 100,
+    db_path           = ":memory:",
+    fixed_allele_freq = 0.5
+  )
+  # 2 small pens (5 each) + 2 large pens (10 each) = 30 animals
+  pop <- add_founders(pop, n_males = 15L, n_females = 15L, line_name = "A")
+  pen_ids <- c(rep("p1", 5), rep("p2", 5), rep("p3", 10), rep("p4", 10))
+  pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pen_ids)
+
+  pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
+  pop <- define_trait(pop, "ADG_social", target_add_var = 0.15)
+  pop <- get_table(pop, "genome_meta") |>
+    define_additive_effects(c("ADG_direct","ADG_social"),
+      G = matrix(c(0.4, -0.05, -0.05, 0.15), 2, 2,
+                 dimnames = list(c("ADG_direct","ADG_social"),
+                                 c("ADG_direct","ADG_social"))))
+
+  pop <- define_phenotype(pop, "ADG",
+    trait_type   = "continuous",
+    mean         = 850,
+    residual_var = 300,
+    components   = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column,
+      "ADG_direct",       "self",            NA_character_,
+      "ADG_social",       "group",           "pen_id"
+    )
+  )
+
+  pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG")
+  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  expect_equal(nrow(ph), 30L)
+  expect_false(any(is.na(ph$pheno_value)))
+})
