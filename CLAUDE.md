@@ -57,6 +57,24 @@ given as options again.
 5. **No abbreviations in column names when the full word is unambiguous.**
    `index_weight` not `index_wt`; `trait_name_1`/`trait_name_2` not `trait_1`/`trait_2`.
 
+## Two-Layer Phenotype Design (v0.31.0+)
+
+The model is split into two distinct layers with a strict boundary between them:
+
+**Genetic component layer** — managed by `define_trait()`:
+- One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
+- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_effect_cov`
+- Arguments: `target_add_var`, `target_add_mean`, `expressed_parent`, `description`, `units`
+- No phenotype-level information at all — no mean, no residual, no trait_type, no expressed_sex
+
+**Observation layer** — managed by `define_phenotype()`:
+- One row in `phenotype_meta` per observed phenotype individuals receive records for (e.g. `ADG`, `WW`, `mortality`)
+- For simple traits, `phenotype_name` equals the `trait_name` of its single genetic component
+- For composite traits (maternal, SGE), `phenotype_name` is new and one or more `trait_meta` rows feed into it via `phenotype_components`
+- Arguments: `trait_type`, `mean`, `expressed_sex`, `repeatable`, `min_value`, `max_value`, `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`, `residual_var`, `components`, `missing_component_action`
+
+**The rule**: if an argument describes the genetics (variance, QTL structure, parent-of-origin), it belongs in `define_trait()`. If it describes what observers record (mean, distribution, sex expression, residual noise, how to assemble from components), it belongs in `define_phenotype()`. Never put observation-layer arguments on `define_trait()` or genetic-layer arguments on `define_phenotype()`.
+
 ## Function Naming Convention
 
 | Prefix        | Meaning                                        |
@@ -160,26 +178,23 @@ populated by `add_founders()` and `add_offspring()`.
 
 ### `trait_meta`
 
-One row per trait. Populated by `define_trait()`.
+One row per **genetic component trait**. Populated by `define_trait()`.
+Contains only genetic-layer information — no phenotype-level metadata.
+Observation-layer metadata lives in `phenotype_meta`.
 
-| Column             | Type    | Notes                                                         |
-|--------------------|---------|---------------------------------------------------------------|
-| id_trait           | INTEGER | Primary key (auto-incrementing)                               |
-| trait_name         | VARCHAR | Unique trait identifier                                       |
-| description        | VARCHAR | Free text                                                     |
-| units              | VARCHAR | e.g. "kg"                                                     |
-| trait_type         | VARCHAR | `"continuous"` / `"count"` / `"binary"` / `"categorical"`     |
-| repeatable         | BOOLEAN | Repeated measures allowed?                                    |
-| recorded_on        | VARCHAR | `"self"` / `"dam"` / `"sire"` / `"offspring_mean"`            |
-| expressed_sex      | VARCHAR | `"both"` / `"M"` / `"F"` for sex-limited traits               |
-| expressed_parent   | VARCHAR | `"both"` / `"parent_1"` / `"parent_2"` for imprinting         |
-| mean               | DOUBLE  | Overall mean / intercept on liability scale                   |
-| min_value          | DOUBLE  | For count traits; clip (NA = no limit)                        |
-| max_value          | DOUBLE  | For count traits; clip                                        |
-| prevalence         | DOUBLE  | For binary traits                                             |
-| thresholds         | VARCHAR | For categorical traits; comma-separated cutpoints             |
-| index_weight       | DOUBLE  | Weight in selection index                                     |
-| economic_value     | DOUBLE  | Economic value per unit                                       |
+| Column          | Type    | Notes                                                              |
+|-----------------|---------|--------------------------------------------------------------------|
+| id_trait        | INTEGER | Primary key (auto-incrementing)                                    |
+| trait_name      | VARCHAR | Unique identifier; equals `phenotype_name` for simple traits       |
+| description     | VARCHAR | Free text                                                          |
+| units           | VARCHAR | e.g. `"kg"`, `"g/day"`                                             |
+| expressed_parent| VARCHAR | `"both"` (default), `"parent_1"` (paternal), `"parent_2"` (maternal) — imprinting |
+| target_add_mean | DOUBLE  | TBV centering mean for the base population; default `0`            |
+
+**What does NOT belong here** (all moved to `phenotype_meta` in v0.31.0):
+`trait_type`, `expressed_sex`, `repeatable`, `mean`, `min_value`, `max_value`,
+`prevalence`, `thresholds`, `cat_values`, `cat_names`, `residual_var`,
+`index_weight`, `economic_value`.
 
 ### `trait_effects`
 
@@ -218,18 +233,91 @@ effect matching `effect_name` in `trait_effects`.
 | trait_name_2       | VARCHAR |                                                    |
 | cov_value          | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
 
+### `phenotype_meta`
+
+Observed phenotype definitions. One row per phenotype name. Populated by
+`define_phenotype()`. Analogous to `trait_meta` but for the observation layer —
+simple traits have the same name in both tables; composite phenotypes (e.g. WW,
+SGE ADG) appear only here.
+
+| Column                   | Type    | Notes                                                         |
+|--------------------------|---------|---------------------------------------------------------------|
+| id_phenotype_meta        | INTEGER | Primary key (auto-incrementing)                               |
+| phenotype_name           | VARCHAR | Unique. Equals `trait_name` for simple traits.                |
+| trait_type               | VARCHAR | `"continuous"`, `"count"`, `"categorical"`                    |
+| mean                     | DOUBLE  | Phenotypic population mean / liability intercept              |
+| expressed_sex            | VARCHAR | `"both"`, `"M"`, or `"F"`                                     |
+| repeatable               | BOOLEAN | Repeated records allowed?                                     |
+| min_value / max_value    | DOUBLE  | Clipping bounds for count traits                              |
+| prevalence               | DOUBLE  | For 2-category categorical traits                             |
+| thresholds               | VARCHAR | Comma-separated liability cutpoints for K-category traits     |
+| cat_values               | VARCHAR | Comma-separated numeric phenotype values per category         |
+| cat_names                | VARCHAR | Comma-separated labels per category                           |
+| store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |
+| missing_component_action | VARCHAR | `"skip"` (default) or `"error"` — what to do when any component of a composite phenotype cannot be resolved for an individual |
+
+**Reserved**: all columns (managed by `define_phenotype()`).
+
+### `phenotype_components`
+
+Component definitions for composite phenotypes. One row per (phenotype ×
+component). Populated by `define_phenotype(..., components = ...)`. Simple
+(non-composite) phenotypes have no rows here.
+
+| Column             | Type    | Notes                                                              |
+|--------------------|---------|--------------------------------------------------------------------|
+| id_phenotype_comp  | INTEGER | Primary key (auto-incrementing)                                    |
+| phenotype_name     | VARCHAR | FK to `phenotype_meta.phenotype_name`                              |
+| source_trait_name  | VARCHAR | FK to `trait_meta.trait_name` — the genetic component trait        |
+| contributor_type   | VARCHAR | `"self"`, `"dam"`, `"sire"`, or `"group"`                          |
+| group_column       | VARCHAR | Column in `group_table` that holds group membership (required for `"group"`) |
+| group_table        | VARCHAR | Table containing `group_column`; default `"ind_meta"`              |
+| aggregation        | VARCHAR | `"sum"` (default) or `"mean"` — how group-mates' TBVs are combined |
+| weight             | DOUBLE  | Scalar multiplier; default `1.0`                                   |
+| weight_type        | VARCHAR | `"fixed"` (default), `"covariate"`, `"legendre"`, `"raw_poly"`     |
+| covariate_name     | VARCHAR | Covariate column when `weight_type = "covariate"`                  |
+| covariate_table    | VARCHAR | Table containing `covariate_name`                                  |
+| poly_order         | INTEGER | Polynomial basis order                                             |
+| poly_scale_min/max | DOUBLE  | Legendre scaling bounds                                            |
+| genome_effect_types| VARCHAR | Default `"additive"`                                               |
+| missing_action     | VARCHAR | Per-component fallback (currently unused; use `phenotype_meta.missing_component_action`) |
+| contributor_filter | VARCHAR | Reserved for spatial/neighborhood lookup — not yet implemented     |
+
+**Note on SGE (Social Genetic Effects / Bijma model)**: for `contributor_type = "group"`,
+`add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
+group-mates) receives a social contribution of 0 and is not excluded. An individual
+with no group assignment receives `NA` and is handled by `missing_component_action`.
+
+### `phenotype_residual_cov`
+
+Residual (co)variance entries. One row per (phenotype₁, phenotype₂, condition).
+Both (i,j) and (j,i) pairs stored for off-diagonal entries. Populated by
+`define_phenotype(..., residual_var = ...)` and `add_residual_cov()`.
+
+| Column          | Type    | Notes                                                              |
+|-----------------|---------|--------------------------------------------------------------------|
+| id_residual_cov | INTEGER | Primary key (auto-incrementing)                                    |
+| phenotype_name_1| VARCHAR |                                                                    |
+| phenotype_name_2| VARCHAR |                                                                    |
+| cov_value       | DOUBLE  |                                                                    |
+| condition_column| VARCHAR | NULL = unconditional; column in `condition_table` for heterogeneous residuals |
+| condition_table | VARCHAR | Default `"ind_meta"`                                               |
+| condition_level | VARCHAR | Value of `condition_column` for this row                           |
+| weight_type     | VARCHAR | Default `"fixed"`                                                  |
+| poly_order      | INTEGER | Polynomial order for `"legendre"` weight type                      |
+
 ### `ind_phenotype`
 
 Phenotype records in long format. Populated by `add_phenotype()`.
 
-| Column       | Type    | Notes                                             |
-|--------------|---------|---------------------------------------------------|
-| id_phenotype | INTEGER | Primary key (global auto-incrementing integer)    |
-| id_ind       | VARCHAR |                                                   |
-| trait_name   | VARCHAR |                                                   |
-| pheno_value  | DOUBLE  | Phenotype value                                   |
-| pheno_number | INTEGER | 1 = first record for this individual × trait, etc.|
-| *user cols*  | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+| Column         | Type    | Notes                                             |
+|----------------|---------|---------------------------------------------------|
+| id_phenotype   | INTEGER | Primary key (global auto-incrementing integer)    |
+| id_ind         | VARCHAR |                                                   |
+| phenotype_name | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
+| pheno_value    | DOUBLE  | Phenotype value                                   |
+| pheno_number   | INTEGER | 1 = first record for this individual × trait, etc.|
+| *user cols*    | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
 
 ### `ind_tbv`
 
@@ -496,13 +584,15 @@ pop |>
 
 `R/define_trait.R`, `R/define_additive_effects.R`
 
-- `define_trait()` — one row in `trait_meta`. Also writes a global
-  `(index_name = NULL, trait_name, economic_weight)` entry to `index_meta` so
-  each trait has a default economic weight without needing `define_index()` first.
-  `overwrite = FALSE` (default) errors if the trait already exists in `trait_meta`;
-  the existing `index_meta` row is preserved. `overwrite = TRUE` replaces both.
-  `target_add_var` and `residual_var` params write to `trait_effect_cov` (not
-  `trait_meta`).
+- `define_trait()` — **genetic layer only**. Writes one row to `trait_meta` and
+  a global `(index_name = NULL, trait_name, economic_weight = 0)` row to
+  `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
+  `trait_effect_cov`), `target_add_mean`, `expressed_parent`, `description`,
+  `units`, `overwrite`. **Never** pass observation-layer arguments here
+  (`trait_type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
+  in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
+  already exists; `overwrite = TRUE` replaces both the `trait_meta` row and its
+  `index_meta` entry.
 - `define_additive_effects()` — accepts a `tidybreed_table` from
   `get_table("genome_meta")` (optionally filtered) as its **first argument**.
   `trait_name` accepts a scalar **or vector** of trait names:
@@ -545,6 +635,37 @@ pop |>
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
 - `define_effect_int()` — sets intercept (`target_add_mean`) for a trait.
 
+### `define_phenotype()` / `add_residual_cov()`
+
+`R/define_phenotype.R`, `R/add_residual_cov.R`
+
+- `define_phenotype(pop, phenotype_name, trait_type, mean, expressed_sex, repeatable, ...)` —
+  registers an observed phenotype in `phenotype_meta`. For simple traits
+  `phenotype_name` matches the `trait_name` already in `trait_meta`. For
+  composite phenotypes (e.g. weaning weight, SGE ADG) the name is new and no
+  prior `define_trait()` call is needed for it.
+
+  Key arguments:
+  - `residual_var` — scalar; writes one unconditional diagonal entry to
+    `phenotype_residual_cov`. For correlated or heterogeneous residuals use
+    `add_residual_cov()` afterwards.
+  - `components` — data frame with columns `source_trait_name` and
+    `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
+    columns: `weight`, `weight_type`, `aggregation`, `group_column`,
+    `group_table`, `covariate_name`, etc. Writes to `phenotype_components`.
+    `NULL` (default) = simple single-self trait.
+  - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
+    `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
+    missing composite piece (missing group assignment, missing dam/sire TBV,
+    etc.). `"skip"` excludes the individual and warns with a count + up to 5
+    example IDs. `"error"` stops immediately.
+
+- `add_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, ...)` —
+  writes conditional or unconditional residual (co)variance entries to
+  `phenotype_residual_cov`. Supply a named matrix for multi-phenotype correlated
+  residuals, or call once per sex/group level with `condition_column = "sex"` and
+  `condition_level = "M"` / `"F"` for heterogeneous residuals.
+
 ### `add_trait_covariate()` *(deprecated)*
 
 `R/add_trait_covariate.R`
@@ -559,11 +680,14 @@ pop |>
 Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
 
-- `add_phenotype()` — the workhorse. `trait_name` defaults to all traits
-  in `trait_meta` when omitted. Internally calls `add_tbv()` first (which reads
-  effects from `genome_effects`), then reads TBVs back from `ind_tbv` for the
-  phenotype model. Adds fixed/random covariate contributions, samples residuals
-  (joint `MVN(0, R)` when multiple traits share the subset and `R` is stored;
+- `add_phenotype()` — the workhorse. `phenotype_name` (formerly `trait_name`)
+  defaults to all phenotypes in `phenotype_meta` when omitted. Internally calls
+  `add_tbv()` first for all required source traits (including all composite
+  components and group-member IDs), then assembles the composite TBV via
+  `.assemble_composite_tbv()`. For group contributors (SGE model), all
+  group-member TBVs are pre-fetched so group aggregation is a single in-memory
+  pass. Adds fixed/random covariate contributions, samples residuals (joint
+  `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
   otherwise independent). Converts liability to phenotype per `trait_type`.
   Writes `ind_phenotype` rows and updates `ind_tbv`.
 - `add_tbv()` — TBV-only; no phenotype records. Reads additive effects from
