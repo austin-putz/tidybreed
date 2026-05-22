@@ -343,3 +343,141 @@ cat("      Negative TBV_social trend = selection against social aggression/compe
 cat("      (expected with r_ds < 0 when selecting on direct performance)\n")
 
 close_pop(pop)
+
+# ── Plots ─────────────────────────────────────────────────────────────────────
+#
+# Saved to: tests/test_sge_adg_selection.pdf
+#
+# Panel A: Mean phenotype +/- 1 SD over generations
+# Panel B: Genetic trends — TBV_direct, (n-1)*TBV_social, Total_GV (all zero-centred)
+# Panel C: TBV_social raw values (shows antagonistic response to direct selection)
+# Panel D: Phenotypic mean vs Total_GV — illustrates social drag masking true gain
+
+if (!requireNamespace("ggplot2",  quietly = TRUE)) stop("Install ggplot2 to produce plots.")
+if (!requireNamespace("patchwork", quietly = TRUE)) stop("Install patchwork to produce plots.")
+
+library(ggplot2)
+library(patchwork)
+
+plot_file <- "tests/test_sge_adg_selection.pdf"
+
+# Tidy data for plotting
+res_plot <- results |>
+  mutate(
+    social_contribution = n1 * mean_tbv_social,   # (pen_size-1) * mean_TBV_social
+    # zero-centre all genetic values relative to gen 0
+    d_direct  = mean_tbv_direct  - mean_tbv_direct[gen == 0],
+    d_social  = mean_tbv_social  - mean_tbv_social[gen == 0],
+    d_soc_con = social_contribution - social_contribution[gen == 0],
+    d_total   = mean_total_gv    - mean_total_gv[gen == 0],
+    d_pheno   = mean_pheno       - mean_pheno[gen == 0]
+  )
+
+theme_sge <- theme_bw(base_size = 11) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(size = 11, face = "bold"),
+        legend.position = "bottom",
+        legend.key.width = unit(1.2, "cm"))
+
+pal <- c(
+  "TBV direct"           = "#1b7837",
+  "(n-1) × TBV social"   = "#d6604d",
+  "Total GV"             = "#2166ac",
+  "Mean phenotype"       = "#762a83"
+)
+
+# Panel A: Phenotype mean ± 1 SD
+pA <- ggplot(res_plot, aes(gen, mean_pheno)) +
+  geom_ribbon(aes(ymin = mean_pheno - sd_pheno,
+                  ymax = mean_pheno + sd_pheno),
+              fill = "#762a83", alpha = 0.12) +
+  geom_line(colour = "#762a83", linewidth = 0.8) +
+  geom_point(colour = "#762a83", size = 1.8) +
+  geom_hline(yintercept = MEAN_ADG, linetype = "dashed", colour = "grey50") +
+  labs(title = "A  Phenotypic mean ± 1 SD",
+       x = "Generation", y = "Mean ADG (g/day)") +
+  theme_sge
+
+# Panel B: Zero-centred genetic trends on one axis
+long_B <- tidyr::pivot_longer(
+  res_plot,
+  cols      = c(d_direct, d_soc_con, d_total),
+  names_to  = "component",
+  values_to = "delta"
+) |>
+  mutate(component = recode(component,
+    d_direct  = "TBV direct",
+    d_soc_con = "(n-1) × TBV social",
+    d_total   = "Total GV"
+  ))
+
+pB <- ggplot(long_B, aes(gen, delta, colour = component, linetype = component)) +
+  geom_hline(yintercept = 0, colour = "grey70") +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.6) +
+  scale_colour_manual(values = pal, name = NULL) +
+  scale_linetype_manual(
+    values = c("TBV direct" = "solid",
+               "(n-1) × TBV social" = "dashed",
+               "Total GV"  = "solid"),
+    name = NULL
+  ) +
+  labs(title = "B  Genetic trends (zero-centred at gen 0)",
+       x = "Generation", y = "Delta genetic value (g/day)") +
+  theme_sge
+
+# Panel C: Raw TBV_social — shows antagonistic correlated response
+pC <- ggplot(res_plot, aes(gen, mean_tbv_social)) +
+  geom_hline(yintercept = 0, colour = "grey70") +
+  geom_line(colour = "#d6604d", linewidth = 0.8) +
+  geom_point(colour = "#d6604d", size = 1.8) +
+  labs(title = "C  Mean TBV_social (raw) -- correlated response",
+       x = "Generation",
+       y = "Mean TBV_social (g/day)",
+       caption = sprintf("r(direct, social) = %.2f; pen size n = %d", R_DS, PEN_SIZE)) +
+  theme_sge +
+  theme(plot.caption = element_text(size = 8, colour = "grey40"))
+
+# Panel D: Phenotypic mean vs Total GV (both zero-centred) — shows social drag
+long_D <- tidyr::pivot_longer(
+  res_plot,
+  cols      = c(d_pheno, d_total),
+  names_to  = "series",
+  values_to = "delta"
+) |>
+  mutate(series = recode(series,
+    d_pheno = "Mean phenotype",
+    d_total = "Total GV"
+  ))
+
+pD <- ggplot(long_D, aes(gen, delta, colour = series)) +
+  geom_hline(yintercept = 0, colour = "grey70") +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.6) +
+  scale_colour_manual(values = pal, name = NULL) +
+  labs(title = "D  Phenotype vs Total GV -- social drag",
+       x = "Generation", y = "Delta value (g/day)",
+       caption = paste0(
+         sprintf("VA_direct=%.0f  VA_social=%.0f  VE=%.0f  Vp~%.0f\n",
+                 VA_DIRECT, VA_SOCIAL, VE, Vp),
+         "Total GV = TBV_direct + (n-1) × TBV_social"
+       )) +
+  theme_sge +
+  theme(plot.caption = element_text(size = 8, colour = "grey40"))
+
+# Assemble and save
+fig <- (pA | pB) / (pC | pD) +
+  plot_annotation(
+    title    = "Pig ADG: 20 generations of phenotypic selection under SGE (Bijma model)",
+    subtitle = sprintf(
+      "10 sires × 50 dams × 300 offspring/gen | %d pigs/pen | r(d,s)=%.2f | seed=20250520",
+      PEN_SIZE, R_DS
+    ),
+    theme = theme(
+      plot.title    = element_text(size = 13, face = "bold"),
+      plot.subtitle = element_text(size = 9,  colour = "grey30")
+    )
+  )
+
+ggsave(plot_file, fig, width = 11, height = 8.5, device = "pdf")
+cat("\nPlot saved to:", plot_file, "\n")
