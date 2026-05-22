@@ -4,7 +4,13 @@
 \alias{.assemble_composite_tbv}
 \title{Assemble composite TBV from phenotype_components for a single phenotype}
 \usage{
-.assemble_composite_tbv(pop, phenotype_name, comp_rows, subset_df)
+.assemble_composite_tbv(
+  pop,
+  phenotype_name,
+  comp_rows,
+  subset_df,
+  missing_component_action = "skip"
+)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}

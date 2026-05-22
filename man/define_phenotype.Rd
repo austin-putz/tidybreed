@@ -20,6 +20,7 @@ define_phenotype(
   store_liability = FALSE,
   residual_var = NULL,
   components = NULL,
+  missing_component_action = c("skip", "error"),
   overwrite = FALSE
 )
 }
@@ -91,6 +92,14 @@ group contributors.
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
 written.}
+
+\item{missing_component_action}{Character. What to do when an individual is
+missing one or more required components (e.g. no group assignment, missing
+dam TBV, missing random effect draw). \code{"skip"} (default) excludes the
+individual from \code{ind_phenotype} and emits a warning with a count.
+\code{"error"} stops with an informative message listing affected individuals.
+Stored in \code{phenotype_meta} so the behaviour is consistent across all
+\code{\link[=add_phenotype]{add_phenotype()}} calls for this phenotype.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a phenotype with the same name
 already exists, replace its rows in \code{phenotype_meta} and
