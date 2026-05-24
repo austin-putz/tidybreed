@@ -24,7 +24,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [define_effect_int()], [define_effect_fixed_class()],
+#' @seealso [define_effect_intercept()], [define_effect_fixed_class()],
 #'   [define_effect_random()], [add_phenotype()]
 #'
 #' @examples

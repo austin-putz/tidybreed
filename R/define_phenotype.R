@@ -42,7 +42,8 @@
 #' @param residual_var Numeric. Scalar residual variance. When supplied, writes
 #'   one unconditional row to `phenotype_residual_cov`
 #'   (`condition_column = NULL`). For heterogeneous residuals or
-#'   multi-phenotype correlated residuals, use [add_residual_cov()] afterwards.
+#'   multi-phenotype correlated residuals, use [define_residual_cov()]
+#'   afterwards.
 #' @param components A data frame or `tibble` with one row per genetic
 #'   component. Columns:
 #'   - `source_trait_name` (required): component trait name in `trait_meta`.
@@ -78,7 +79,7 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [define_trait()], [add_residual_cov()], [add_phenotype()],
+#' @seealso [define_trait()], [define_residual_cov()], [add_phenotype()],
 #'   [define_trait_simple()]
 #'
 #' @examples
@@ -249,7 +250,7 @@ define_phenotype <- function(pop,
         is.na(residual_var) || residual_var < 0) {
       stop("`residual_var` must be a non-negative number.", call. = FALSE)
     }
-    pop <- add_residual_cov(
+    pop <- define_residual_cov(
       pop,
       phenotype_names  = phenotype_name,
       cov_matrix       = matrix(as.numeric(residual_var), 1L, 1L,

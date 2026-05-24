@@ -37,14 +37,14 @@ make_ap_pop <- function() {
 
 # ── 1. Core functionality ─────────────────────────────────────────────────────
 
-test_that("compute_derived() returns pop invisibly", {
+test_that("mutate_derived() returns pop invisibly", {
   # run all code above as function
   pop <- make_ap_pop()
   
-  # use `compute_derived()` function to add `puberty_date` to `ind_meta`
+  # use `mutate_derived()` function to add `puberty_date` to `ind_meta`
   result <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -56,11 +56,11 @@ test_that("compute_derived() returns pop invisibly", {
 })
 
 
-test_that("compute_derived() writes to secondary table (ind_meta)", {
+test_that("mutate_derived() writes to secondary table (ind_meta)", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -91,11 +91,11 @@ test_that("compute_derived() writes to secondary table (ind_meta)", {
 })
 
 
-test_that("compute_derived() writes to primary table (ind_phenotype)", {
+test_that("mutate_derived() writes to primary table (ind_phenotype)", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -122,11 +122,11 @@ test_that("compute_derived() writes to primary table (ind_phenotype)", {
 })
 
 
-test_that("compute_derived() writes to both tables in a single call", {
+test_that("mutate_derived() writes to both tables in a single call", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -156,12 +156,12 @@ test_that("compute_derived() writes to both tables in a single call", {
 })
 
 
-test_that("compute_derived() updates an existing column (no duplicate column added)", {
+test_that("mutate_derived() updates an existing column (no duplicate column added)", {
   pop <- make_ap_pop()
   # First call creates puberty_date
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -173,7 +173,7 @@ test_that("compute_derived() updates an existing column (no duplicate column add
 
   # Second call overwrites with a different constant
   pop <- get_table(pop, "ind_meta") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) as.Date("2025-06-01"),
       write_to = c(ind_meta = "puberty_date")
     )
@@ -193,7 +193,7 @@ test_that("NAs in result_vec are written as NULL (remain NA in R)", {
   pop <- make_ap_pop()
   # compute returns NA for everyone
   pop <- get_table(pop, "ind_meta") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) rep(NA_real_, nrow(df)),
       write_to = c(ind_meta = "some_score")
     )
@@ -204,11 +204,11 @@ test_that("NAs in result_vec are written as NULL (remain NA in R)", {
 })
 
 
-test_that("compute_derived() works without join_table (primary table only)", {
+test_that("mutate_derived() works without join_table (primary table only)", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) df$pheno_value * 0.1,   # scaled value
       write_to = c(ind_phenotype = "value_scaled")
     )
@@ -240,7 +240,7 @@ test_that("conflict error when two rows for same id_ind produce different values
   expect_error(
     get_table(pop, "ind_phenotype") |>
       dplyr::filter(phenotype_name == "AP") |>
-      compute_derived(
+      mutate_derived(
         compute    = \(df) df$birth_date + as.integer(df$pheno_value),
         join_table = "ind_meta",
         join_by    = "id_ind",
@@ -267,7 +267,7 @@ test_that("no conflict when two rows produce the same value (silently deduped)",
   expect_no_error(
     get_table(pop, "ind_phenotype") |>
       dplyr::filter(phenotype_name == "AP") |>
-      compute_derived(
+      mutate_derived(
         compute  = \(df) "constant",   # same for every row
         write_to = c(ind_meta = "label_col")
       )
@@ -281,8 +281,8 @@ test_that("no conflict when two rows produce the same value (silently deduped)",
 test_that("error if tbl_obj is not a tidybreed_table", {
   pop <- make_ap_pop()
   expect_error(
-    compute_derived(pop, compute = \(df) 1, write_to = c(ind_meta = "x")),
-    "compute_derived\\(\\) must be called after get_table"
+    mutate_derived(pop, compute = \(df) 1, write_to = c(ind_meta = "x")),
+    "mutate_derived\\(\\) must be called after get_table"
   )
   close_pop(pop)
 })
@@ -292,7 +292,7 @@ test_that("error if compute is not a function", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(compute = "not_a_function", write_to = c(ind_meta = "x")),
+      mutate_derived(compute = "not_a_function", write_to = c(ind_meta = "x")),
     "'compute' must be a function"
   )
   close_pop(pop)
@@ -303,7 +303,7 @@ test_that("error if write_to is NULL", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(compute = \(df) 1, write_to = NULL),
+      mutate_derived(compute = \(df) 1, write_to = NULL),
     "'write_to' must be a named character vector"
   )
   close_pop(pop)
@@ -314,7 +314,7 @@ test_that("error if write_to has no names", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(compute = \(df) 1, write_to = "puberty_date"),
+      mutate_derived(compute = \(df) 1, write_to = "puberty_date"),
     "'write_to' must be a named character vector"
   )
   close_pop(pop)
@@ -326,7 +326,7 @@ test_that("error if compute() returns wrong-length vector (not 1 and not nrow)",
   # ind_meta has 15 rows; returning length 3 is neither 1 nor 15
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(compute = \(df) c(1, 2, 3), write_to = c(ind_meta = "x")),
+      mutate_derived(compute = \(df) c(1, 2, 3), write_to = c(ind_meta = "x")),
     "compute\\(\\) returned .* values but the joined data has"
   )
   close_pop(pop)
@@ -337,7 +337,7 @@ test_that("error if join_table not in pop$tables", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_phenotype") |>
-      compute_derived(
+      mutate_derived(
         compute    = \(df) 1,
         join_table = "no_such_table",
         write_to   = c(ind_phenotype = "x")
@@ -352,7 +352,7 @@ test_that("error if join_by not in primary table", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_phenotype") |>
-      compute_derived(
+      mutate_derived(
         compute    = \(df) 1,
         join_table = "ind_meta",
         join_by    = "no_such_col",
@@ -368,7 +368,7 @@ test_that("error if join_by not in join_table", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(
+      mutate_derived(
         compute    = \(df) 1,
         join_table = "genome_meta",
         join_by    = "id_ind",
@@ -384,7 +384,7 @@ test_that("error if destination table not in TABLE_PRIMARY_KEYS", {
   pop <- make_ap_pop()
   expect_error(
     get_table(pop, "ind_meta") |>
-      compute_derived(
+      mutate_derived(
         compute  = \(df) 1,
         write_to = c(genome_haplotype = "x")
       ),
@@ -399,7 +399,7 @@ test_that("error if dest_col is a reserved column", {
   expect_error(
     get_table(pop, "ind_phenotype") |>
       dplyr::filter(phenotype_name == "AP") |>
-      compute_derived(
+      mutate_derived(
         compute  = \(df) df$pheno_value,
         write_to = c(ind_phenotype = "pheno_value")   # "pheno_value" is reserved
       ),
@@ -414,7 +414,7 @@ test_that("early return with message when filter matches 0 rows", {
   expect_message(
     pop2 <- get_table(pop, "ind_phenotype") |>
       dplyr::filter(phenotype_name == "NONEXISTENT") |>
-      compute_derived(
+      mutate_derived(
         compute  = \(df) df$pheno_value,
         write_to = c(ind_phenotype = "value_copy")
       ),
@@ -431,7 +431,7 @@ test_that("Date result creates DATE column", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$birth_date + as.integer(df$pheno_value),
       join_table = "ind_meta",
       join_by    = "id_ind",
@@ -447,7 +447,7 @@ test_that("Date result creates DATE column", {
 test_that("integer result creates INTEGER column", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_meta") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) 1L,
       write_to = c(ind_meta = "gen")
     )
@@ -460,7 +460,7 @@ test_that("integer result creates INTEGER column", {
 test_that("double result creates DOUBLE column", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_meta") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) 1.5,
       write_to = c(ind_meta = "score_d")
     )
@@ -473,7 +473,7 @@ test_that("double result creates DOUBLE column", {
 test_that("character result creates VARCHAR column", {
   pop <- make_ap_pop()
   pop <- get_table(pop, "ind_meta") |>
-    compute_derived(
+    mutate_derived(
       compute  = \(df) "group_A",
       write_to = c(ind_meta = "grp")
     )
@@ -494,7 +494,7 @@ test_that("primary table columns take precedence when join_table has same column
 
   pop <- get_table(pop, "ind_phenotype") |>
     dplyr::filter(pheno_number == 1L) |>
-    compute_derived(
+    mutate_derived(
       compute    = \(df) df$phenotype_name,   # should be ind_phenotype's phenotype_name
       join_table = "ind_meta",
       join_by    = "id_ind",

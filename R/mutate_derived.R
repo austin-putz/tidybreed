@@ -41,7 +41,7 @@
 #'
 #' Requires at most one computed value per `join_by` ID. If the primary table
 #' has multiple rows for the same individual that produce *different* computed
-#' values, `compute_derived()` errors with a message asking you to pre-filter.
+#' values, `mutate_derived()` errors with a message asking you to pre-filter.
 #' Identical values for the same `join_by` ID are silently deduplicated (first
 #' occurrence wins).
 #'
@@ -70,7 +70,7 @@
 #' pop <- pop |>
 #'   get_table("ind_phenotype") |>
 #'   dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
-#'   compute_derived(
+#'   mutate_derived(
 #'     compute    = \(df) df$birth_date + as.integer(df$value),
 #'     join_table = "ind_meta",
 #'     join_by    = "id_ind",
@@ -81,22 +81,22 @@
 #' pop <- pop |>
 #'   get_table("ind_phenotype") |>
 #'   dplyr::filter(trait_name == "BW") |>
-#'   compute_derived(
+#'   mutate_derived(
 #'     compute  = \(df) df$value * 2.205,   # kg -> lb
 #'     write_to = c(ind_phenotype = "value_lb")
 #'   )
 #' }
 #'
 #' @export
-compute_derived <- function(tbl_obj, compute, join_table = NULL,
+mutate_derived <- function(tbl_obj, compute, join_table = NULL,
                              join_by = "id_ind", write_to) {
 
   # ── 1. Input validation ───────────────────────────────────────────────────
 
   if (!inherits(tbl_obj, "tidybreed_table")) {
     stop(
-      "compute_derived() must be called after get_table(). ",
-      "Use: pop |> get_table('table_name') |> compute_derived(...)",
+      "mutate_derived() must be called after get_table(). ",
+      "Use: pop |> get_table('table_name') |> mutate_derived(...)",
       call. = FALSE
     )
   }
@@ -164,7 +164,7 @@ compute_derived <- function(tbl_obj, compute, join_table = NULL,
   df_primary <- dplyr::collect(tbl_obj$tbl)
 
   if (nrow(df_primary) == 0L) {
-    message("compute_derived(): primary table filter matched 0 rows; nothing written.")
+    message("mutate_derived(): primary table filter matched 0 rows; nothing written.")
     return(invisible(pop))
   }
 
@@ -284,7 +284,7 @@ compute_derived <- function(tbl_obj, compute, join_table = NULL,
               ""
             },
             ". Filter the primary table to one row per ", join_by, " before ",
-            "calling compute_derived(), or only write back to the primary table.",
+            "calling mutate_derived(), or only write back to the primary table.",
             call. = FALSE
           )
         }
@@ -319,7 +319,7 @@ compute_derived <- function(tbl_obj, compute, join_table = NULL,
         "ALTER TABLE ", dest_table, " ADD COLUMN ", dest_col, " ", db_type
       ))
       message(
-        "compute_derived(): added new column '", dest_col,
+        "mutate_derived(): added new column '", dest_col,
         "' (", db_type, ") to `", dest_table, "`"
       )
     }
@@ -336,7 +336,7 @@ compute_derived <- function(tbl_obj, compute, join_table = NULL,
 
     n_written <- sum(!is.na(values_to_write))
     message(
-      "compute_derived(): wrote ", length(pk_vals), " rows to `",
+      "mutate_derived(): wrote ", length(pk_vals), " rows to `",
       dest_table, "$", dest_col, "` (", n_written, " non-NA)"
     )
   }

@@ -4,8 +4,9 @@
 #' Updates `mean` in `phenotype_meta` for the named phenotype. This value is
 #' the overall population mean added to every individual's liability before
 #' residuals and fixed/random shifts. It can also be set at definition time via
-#' the `mean` argument in [define_phenotype()]; `define_effect_int()` lets you
-#' update it without redefining the whole phenotype.
+#' the `mean` argument in [define_phenotype()];
+#' `define_effect_intercept()` lets you update it without redefining the whole
+#' phenotype.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_name Character. Name of an existing phenotype in
@@ -19,10 +20,10 @@
 #'
 #' @examples
 #' \dontrun{
-#' pop <- pop |> define_effect_int("ADG", mean = 850)
+#' pop <- pop |> define_effect_intercept("ADG", mean = 850)
 #' }
 #' @export
-define_effect_int <- function(pop, phenotype_name, mean) {
+define_effect_intercept <- function(pop, phenotype_name, mean) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)

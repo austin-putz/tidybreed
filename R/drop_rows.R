@@ -137,29 +137,29 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' pop |>
 #'   get_table("ind_phenotype") |>
 #'   dplyr::filter(id_ind %in% culled_ids, trait_name == "litter_size") |>
-#'   delete_rows()
+#'   drop_rows()
 #'
 #' # Remove all data for culled animals across every individual table
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   delete_rows(tables = "all")
+#'   drop_rows(tables = "all")
 #'
 #' # Delete from an explicit subset of tables only
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   delete_rows(tables = c("ind_phenotype", "ind_tbv"))
+#'   drop_rows(tables = c("ind_phenotype", "ind_tbv"))
 #'
 #' # Preview before deleting
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   delete_rows(tables = "all", dry_run = TRUE)
+#'   drop_rows(tables = "all", dry_run = TRUE)
 #' }
 #'
 #' @export
-delete_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
+drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
 
   # ---- A. Input validation --------------------------------------------------
   if (!inherits(tbl, "tidybreed_table")) {
@@ -208,7 +208,7 @@ delete_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
 
   # ---- D. Cross-table mode --------------------------------------------------
   if (!"id_ind" %in% names(collected_df)) {
-    stop("delete_rows() with tables != NULL requires the source table '",
+    stop("drop_rows() with tables != NULL requires the source table '",
          table_name, "' to have an 'id_ind' column.",
          call. = FALSE)
   }

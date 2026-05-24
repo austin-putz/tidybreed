@@ -48,7 +48,7 @@
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
 #' @seealso [define_phenotype()], [define_trait()], [define_additive_effects()],
-#'   [add_residual_cov()], [define_effect_cov_matrix()],
+#'   [define_residual_cov()], [define_effect_cov_matrix()],
 #'   [define_effect_fixed_class()], [define_effect_fixed_cov()],
 #'   [define_effect_random()], [add_tbv()]
 #'
@@ -572,7 +572,7 @@ add_phenotype <- function(tbl,
       if (is.na(resid_var)) {
         stop("No residual variance found for phenotype '", t, "'. ",
              "Specify via define_phenotype(residual_var = ...) or ",
-             "add_residual_cov().", call. = FALSE)
+             "define_residual_cov().", call. = FALSE)
       }
       resid <- stats::rnorm(n_ind, sd = sqrt(resid_var))
     }

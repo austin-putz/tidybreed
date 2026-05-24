@@ -14,7 +14,7 @@
 #' * `"residual"` — residual (co)variances (R matrix). **Routed to
 #'   `phenotype_residual_cov`** (not `trait_effect_cov`). Matrix row/column
 #'   names are treated as `phenotype_name` values. Equivalent to calling
-#'   [add_residual_cov()] with `condition_column = NULL`. Use this for a
+#'   [define_residual_cov()] with `condition_column = NULL`. Use this for a
 #'   multi-phenotype correlated residual matrix; for a single scalar residual
 #'   use `residual_var` in [define_phenotype()] instead.
 #' * Any named random effect (`"litter"`, `"herd"`, `"dam"`, …) — must match
@@ -75,7 +75,7 @@ define_effect_cov_matrix <- function(pop,
   if (identical(effect_name, "residual")) {
     pn <- if (!is.null(dimnames(cov_matrix))) rownames(cov_matrix) else NULL
     if (!is.null(attr(cov_matrix, "dimnames"))) pn <- rownames(cov_matrix)
-    return(add_residual_cov(pop,
+    return(define_residual_cov(pop,
       phenotype_names  = pn,
       cov_matrix       = cov_matrix,
       condition_column = NULL))

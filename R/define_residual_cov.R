@@ -1,4 +1,4 @@
-#' Add residual covariance entries for observed phenotypes
+#' Define residual covariance entries for observed phenotypes
 #'
 #' @description
 #' Writes rows to `phenotype_residual_cov` representing the residual
@@ -41,22 +41,22 @@
 #'     trait_type   = "continuous",
 #'     mean         = 8000,
 #'     residual_var = 600) |>   # unconditional default
-#'   add_residual_cov("BW_turkey",
+#'   define_residual_cov("BW_turkey",
 #'     cov_matrix       = matrix(900, 1, 1, dimnames = list("BW_turkey","BW_turkey")),
 #'     condition_column = "sex",
 #'     condition_level  = "M") |>
-#'   add_residual_cov("BW_turkey",
+#'   define_residual_cov("BW_turkey",
 #'     cov_matrix       = matrix(400, 1, 1, dimnames = list("BW_turkey","BW_turkey")),
 #'     condition_column = "sex",
 #'     condition_level  = "F")
 #' }
 #' @export
-add_residual_cov <- function(pop,
-                             phenotype_names,
-                             cov_matrix,
-                             condition_column = NULL,
-                             condition_table  = "ind_meta",
-                             condition_level  = NULL) {
+define_residual_cov <- function(pop,
+                                phenotype_names,
+                                cov_matrix,
+                                condition_column = NULL,
+                                condition_table  = "ind_meta",
+                                condition_level  = NULL) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)

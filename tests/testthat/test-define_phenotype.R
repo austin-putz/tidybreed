@@ -213,24 +213,24 @@ test_that("define_phenotype() stores components in phenotype_components", {
 })
 
 
-test_that("add_residual_cov() writes conditional residual rows", {
+test_that("define_residual_cov() writes conditional residual rows", {
   pop <- make_pheno_base_pop("dp_cond_resid")
   on.exit(close_pop(pop))
 
   pop <- define_trait(pop, "BW", target_add_var = 100)
   pop <- define_phenotype(pop, "BW", residual_var = 600)
 
-  pop <- add_residual_cov(pop,
-                          phenotype_names  = "BW",
-                          cov_matrix       = matrix(400, 1, 1,
-                                                    dimnames = list("BW","BW")),
-                          condition_column = "sex",
-                          condition_level  = "M")
-  pop <- add_residual_cov(pop,
-                          phenotype_names  = "BW",
-                          cov_matrix       = matrix(800, 1, 1,
-                                                    dimnames = list("BW","BW")),
-                          condition_column = "sex",
+  pop <- define_residual_cov(pop,
+                             phenotype_names  = "BW",
+                             cov_matrix       = matrix(400, 1, 1,
+                                                       dimnames = list("BW","BW")),
+                             condition_column = "sex",
+                             condition_level  = "M")
+  pop <- define_residual_cov(pop,
+                             phenotype_names  = "BW",
+                             cov_matrix       = matrix(800, 1, 1,
+                                                       dimnames = list("BW","BW")),
+                             condition_column = "sex",
                           condition_level  = "F")
 
   rcov <- DBI::dbGetQuery(pop$db_conn,

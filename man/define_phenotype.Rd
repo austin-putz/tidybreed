@@ -66,7 +66,8 @@ Only meaningful for categorical traits.}
 \item{residual_var}{Numeric. Scalar residual variance. When supplied, writes
 one unconditional row to \code{phenotype_residual_cov}
 (\code{condition_column = NULL}). For heterogeneous residuals or
-multi-phenotype correlated residuals, use \code{\link[=add_residual_cov]{add_residual_cov()}} afterwards.}
+multi-phenotype correlated residuals, use \code{\link[=define_residual_cov]{define_residual_cov()}}
+afterwards.}
 
 \item{components}{A data frame or \code{tibble} with one row per genetic
 component. Columns:
@@ -147,6 +148,6 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_trait]{define_trait()}}, \code{\link[=add_residual_cov]{add_residual_cov()}}, \code{\link[=add_phenotype]{add_phenotype()}},
+\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_residual_cov]{define_residual_cov()}}, \code{\link[=add_phenotype]{add_phenotype()}},
 \code{\link[=define_trait_simple]{define_trait_simple()}}
 }

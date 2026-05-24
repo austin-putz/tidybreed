@@ -84,7 +84,7 @@ pop <- pop |>
 }
 \seealso{
 \code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
-\code{\link[=add_residual_cov]{add_residual_cov()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}},
+\code{\link[=define_residual_cov]{define_residual_cov()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}},
 \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
 \code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
 }

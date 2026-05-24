@@ -64,6 +64,6 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_effect_int]{define_effect_int()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
+\code{\link[=define_effect_intercept]{define_effect_intercept()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
 \code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}}
 }

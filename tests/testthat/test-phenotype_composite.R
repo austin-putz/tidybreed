@@ -204,16 +204,16 @@ test_that("heterogeneous residuals by sex produce different variance groups", {
                           residual_var = 600)
 
   # Heterogeneous residuals: males 400, females 800
-  pop <- add_residual_cov(pop, "BW",
-                          matrix(400, 1, 1, dimnames = list("BW","BW")),
-                          condition_column = "sex",
-                          condition_table  = "ind_meta",
-                          condition_level  = "M")
-  pop <- add_residual_cov(pop, "BW",
-                          matrix(800, 1, 1, dimnames = list("BW","BW")),
-                          condition_column = "sex",
-                          condition_table  = "ind_meta",
-                          condition_level  = "F")
+  pop <- define_residual_cov(pop, "BW",
+                             matrix(400, 1, 1, dimnames = list("BW","BW")),
+                             condition_column = "sex",
+                             condition_table  = "ind_meta",
+                             condition_level  = "M")
+  pop <- define_residual_cov(pop, "BW",
+                             matrix(800, 1, 1, dimnames = list("BW","BW")),
+                             condition_column = "sex",
+                             condition_table  = "ind_meta",
+                             condition_level  = "F")
 
   # Verify three rows in phenotype_residual_cov
   rcov <- DBI::dbGetQuery(pop$db_conn,

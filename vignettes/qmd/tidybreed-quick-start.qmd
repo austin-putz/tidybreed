@@ -2397,7 +2397,7 @@ TBVs and then they are culled from the population, therefore no more use for the
 genotype or haplotypes. Most of the time we will summarize data and move on in
 simulations, remember we can always delete as we go.
 
-You can also use the `delete_rows()` helper function for a simpler interface when
+You can also use the `drop_rows()` helper function for a simpler interface when
 removing rows by ID from a table.
 
 ```{r}

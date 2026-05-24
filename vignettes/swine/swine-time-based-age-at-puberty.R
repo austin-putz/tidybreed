@@ -388,7 +388,7 @@ pop %>%
 
 # add overall mean for AP
 pop %>%
-  define_effect_int(
+  define_effect_intercept(
     trait_name = "AP",              # trait (need to change to "trait_name")
     mean = config$general$mean_puberty_age
   )
@@ -579,7 +579,7 @@ pop %>% get_table("ind_tbv")
 
 # add overall mean for ADG
 pop %>%
-  define_effect_int(
+  define_effect_intercept(
     trait_name = "ADG",              # trait (need to change to "trait_name")
     mean = 1000
   )
@@ -647,7 +647,7 @@ pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
 
 # add overall mean for ADG
 pop %>%
-  define_effect_int(
+  define_effect_intercept(
     trait_name = "BF",              # trait (need to change to "trait_name")
     mean = 10
   )
@@ -716,7 +716,7 @@ pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
 
 # add overall mean for ADG
 pop %>%
-  define_effect_int(
+  define_effect_intercept(
     trait_name = "NW",              # trait (need to change to "trait_name")
     mean = 10
   )

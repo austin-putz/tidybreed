@@ -1,3 +1,17 @@
+# tidybreed 0.33.0 (2026-05-23)
+
+## Breaking changes
+
+* `add_residual_cov()` renamed to `define_residual_cov()` — residual covariance
+  is model configuration, not simulation output.
+* `define_effect_int()` renamed to `define_effect_intercept()` — abbreviation
+  violated the no-abbreviation naming rule.
+* `compute_derived()` renamed to `mutate_derived()` — aligns with the `mutate_`
+  prefix for column-update operations.
+* `delete_rows()` renamed to `drop_rows()` — `delete_` is not a defined prefix
+  in the naming convention.
+* `add_trait_covariate()` removed (was deprecated since v0.6.0).
+
 # tidybreed 0.32.0 (2026-05-20)
 
 ## New features
