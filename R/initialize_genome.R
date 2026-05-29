@@ -285,7 +285,9 @@ initialize_genome <- function(pop_name,
       cat_values               VARCHAR,
       cat_names                VARCHAR,
       store_liability          BOOLEAN DEFAULT FALSE,
-      missing_component_action VARCHAR DEFAULT 'skip'
+      missing_component_action VARCHAR DEFAULT 'skip',
+      formula_tbv              VARCHAR,
+      formula                  VARCHAR
     )
   ")
 

@@ -109,7 +109,9 @@
 #' @export
 define_phenotype <- function(pop,
                              phenotype_name,
-                             trait_type               = c("continuous", "count", "categorical"),
+                             trait_type               = c("continuous", "count",
+                                                          "categorical",
+                                                          "derived_formula"),
                              mean                     = 0,
                              expressed_sex            = c("both", "M", "F"),
                              repeatable               = FALSE,
@@ -122,6 +124,8 @@ define_phenotype <- function(pop,
                              store_liability          = FALSE,
                              residual_var             = NULL,
                              components               = NULL,
+                             formula_tbv              = NULL,
+                             formula                  = NULL,
                              missing_component_action = c("skip", "error"),
                              overwrite                = FALSE) {
 
@@ -173,6 +177,78 @@ define_phenotype <- function(pop,
         stop("`cat_names` entries must not contain commas.", call. = FALSE)
       }
     }
+  }
+
+  # ── Formula / derived_formula validation ──────────────────────────────────
+
+  # formula_tbv and components are mutually exclusive
+  if (!is.null(formula_tbv) && !is.null(components))
+    stop(
+      "Supply `formula_tbv` OR `components`, not both. ",
+      "`formula_tbv` is the DSL shorthand; `components` is the advanced path ",
+      "(covariate weights, Legendre polynomial weights).",
+      call. = FALSE
+    )
+
+  # formula requires trait_type = "derived_formula"
+  if (!is.null(formula) && trait_type != "derived_formula")
+    stop(
+      "`formula` requires `trait_type = \"derived_formula\"`. ",
+      "For composite TBV composition use `formula_tbv` instead.",
+      call. = FALSE
+    )
+
+  # derived_formula guards
+  if (trait_type == "derived_formula") {
+    if (!is.null(residual_var))
+      stop(
+        "`derived_formula` phenotypes have no independent residual variance. ",
+        "Do not supply `residual_var` — residual properties are determined by ",
+        "the component phenotypes.",
+        call. = FALSE
+      )
+    if (!is.null(components))
+      stop(
+        "`derived_formula` phenotypes have no TBV components. Do not supply `components`.",
+        call. = FALSE
+      )
+    if (!is.null(formula_tbv))
+      stop(
+        "`derived_formula` phenotypes use `formula` (not `formula_tbv`). ",
+        "`formula_tbv` is for composite TBV assembly, not arithmetic derivation.",
+        call. = FALSE
+      )
+    if (is.null(formula))
+      stop(
+        "`trait_type = \"derived_formula\"` requires a `formula` string. ",
+        "Example: `formula = \"ADFI / ADG\"`.",
+        call. = FALSE
+      )
+  }
+
+  # Validate formula_tbv: parse + trait symbol check (group columns deferred)
+  if (!is.null(formula_tbv)) {
+    if (!is.character(formula_tbv) || length(formula_tbv) != 1 || !nzchar(formula_tbv))
+      stop("`formula_tbv` must be a non-empty character string.", call. = FALSE)
+    known_traits <- DBI::dbGetQuery(
+      pop$db_conn, "SELECT trait_name FROM trait_meta"
+    )$trait_name
+    .validate_formula_tbv(formula_tbv, known_traits)
+    if (grepl("group_sum|group_mean", formula_tbv))
+      message(
+        "Note: group column name(s) in formula_tbv are validated at add_phenotype() ",
+        "time, not now. A clear error is raised then if a column is missing."
+      )
+  }
+
+  # Validate derived formula symbols (best-effort — warn if not yet defined)
+  if (!is.null(formula)) {
+    if (!is.character(formula) || length(formula) != 1 || !nzchar(formula))
+      stop("`formula` must be a non-empty character string.", call. = FALSE)
+    known_phenos <- DBI::dbGetQuery(
+      pop$db_conn, "SELECT phenotype_name FROM phenotype_meta"
+    )$phenotype_name
+    .validate_derived_formula(formula, known_phenos)
   }
 
   # ── Ensure tables exist ────────────────────────────────────────────────────
@@ -238,7 +314,9 @@ define_phenotype <- function(pop,
     cat_values               = cat_values_str,
     cat_names                = cat_names_str,
     store_liability          = as.logical(store_liability),
-    missing_component_action = missing_component_action
+    missing_component_action = missing_component_action,
+    formula_tbv              = if (is.null(formula_tbv)) NA_character_ else formula_tbv,
+    formula                  = if (is.null(formula))     NA_character_ else formula
   )
 
   DBI::dbWriteTable(pop$db_conn, "phenotype_meta", row, append = TRUE)
@@ -333,7 +411,11 @@ define_phenotype <- function(pop,
     DBI::dbWriteTable(pop$db_conn, "phenotype_components", comp_rows, append = TRUE)
   }
 
-  message("Added phenotype '", phenotype_name, "' (type: ", trait_type, ").")
+  msg_suffix <- ""
+  if (!is.null(formula_tbv)) msg_suffix <- " [formula_tbv DSL]"
+  if (!is.null(formula))     msg_suffix <- " [derived_formula]"
+  message("Added phenotype '", phenotype_name, "' (type: ", trait_type, ")",
+          msg_suffix, ".")
 
   invisible(pop)
 }

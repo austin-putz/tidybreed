@@ -1,3 +1,66 @@
+# tidybreed 0.34.0 (2026-05-24)
+
+## New features
+
+* `define_phenotype()` gains two new arguments for formula-based phenotype
+  specification, reducing boilerplate for common composite and derived patterns:
+
+  * **`formula_tbv`** — a DSL string that composes the true breeding value from
+    named traits using a small set of functions:
+    * Bare symbol or `self(trait)` — the focal individual's own TBV
+    * `dam(trait)` — the dam's TBV (NA for founders; handled by `missing_component_action`)
+    * `sire(trait)` — the sire's TBV
+    * `group_sum(trait, col, table = "ind_meta")` — sum of group-mates' TBVs (self excluded)
+    * `group_mean(trait, col, table = "ind_meta")` — mean of group-mates' TBVs
+    * Standard R arithmetic operators and a whitelist of math functions (`sqrt`,
+      `log`, `exp`, `abs`, `round`, etc.)
+
+    Example — maternal weaning weight:
+    ```r
+    define_phenotype(pop, "WW", trait_type = "continuous",
+                     mean = 230, residual_var = 180,
+                     formula_tbv = "WWD + 0.5 * dam(WWM)")
+    ```
+
+    Example — SGE average daily gain:
+    ```r
+    define_phenotype(pop, "ADG_obs", trait_type = "continuous",
+                     mean = 850, residual_var = 300,
+                     formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
+    ```
+
+    The existing `components` data frame path is retained unchanged for advanced
+    cases (covariate weights, Legendre polynomial weights).
+
+  * **`formula`** — an arithmetic expression over previously simulated
+    `ind_phenotype` records, used with `trait_type = "derived_formula"`. No
+    residual variance is drawn; the value is computed directly. Topological sort
+    in `add_phenotype()` ensures dependencies are evaluated first.
+
+    Example — feed conversion ratio:
+    ```r
+    define_phenotype(pop, "FCR", trait_type = "derived_formula",
+                     formula = "ADFI / ADG")
+    ```
+
+    Supports chains (`FCR_pct = "FCR * 100"`), scalar coefficients
+    (`"ADFI - 0.036*ADG - 0.0072*MBW"`), and whitelisted math functions
+    (`"ADG / MBW^0.75"`). Division by zero and `sqrt(negative)` produce NA
+    with a warning.
+
+* `add_phenotype()` now topologically sorts phenotypes when any
+  `derived_formula` phenotype is present, guaranteeing dependency order even
+  when `add_phenotype()` is called with no phenotype name.
+
+* `phenotype_meta` gains two new `VARCHAR` columns: `formula_tbv` and
+  `formula`. Existing databases are migrated automatically on first use via
+  `ensure_trait_tables()`.
+
+* `define_phenotype()` validates `formula_tbv` trait names against `trait_meta`
+  at definition time, with close-match suggestions (using `agrep`) for
+  unknown names. Group column existence is validated at `add_phenotype()` time
+  with a clear error message and a hint to use the `table=` argument.
+
 # tidybreed 0.33.0 (2026-05-23)
 
 ## Breaking changes

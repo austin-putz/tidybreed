@@ -317,9 +317,9 @@ get_residual_cov <- function(pop, phenotype_names, subset_df = NULL) {
         R_u[r$phenotype_name_1, r$phenotype_name_2] <- r$cov_value
       }
     }
-    # Always extract diagonal variances (used for independent draws)
-    diag_ok <- !any(is.na(diag(R_u)))
-    if (diag_ok) resid_var <- diag(R_u)
+    # Extract diagonal variances for phenotypes that have them (even if others don't)
+    diag_vals <- diag(R_u)
+    resid_var[!is.na(diag_vals)] <- diag_vals[!is.na(diag_vals)]
     # Full matrix only usable for joint MVN draw when entirely non-NA
     if (!any(is.na(R_u))) R_unconditional <- R_u
   }

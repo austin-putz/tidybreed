@@ -164,8 +164,27 @@ add_phenotype <- function(tbl,
     }
   }
 
+  # ── 4b. Classify formula types for each phenotype ─────────────────────────
+
+  has_formula_tbv <- stats::setNames(logical(length(phenos)), phenos)
+  has_formula     <- stats::setNames(logical(length(phenos)), phenos)
+  formula_tbv_str <- stats::setNames(character(length(phenos)), phenos)
+  formula_str     <- stats::setNames(character(length(phenos)), phenos)
+
+  for (t in phenos) {
+    m_t  <- pheno_meta[pheno_meta$phenotype_name == t, ]
+    ftbv <- if ("formula_tbv" %in% names(m_t) && !is.na(m_t$formula_tbv) &&
+                 nzchar(m_t$formula_tbv)) m_t$formula_tbv else NA_character_
+    fder <- if ("formula" %in% names(m_t) && !is.na(m_t$formula) &&
+                 nzchar(m_t$formula)) m_t$formula else NA_character_
+    has_formula_tbv[t] <- !is.na(ftbv)
+    has_formula[t]     <- !is.na(fder)
+    formula_tbv_str[t] <- if (is.na(ftbv)) "" else ftbv
+    formula_str[t]     <- if (is.na(fder)) "" else fder
+  }
+
   # G1: Validate genome_effects only for simple (non-composite) phenotypes
-  for (t in phenos[!has_components]) {
+  for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
     n_eff <- DBI::dbGetQuery(
       pop$db_conn,
       paste0("SELECT COUNT(*) AS n FROM genome_effects ",
@@ -176,10 +195,25 @@ add_phenotype <- function(tbl,
       stop(
         "No additive effects found for phenotype '", t, "' in genome_effects. ",
         "For simple phenotypes call define_additive_effects() first. ",
-        "For composite phenotypes supply 'components' in define_phenotype().",
+        "For composite phenotypes supply 'components' or 'formula_tbv' in define_phenotype(). ",
+        "For derived phenotypes (no genetic architecture) use trait_type = 'derived_formula'.",
         call. = FALSE
       )
     }
+  }
+
+  # ── 4c. Topological sort when derived_formula phenotypes are present ────────
+
+  if (any(has_formula)) {
+    ordered_phenos <- .topo_sort_phenotypes(pheno_meta)
+    phenos             <- ordered_phenos
+    has_components     <- has_components[phenos]
+    has_formula_tbv    <- has_formula_tbv[phenos]
+    has_formula        <- has_formula[phenos]
+    formula_tbv_str    <- formula_tbv_str[phenos]
+    formula_str        <- formula_str[phenos]
+    components_by_pheno <- components_by_pheno[phenos]
+    pheno_meta         <- pheno_meta[match(phenos, pheno_meta$phenotype_name), ]
   }
 
   # ── 5. Sex filter using phenotype_meta.expressed_sex ──────────────────────
@@ -222,8 +256,10 @@ add_phenotype <- function(tbl,
 
   # ── 6. Compute TBVs ───────────────────────────────────────────────────────
 
-  simple_phenos    <- phenos[!has_components]
-  composite_phenos <- phenos[has_components]
+  # Derived formula phenotypes have no TBV; exclude from TBV computation
+  simple_phenos        <- phenos[!has_components & !has_formula_tbv & !has_formula]
+  composite_phenos     <- phenos[has_components]
+  formula_tbv_phenos   <- phenos[has_formula_tbv]
 
   # Simple: phenotype_name == trait_name in trait_meta
   if (length(simple_phenos) > 0) {
@@ -275,6 +311,64 @@ add_phenotype <- function(tbl,
               ))$id_ind
               all_contributor_ids <- unique(c(all_contributor_ids, member_ids))
             }
+          }
+        }
+      }
+    }
+
+    if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
+      contrib_tbl <- get_table(pop, "ind_meta") |>
+        dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
+      pop <- add_tbv(contrib_tbl, trait_name = all_source_traits)
+    }
+  }
+
+  # G2b: formula_tbv — gather all contributor IDs + source traits via AST walk
+  if (length(formula_tbv_phenos) > 0) {
+    all_source_traits   <- character(0)
+    all_contributor_ids <- character(0)
+
+    for (t in formula_tbv_phenos) {
+      ftbv      <- formula_tbv_str[t]
+      expr      <- parse(text = ftbv, keep.source = FALSE)[[1]]
+      walk_res  <- .walk_formula_tbv_ast(expr)
+      subset_df <- subset_by_pheno[[t]]
+
+      all_source_traits <- unique(c(all_source_traits,
+        vapply(walk_res$trait_refs, `[[`, character(1), "trait")
+      ))
+
+      for (ref in walk_res$trait_refs) {
+        if (ref$type == "self") {
+          all_contributor_ids <- unique(c(all_contributor_ids,
+                                          as.character(subset_df$id_ind)))
+        } else if (ref$type == "dam") {
+          dids <- as.character(subset_df$id_parent_2)
+          dids <- dids[!is.na(dids) & dids != "NA" & nzchar(dids)]
+          all_contributor_ids <- unique(c(all_contributor_ids, dids))
+        } else if (ref$type == "sire") {
+          sids <- as.character(subset_df$id_parent_1)
+          sids <- sids[!is.na(sids) & sids != "NA" & nzchar(sids)]
+          all_contributor_ids <- unique(c(all_contributor_ids, sids))
+        } else if (ref$type %in% c("group_sum", "group_mean")) {
+          grp_col   <- ref$col
+          grp_tbl   <- ref$table
+          focal_sql <- paste0("'", subset_df$id_ind, "'", collapse = ", ")
+          grp_vals  <- tryCatch(
+            DBI::dbGetQuery(pop$db_conn, paste0(
+              "SELECT DISTINCT \"", grp_col, "\" AS gv FROM ", grp_tbl,
+              " WHERE id_ind IN (", focal_sql,
+              ") AND \"", grp_col, "\" IS NOT NULL"
+            ))$gv,
+            error = function(e) character(0)  # column/table errors caught later
+          )
+          if (length(grp_vals) > 0) {
+            gv_sql     <- paste0("'", grp_vals, "'", collapse = ", ")
+            member_ids <- DBI::dbGetQuery(pop$db_conn, paste0(
+              "SELECT id_ind FROM ", grp_tbl,
+              " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
+            ))$id_ind
+            all_contributor_ids <- unique(c(all_contributor_ids, member_ids))
           }
         }
       }
@@ -516,9 +610,64 @@ add_phenotype <- function(tbl,
       }
     }
 
-    # 9b. TBV: composite vs simple
-    if (has_components[t]) {
-      # G2: Assemble composite TBV from phenotype_components
+    # 9b. TBV: four-way dispatch
+    if (has_formula[t]) {
+      # ── derived_formula: evaluate arithmetic over ind_phenotype records ──
+      derived_vals <- .eval_derived_formula(pop, formula_str[t], ids_t, t)
+
+      # Write records directly — no residual, no liability conversion
+      records <- tibble::tibble(
+        id_phenotype   = next_phenotype_ids(pop, n_ind),
+        id_ind         = ids_t,
+        phenotype_name = t,
+        pheno_value    = as.numeric(derived_vals),
+        pheno_number   = next_pheno_numbers(pop, t, ids_t)
+      )
+      if (length(extra_cols) > 0) {
+        prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
+                                     pop$db_conn)
+        for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
+      }
+      DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
+      message("Wrote ", n_ind, " derived phenotype records for '", t, "'.")
+      next  # skip residual draw, liability conversion, etc.
+
+    } else if (has_formula_tbv[t]) {
+      # ── formula_tbv composite: evaluate DSL formula ──
+      mca <- if ("missing_component_action" %in% names(m) &&
+                 !is.na(m$missing_component_action) &&
+                 nzchar(m$missing_component_action)) m$missing_component_action else "skip"
+
+      raw_tbv <- .eval_formula_tbv(pop, formula_tbv_str[t], subset_df, t)
+      tbv     <- raw_tbv[ids_t]
+
+      excl_mask <- is.na(tbv)
+      if (any(excl_mask)) {
+        n_excl    <- sum(excl_mask)
+        excl_ids  <- ids_t[excl_mask]
+        msg <- paste0(
+          n_excl, " individual(s) had one or more missing components for phenotype '",
+          t, "' (formula_tbv: ", formula_tbv_str[t], ") and were excluded. ",
+          "(IDs: ", paste(head(excl_ids, 5), collapse = ", "),
+          if (n_excl > 5) paste0(" ... +", n_excl - 5L, " more") else "", ")"
+        )
+        if (mca == "error") stop(msg, call. = FALSE)
+        else warning(msg, call. = FALSE)
+
+        ids_t             <- ids_t[!excl_mask]
+        n_ind             <- length(ids_t)
+        subset_df         <- subset_df[!excl_mask, , drop = FALSE]
+        covariate_contrib <- covariate_contrib[!excl_mask]
+        tbv               <- tbv[ids_t]
+        if (n_ind == 0) {
+          message("Phenotype '", t, "': all individuals excluded (no formula_tbv result).")
+          next
+        }
+      }
+      # Fall through to 9c (residual draw) — same as simple/composite
+
+    } else if (has_components[t]) {
+      # ── components data frame path (unchanged) ──
       mca <- if ("missing_component_action" %in% names(m) &&
                  !is.na(m$missing_component_action) &&
                  nzchar(m$missing_component_action)) m$missing_component_action else "skip"
@@ -540,7 +689,7 @@ add_phenotype <- function(tbl,
         }
       }
     } else {
-      # Simple phenotype: read TBV from ind_tbv by trait_name = phenotype_name
+      # ── Simple phenotype: read TBV from ind_tbv ──
       ids_sql  <- paste0("'", ids_t, "'", collapse = ", ")
       t_safe   <- gsub("'", "''", t)
       tbv_rows <- DBI::dbGetQuery(

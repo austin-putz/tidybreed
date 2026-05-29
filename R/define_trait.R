@@ -289,7 +289,9 @@ ensure_trait_tables <- function(pop) {
         cat_values               VARCHAR,
         cat_names                VARCHAR,
         store_liability          BOOLEAN DEFAULT FALSE,
-        missing_component_action VARCHAR DEFAULT 'skip'
+        missing_component_action VARCHAR DEFAULT 'skip',
+        formula_tbv              VARCHAR,
+        formula                  VARCHAR
       )
     ",
 
@@ -401,6 +403,15 @@ ensure_trait_tables <- function(pop) {
     if (!"missing_component_action" %in% pm_cols)
       DBI::dbExecute(con,
         "ALTER TABLE phenotype_meta ADD COLUMN missing_component_action VARCHAR DEFAULT 'skip'")
+  }
+
+  # Add formula_tbv and formula to phenotype_meta (v0.32.x → v0.34.0)
+  if ("phenotype_meta" %in% DBI::dbListTables(con)) {
+    pm_cols <- DBI::dbListFields(con, "phenotype_meta")
+    if (!"formula_tbv" %in% pm_cols)
+      DBI::dbExecute(con, "ALTER TABLE phenotype_meta ADD COLUMN formula_tbv VARCHAR")
+    if (!"formula" %in% pm_cols)
+      DBI::dbExecute(con, "ALTER TABLE phenotype_meta ADD COLUMN formula VARCHAR")
   }
 
   pop$tables <- unique(c(pop$tables, names(ddl)))
