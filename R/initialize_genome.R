@@ -274,7 +274,7 @@ initialize_genome <- function(pop_name,
     CREATE TABLE phenotype_meta (
       id_phenotype_meta        INTEGER PRIMARY KEY,
       phenotype_name           VARCHAR UNIQUE NOT NULL,
-      trait_type               VARCHAR,
+      type                     VARCHAR,
       mean                     DOUBLE DEFAULT 0,
       expressed_sex            VARCHAR DEFAULT 'both',
       repeatable               BOOLEAN DEFAULT FALSE,

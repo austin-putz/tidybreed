@@ -46,9 +46,8 @@ hypor_blue    <- rgb(  0,  65, 120, max=255)   # "navy"
 # yaml inputs
 #------------------------------------------------------------------------------#
 
-#args <- commandArgs(trailingOnly = TRUE)
-#config_path <- args[1]
-config_path <- "~/Claude/tidybreed-test/scenarios/age_at_puberty_sexed_semen.yaml"
+# yaml file name
+config_path <- "~/Claude/tidybreed/vignettes/swine/age_at_puberty_sexed_semen.yaml"
 
 # check for yaml file name
 if (is.na(config_path)) {
@@ -150,20 +149,20 @@ pop <- initialize_genome(
 
 # create 2 custom fields for simulation pipeline
 pop %>% 
-  get_table("ind_meta") %>%
+  get_table("ind_meta") %>% 
   mutate_table(
-    rep          = NA_integer_,    # rep (replication) number as 'integer'
-    status       = NA_character_,  # status [e.g. 'juvenile', 'off-test-gilt', 'gest', 'lact', etc]
-    conc_date    = as.Date(NA),
-    birth_date   = as.Date(NA),
-    on_test_date = as.Date(NA),
+    rep           = NA_integer_,    # rep (replication) number as 'integer'
+    status        = NA_character_,  # status [e.g. 'juvenile', 'off-test-gilt', 'gest', 'lact', etc]
+    conc_date     = as.Date(NA),
+    birth_date    = as.Date(NA),
+    on_test_date  = as.Date(NA),
     off_test_date = as.Date(NA),
-    puberty_date = as.Date(NA),
-    mate_date   = as.Date(NA),
-    farrow_date = as.Date(NA),
-    wean_date   = as.Date(NA),
-    cull_date   = as.Date(NA),
-    death_date  = as.Date(NA)
+    puberty_date  = as.Date(NA),
+    mate_date     = as.Date(NA),
+    farrow_date   = as.Date(NA),
+    wean_date     = as.Date(NA),
+    cull_date     = as.Date(NA),
+    death_date    = as.Date(NA)
   )
 
 # add 'active' field, default to FALSE
@@ -246,21 +245,21 @@ sampled_birth_dates <- min_birth_date +
          min = 0, max = days_between_founders))
 
 # hist of birth dates
-hist(sampled_birth_dates, breaks = 50, col="steelblue3")
+hist(sampled_birth_dates, breaks = 50, col="darkorange2")
 
 # add founders
 pop <- pop %>%
-  add_founders(          # add founders
-    n_males   = config$population$n_founder_male,      # sample male founders
-    n_females = config$population$n_founder_female,     # sample female founders
-    line_name = "Libra",         # name this line
-    rep       = repl,            # USER DEFINED - replicate
+  add_founders(                                            # add founders
+    n_males       = config$population$n_founder_male,      # sample male founders
+    n_females     = config$population$n_founder_female,    # sample female founders
+    line_name     = "Libra",                               # name this line
+    rep           = repl,                                  # USER DEFINED - replicate
     conc_date     = sampled_birth_dates - config$general$gest_len, 
     birth_date    = sampled_birth_dates, 
     on_test_date  = sampled_birth_dates + config$testing$on_test_age,
     off_test_date = sampled_birth_dates + config$testing$off_test_age,
-    alive     = TRUE,
-    active    = FALSE
+    alive         = TRUE,
+    active        = FALSE
   )
 
 #------------------------------------------------------------------------------#
@@ -284,22 +283,25 @@ pop %>% get_table("genome_meta")
 warning("Add cov matrices")
 
 # additive genetic (CO)VARIANCES
-mat.add.gen.vars <- matrix(c(200.00,  0.00,    0.00,  0.00,
-                               0.00,  0.90,    3.07,  0.21,
-                               0.00,  3.07, 1050.00, 17.80,
-                               0.00,  0.21,   17.80,  1.20), 
-                      nrow = 4, byrow=TRUE, 
-                      dimnames = list(c("AP", "NW", "ADG", "BF"), 
-                                      c("AP", "NW", "ADG", "BF")))
+mat.add.gen.vars <- matrix(c(200.00,  0.00,    0.00,  0.00, 0.00, 0.00,
+                               0.00,  0.90,    3.07,  0.21, 0.00, 0.00,
+                               0.00,  3.07, 1050.00, 17.80, 0.00, 0.00,
+                               0.00,  0.21,   17.80,  1.20, 0.00, 0.00,
+                               0.00,  0.00,    0.00,  0.00, 0.04, 0.00,
+                               0.00,  0.00,    0.00,  0.00, 0.00, 0.13), 
+                      nrow = 6, byrow=TRUE, 
+                      dimnames = list(c("AP", "NW", "ADG", "BF", "WWD", "WWM"), 
+                                      c("AP", "NW", "ADG", "BF", "WWD", "WWM")))
 
 # residual (CO)VARIANCES
-mat.res.vars <- matrix(c(400,  0.00,    0.00,  0.00,
-                         0.0,  8.10,   10.00,  0.65,
-                         0.0, 10.00, 2100.00, 10.00,
-                         0.0,  0.65,   10.00,  1.30), 
-                      nrow = 4, byrow=TRUE, 
-                      dimnames = list(c("AP", "NW", "ADG", "BF"), 
-                                      c("AP", "NW", "ADG", "BF")))
+mat.res.vars <- matrix(c(400,  0.00,    0.00,  0.00, 0.00,
+                         0.0,  8.10,   10.00,  0.65, 0.00,
+                         0.0, 10.00, 2100.00, 10.00, 0.00,
+                         0.0,  0.65,   10.00,  1.30, 0.00,
+                         0.0,  0.00,    0.00,  0.00, 0.45), 
+                      nrow = 5, byrow=TRUE, 
+                      dimnames = list(c("AP", "NW", "ADG", "BF", "WW"), 
+                                      c("AP", "NW", "ADG", "BF", "WW")))
 
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
@@ -308,6 +310,7 @@ pop <- pop %>%
     cov_matrix  = mat.add.gen.vars    # name of matrix with row/col names
   )
 
+# print additive variance components
 pop %>% get_table("trait_effect_cov")
 
 # add this residual covariance matrix to a table with function
@@ -317,6 +320,7 @@ pop <- pop %>%
     cov_matrix  = mat.res.vars     # name for matrix with row/col names
   )
 
+# print residual variance components
 pop %>% get_table("phenotype_residual_cov")
 
 #------------------------------------------------------------#
@@ -325,13 +329,44 @@ pop %>% get_table("phenotype_residual_cov")
 
 warning("Define index")
 
-# add generic terminal index
+# percent inclusion (WW replaces WWD + WWM as a composite phenotype)
+pct <- c(
+  AP  = 0.10,  # lower is better
+  NW  = 0.25,  # higher is better
+  ADG = 0.20,  # higher is better
+  BF  = 0.10,  # lower is better
+  WW  = 0.35   # higher is better (combined: formerly 0.15 WWD + 0.20 WWM)
+)
+
+# direction required
+direction <- c(
+  AP  = -1,
+  NW  =  1,
+  ADG =  1,
+  BF  = -1,
+  WW  =  1
+)
+
+# genetic SD per trait (WW = sqrt(Var_WWD + Var_WWM) = sqrt(0.04 + 0.13))
+gen_sd <- c(
+  AP  = sqrt(200.00),
+  NW  = sqrt(0.90),
+  ADG = sqrt(1050.00),
+  BF  = sqrt(1.20),
+  WW  = sqrt(0.04 + 0.13)
+)
+
+# raw weights
+raw_weights <- (pct * direction) / gen_sd
+round(raw_weights, 3)
+
+# add maternal index (WW = composite weaning weight phenotype EBV)
 pop %>%
   define_index(
     index_name   = "maternal",
-    trait_names  = c("AP", "NW", "ADG", "BF"),
-    index_wts    = c(-3, 93, 1.5, -30),
-    economic_wts = c(0, 80, 2.0, -20)
+    trait_names  = c("AP", "NW", "ADG", "BF", "WW"),
+    index_wts    = raw_weights,
+    economic_wts = c(0, 80, 2.0, -20, 0.25)
   )
 
 # print table with index values
@@ -348,21 +383,21 @@ pop <- pop %>%
   define_trait(
     trait_name = "AP",
     target_add_mean = 0,
-    #target_add_var = 200,        # already added above
-    expressed_parent = "both", 
+    #target_add_var = 200,        # already added above!! 
+    #expressed_parent = "both", 
     description = "Age at Puberty",
     units = "days",
     overwrite = TRUE
   ) %>%
   define_phenotype(
     phenotype_name = "AP",
-    trait_type = "count",
-    #residual_var = 400,                       # already added above
-    mean = config$general$mean_puberty_age,
-    expressed_sex = "F", 
-    repeatable = FALSE,
-    min_value = 20,
-    overwrite = TRUE
+    type           = "count",
+    #residual_var  = 400,                       # already added above!! 
+    mean           = config$general$mean_puberty_age,
+    expressed_sex  = "F", 
+    repeatable     = FALSE,
+    min_value      = 20,
+    overwrite      = TRUE
   )
 
 pop %>% get_table("trait_meta")
@@ -573,20 +608,27 @@ warning("Define ADG")
 
 # add ADG as a trait
 pop <- pop %>%
-  add_trait(
-    trait_name  = "ADG",
-    description = "Average Daily Gain", 
-    units       = "g/d",                  # grams per day during testing period
-    trait_type  = "continuous",           # not categorical or binary
-    repeatable  = FALSE,                  # only 1 phenotype per individual
-    recorded_on = "self",                 # recorded on itself only
-    target_add_mean = 0,      # mean TBV in 'base'
-    #target_add_var  = 1082,  # additive variance target in 'base'
-    #residual_var    = 2500,  # residual variance (target h2 ~0.30) - 'fixed'
-    index_weight    = 1.49,   # index weight (not implemented yet)
-    economic_value  = 1.49,   # economic value (not implemented yet)
-    overwrite       = TRUE    # wipe this row if it exists and replace with this new data
-  )
+  define_trait(
+    trait_name      = "ADG",
+    description     = "Average Daily Gain",   # 
+    units           = "g/d",                  # grams per day during testing period
+    target_add_mean = 0,                      # mean TBV in 'base'
+    overwrite       = TRUE                    # wipe this row if it exists and replace with this new data
+    #type        = "continuous",    # now at phenotype level, not trait level
+    #repeatable  = FALSE,           # now at phenotype level, not trait level
+    #recorded_on = "self",          # now at phenotype level, not trait level
+  ) %>%
+  define_phenotype(
+    phenotype_name = "ADG", 
+    type = "continuous",
+    mean = 1000,
+    expressed_sex = "both",
+    min_value = 0, 
+    overwrite = TRUE
+  ) 
+
+pop %>% get_table("trait_meta")
+pop %>% get_table("phenotype_meta")
 
 # add which loci are QTL and their effects
 pop %>%
@@ -643,7 +685,7 @@ pop <- pop %>%
     trait_name  = "BF",
     description = "Ultrasound Backfat", 
     units       = "mm",                  # grams per day during testing period
-    trait_type  = "continuous",           # not categorical or binary
+    type        = "continuous",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "self",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'
@@ -702,6 +744,94 @@ pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF")
 pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF") %>% collect() %>% count()
 
 #------------------------------------------------------------#
+# Trait: WWD - Weaning Weight Direct
+#------------------------------------------------------------#
+
+warning("Define WWD - Weaning Weight Direct")
+
+pop <- pop %>%
+  define_trait(
+    trait_name       = "WWD",
+    description      = "Weaning Weight - Direct Genetic Effect",
+    units            = "kg",
+    expressed_parent = "both",
+    target_add_mean  = 0,
+    overwrite        = TRUE
+  )
+
+pop %>%
+  get_table("genome_meta") %>%
+  filter(is_9k != TRUE) %>%
+  define_additive_effects(
+    trait_name       = "WWD",
+    distribution     = "normal",
+    scale_to_target  = TRUE,
+    base             = "current_pop"
+  )
+
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  filter(rep == repl) %>%
+  add_tbv("WWD", rep = repl)
+
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWD")
+
+#------------------------------------------------------------#
+# Trait: WWM - Weaning Weight Maternal
+#------------------------------------------------------------#
+
+warning("Define WWM - Weaning Weight Maternal")
+
+pop <- pop %>%
+  define_trait(
+    trait_name       = "WWM",
+    description      = "Weaning Weight - Maternal Genetic Effect",
+    units            = "kg",
+    expressed_parent = "both",
+    target_add_mean  = 0,
+    overwrite        = TRUE
+  )
+
+pop %>%
+  get_table("genome_meta") %>%
+  filter(is_9k != TRUE) %>%
+  define_additive_effects(
+    trait_name       = "WWM",
+    distribution     = "normal",
+    scale_to_target  = TRUE,
+    base             = "current_pop"
+  )
+
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  filter(rep == repl) %>%
+  add_tbv("WWM", rep = repl)
+
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWM")
+
+#------------------------------------------------------------#
+# Phenotype: WW - Weaning Weight (composite: WWD + dam(WWM))
+#------------------------------------------------------------#
+
+warning("Define WW phenotype (formula_tbv DSL)")
+
+pop <- pop %>%
+  define_phenotype(
+    phenotype_name           = "WW",
+    type                     = "continuous",
+    formula_tbv              = "WWD + dam(WWM)",
+    mean                     = config$general$wean_weight_mean,
+    expressed_sex            = "both",
+    repeatable               = FALSE,
+    min_value                = 0,
+    missing_component_action = "skip",    # founders have no dam — will be skipped
+    overwrite                = TRUE
+  )
+
+pop %>% get_table("phenotype_meta")
+pop %>% get_table("phenotype_components")
+
+#------------------------------------------------------------#
 # Trait: NW
 #------------------------------------------------------------#
 
@@ -713,7 +843,7 @@ pop <- pop %>%
     trait_name  = "NW",
     description = "Number Weaned", 
     units       = "count",                  # grams per day during testing period
-    trait_type  = "count",           # not categorical or binary
+    type        = "count",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "dam",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'
@@ -816,11 +946,13 @@ if (1 > 2){
   dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'ADG'")
   dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'BF'")
   dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'NW'")
-  # delete rows in tables if needed!  
+  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'WW'")
+  # delete rows in tables if needed!
   dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'AP'")
   dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'ADG'")
   dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'BF'")
   dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'NW'")
+  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'WW'")
   # delete index rows
   dbExecute(pop$db_conn, "DELETE FROM ind_index WHERE index_name = 'maternal'")
   # delete new offspring
@@ -921,7 +1053,17 @@ pop %>%
   ) %>%
   add_phenotype("BF", rep = repl, pheno_date = cur_date)
 
+# ---------- WW ---------- #
 
+message("Add WW Phenotype (weaning weight on piglets weaned today)")
+
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  filter(
+    rep == repl,
+    birth_date == (cur_date - config$general$lact_len)  # piglets being weaned today
+  ) %>%
+  add_phenotype("WW", rep = repl, pheno_date = cur_date)
 
 
 
@@ -1062,6 +1204,18 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
 
   pop %>% get_table("ind_ebv") %>%
     filter(trait_name == "NW", rep == repl)
+
+  # run EBV for WW
+  pop <- pop %>%
+    get_table("ind_meta") %>%
+    filter(rep == repl) %>%
+    add_ebv("WW", software="blupf90", model="blup",
+            phenotype = pop %>% get_table("ind_phenotype") %>%
+              filter(pheno_date < cur_date | is.na(pheno_date)),
+            eval_date = cur_date, rep = repl)
+
+  pop %>% get_table("ind_ebv") %>%
+    filter(trait_name == "WW", rep == repl)
 
 } else {  # END CALCULATE EBVs
   warning("EBVs NOT RUN TODAY")

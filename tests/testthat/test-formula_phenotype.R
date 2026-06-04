@@ -82,7 +82,7 @@ test_that("formula_tbv is stored in phenotype_meta", {
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 230,
     residual_var = 180,
     formula_tbv = "WWD + 0.5 * dam(WWM)")
@@ -105,17 +105,17 @@ test_that("formula is stored in phenotype_meta for derived_formula", {
   pop <- get_table(pop, "genome_meta") |>
     dplyr::slice_sample(n = 100) |>
     define_additive_effects(c("ADFI", "ADG"), G = G_fcr)
-  pop <- define_phenotype(pop, "ADFI", trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADFI", type = "continuous",
                           mean = 2.2, residual_var = 0.1)
-  pop <- define_phenotype(pop, "ADG",  trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADG",  type = "continuous",
                           mean = 0.9, residual_var = 0.08)
-  pop <- define_phenotype(pop, "FCR",  trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "FCR",  type = "derived_formula",
                           formula = "ADFI / ADG")
 
   pm  <- dplyr::collect(get_table(pop, "phenotype_meta"))
   fcr <- pm[pm$phenotype_name == "FCR", ]
   expect_equal(fcr$formula,   "ADFI / ADG")
-  expect_equal(fcr$trait_type, "derived_formula")
+  expect_equal(fcr$type, "derived_formula")
   expect_true(is.na(fcr$formula_tbv))
 })
 
@@ -127,7 +127,7 @@ test_that("formula_tbv and components together raises an error", {
 
   expect_error(
     define_phenotype(pop, "WW",
-      trait_type  = "continuous",
+      type        = "continuous",
       mean        = 230,
       residual_var = 180,
       formula_tbv = "WWD + 0.5 * dam(WWM)",
@@ -146,7 +146,7 @@ test_that("derived_formula with residual_var raises an error", {
   on.exit(close_pop(pop))
 
   expect_error(
-    define_phenotype(pop, "FCR", trait_type = "derived_formula",
+    define_phenotype(pop, "FCR", type = "derived_formula",
                      formula = "ADFI / ADG", residual_var = 0.1),
     "derived_formula.*no independent residual"
   )
@@ -161,7 +161,7 @@ test_that("unknown trait in formula_tbv raises error with close-match suggestion
 
   expect_error(
     define_phenotype(pop, "WW2",
-      trait_type  = "continuous",
+      type        = "continuous",
       mean        = 230,
       residual_var = 180,
       formula_tbv = "WWD + 0.5 * dam(WWM)"),
@@ -177,7 +177,7 @@ test_that("formula_tbv with invalid R syntax raises a parse error", {
 
   expect_error(
     define_phenotype(pop, "WW3",
-      trait_type  = "continuous",
+      type        = "continuous",
       mean        = 230,
       residual_var = 180,
       formula_tbv = "WWD + ("),
@@ -193,7 +193,7 @@ test_that("formula_tbv with scalar constant warns", {
 
   expect_warning(
     define_phenotype(pop, "WW4",
-      trait_type  = "continuous",
+      type        = "continuous",
       mean        = 230,
       residual_var = 180,
       formula_tbv = "WWD + 0.5 * dam(WWM) - 10"),
@@ -207,7 +207,7 @@ test_that("derived_formula missing formula raises error", {
   on.exit(close_pop(pop))
 
   expect_error(
-    define_phenotype(pop, "FCR2", trait_type = "derived_formula"),
+    define_phenotype(pop, "FCR2", type = "derived_formula"),
     "derived_formula.*requires.*formula"
   )
 })
@@ -222,7 +222,7 @@ test_that("formula_tbv maternal WW: correct record count and no WW in ind_tbv", 
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 230,
     residual_var = 180,
     formula_tbv = "WWD + 0.5 * dam(WWM)")
@@ -248,7 +248,7 @@ test_that("formula_tbv maternal WW: mean phenotype approximately correct", {
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 230,
     residual_var = 180,
     formula_tbv = "WWD + 0.5 * dam(WWM)")
@@ -269,7 +269,7 @@ test_that("formula_tbv maternal model produces no phenotype_components rows", {
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 230,
     residual_var = 180,
     formula_tbv = "WWD + 0.5 * dam(WWM)")
@@ -285,7 +285,7 @@ test_that("formula_tbv founders (no dam) are excluded with skip warning", {
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 230,
     residual_var = 180,
     formula_tbv = "WWD + 0.5 * dam(WWM)",
@@ -307,7 +307,7 @@ test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tbv"
   pop <- setup_sge_traits(pop)
 
   pop <- define_phenotype(pop, "ADG_obs",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 850,
     residual_var = 300,
     formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
@@ -328,10 +328,10 @@ test_that("formula_tbv group_mean vs group_sum produce different phenotype value
   pop_mean <- setup_sge_traits(pop_mean)
 
   pop_sum <- define_phenotype(pop_sum, "ADG_obs",
-    trait_type = "continuous", mean = 850, residual_var = 300,
+    type = "continuous", mean = 850, residual_var = 300,
     formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
   pop_mean <- define_phenotype(pop_mean, "ADG_obs",
-    trait_type = "continuous", mean = 850, residual_var = 300,
+    type = "continuous", mean = 850, residual_var = 300,
     formula_tbv = "ADG_direct + group_mean(ADG_SGE, pen_id)")
 
   set.seed(301); pop_sum  <- get_table(pop_sum,  "ind_meta") |> add_phenotype("ADG_obs", seed = 99L)
@@ -367,7 +367,7 @@ test_that("formula_tbv multiple group terms in one formula work", {
     mutate_table(pen_id = pen_ids, barn_id = barn_ids)
 
   pop <- define_phenotype(pop, "ADG_multi",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 850,
     residual_var = 300,
     formula_tbv = "ADG_direct + group_sum(SGE_pen, pen_id) + group_sum(SGE_barn, barn_id)")
@@ -384,7 +384,7 @@ test_that("formula_tbv explicit table= argument works", {
   pop <- setup_sge_traits(pop)
 
   pop <- define_phenotype(pop, "ADG_obs",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 850,
     residual_var = 300,
     formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id, table = \"ind_meta\")")
@@ -402,7 +402,7 @@ test_that("formula_tbv missing group column errors at add_phenotype with clear m
 
   # Define formula with a non-existent column name
   pop <- define_phenotype(pop, "ADG_obs",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 850,
     residual_var = 300,
     formula_tbv = "ADG_direct + group_sum(ADG_SGE, nonexistent_col)")
@@ -429,9 +429,9 @@ setup_fcr_pop <- function(pop_name, n = 50, seed = 999) {
   pop <- get_table(pop, "genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_additive_effects(c("ADFI", "ADG"), G = G_fcr)
-  pop <- define_phenotype(pop, "ADFI", trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADFI", type = "continuous",
                           mean = 2.2, residual_var = 0.1)
-  pop <- define_phenotype(pop, "ADG",  trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADG",  type = "continuous",
                           mean = 0.9, residual_var = 0.08)
   pop
 }
@@ -439,7 +439,7 @@ setup_fcr_pop <- function(pop_name, n = 50, seed = 999) {
 test_that("FCR derived_formula: correct record count and FCR not in ind_tbv", {
   pop <- setup_fcr_pop("fD1")
   on.exit(close_pop(pop))
-  pop <- define_phenotype(pop, "FCR", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "FCR", type = "derived_formula",
                           formula = "ADFI / ADG")
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
 
@@ -454,7 +454,7 @@ test_that("FCR derived_formula: correct record count and FCR not in ind_tbv", {
 test_that("FCR mean is approximately ADFI_mean / ADG_mean", {
   pop <- setup_fcr_pop("fD2")
   on.exit(close_pop(pop))
-  pop <- define_phenotype(pop, "FCR", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "FCR", type = "derived_formula",
                           formula = "ADFI / ADG")
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
 
@@ -466,9 +466,9 @@ test_that("FCR mean is approximately ADFI_mean / ADG_mean", {
 test_that("topological ordering: FCR_pct evaluated after FCR when add_phenotype called with no name", {
   pop <- setup_fcr_pop("fD3")
   on.exit(close_pop(pop))
-  pop <- define_phenotype(pop, "FCR",     trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "FCR",     type = "derived_formula",
                           formula = "ADFI / ADG")
-  pop <- define_phenotype(pop, "FCR_pct", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "FCR_pct", type = "derived_formula",
                           formula = "FCR * 100")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
@@ -492,11 +492,11 @@ test_that("division by zero produces NA with warning", {
   on.exit(close_pop(pop))
 
   # Force ADG = 0 for all individuals by using user_values
-  pop <- define_phenotype(pop, "ADG_zero", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "ADG_zero", type = "derived_formula",
                           formula = "ADG - ADG")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
-  pop <- define_phenotype(pop, "BadFCR", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "BadFCR", type = "derived_formula",
                           formula = "ADFI / ADG_zero")
 
   expect_warning(
@@ -525,13 +525,13 @@ test_that("RFI with scalar coefficients: ADFI - 0.036*ADG - 0.0072*MBW", {
     dplyr::filter(locus_name %in% sel3) |>
     define_additive_effects(c("ADFI", "ADG", "MBW"), G = G3rfi)
 
-  pop <- define_phenotype(pop, "ADFI", trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADFI", type = "continuous",
                           mean = 2.2, residual_var = 0.1)
-  pop <- define_phenotype(pop, "ADG",  trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADG",  type = "continuous",
                           mean = 0.9, residual_var = 0.08)
-  pop <- define_phenotype(pop, "MBW",  trait_type = "continuous",
+  pop <- define_phenotype(pop, "MBW",  type = "continuous",
                           mean = 50,  residual_var = 5)
-  pop <- define_phenotype(pop, "RFI",  trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "RFI",  type = "derived_formula",
                           formula = "ADFI - 0.036*ADG - 0.0072*MBW")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
@@ -545,7 +545,7 @@ test_that("RFI with scalar coefficients: ADFI - 0.036*ADG - 0.0072*MBW", {
 test_that("whitelisted math function sqrt() works in derived formula", {
   pop <- setup_fcr_pop("fD6")
   on.exit(close_pop(pop))
-  pop <- define_phenotype(pop, "sqrtADG", trait_type = "derived_formula",
+  pop <- define_phenotype(pop, "sqrtADG", type = "derived_formula",
                           formula = "sqrt(ADG)")
   pop <- get_table(pop, "ind_meta") |> add_phenotype()
 
@@ -570,7 +570,7 @@ test_that("existing components-based maternal WW still works", {
   pop <- setup_ww_traits(pop)
 
   pop <- define_phenotype(pop, "WW",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 230,
     residual_var = 180,
     components   = tibble::tribble(
@@ -596,7 +596,7 @@ test_that("existing components-based SGE model still works", {
   pop <- setup_sge_traits(pop)
 
   pop <- define_phenotype(pop, "ADG_obs",
-    trait_type  = "continuous",
+    type        = "continuous",
     mean        = 850,
     residual_var = 300,
     components  = tibble::tribble(
@@ -621,7 +621,7 @@ test_that("simple phenotype (no formula, no components) still works", {
   pop <- get_table(pop, "genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
     define_additive_effects("ADG")
-  pop <- define_phenotype(pop, "ADG", trait_type = "continuous",
+  pop <- define_phenotype(pop, "ADG", type = "continuous",
                           mean = 850, residual_var = 300)
   pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG")
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))

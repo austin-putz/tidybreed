@@ -56,7 +56,7 @@ pop1 <- get_table(pop1, "genome_meta") |>
   define_additive_effects(c("WWD", "WWM"), G = G_ww)
 
 pop1 <- define_phenotype(pop1, "WW",
-  trait_type   = "continuous",
+  type         = "continuous",
   mean         = 230,
   residual_var = 180,
   formula_tbv  = "WWD + 0.5 * dam(WWM)")
@@ -106,7 +106,7 @@ pop2 <- get_table(pop2, "genome_meta") |>
   define_additive_effects(c("ADG_direct", "ADG_SGE"), G = G_sge)
 
 pop2 <- define_phenotype(pop2, "ADG_obs",
-  trait_type   = "continuous",
+  type         = "continuous",
   mean         = 850,
   residual_var = 300,
   formula_tbv  = "ADG_direct + group_sum(ADG_SGE, pen_id)")
@@ -147,11 +147,11 @@ pop3 <- get_table(pop3, "genome_meta") |>
   slice_sample(n = 100) |>
   define_additive_effects(c("ADFI", "ADG"), G = G_fcr)
 
-pop3 <- define_phenotype(pop3, "ADFI", trait_type = "continuous",
+pop3 <- define_phenotype(pop3, "ADFI", type = "continuous",
                          mean = 2.2, residual_var = 0.1)
-pop3 <- define_phenotype(pop3, "ADG",  trait_type = "continuous",
+pop3 <- define_phenotype(pop3, "ADG",  type = "continuous",
                          mean = 0.9, residual_var = 0.08)
-pop3 <- define_phenotype(pop3, "FCR",  trait_type = "derived_formula",
+pop3 <- define_phenotype(pop3, "FCR",  type = "derived_formula",
                          formula = "ADFI / ADG")
 
 # Simulate all phenotypes with a single add_phenotype() call (topo sort ensures FCR last)
@@ -225,19 +225,19 @@ pop4 <- get_table(pop4, "genome_meta") |>
   define_additive_effects(c("ADFI","ADG"), G = G_fcr2)
 
 # Define phenotypes
-pop4 <- define_phenotype(pop4, "ADFI", trait_type = "continuous", mean = 2.2,
+pop4 <- define_phenotype(pop4, "ADFI", type = "continuous", mean = 2.2,
                          residual_var = 0.1)
-pop4 <- define_phenotype(pop4, "ADG",  trait_type = "continuous", mean = 0.9,
+pop4 <- define_phenotype(pop4, "ADG",  type = "continuous", mean = 0.9,
                          residual_var = 0.08)
-pop4 <- define_phenotype(pop4, "FCR",     trait_type = "derived_formula",
+pop4 <- define_phenotype(pop4, "FCR",     type = "derived_formula",
                          formula = "ADFI / ADG")
-pop4 <- define_phenotype(pop4, "FCR_pct", trait_type = "derived_formula",
+pop4 <- define_phenotype(pop4, "FCR_pct", type = "derived_formula",
                          formula = "FCR * 100")
 
 # Maternal WW — needs offspring with parents
 pop4 <- add_offspring_gen(pop4, n_off = 40)
 pop4 <- define_phenotype(pop4, "WW",
-  trait_type   = "continuous",
+  type         = "continuous",
   mean         = 230,
   residual_var = 180,
   formula_tbv  = "WWD + 0.5 * dam(WWM)")

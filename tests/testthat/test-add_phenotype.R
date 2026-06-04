@@ -36,7 +36,7 @@ setup_simple_trait <- function(pop, trait_name, target_add_var = 0.25,
   pop <- define_trait(pop, trait_name, target_add_var = target_add_var)
   pop <- apply_random_qtl(pop, trait_name, n_qtl = n_qtl)
   pop <- define_phenotype(pop, trait_name,
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = mean,
                           residual_var = residual_var)
   pop
@@ -96,7 +96,7 @@ test_that("categorical trait with prevalence respects target rate approximately"
   pop <- define_trait(pop, "mort", target_add_var = 1)
   pop <- apply_random_qtl(pop, "mort", n_qtl = 50)
   pop <- define_phenotype(pop, "mort",
-                          trait_type      = "categorical",
+                          type            = "categorical",
                           prevalence      = 0.1,
                           cat_values      = c(0, 1),
                           cat_names       = c("Alive", "Dead"),
@@ -131,7 +131,7 @@ test_that("categorical trait with explicit thresholds produces correct categorie
   pop <- define_trait(pop, "body_score", target_add_var = 1)
   pop <- apply_random_qtl(pop, "body_score", n_qtl = 40)
   pop <- define_phenotype(pop, "body_score",
-                          trait_type      = "categorical",
+                          type            = "categorical",
                           thresholds      = c(-1, 0, 1),
                           cat_values      = c(1, 2, 3, 4),
                           cat_names       = c("thin", "fair", "good", "excellent"),
@@ -155,7 +155,7 @@ test_that("count trait clips to min/max", {
   pop <- define_trait(pop, "litter", target_add_var = 4, target_add_mean = 10)
   pop <- apply_random_qtl(pop, "litter", n_qtl = 60)
   pop <- define_phenotype(pop, "litter",
-                          trait_type   = "count",
+                          type         = "count",
                           mean         = 10,
                           min_value    = 0,
                           max_value    = 20,
@@ -200,7 +200,7 @@ test_that("fixed-effect class shifts phenotype by level", {
   pop <- define_trait(pop, "ADG", target_add_var = 0.01)
   pop <- apply_random_qtl(pop, "ADG", n_qtl = 20)
   pop <- define_phenotype(pop, "ADG",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           residual_var = 0.01)
   pop <- pop |>
     define_effect_fixed_class("ADG", "sex",
@@ -278,7 +278,7 @@ test_that("sex-limited phenotype only records correct sex", {
   pop <- define_trait(pop, "milk", target_add_var = 10)
   pop <- apply_random_qtl(pop, "milk", n_qtl = 40)
   pop <- define_phenotype(pop, "milk",
-                          trait_type    = "continuous",
+                          type          = "continuous",
                           expressed_sex = "F",
                           mean          = 30,
                           residual_var  = 5)
@@ -318,7 +318,7 @@ test_that("repeatable phenotype allows multiple records per individual", {
   pop <- define_trait(pop, "LS", target_add_var = 1)
   pop <- apply_random_qtl(pop, "LS", n_qtl = 20)
   pop <- define_phenotype(pop, "LS",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           repeatable   = TRUE,
                           residual_var = 1)
   pop <- define_effect_random(pop, "LS", "pe",

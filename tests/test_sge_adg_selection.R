@@ -202,7 +202,7 @@ pop <- get_table(pop, "genome_meta") |>
   define_additive_effects(c("ADG_direct", "ADG_SGE"), G = G_mat)
 
 pop <- define_phenotype(pop, "ADG",
-  trait_type   = "continuous",
+  type         = "continuous",
   mean         = MEAN_ADG,
   residual_var = VE,
   components   = tibble::tribble(

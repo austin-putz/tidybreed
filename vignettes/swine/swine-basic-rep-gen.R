@@ -199,7 +199,7 @@ for (repl in seq_len(n_reps)) {
   pop <- pop |>
     define_phenotype(
       phenotype_name = "ADG",
-      trait_type     = "continuous",
+      type           = "continuous",
       mean           = 1000,
       residual_var   = 2100,
       overwrite      = TRUE
@@ -238,7 +238,7 @@ for (repl in seq_len(n_reps)) {
   pop <- pop |>
     define_phenotype(
       phenotype_name = "BF",
-      trait_type     = "continuous",
+      type           = "continuous",
       mean           = 10,
       residual_var   = 1.30,
       min_value      = 0,
@@ -277,7 +277,7 @@ for (repl in seq_len(n_reps)) {
   pop <- pop |>
     define_phenotype(
       phenotype_name = "NW",
-      trait_type     = "count",
+      type           = "count",
       mean           = 10,
       residual_var   = 8.10,
       min_value      = 1,
@@ -349,7 +349,7 @@ for (repl in seq_len(n_reps)) {
   pop <- pop |>
     define_phenotype(
       phenotype_name           = "WW",
-      trait_type               = "continuous",
+      type                     = "continuous",
       mean                     = 6.5,     # mean pig WW at 21 days (kg)
       residual_var             = 2.30,
       min_value                = 0.5,

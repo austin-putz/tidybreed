@@ -7,7 +7,7 @@
 define_phenotype(
   pop,
   phenotype_name,
-  trait_type = c("continuous", "count", "categorical"),
+  type = c("continuous", "count", "categorical", "derived_formula"),
   mean = 0,
   expressed_sex = c("both", "M", "F"),
   repeatable = FALSE,
@@ -20,6 +20,8 @@ define_phenotype(
   store_liability = FALSE,
   residual_var = NULL,
   components = NULL,
+  formula_tbv = NULL,
+  formula = NULL,
   missing_component_action = c("skip", "error"),
   overwrite = FALSE
 )
@@ -30,8 +32,11 @@ define_phenotype(
 \item{phenotype_name}{Character. Name of the observed phenotype; equals
 \code{trait_name} for simple (non-composite) traits.}
 
-\item{trait_type}{Character. One of \code{"continuous"}, \code{"count"},
-\code{"categorical"}.}
+\item{type}{Character. One of \code{"continuous"}, \code{"count"}, \code{"categorical"},
+or \code{"derived_formula"}. \code{"derived_formula"} phenotypes are computed at
+\code{\link[=add_phenotype]{add_phenotype()}} time by evaluating the \code{formula} expression over already-
+recorded phenotype values for the same individuals; they have no TBV,
+no residual variance, and no QTL of their own.}
 
 \item{mean}{Numeric. Phenotypic population mean (intercept). Default \code{0}.}
 
@@ -92,7 +97,20 @@ group contributors.
 }
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
-written.}
+written. Mutually exclusive with \code{formula_tbv}.}
+
+\item{formula_tbv}{Character. DSL shorthand for assembling a composite TBV
+from component traits already in \code{trait_meta}. Supports the operators
+\code{+}, \code{-}, \code{*} (scalar multiply), \code{group_sum(trait, col)}, and
+\code{group_mean(trait, col)}. Contributor roles are encoded by suffix:
+\verb{_self}, \verb{_dam}, \verb{_sire} (e.g. \code{"WWD_self + WWM_dam"}). Mutually
+exclusive with \code{components}. Not valid with \code{type = "derived_formula"}.}
+
+\item{formula}{Character. Arithmetic expression evaluated over already-
+recorded phenotype values to produce a derived phenotype. Phenotype names
+reference \code{ind_phenotype} records produced earlier in the same
+\code{\link[=add_phenotype]{add_phenotype()}} call. Operators \code{+}, \code{-}, \code{*}, \code{/} and parentheses are
+supported. Required when \code{type = "derived_formula"}. Not valid otherwise.}
 
 \item{missing_component_action}{Character. What to do when an individual is
 missing one or more required components (e.g. no group assignment, missing
@@ -124,20 +142,42 @@ writes an unconditional diagonal entry to \code{phenotype_residual_cov}. If
 }
 \examples{
 \dontrun{
-# Simple continuous trait
+# ── Simple continuous trait ──────────────────────────────────────────────
 pop <- pop |>
   define_trait("ADG", target_add_var = 100) |>
   get_table("genome_meta") |>
   define_additive_effects("ADG") |>
   define_phenotype("ADG",
-    trait_type   = "continuous",
-    mean         = 500,
+    type         = "continuous",
+    mean         = 850,
     residual_var = 120)
 
-# Maternal composite: WW = WWD (self) + WWM (dam)
+# ── Count trait with clipping bounds ────────────────────────────────────
+pop <- pop |>
+  define_trait("NW", target_add_var = 2) |>
+  get_table("genome_meta") |>
+  define_additive_effects("NW") |>
+  define_phenotype("NW",
+    type         = "count",
+    mean         = 10,
+    min_value    = 1,
+    max_value    = 30,
+    residual_var = 8)
+
+# ── Categorical trait (binary via prevalence) ────────────────────────────
+pop <- pop |>
+  define_trait("mort", target_add_var = 0.05) |>
+  get_table("genome_meta") |>
+  define_additive_effects("mort") |>
+  define_phenotype("mort",
+    type       = "categorical",
+    prevalence = 0.05,
+    cat_names  = c("Alive", "Dead"))
+
+# ── Maternal composite via components data frame: WW = WWD (self) + WWM (dam) ──
 pop <- pop |>
   define_phenotype("WW",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 230,
     residual_var = 180,
     components   = tibble::tribble(
@@ -145,6 +185,29 @@ pop <- pop |>
       "WWD",              "self",
       "WWM",              "dam"
     ))
+
+# ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
+pop <- pop |>
+  define_phenotype("WW",
+    type         = "continuous",
+    mean         = 230,
+    residual_var = 180,
+    formula_tbv  = "WWD_self + WWM_dam")
+
+# ── SGE (social genetic effects): ADG = direct_self + social group sum ──
+pop <- pop |>
+  define_phenotype("ADG_sge",
+    type         = "continuous",
+    mean         = 850,
+    residual_var = 100,
+    formula_tbv  = "ADG_direct_self + group_sum(ADG_social, pen_id)")
+
+# ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
+# (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)
+pop <- pop |>
+  define_phenotype("FCR",
+    type    = "derived_formula",
+    formula = "ADFI / ADG")
 }
 }
 \seealso{

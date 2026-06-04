@@ -65,13 +65,13 @@ The model is split into two distinct layers with a strict boundary between them:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
 - Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_effect_cov`
 - Arguments: `target_add_var`, `target_add_mean`, `expressed_parent`, `description`, `units`
-- No phenotype-level information at all — no mean, no residual, no trait_type, no expressed_sex
+- No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
 **Observation layer** — managed by `define_phenotype()`:
 - One row in `phenotype_meta` per observed phenotype individuals receive records for (e.g. `ADG`, `WW`, `mortality`)
 - For simple traits, `phenotype_name` equals the `trait_name` of its single genetic component
 - For composite traits (maternal, SGE), `phenotype_name` is new and one or more `trait_meta` rows feed into it via `phenotype_components`
-- Arguments: `trait_type`, `mean`, `expressed_sex`, `repeatable`, `min_value`, `max_value`, `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`, `residual_var`, `components`, `missing_component_action`
+- Arguments: `type`, `mean`, `expressed_sex`, `repeatable`, `min_value`, `max_value`, `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`, `residual_var`, `components`, `formula_tbv`, `formula`, `missing_component_action`
 
 **The rule**: if an argument describes the genetics (variance, QTL structure, parent-of-origin), it belongs in `define_trait()`. If it describes what observers record (mean, distribution, sex expression, residual noise, how to assemble from components), it belongs in `define_phenotype()`. Never put observation-layer arguments on `define_trait()` or genetic-layer arguments on `define_phenotype()`.
 
@@ -192,7 +192,7 @@ Observation-layer metadata lives in `phenotype_meta`.
 | target_add_mean | DOUBLE  | TBV centering mean for the base population; default `0`            |
 
 **What does NOT belong here** (all moved to `phenotype_meta` in v0.31.0):
-`trait_type`, `expressed_sex`, `repeatable`, `mean`, `min_value`, `max_value`,
+`type`, `expressed_sex`, `repeatable`, `mean`, `min_value`, `max_value`,
 `prevalence`, `thresholds`, `cat_values`, `cat_names`, `residual_var`,
 `index_weight`, `economic_value`.
 
@@ -244,7 +244,7 @@ SGE ADG) appear only here.
 |--------------------------|---------|---------------------------------------------------------------|
 | id_phenotype_meta        | INTEGER | Primary key (auto-incrementing)                               |
 | phenotype_name           | VARCHAR | Unique. Equals `trait_name` for simple traits.                |
-| trait_type               | VARCHAR | `"continuous"`, `"count"`, `"categorical"`                    |
+| type                     | VARCHAR | `"continuous"`, `"count"`, `"categorical"`, `"derived_formula"` |
 | mean                     | DOUBLE  | Phenotypic population mean / liability intercept              |
 | expressed_sex            | VARCHAR | `"both"`, `"M"`, or `"F"`                                     |
 | repeatable               | BOOLEAN | Repeated records allowed?                                     |
@@ -589,7 +589,7 @@ pop |>
   `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
   `trait_effect_cov`), `target_add_mean`, `expressed_parent`, `description`,
   `units`, `overwrite`. **Never** pass observation-layer arguments here
-  (`trait_type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
+  (`type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
   in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
   already exists; `overwrite = TRUE` replaces both the `trait_meta` row and its
   `index_meta` entry.
@@ -639,7 +639,7 @@ pop |>
 
 `R/define_phenotype.R`, `R/add_residual_cov.R`
 
-- `define_phenotype(pop, phenotype_name, trait_type, mean, expressed_sex, repeatable, ...)` —
+- `define_phenotype(pop, phenotype_name, type, mean, expressed_sex, repeatable, ...)` —
   registers an observed phenotype in `phenotype_meta`. For simple traits
   `phenotype_name` matches the `trait_name` already in `trait_meta`. For
   composite phenotypes (e.g. weaning weight, SGE ADG) the name is new and no
@@ -688,7 +688,7 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   group-member TBVs are pre-fetched so group aggregation is a single in-memory
   pass. Adds fixed/random covariate contributions, samples residuals (joint
   `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
-  otherwise independent). Converts liability to phenotype per `trait_type`.
+  otherwise independent). Converts liability to phenotype per `type`.
   Writes `ind_phenotype` rows and updates `ind_tbv`.
 - `add_tbv()` — TBV-only; no phenotype records. Reads additive effects from
   `genome_effects` (where `genome_effect_type = "additive"` and

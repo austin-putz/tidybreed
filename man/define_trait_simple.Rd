@@ -11,7 +11,7 @@ define_trait_simple(
   target_add_var,
   mean = 0,
   residual_var,
-  trait_type = "continuous",
+  type = "continuous",
   expressed_sex = "both",
   repeatable = FALSE,
   effect_distribution = "normal",
@@ -35,7 +35,7 @@ define_trait_simple(
 
 \item{residual_var}{Numeric. Residual variance. Passed to \code{\link[=define_phenotype]{define_phenotype()}}.}
 
-\item{trait_type}{Character. One of \code{"continuous"} (default), \code{"count"},
+\item{type}{Character. One of \code{"continuous"} (default), \code{"count"},
 \code{"categorical"}. Passed to \code{\link[=define_phenotype]{define_phenotype()}}.}
 
 \item{expressed_sex}{Character. \code{"both"} (default), \code{"M"}, or \code{"F"}.

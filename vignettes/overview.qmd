@@ -508,9 +508,7 @@ pop <- pop |>
 pop <- pop |>
   define_trait(
     trait_name     = "ADG",
-    trait_type     = "continuous",
-    target_add_var = 100,
-    residual_var   = 150
+    target_add_var = 100
   )
 
 # 4. Assign QTL effects (random sample of 200 loci)

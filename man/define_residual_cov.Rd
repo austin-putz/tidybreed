@@ -57,7 +57,7 @@ after \code{\link[=define_phenotype]{define_phenotype()}} has written the uncond
 # Heterogeneous residual by sex for turkey BW
 pop <- pop |>
   define_phenotype("BW_turkey",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 8000,
     residual_var = 600) |>   # unconditional default
   define_residual_cov("BW_turkey",

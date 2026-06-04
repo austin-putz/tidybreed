@@ -22,7 +22,7 @@ make_ap_pop <- function() {
     dplyr::filter(locus_name %in% sel) |>
     define_additive_effects("AP")
   pop <- define_phenotype(pop, "AP",
-                          trait_type    = "count",
+                          type          = "count",
                           mean          = 180,
                           min_value     = 150,
                           max_value     = 250,

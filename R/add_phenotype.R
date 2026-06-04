@@ -196,7 +196,8 @@ add_phenotype <- function(tbl,
         "No additive effects found for phenotype '", t, "' in genome_effects. ",
         "For simple phenotypes call define_additive_effects() first. ",
         "For composite phenotypes supply 'components' or 'formula_tbv' in define_phenotype(). ",
-        "For derived phenotypes (no genetic architecture) use trait_type = 'derived_formula'.",
+        "For derived phenotypes (no genetic architecture) ",
+        "use type = 'derived_formula'.",
         call. = FALSE
       )
     }
@@ -731,15 +732,15 @@ add_phenotype <- function(tbl,
     liability  <- pheno_mean + covariate_contrib + as.numeric(tbv) + resid
 
     # 9e. Phenotype-type conversion
-    trait_type <- if (is.null(m$trait_type) || is.na(m$trait_type)) {
+    pheno_type <- if (is.null(m$type) || is.na(m$type)) {
       "continuous"
     } else {
-      m$trait_type
+      m$type
     }
 
     cat_idx <- NULL
 
-    if (trait_type == "categorical") {
+    if (pheno_type == "categorical") {
       has_thresh <- !is.null(m$thresholds) && !is.na(m$thresholds) &&
                    nzchar(m$thresholds)
       if (has_thresh) {
@@ -764,7 +765,7 @@ add_phenotype <- function(tbl,
       }
     } else {
       value <- switch(
-        trait_type,
+        pheno_type,
         continuous = liability,
         count      = as.numeric(clip_count(liability, m$min_value, m$max_value)),
         liability

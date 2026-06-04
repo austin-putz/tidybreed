@@ -15,7 +15,7 @@
 #' @param mean Numeric. Phenotypic population mean. Passed to
 #'   [define_phenotype()] as the `mean` argument. Default `0`.
 #' @param residual_var Numeric. Residual variance. Passed to [define_phenotype()].
-#' @param trait_type Character. One of `"continuous"` (default), `"count"`,
+#' @param type Character. One of `"continuous"` (default), `"count"`,
 #'   `"categorical"`. Passed to [define_phenotype()].
 #' @param expressed_sex Character. `"both"` (default), `"M"`, or `"F"`.
 #'   Passed to [define_phenotype()].
@@ -53,7 +53,7 @@ define_trait_simple <- function(pop,
                                 target_add_var,
                                 mean                = 0,
                                 residual_var,
-                                trait_type          = "continuous",
+                                type                = "continuous",
                                 expressed_sex       = "both",
                                 repeatable          = FALSE,
                                 effect_distribution = "normal",
@@ -85,7 +85,7 @@ define_trait_simple <- function(pop,
 
   pop <- define_phenotype(pop,
                           phenotype_name = trait_name,
-                          trait_type     = trait_type,
+                          type           = type,
                           mean           = mean,
                           expressed_sex  = expressed_sex,
                           repeatable     = repeatable,

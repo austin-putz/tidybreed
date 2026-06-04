@@ -332,7 +332,7 @@ pop <- pop %>%
     trait_name  = "AP",
     description = "Age at Puberty", 
     units       = "days",                  # grams per day during testing period
-    trait_type  = "count",           # not categorical or binary
+    type        = "count",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "self",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'
@@ -546,7 +546,7 @@ pop <- pop %>%
     trait_name  = "ADG",
     description = "Average Daily Gain", 
     units       = "g/d",                  # grams per day during testing period
-    trait_type  = "continuous",           # not categorical or binary
+    type        = "continuous",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "self",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'
@@ -612,7 +612,7 @@ pop <- pop %>%
     trait_name  = "BF",
     description = "Ultrasound Backfat", 
     units       = "mm",                  # grams per day during testing period
-    trait_type  = "continuous",           # not categorical or binary
+    type        = "continuous",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "self",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'
@@ -682,7 +682,7 @@ pop <- pop %>%
     trait_name  = "NW",
     description = "Number Weaned", 
     units       = "count",                  # grams per day during testing period
-    trait_type  = "count",           # not categorical or binary
+    type        = "count",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "dam",                 # recorded on itself only
     target_add_mean = 0,      # mean TBV in 'base'

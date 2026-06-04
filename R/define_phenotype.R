@@ -16,8 +16,11 @@
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_name Character. Name of the observed phenotype; equals
 #'   `trait_name` for simple (non-composite) traits.
-#' @param trait_type Character. One of `"continuous"`, `"count"`,
-#'   `"categorical"`.
+#' @param type Character. One of `"continuous"`, `"count"`, `"categorical"`,
+#'   or `"derived_formula"`. `"derived_formula"` phenotypes are computed at
+#'   [add_phenotype()] time by evaluating the `formula` expression over already-
+#'   recorded phenotype values for the same individuals; they have no TBV,
+#'   no residual variance, and no QTL of their own.
 #' @param mean Numeric. Phenotypic population mean (intercept). Default `0`.
 #' @param expressed_sex Character. Who receives a phenotype record: `"both"`
 #'   (default), `"M"`, or `"F"`.
@@ -65,7 +68,18 @@
 #'     group contributors.
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
-#'   written.
+#'   written. Mutually exclusive with `formula_tbv`.
+#' @param formula_tbv Character. DSL shorthand for assembling a composite TBV
+#'   from component traits already in `trait_meta`. Supports the operators
+#'   `+`, `-`, `*` (scalar multiply), `group_sum(trait, col)`, and
+#'   `group_mean(trait, col)`. Contributor roles are encoded by suffix:
+#'   `_self`, `_dam`, `_sire` (e.g. `"WWD_self + WWM_dam"`). Mutually
+#'   exclusive with `components`. Not valid with `type = "derived_formula"`.
+#' @param formula Character. Arithmetic expression evaluated over already-
+#'   recorded phenotype values to produce a derived phenotype. Phenotype names
+#'   reference `ind_phenotype` records produced earlier in the same
+#'   [add_phenotype()] call. Operators `+`, `-`, `*`, `/` and parentheses are
+#'   supported. Required when `type = "derived_formula"`. Not valid otherwise.
 #' @param missing_component_action Character. What to do when an individual is
 #'   missing one or more required components (e.g. no group assignment, missing
 #'   dam TBV, missing random effect draw). `"skip"` (default) excludes the
@@ -84,20 +98,42 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Simple continuous trait
+#' # ── Simple continuous trait ──────────────────────────────────────────────
 #' pop <- pop |>
 #'   define_trait("ADG", target_add_var = 100) |>
 #'   get_table("genome_meta") |>
 #'   define_additive_effects("ADG") |>
 #'   define_phenotype("ADG",
-#'     trait_type   = "continuous",
-#'     mean         = 500,
+#'     type         = "continuous",
+#'     mean         = 850,
 #'     residual_var = 120)
 #'
-#' # Maternal composite: WW = WWD (self) + WWM (dam)
+#' # ── Count trait with clipping bounds ────────────────────────────────────
+#' pop <- pop |>
+#'   define_trait("NW", target_add_var = 2) |>
+#'   get_table("genome_meta") |>
+#'   define_additive_effects("NW") |>
+#'   define_phenotype("NW",
+#'     type         = "count",
+#'     mean         = 10,
+#'     min_value    = 1,
+#'     max_value    = 30,
+#'     residual_var = 8)
+#'
+#' # ── Categorical trait (binary via prevalence) ────────────────────────────
+#' pop <- pop |>
+#'   define_trait("mort", target_add_var = 0.05) |>
+#'   get_table("genome_meta") |>
+#'   define_additive_effects("mort") |>
+#'   define_phenotype("mort",
+#'     type       = "categorical",
+#'     prevalence = 0.05,
+#'     cat_names  = c("Alive", "Dead"))
+#'
+#' # ── Maternal composite via components data frame: WW = WWD (self) + WWM (dam) ──
 #' pop <- pop |>
 #'   define_phenotype("WW",
-#'     trait_type   = "continuous",
+#'     type         = "continuous",
 #'     mean         = 230,
 #'     residual_var = 180,
 #'     components   = tibble::tribble(
@@ -105,11 +141,34 @@
 #'       "WWD",              "self",
 #'       "WWM",              "dam"
 #'     ))
+#'
+#' # ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
+#' pop <- pop |>
+#'   define_phenotype("WW",
+#'     type         = "continuous",
+#'     mean         = 230,
+#'     residual_var = 180,
+#'     formula_tbv  = "WWD_self + WWM_dam")
+#'
+#' # ── SGE (social genetic effects): ADG = direct_self + social group sum ──
+#' pop <- pop |>
+#'   define_phenotype("ADG_sge",
+#'     type         = "continuous",
+#'     mean         = 850,
+#'     residual_var = 100,
+#'     formula_tbv  = "ADG_direct_self + group_sum(ADG_social, pen_id)")
+#'
+#' # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
+#' # (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)
+#' pop <- pop |>
+#'   define_phenotype("FCR",
+#'     type    = "derived_formula",
+#'     formula = "ADFI / ADG")
 #' }
 #' @export
 define_phenotype <- function(pop,
                              phenotype_name,
-                             trait_type               = c("continuous", "count",
+                             type                     = c("continuous", "count",
                                                           "categorical",
                                                           "derived_formula"),
                              mean                     = 0,
@@ -136,13 +195,13 @@ define_phenotype <- function(pop,
             nchar(phenotype_name) > 0)
   validate_sql_identifier(phenotype_name, what = "phenotype name")
 
-  trait_type               <- match.arg(trait_type)
+  type                     <- match.arg(type)
   expressed_sex            <- match.arg(expressed_sex)
   missing_component_action <- match.arg(missing_component_action)
 
   # ── Categorical validation ─────────────────────────────────────────────────
 
-  if (trait_type == "categorical") {
+  if (type == "categorical") {
     has_thresholds <- !is.null(thresholds) && length(thresholds) >= 1 &&
                       !all(is.na(thresholds))
     has_prevalence <- !is.null(prevalence) && !is.na(prevalence) &&
@@ -190,16 +249,16 @@ define_phenotype <- function(pop,
       call. = FALSE
     )
 
-  # formula requires trait_type = "derived_formula"
-  if (!is.null(formula) && trait_type != "derived_formula")
+  # formula requires type = "derived_formula"
+  if (!is.null(formula) && type != "derived_formula")
     stop(
-      "`formula` requires `trait_type = \"derived_formula\"`. ",
+      "`formula` requires `type = \"derived_formula\"`. ",
       "For composite TBV composition use `formula_tbv` instead.",
       call. = FALSE
     )
 
   # derived_formula guards
-  if (trait_type == "derived_formula") {
+  if (type == "derived_formula") {
     if (!is.null(residual_var))
       stop(
         "`derived_formula` phenotypes have no independent residual variance. ",
@@ -220,7 +279,7 @@ define_phenotype <- function(pop,
       )
     if (is.null(formula))
       stop(
-        "`trait_type = \"derived_formula\"` requires a `formula` string. ",
+        "`type = \"derived_formula\"` requires a `formula` string. ",
         "Example: `formula = \"ADFI / ADG\"`.",
         call. = FALSE
       )
@@ -303,7 +362,7 @@ define_phenotype <- function(pop,
   row <- tibble::tibble(
     id_phenotype_meta        = new_id,
     phenotype_name           = phenotype_name,
-    trait_type               = trait_type,
+    type                     = type,
     mean                     = as.numeric(mean),
     expressed_sex            = expressed_sex,
     repeatable               = as.logical(repeatable),
@@ -414,7 +473,7 @@ define_phenotype <- function(pop,
   msg_suffix <- ""
   if (!is.null(formula_tbv)) msg_suffix <- " [formula_tbv DSL]"
   if (!is.null(formula))     msg_suffix <- " [derived_formula]"
-  message("Added phenotype '", phenotype_name, "' (type: ", trait_type, ")",
+  message("Added phenotype '", phenotype_name, "' (type: ", type, ")",
           msg_suffix, ".")
 
   invisible(pop)

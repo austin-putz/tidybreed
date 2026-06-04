@@ -1007,7 +1007,7 @@ pop <- pop %>%
     trait_name  = "ADG",
     description = "Average Daily Gain",
     units       = "g/d",                  # grams per day during testing period
-    trait_type  = "continuous",           # not categorical or binary
+    type        = "continuous",           # not categorical or binary
     repeatable  = FALSE,                  # only 1 phenotype per individual
     recorded_on = "self",                 # recorded on itself only
     target_add_mean = 0,     # mean TBV in 'base'
@@ -1283,7 +1283,7 @@ pop <- pop %>%
     trait_name = "BF",        # name of trait
     description = "Ultrasound  Backfat",   # what exactly is this trait?
     units = "mm",                          # grams per day during testing period
-    trait_type = "continuous",             # not categorical or binary
+    type = "continuous",             # not categorical or binary
     repeatable = FALSE,                    # only 1 phenotype per individual
     recorded_on = "self",                  # can be recorded on the dam, etc
     min_value = 0,           # backfat cannot be negative
@@ -1809,7 +1809,7 @@ pop <- pop %>%
     trait_name  = "NW",
     description = "Number Weaned",
     units       = "count",                # total piglets weaned
-    trait_type  = "count",                # positive integer
+    type        = "count",                # positive integer
     repeatable  = TRUE,                   # as long as reproducing
     recorded_on = "dam",                  # recorded on dam only
     min_value = 1,                        # minimum value for trait (1 NW)

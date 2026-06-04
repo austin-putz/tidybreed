@@ -1,3 +1,29 @@
+# tidybreed 0.34.1 (2026-06-03)
+
+## Breaking changes
+
+* `define_phenotype()` argument `trait_type` renamed to `type`. The old name
+  conflicts with the genetic layer (`define_trait()` world); the observation
+  layer should use the shorter, unambiguous name. Update all calls:
+  `trait_type = "continuous"` → `type = "continuous"`.
+
+* `phenotype_meta` DB column renamed from `trait_type` to `type` to match the
+  argument name (per naming-consistency rule: argument names must match the
+  column they populate). Existing databases must be recreated.
+
+## Improvements
+
+* `define_phenotype()` man page now fully documents `formula_tbv`, `formula`,
+  and `type = "derived_formula"`, with examples for continuous, count,
+  categorical, maternal composite (both `components` data frame and `formula_tbv`
+  shorthand), SGE, and derived-formula patterns.
+
+* `define_trait_simple()` argument `trait_type` likewise renamed to `type`.
+
+* `sql_utils.R`: removed stale observation-layer columns (`trait_type`,
+  `repeatable`, etc.) from `trait_meta` reserved cols (they moved to
+  `phenotype_meta` in v0.31.0); added `phenotype_meta` reserved cols entry.
+
 # tidybreed 0.34.0 (2026-05-24)
 
 ## New features

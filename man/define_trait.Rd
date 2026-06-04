@@ -69,7 +69,7 @@ pop <- pop |>
 
 # Then define the observed composite phenotype:
 pop <- pop |>
-  define_phenotype("WW", trait_type = "continuous", mean = 230,
+  define_phenotype("WW", type = "continuous", mean = 230,
     residual_var = 180,
     components = tibble::tribble(
       ~source_trait_name, ~contributor_type,

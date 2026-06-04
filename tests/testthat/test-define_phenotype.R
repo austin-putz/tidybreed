@@ -19,14 +19,14 @@ test_that("define_phenotype() inserts a row into phenotype_meta", {
 
   pop <- define_trait(pop, "ADG", target_add_var = 1)
   pop <- define_phenotype(pop, "ADG",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = 500,
                           residual_var = 120)
 
   row <- DBI::dbGetQuery(pop$db_conn,
     "SELECT * FROM phenotype_meta WHERE phenotype_name = 'ADG'")
   expect_equal(nrow(row), 1L)
-  expect_equal(row$trait_type,    "continuous")
+  expect_equal(row$type,    "continuous")
   expect_equal(row$mean,          500)
   expect_equal(row$expressed_sex, "both")
   expect_false(row$repeatable)
@@ -86,18 +86,18 @@ test_that("define_phenotype() categorical with prevalence validates correctly", 
 
   # Must supply thresholds OR prevalence
   expect_error(
-    define_phenotype(pop, "mort", trait_type = "categorical", residual_var = 1),
+    define_phenotype(pop, "mort", type = "categorical", residual_var = 1),
     "thresholds"
   )
   # Cannot supply both
   expect_error(
-    define_phenotype(pop, "mort", trait_type = "categorical",
+    define_phenotype(pop, "mort", type = "categorical",
                      prevalence = 0.1, thresholds = c(0), residual_var = 1),
     "not both"
   )
 
   pop <- define_phenotype(pop, "mort",
-                          trait_type      = "categorical",
+                          type            = "categorical",
                           prevalence      = 0.10,
                           cat_values      = c(0, 1),
                           cat_names       = c("Alive", "Dead"),
@@ -106,7 +106,7 @@ test_that("define_phenotype() categorical with prevalence validates correctly", 
 
   row <- DBI::dbGetQuery(pop$db_conn,
     "SELECT * FROM phenotype_meta WHERE phenotype_name = 'mort'")
-  expect_equal(row$trait_type,      "categorical")
+  expect_equal(row$type,      "categorical")
   expect_equal(row$prevalence,      0.10)
   expect_equal(row$cat_values,      "0,1")
   expect_equal(row$cat_names,       "Alive,Dead")
@@ -120,7 +120,7 @@ test_that("define_phenotype() categorical with thresholds stores them correctly"
 
   pop <- define_trait(pop, "score", target_add_var = 1)
   pop <- define_phenotype(pop, "score",
-                          trait_type  = "categorical",
+                          type        = "categorical",
                           thresholds  = c(-1, 0, 1),
                           cat_values  = c(1, 2, 3, 4),
                           cat_names   = c("thin", "fair", "good", "excellent"),
@@ -143,20 +143,20 @@ test_that("define_phenotype() validates cat_values and cat_names lengths", {
 
   # 1 threshold → 2 categories; cat_values must be length 2
   expect_error(
-    define_phenotype(pop, "x", trait_type = "categorical",
+    define_phenotype(pop, "x", type = "categorical",
                      thresholds = c(0), cat_values = c(1, 2, 3), residual_var = 1),
     "length 2"
   )
   # cat_names must match cat_values count
   expect_error(
-    define_phenotype(pop, "x", trait_type = "categorical",
+    define_phenotype(pop, "x", type = "categorical",
                      thresholds = c(0), cat_values = c(0, 1),
                      cat_names = c("No"), residual_var = 1),
     "length 2"
   )
   # cat_names cannot contain commas
   expect_error(
-    define_phenotype(pop, "x", trait_type = "categorical",
+    define_phenotype(pop, "x", type = "categorical",
                      thresholds = c(0),
                      cat_names = c("Yes, really", "No"), residual_var = 1),
     "commas"
@@ -187,7 +187,7 @@ test_that("define_phenotype() stores components in phenotype_components", {
   pop <- define_trait(pop, "WWM", target_add_var = 80)
 
   pop <- define_phenotype(pop, "WW",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = 230,
                           residual_var = 180,
                           components   = tibble::tribble(

@@ -70,7 +70,7 @@ test_that("composite maternal phenotype assembles correctly", {
 
   # Define the composite phenotype
   pop <- define_phenotype(pop, "WW",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = 230,
                           residual_var = 180,
                           components   = tibble::tribble(
@@ -123,7 +123,7 @@ test_that("composite phenotype excludes founders with missing dam TBV", {
     define_additive_effects("WWM")
 
   pop <- define_phenotype(pop, "WW",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = 200,
                           residual_var = 150,
                           components   = tibble::tribble(
@@ -159,7 +159,7 @@ test_that("repeatable phenotype with PE random effect produces multiple records"
     define_additive_effects("LS")
 
   pop <- define_phenotype(pop, "LS",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           repeatable   = TRUE,
                           mean         = 10,
                           residual_var = 1)
@@ -200,7 +200,7 @@ test_that("heterogeneous residuals by sex produce different variance groups", {
 
   # Unconditional default (fallback)
   pop <- define_phenotype(pop, "BW",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           residual_var = 600)
 
   # Heterogeneous residuals: males 400, females 800
@@ -246,7 +246,7 @@ test_that("sex-limited phenotype only generates records for the specified sex", 
     define_additive_effects("milk")
 
   pop <- define_phenotype(pop, "milk",
-                          trait_type    = "continuous",
+                          type          = "continuous",
                           expressed_sex = "F",
                           mean          = 8000,
                           residual_var  = 2000000)
@@ -278,7 +278,7 @@ test_that("phenotype mean in phenotype_meta controls liability intercept", {
     define_additive_effects("ADG")
 
   pop <- define_phenotype(pop, "ADG",
-                          trait_type   = "continuous",
+                          type         = "continuous",
                           mean         = 750,
                           residual_var = 1)
 
@@ -356,7 +356,7 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
 
   # Composite SGE phenotype
   pop <- define_phenotype(pop, "ADG",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 850,
     residual_var = 300,
     components   = tibble::tribble(
@@ -408,7 +408,7 @@ test_that("SGE aggregation sum vs mean differ when pen size > 1", {
   DBI::dbExecute(pop_mean$db_conn,
     "DELETE FROM phenotype_components WHERE phenotype_name = 'ADG'")
   pop_mean <- define_phenotype(pop_mean, "ADG",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 850,
     residual_var = 300,
     components   = tibble::tribble(
@@ -470,7 +470,7 @@ test_that("Missing pen_id with missing_component_action='error' stops", {
   DBI::dbExecute(pop$db_conn,
     "DELETE FROM phenotype_components WHERE phenotype_name = 'ADG'")
   pop <- define_phenotype(pop, "ADG",
-    trait_type               = "continuous",
+    type                     = "continuous",
     mean                     = 850,
     residual_var             = 300,
     missing_component_action = "error",
@@ -497,7 +497,7 @@ test_that("group_column omitted for group contributor errors in define_phenotype
 
   expect_error(
     define_phenotype(pop, "ADG2",
-      trait_type = "continuous",
+      type = "continuous",
       components = tibble::tribble(
         ~source_trait_name, ~contributor_type,
         "ADG_direct",       "group"
@@ -537,7 +537,7 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
                                  c("mort_direct","mort_social"))))
 
   pop <- define_phenotype(pop, "mortality",
-    trait_type   = "categorical",
+    type         = "categorical",
     prevalence   = 0.1,
     residual_var = 1,
     components   = tibble::tribble(
@@ -581,7 +581,7 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
                                  c("ADG_direct","ADG_social"))))
 
   pop <- define_phenotype(pop, "ADG",
-    trait_type   = "continuous",
+    type         = "continuous",
     mean         = 850,
     residual_var = 300,
     components   = tibble::tribble(
