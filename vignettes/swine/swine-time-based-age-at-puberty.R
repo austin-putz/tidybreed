@@ -403,8 +403,8 @@ pop %>%
     sex == "F",
   ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait_name = "AP",              # trait name
-    rep = repl                 # set rep number
+    phenotype_name = "AP",    # phenotype name
+    rep = repl                # set rep number
   )
 
 pop %>% get_table("ind_phenotype")
@@ -660,8 +660,8 @@ pop %>%
     off_test_date < start_date
   ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait_name = "BF",               # trait name
-    rep = repl                  # add rep
+    phenotype_name = "BF",    # phenotype name
+    rep = repl                # add rep
   )
 
 # print table

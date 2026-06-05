@@ -6,7 +6,7 @@
 \usage{
 add_phenotype(
   tbl,
-  trait_name = NULL,
+  phenotype_name = NULL,
   user_residual = NULL,
   user_values = NULL,
   seed = NULL,
@@ -17,9 +17,8 @@ add_phenotype(
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
 through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column.}
 
-\item{trait_name}{Character vector of phenotype name(s) (accepts phenotype
-names — the argument is named \code{trait_name} for backward compatibility).
-When \code{NULL} (default), all phenotypes in \code{phenotype_meta} are used in
+\item{phenotype_name}{Character vector of phenotype name(s). When \code{NULL}
+(default), all phenotypes in \code{phenotype_meta} are used in
 \code{id_phenotype_meta} order.}
 
 \item{user_residual}{Optional override for residual draws. Numeric vector

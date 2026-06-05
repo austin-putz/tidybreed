@@ -252,7 +252,7 @@ pop <- pop %>%
   add_founders(                                            # add founders
     n_males       = config$population$n_founder_male,      # sample male founders
     n_females     = config$population$n_founder_female,    # sample female founders
-    line_name     = "Libra",                               # name this line
+    line_name     = "A",                               # name this line
     rep           = repl,                                  # USER DEFINED - replicate
     conc_date     = sampled_birth_dates - config$general$gest_len, 
     birth_date    = sampled_birth_dates, 
@@ -323,19 +323,20 @@ pop <- pop %>%
 # print residual variance components
 pop %>% get_table("phenotype_residual_cov")
 
-#------------------------------------------------------------#
+#------------------------------------------------------------------------------#
 # Index
-#------------------------------------------------------------#
+#------------------------------------------------------------------------------#
 
 warning("Define index")
 
-# percent inclusion (WW replaces WWD + WWM as a composite phenotype)
+# percent inclusion
 pct <- c(
   AP  = 0.10,  # lower is better
   NW  = 0.25,  # higher is better
   ADG = 0.20,  # higher is better
   BF  = 0.10,  # lower is better
-  WW  = 0.35   # higher is better (combined: formerly 0.15 WWD + 0.20 WWM)
+  WWD = 0.15,  # higher is better (weaning weight direct)
+  WWM = 0.20   # higher is better (weaning weight maternal)
 )
 
 # direction required
@@ -344,7 +345,8 @@ direction <- c(
   NW  =  1,
   ADG =  1,
   BF  = -1,
-  WW  =  1
+  WWD =  1,
+  WWM =  1
 )
 
 # genetic SD per trait (WW = sqrt(Var_WWD + Var_WWM) = sqrt(0.04 + 0.13))
@@ -353,7 +355,8 @@ gen_sd <- c(
   NW  = sqrt(0.90),
   ADG = sqrt(1050.00),
   BF  = sqrt(1.20),
-  WW  = sqrt(0.04 + 0.13)
+  WWD = sqrt(0.04),
+  WWM = sqrt(0.13)
 )
 
 # raw weights
@@ -364,16 +367,20 @@ round(raw_weights, 3)
 pop %>%
   define_index(
     index_name   = "maternal",
-    trait_names  = c("AP", "NW", "ADG", "BF", "WW"),
+    trait_names  = c("AP", "NW", "ADG", "BF", "WWD", "WWM"),
     index_wts    = raw_weights,
-    economic_wts = c(0, 80, 2.0, -20, 0.25)
+    economic_wts = c(-0.5, 80, 2.0, -20, 0.25, 0.50)
   )
 
 # print table with index values
 pop %>% get_table("index_meta")
 
+#------------------------------------------------------------------------------#
+# Add Traits + Phenotypes
+#------------------------------------------------------------------------------#
+
 #------------------------------------------------------------#
-# Trait: AP - Age at Puberty
+# Trait + Phenotype: Age at Puberty (AP)
 #------------------------------------------------------------#
 
 warning("Define AP - Age at Puberty")
@@ -381,13 +388,13 @@ warning("Define AP - Age at Puberty")
 # add ADG as a trait
 pop <- pop %>%
   define_trait(
-    trait_name = "AP",
+    trait_name      = "AP",
     target_add_mean = 0,
     #target_add_var = 200,        # already added above!! 
-    #expressed_parent = "both", 
-    description = "Age at Puberty",
-    units = "days",
-    overwrite = TRUE
+    #expressed_parent = "both",   # as in only from maternal or pat haplotype
+    description     = "Age at Puberty",
+    units           = "days",
+    overwrite       = TRUE
   ) %>%
   define_phenotype(
     phenotype_name = "AP",
@@ -407,40 +414,45 @@ pop %>% get_table("phenotype_components")
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   define_additive_effects(
-    trait_name = "AP", 
-    distribution = "normal", 
+    trait_name      = "AP", 
+    distribution    = "normal", 
     scale_to_target = TRUE, 
-    base = "current_pop"
+    base            = "current_pop"
   )
 
 # print 'genome_effects'
 pop %>% get_table("genome_effects")
 
-# add all TBV for AP
+# calculate all TBV for AP
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("AP", rep = repl)
 
+# print TBV table
 pop %>% get_table("ind_tbv")
 
+# add 9k genotypes to all animals
 pop %>%
   get_table("ind_meta") %>%
   add_genotypes(chip_name = "9k")
 
+# print ind_meta table with new field for genotyped or not
 pop %>% get_table("ind_meta")
 
+# extract genotypes on these animals
 pop %>%
   get_table("ind_meta") %>%
   extract_genotypes(chip_name = "9k")
 
+# pull out 
 pop %>%
   get_table("ind_meta") %>%
-  filter(
-    id_ind %in% c("Libra_1", "Libra_2")
-  ) %>%
+    filter(
+      id_ind %in% c("A_1", "A_2")
+    ) %>%
   extract_genotypes(
     effects_tbl = pop %>% get_table("genome_effects") %>% filter(trait_name=="AP")
   ) %>%
@@ -469,10 +481,11 @@ pop %>%
     sex == "F",
   ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait_name = "AP",              # trait name
-    rep = repl                 # set rep number
+    phenotype_name = "AP",    # phenotype name
+    rep = repl                # set rep number
   )
 
+# print phenotype table
 pop %>% get_table("ind_phenotype")
 
 # ----- EXTRACT PHENOTYPE ----- #
@@ -487,16 +500,18 @@ data.age.puberty <- pop %>%
   select(id_ind, pheno_value) %>%
   collect()
 
+# extract IDs
 list_founder_AP_ids <- as.character(data.age.puberty$id_ind)
 
 # ----- ADD PUBERTY DATE ----- #
 
+# extract birth dates and join to puberty age and sum to get phenotype date
 data.birth.date <- pop %>%
   get_table("ind_meta") %>%
-  filter(
-    rep == repl,
-    id_ind %in% list_founder_AP_ids
-  ) %>%
+    filter(
+      rep == repl,
+      id_ind %in% list_founder_AP_ids
+    ) %>%
   select(id_ind, birth_date) %>%
   collect() %>%
   left_join(., data.age.puberty) %>%
@@ -515,7 +530,7 @@ if (all(list_founder_AP_ids == data.birth.date$id_ind) == FALSE){
 
 # ----- UPDATE 'puberty_date' in 'ind_meta' ----- #
 
-# add phenotype date to phenotype table
+# add phenotype date within phenotype table
 pop <- pop %>%
   get_table("ind_meta") %>%
   filter(
@@ -548,7 +563,7 @@ pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "AP")
 # count how many rows are before the start date
 pop %>% 
   get_table("ind_phenotype") %>% 
-  filter(phenotype_name == "AP", pheno_date < start_date) %>% 
+    filter(phenotype_name == "AP", pheno_date < start_date) %>% 
   collect() %>% 
   count()
 
@@ -601,7 +616,7 @@ pop %>%
   )
 
 #------------------------------------------------------------#
-# Trait: ADG
+# Trait + Phenotype: Average Daily Gain (ADG)
 #------------------------------------------------------------#
 
 warning("Define ADG")
@@ -635,7 +650,7 @@ pop %>%
   get_table("genome_meta") %>%
   filter(is_9k != TRUE) %>%
   # set loci as QTL for this trait
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -645,17 +660,18 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("ADG", rep = repl)
 
+# print TBV table
 pop %>% get_table("ind_tbv")
 
-# add overall mean for ADG
-pop %>%
-  add_effect_int(
-    trait_name = "ADG",              # trait (need to change to "trait_name")
-    mean = 1000
-  )
+# # add overall mean for ADG
+# pop %>%
+#   add_effect_int(
+#     trait_name = "ADG",              # trait (need to change to "trait_name")
+#     mean = 1000
+#   )
 
 # test `add_phenotype()` function
 pop %>%
@@ -670,58 +686,62 @@ pop %>%
   )  
 
 # check ADG phenotype count
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "ADG")
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "ADG") %>% collect() %>% count()
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "ADG")
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "ADG") %>% 
+  collect() %>% count()
 
 #------------------------------------------------------------#
-# Trait: BF
+# Trait + Phenotype: Backfat (BF)
 #------------------------------------------------------------#
 
 warning("Define BF")
 
-# add ADG as a trait
+# add BF as a trait + phenotype
 pop <- pop %>%
-  add_trait(
-    trait_name  = "BF",
+  define_trait(
+    trait_name      = "BF",
     description = "Ultrasound Backfat", 
-    units       = "mm",                  # grams per day during testing period
-    type        = "continuous",           # not categorical or binary
-    repeatable  = FALSE,                  # only 1 phenotype per individual
-    recorded_on = "self",                 # recorded on itself only
-    target_add_mean = 0,      # mean TBV in 'base'
-    min_value       = 0,      # cannot be negative
-    #target_add_var  = 1082,  # additive variance target in 'base'
-    #residual_var    = 2500,  # residual variance (target h2 ~0.30) - 'fixed'
-    index_weight    = -28.61, # index weight (not implemented yet)
-    economic_value  = -28.61, # economic value (not implemented yet)
-    overwrite       = TRUE    # wipe this row if it exists and replace with this new data
-  )
+    units       = "mm", 
+    target_add_mean = 0,                 # mean TBV in 'base'
+    overwrite       = TRUE
+  ) %>%
+  define_phenotype(
+    phenotype_name = "BF", 
+    type = "continuous",
+    mean = 10,
+    expressed_sex = "both",
+    min_value = 0, 
+    overwrite = TRUE
+  ) 
+
+pop %>% get_table("trait_meta")
+pop %>% get_table("phenotype_meta")
 
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   # set loci as QTL for this trait
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
     base            = "current_pop" # use all animals in pop to standardized (or if filtered)
   )
 
-# add all TBV for ADG
+# add all TBV for BF
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("BF", rep = repl)
 
 # look at TBV table
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
 
-# add overall mean for ADG
+# add overall mean for BF
 pop %>%
-  add_effect_int(
-    trait_name = "BF",              # trait (need to change to "trait_name")
+  define_effect_intercept(
+    phenotype_name = "BF",              # trait (need to change to "trait_name")
     mean = 10
   )
 
@@ -732,16 +752,24 @@ pop %>%
     rep == repl,
     off_test_date < start_date
   ) %>%
-  add_phenotype(                # add rows to 'ind_phenotye' table
-    trait_name = "BF",               # trait name
+  add_phenotype(                # add rows to 'ind_phenotype' table
+    phenotype_name = "BF",          # phenotype name
     rep = repl                  # add rep
   )
 
 # print table
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF")
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "BF")
 
 # count new phenotypes
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "BF") %>% collect() %>% count()
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "BF") %>% 
+  collect() %>% count()
+
+#------------------------------------------------------------------------------#
+# Phenotype Weaning Weight (WW)
+#------------------------------------------------------------------------------#
+
+# Description:
+#   - weaning weight is the combination of weaning weight direct and maternal
 
 #------------------------------------------------------------#
 # Trait: WWD - Weaning Weight Direct
@@ -761,7 +789,7 @@ pop <- pop %>%
 
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   define_additive_effects(
     trait_name       = "WWD",
     distribution     = "normal",
@@ -771,7 +799,7 @@ pop %>%
 
 pop <- pop %>%
   get_table("ind_meta") %>%
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("WWD", rep = repl)
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWD")
@@ -794,7 +822,7 @@ pop <- pop %>%
 
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   define_additive_effects(
     trait_name       = "WWM",
     distribution     = "normal",
@@ -804,7 +832,7 @@ pop %>%
 
 pop <- pop %>%
   get_table("ind_meta") %>%
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("WWM", rep = repl)
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWM")
@@ -837,30 +865,30 @@ pop %>% get_table("phenotype_components")
 
 warning("Define NW")
 
-# add ADG as a trait
+# add NW as a trait + phenotype
 pop <- pop %>%
-  add_trait(
-    trait_name  = "NW",
-    description = "Number Weaned", 
-    units       = "count",                  # grams per day during testing period
-    type        = "count",           # not categorical or binary
-    repeatable  = FALSE,                  # only 1 phenotype per individual
-    recorded_on = "dam",                 # recorded on itself only
-    target_add_mean = 0,      # mean TBV in 'base'
-    min_value       = 1,      # cannot be negative
-    #target_add_var  = 1082,  # additive variance target in 'base'
-    #residual_var    = 2500,  # residual variance (target h2 ~0.30) - 'fixed'
-    index_weight    = 91.93, # index weight (not implemented yet)
-    economic_value  = 92.93, # economic value (not implemented yet)
-    overwrite       = TRUE    # wipe this row if it exists and replace with this new data
+  define_trait(
+    trait_name      = "NW",
+    description     = "Number Weaned", 
+    units           = "count",
+    target_add_mean = 0,
+    overwrite       = TRUE
+  ) %>%
+  define_phenotype(
+    phenotype_name = "NW", 
+    type = "count",
+    mean = 10,
+    expressed_sex = "F",
+    min_value = 0, 
+    overwrite = TRUE
   )
 
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   # set loci as QTL for this trait
-  add_additive_effects(
+  define_additive_effects(
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
@@ -870,15 +898,15 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-  filter(rep == repl) %>%
+    filter(rep == repl) %>%
   add_tbv("NW", rep = repl)
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
 
 # add overall mean for ADG
 pop %>%
-  add_effect_int(
-    trait_name = "NW",              # trait (need to change to "trait_name")
+  define_effect_intercept(
+    phenotype_name = "NW",
     mean = 10
   )
 
@@ -917,7 +945,7 @@ pop %>%
 pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
-  group_by(rep, trait_name) %>%
+  group_by(rep, phenotype_name) %>%
   summarise(
     MeanP = mean(pheno_value),
     .groups = "drop_last"
@@ -926,9 +954,13 @@ pop %>%
 
 
 
+#------------------------------------------------------------#
+# Calculate true index value
+#------------------------------------------------------------#
+
 pop %>% get_table("ind_meta") %>% add_tbv(index_names = "maternal")
 
-pop %>% get_table("ind_true_index")
+pop %>% get_table("ind_true_index") %>% collect() %>% print(n=10)
 
 
 
@@ -1562,7 +1594,7 @@ if (cur_date == female_selection_date){
     id_parent_1 = rep(list_sampled_boar_matings_sexed_males, time=data.nw.males$pheno_value),
     # rep dams by "NW" phenotype to get a full litter (1 row / offspring)
     id_parent_2 = rep(c(data.nw.males$id_ind), time=data.nw.males$pheno_value),
-    line_name     = "Libra",
+    line_name     = "A",
     sex           = "M",       # SEXED SEMEN -> males only
     rep           = repl,
     conc_date     = cur_date,
@@ -1577,7 +1609,7 @@ if (cur_date == female_selection_date){
     id_parent_1 = rep(list_sampled_boar_matings_sexed_females, time=data.nw.females$pheno_value),
     # rep dams by "NW" phenotype to get a full litter (1 row / offspring)
     id_parent_2 = rep(c(data.nw.females$id_ind), time=data.nw.females$pheno_value),
-    line_name     = "Libra",
+    line_name     = "A",
     sex           = "F",         # SEXED SEMEN -> females only
     rep           = repl,
     conc_date     = cur_date,

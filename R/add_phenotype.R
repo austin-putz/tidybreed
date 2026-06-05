@@ -31,9 +31,8 @@
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [filter()]). The table must contain an `id_ind` column.
-#' @param trait_name Character vector of phenotype name(s) (accepts phenotype
-#'   names — the argument is named `trait_name` for backward compatibility).
-#'   When `NULL` (default), all phenotypes in `phenotype_meta` are used in
+#' @param phenotype_name Character vector of phenotype name(s). When `NULL`
+#'   (default), all phenotypes in `phenotype_meta` are used in
 #'   `id_phenotype_meta` order.
 #' @param user_residual Optional override for residual draws. Numeric vector
 #'   of length `n_subset` for single phenotype, or a named list keyed by
@@ -65,8 +64,8 @@
 #' }
 #' @export
 add_phenotype <- function(tbl,
-                          trait_name    = NULL,
-                          user_residual = NULL,
+                          phenotype_name = NULL,
+                          user_residual  = NULL,
                           user_values   = NULL,
                           seed          = NULL,
                           ...) {
@@ -76,19 +75,19 @@ add_phenotype <- function(tbl,
   validate_tidybreed_pop(pop)
 
   # Resolve phenotype names from phenotype_meta
-  if (is.null(trait_name)) {
-    trait_name <- DBI::dbGetQuery(
+  if (is.null(phenotype_name)) {
+    phenotype_name <- DBI::dbGetQuery(
       pop$db_conn,
       "SELECT phenotype_name FROM phenotype_meta ORDER BY id_phenotype_meta"
     )$phenotype_name
-    if (length(trait_name) == 0L)
+    if (length(phenotype_name) == 0L)
       stop("No phenotypes found in phenotype_meta. ",
            "Call define_phenotype() first.", call. = FALSE)
   }
 
-  stopifnot(is.character(trait_name), length(trait_name) >= 1)
-  lapply(trait_name, validate_sql_identifier, what = "phenotype name")
-  phenos <- trait_name
+  stopifnot(is.character(phenotype_name), length(phenotype_name) >= 1)
+  lapply(phenotype_name, validate_sql_identifier, what = "phenotype name")
+  phenos <- phenotype_name
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {

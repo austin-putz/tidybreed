@@ -1,3 +1,15 @@
+# tidybreed 0.34.2 (2026-06-05)
+
+## Breaking changes
+
+* `add_phenotype()` argument renamed from `trait_name` to `phenotype_name`.
+  The old name contradicted the two-layer design (traits = genetic components,
+  phenotypes = observed records) and caused silent bugs: passing
+  `phenotype_name = "ADG"` fell into `...` as an extra column, leaving the
+  selector `NULL` and generating records for *all* phenotypes. Update all
+  named calls: `trait_name = "ADG"` → `phenotype_name = "ADG"`. Positional
+  calls (`add_phenotype("ADG")`) are unaffected.
+
 # tidybreed 0.34.1 (2026-06-03)
 
 ## Breaking changes
