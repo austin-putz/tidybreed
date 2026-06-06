@@ -1,3 +1,14 @@
+# tidybreed 0.35.1 (2026-06-06)
+
+## Bug fixes
+
+* `add_phenotype()` now validates `...` arguments against common misspellings
+  of `phenotype_name` (e.g., `trait`, `phenotype`, `trait_name`, `pheno_name`).
+  Previously, `phenotype_name = "ADG"` mistyped as `trait = "ADG"` would silently
+  be treated as an extra column, leaving the selector NULL and adding **all**
+  phenotypes instead of just ADG. Now raises a clear error directing users to the
+  correct argument name.
+
 # tidybreed 0.35.0 (2026-06-05)
 
 ## Breaking changes
