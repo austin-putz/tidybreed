@@ -280,10 +280,14 @@ pop %>% get_table("genome_meta")
 # Add Traits
 #------------------------------------------------------------------------------#
 
-warning("Add cov matrices")
+#------------------------------------------------------------#
+# Additive Genetic Covariance
+#------------------------------------------------------------#
+
+warning("Add genetic covariance matrix")
 
 # additive genetic (CO)VARIANCES
-mat.add.gen.vars <- matrix(c(200.00,  0.00,    0.00,  0.00, 0.00, 0.00,
+vars.mat.add <- matrix(c(200.00,  0.00,    0.00,  0.00, 0.00, 0.00,
                                0.00,  0.90,    3.07,  0.21, 0.00, 0.00,
                                0.00,  3.07, 1050.00, 17.80, 0.00, 0.00,
                                0.00,  0.21,   17.80,  1.20, 0.00, 0.00,
@@ -293,8 +297,26 @@ mat.add.gen.vars <- matrix(c(200.00,  0.00,    0.00,  0.00, 0.00, 0.00,
                       dimnames = list(c("AP", "NW", "ADG", "BF", "WWD", "WWM"), 
                                       c("AP", "NW", "ADG", "BF", "WWD", "WWM")))
 
+# add this additive genetic covariance matrix to a table with function
+pop <- pop %>%
+  define_effect_cov_matrix(
+    effect_name = "gen_add",          # fixed term for additive genetic (co)variance matrix
+    cov_matrix  = vars.mat.add    # name of matrix with row/col names
+  )
+
+# print additive variance components
+pop %>% get_table("trait_effect_cov")
+
+#------------------------------------------------------------#
+# Residual Covariance
+#------------------------------------------------------------#
+
+warning("Add residual covariance matrix")
+
+# NOTE: Only 5 phenotypes, while 6 "traits" above
+
 # residual (CO)VARIANCES
-mat.res.vars <- matrix(c(400,  0.00,    0.00,  0.00, 0.00,
+vars.mat.res <- matrix(c(400,  0.00,    0.00,  0.00, 0.00,
                          0.0,  8.10,   10.00,  0.65, 0.00,
                          0.0, 10.00, 2100.00, 10.00, 0.00,
                          0.0,  0.65,   10.00,  1.30, 0.00,
@@ -303,21 +325,11 @@ mat.res.vars <- matrix(c(400,  0.00,    0.00,  0.00, 0.00,
                       dimnames = list(c("AP", "NW", "ADG", "BF", "WW"), 
                                       c("AP", "NW", "ADG", "BF", "WW")))
 
-# add this additive genetic covariance matrix to a table with function
-pop <- pop %>%
-  define_effect_cov_matrix(
-    effect_name = "gen_add",          # fixed term for additive genetic (co)variance matrix
-    cov_matrix  = mat.add.gen.vars    # name of matrix with row/col names
-  )
-
-# print additive variance components
-pop %>% get_table("trait_effect_cov")
-
 # add this residual covariance matrix to a table with function
 pop <- pop %>%
   define_effect_cov_matrix(
     effect_name = "residual",      # fixed term for residual (co)variance matrix
-    cov_matrix  = mat.res.vars     # name for matrix with row/col names
+    cov_matrix  = vars.mat.res     # name for matrix with row/col names
   )
 
 # print residual variance components
@@ -531,28 +543,42 @@ if (all(list_founder_AP_ids == data.birth.date$id_ind) == FALSE){
 # ----- UPDATE 'puberty_date' in 'ind_meta' ----- #
 
 # add phenotype date within phenotype table
-pop <- pop %>%
+puberty_ids <- pop %>%
   get_table("ind_meta") %>%
   filter(
     rep == repl,
     sex == "F"
   ) %>%
+  pull(id_ind)
+
+pop <- pop %>%
+  get_table("ind_meta") %>%
   mutate_table(
-    puberty_date = data.birth.date$pheno_date
+    puberty_date = tibble::tibble(
+      id_ind = puberty_ids,
+      puberty_date = data.birth.date$pheno_date
+    )
   )
 
 # ----- UPDATE 'pheno_date' in 'ind_phenotype' ----- #
 
 # add phenotype date to phenotype table
-pop <- pop %>%
+pheno_rec_ids <- pop %>%
   get_table("ind_phenotype") %>%
   filter(
     rep == repl,
     phenotype_name == "AP",
     id_ind %in% list_founder_AP_ids
   ) %>%
+  pull(id_phenotype)
+
+pop <- pop %>%
+  get_table("ind_phenotype") %>%
   mutate_table(
-    pheno_date = data.birth.date$pheno_date
+    pheno_date = tibble::tibble(
+      id_phenotype = pheno_rec_ids,
+      pheno_date = data.birth.date$pheno_date
+    )
   )
 
 # ----- CHECK 'ind_phenotype' ----- #
@@ -911,10 +937,10 @@ pop %>%
   )
 
 # check phenotype table for NW
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "NW")
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "NW")
 
 # count NW phenotypes 
-pop %>% get_table("ind_phenotype") %>% filter(trait_name == "NW") %>% collect() %>% count()
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "NW") %>% collect() %>% count()
 
 #------------------------------------------------------------------------------#
 # Checks
@@ -960,7 +986,7 @@ pop %>%
 
 pop %>% get_table("ind_meta") %>% add_tbv(index_names = "maternal")
 
-pop %>% get_table("ind_true_index") %>% collect() %>% print(n=10)
+pop %>% get_table("ind_true_index") %>% collect()
 
 
 
@@ -1743,7 +1769,7 @@ if (cur_date == female_selection_date){
   message("Add 'puberty_date' on new gilts")
   
   # add puberty date to 'ind_meta' table
-  pop <- pop %>%
+  gilt_ids <- pop %>%
     get_table("ind_meta") %>%
     filter(
       #rep == repl,
@@ -1751,8 +1777,15 @@ if (cur_date == female_selection_date){
       #conc_date == cur_date
       id_ind %in% list_cur_AP_ids
     ) %>%
+    pull(id_ind)
+
+  pop <- pop %>%
+    get_table("ind_meta") %>%
     mutate_table(
-      puberty_date = data.birth.date$pheno_date
+      puberty_date = tibble::tibble(
+        id_ind = gilt_ids,
+        puberty_date = data.birth.date$pheno_date
+      )
     )
   
   # ----- UPDATE 'pheno_date' in 'ind_phenotype' ----- #
@@ -1760,7 +1793,7 @@ if (cur_date == female_selection_date){
   message("Update 'pheno_date' on new gilts")
   
   # add phenotype date to phenotype table
-  pop <- pop %>%
+  gilt_pheno_ids <- pop %>%
     get_table("ind_phenotype") %>%
     filter(
       #rep == repl,
@@ -1768,8 +1801,15 @@ if (cur_date == female_selection_date){
       id_ind %in% list_cur_AP_ids,
       current_date == cur_date
     ) %>%
+    pull(id_phenotype)
+
+  pop <- pop %>%
+    get_table("ind_phenotype") %>%
     mutate_table(
-      pheno_date = data.birth.date$pheno_date
+      pheno_date = tibble::tibble(
+        id_phenotype = gilt_pheno_ids,
+        pheno_date = data.birth.date$pheno_date
+      )
     )
   
   # ----- CHECK 'ind_phenotype' ----- #

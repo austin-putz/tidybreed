@@ -103,7 +103,7 @@ add_index <- function(tbl,
     if (length(extra_cols[[nm]]) != 1L) {
       stop(
         "Extra field '", nm, "' passed to add_index() must be a scalar ",
-        "(broadcast to all rows). Use mutate_table() for per-row vectors.",
+        "(broadcast to all rows). Use mutate_table() with a tibble for per-row values.",
         call. = FALSE
       )
     }

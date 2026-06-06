@@ -450,28 +450,42 @@ if (all(list_founder_AP_ids == data.birth.date$id_ind) == FALSE){
 # ----- UPDATE 'puberty_date' in 'ind_meta' ----- #
 
 # add phenotype date to phenotype table
-pop <- pop %>%
+puberty_ids <- pop %>%
   get_table("ind_meta") %>%
   filter(
     rep == repl,
     sex == "F"
   ) %>%
+  pull(id_ind)
+
+pop <- pop %>%
+  get_table("ind_meta") %>%
   mutate_table(
-    puberty_date = data.birth.date$pheno_date
+    puberty_date = tibble::tibble(
+      id_ind = puberty_ids,
+      puberty_date = data.birth.date$pheno_date
+    )
   )
 
 # ----- UPDATE 'pheno_date' in 'ind_phenotype' ----- #
 
 # add phenotype date to phenotype table
-pop <- pop %>%
+pheno_rec_ids <- pop %>%
   get_table("ind_phenotype") %>%
   filter(
     rep == repl,
     trait_name == "AP",
     id_ind %in% list_founder_AP_ids
   ) %>%
+  pull(id_phenotype)
+
+pop <- pop %>%
+  get_table("ind_phenotype") %>%
   mutate_table(
-    pheno_date = data.birth.date$pheno_date
+    pheno_date = tibble::tibble(
+      id_phenotype = pheno_rec_ids,
+      pheno_date = data.birth.date$pheno_date
+    )
   )
 
 # ----- CHECK 'ind_phenotype' ----- #
@@ -1429,7 +1443,7 @@ if (cur_date == female_selection_date){
   message("Add 'puberty_date' on new gilts")
   
   # add puberty date to 'ind_meta' table
-  pop <- pop %>%
+  gilt_ids <- pop %>%
     get_table("ind_meta") %>%
     filter(
       #rep == repl,
@@ -1437,16 +1451,23 @@ if (cur_date == female_selection_date){
       #conc_date == cur_date
       id_ind %in% list_cur_AP_ids
     ) %>%
-    mutate_table(
-      puberty_date = data.birth.date$pheno_date
-    )
-  
-  # ----- UPDATE 'pheno_date' in 'ind_phenotype' ----- #
-  
-  message("Update 'pheno_date' on new gilts")
-  
-  # add phenotype date to phenotype table
+    pull(id_ind)
+
   pop <- pop %>%
+    get_table("ind_meta") %>%
+    mutate_table(
+      puberty_date = tibble::tibble(
+        id_ind = gilt_ids,
+        puberty_date = data.birth.date$pheno_date
+      )
+    )
+
+  # ----- UPDATE 'pheno_date' in 'ind_phenotype' ----- #
+
+  message("Update 'pheno_date' on new gilts")
+
+  # add phenotype date to phenotype table
+  gilt_pheno_ids <- pop %>%
     get_table("ind_phenotype") %>%
     filter(
       #rep == repl,
@@ -1454,8 +1475,15 @@ if (cur_date == female_selection_date){
       id_ind %in% list_cur_AP_ids,
       current_date == cur_date
     ) %>%
+    pull(id_phenotype)
+
+  pop <- pop %>%
+    get_table("ind_phenotype") %>%
     mutate_table(
-      pheno_date = data.birth.date$pheno_date
+      pheno_date = tibble::tibble(
+        id_phenotype = gilt_pheno_ids,
+        pheno_date = data.birth.date$pheno_date
+      )
     )
   
   # ----- CHECK 'ind_phenotype' ----- #

@@ -203,17 +203,40 @@ test_that("NA values produce DEFAULT NULL", {
 
 # ── Error cases ──────────────────────────────────────────────────────────────
 
-test_that(".set_default with vector errors", {
+test_that(".set_default with plain vector errors", {
   pop <- create_test_pop()
 
   # Add some rows
   pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
+  # Plain vectors are not allowed, so this errors on the vector first
   expect_error(
     pop |>
       get_table("ind_meta") |>
       mutate_table(gen = 1:10, .set_default = TRUE),
-    "Cannot use .set_default = TRUE with vector values"
+    "Plain vectors are not allowed"
+  )
+
+  close_pop(pop)
+})
+
+
+test_that(".set_default with tibble errors", {
+  pop <- create_test_pop()
+
+  # Add some rows
+  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+
+  # Tibbles with .set_default should error
+  ids <- dplyr::collect(get_table(pop, "ind_meta")) |> dplyr::pull(id_ind)
+  expect_error(
+    pop |>
+      get_table("ind_meta") |>
+      mutate_table(
+        gen = tibble::tibble(id_ind = ids, gen = c(rep(0L, 5), rep(1L, 5))),
+        .set_default = TRUE
+      ),
+    "Cannot use .set_default = TRUE with tibble"
   )
 
   close_pop(pop)

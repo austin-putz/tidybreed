@@ -1,3 +1,26 @@
+# tidybreed 0.35.0 (2026-06-05)
+
+## Breaking changes
+
+* `mutate_table()` no longer accepts plain R vectors (length > 1) for setting
+  per-row values. Positional vector assignment was unsafe: row order is not
+  guaranteed and can silently drift when rows are added or reordered, causing
+  wrong values to land on wrong rows with no error.
+
+  Replace with an explicit tibble carrying the primary key column:
+  ```r
+  # Before (unsafe):
+  mutate_table(gen = c(1, 2, 3))
+
+  # After (safe):
+  mutate_table(gen = tibble::tibble(
+    id_ind = c("A_1", "A_2", "A_3"),
+    gen = c(1L, 2L, 3L)
+  ))
+  ```
+
+  Scalar broadcasting is unchanged and unaffected.
+
 # tidybreed 0.34.2 (2026-06-05)
 
 ## Breaking changes

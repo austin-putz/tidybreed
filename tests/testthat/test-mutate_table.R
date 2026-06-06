@@ -120,16 +120,6 @@ test_that("mutate_table() adds multiple scalar columns at once", {
 })
 
 
-test_that("mutate_table() adds a vector column with correct per-row values", {
-  pop <- create_pop_for_mutate(n_males = 5, n_females = 5)
-  weights <- seq(50, 59, by = 1)
-  pop <- get_table(pop, "ind_meta") |> mutate_table(weight = weights)
-  result <- dplyr::collect(get_table(pop, "ind_meta"))
-  expect_equal(sort(result$weight), sort(weights))
-  close_pop(pop)
-})
-
-
 test_that("mutate_table() updates an existing column", {
   pop <- create_pop_for_mutate()
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
@@ -215,12 +205,14 @@ test_that("existing column + filter: only matched rows updated", {
 })
 
 
-test_that("vector + filter: vector of length n_filtered succeeds", {
+test_that("tibble: explicit PK + value columns succeeds", {
   pop <- create_pop_for_mutate(n_males = 5, n_females = 5)
+  ids <- dplyr::collect(get_table(pop, "ind_meta")) |>
+    dplyr::filter(sex == "M") |>
+    dplyr::pull(id_ind)
   scores <- c(10.1, 10.2, 10.3, 10.4, 10.5)
   pop <- get_table(pop, "ind_meta") |>
-    dplyr::filter(sex == "M") |>
-    mutate_table(score = scores)
+    mutate_table(score = tibble::tibble(id_ind = ids, score = scores))
   result <- dplyr::collect(get_table(pop, "ind_meta"))
   expect_equal(sort(result$score[result$sex == "M"]), sort(scores))
   expect_true(all(is.na(result$score[result$sex == "F"])))
@@ -228,13 +220,48 @@ test_that("vector + filter: vector of length n_filtered succeeds", {
 })
 
 
-test_that("vector + filter: wrong length errors with clear message", {
-  pop <- create_pop_for_mutate(n_males = 5, n_females = 5)
+test_that("tibble: missing PK column errors", {
+  pop <- create_pop_for_mutate()
+  bad_tbl <- tibble::tibble(score = c(1, 2, 3))
   expect_error(
-    get_table(pop, "ind_meta") |>
-      dplyr::filter(sex == "M") |>
-      mutate_table(score = 1:4),  # 4, not 5
-    "5"
+    get_table(pop, "ind_meta") |> mutate_table(score = bad_tbl),
+    "id_ind"
+  )
+  close_pop(pop)
+})
+
+
+test_that("tibble: missing field column errors", {
+  pop <- create_pop_for_mutate()
+  bad_tbl <- tibble::tibble(id_ind = c("A_1", "A_2"))
+  expect_error(
+    get_table(pop, "ind_meta") |> mutate_table(score = bad_tbl),
+    "score"
+  )
+  close_pop(pop)
+})
+
+
+test_that("tibble: unknown IDs error", {
+  pop <- create_pop_for_mutate()
+  bad_tbl <- tibble::tibble(id_ind = c("FAKE_ID"), score = c(99.9))
+  expect_error(
+    get_table(pop, "ind_meta") |> mutate_table(score = bad_tbl),
+    "not found"
+  )
+  close_pop(pop)
+})
+
+
+test_that("plain vector (length > 1) errors with helpful message", {
+  pop <- create_pop_for_mutate()
+  expect_error(
+    get_table(pop, "ind_meta") |> mutate_table(score = c(1.0, 2.0, 3.0)),
+    "Plain vectors are not allowed"
+  )
+  expect_error(
+    get_table(pop, "ind_meta") |> mutate_table(score = c(1.0, 2.0, 3.0)),
+    "tibble"
   )
   close_pop(pop)
 })
@@ -294,12 +321,33 @@ test_that("SQL reserved keywords are blocked", {
 })
 
 
-test_that("vector length mismatch errors with clear message", {
-  pop <- create_pop_for_mutate(n_males = 5, n_females = 5)
+test_that("tibble: ID validation catches non-existent IDs", {
+  pop <- create_pop_for_mutate()
+  bad_ids <- c("NONEXISTENT_ID_1", "NONEXISTENT_ID_2")
   expect_error(
-    get_table(pop, "ind_meta") |> mutate_table(gen = 1:9),   # 9, not 10
-    "10"
+    get_table(pop, "ind_meta") |>
+      mutate_table(score = tibble::tibble(id_ind = bad_ids, score = c(1, 2))),
+    "not found"
   )
+  close_pop(pop)
+})
+
+
+test_that("scalar + tibble in same call: both updated", {
+  pop <- create_pop_for_mutate(n_males = 2, n_females = 2)
+  ids <- dplyr::collect(get_table(pop, "ind_meta")) |>
+    dplyr::filter(sex == "M") |>
+    dplyr::pull(id_ind)
+
+  pop <- get_table(pop, "ind_meta") |>
+    mutate_table(
+      status = "active",  # scalar
+      score = tibble::tibble(id_ind = ids, score = c(1.1, 2.2))  # tibble
+    )
+
+  result <- dplyr::collect(get_table(pop, "ind_meta"))
+  expect_true(all(result$status == "active"))
+  expect_equal(result$score[result$sex == "M"], c(1.1, 2.2), tolerance = 1e-10)
   close_pop(pop)
 })
 

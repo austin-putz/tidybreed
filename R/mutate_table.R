@@ -278,41 +278,6 @@ count_nonnull_in_filter <- function(conn, table_name, field_name, pk_col, filter
 }
 
 
-#' Return primary key values in canonical row order
-#'
-#' For `ind_meta`, order is ROWID (insertion order).
-#' For `genome_meta` and unknown tables, order is by the PK column value.
-#'
-#' @param conn DuckDB connection
-#' @param table_name Table name string
-#' @param pk_col Primary key column name
-#' @param filter_ids NULL for all rows; character/integer vector to restrict to
-#'   a subset of PK values (uses a temp-table join to avoid large IN lists)
-#' @keywords internal
-get_pks_in_order <- function(conn, table_name, pk_col, filter_ids = NULL) {
-
-  order_by <- if (table_name == "ind_meta") "ROWID" else pk_col
-
-  if (is.null(filter_ids)) {
-    query  <- paste0("SELECT ", pk_col, " FROM ", table_name, " ORDER BY ", order_by)
-    return(DBI::dbGetQuery(conn, query)[[pk_col]])
-  }
-
-  filter_df <- data.frame(pk = filter_ids, stringsAsFactors = FALSE)
-  names(filter_df) <- pk_col
-  DBI::dbWriteTable(conn, "_tb_pk_ord", filter_df, overwrite = TRUE)
-
-  query <- paste0(
-    "SELECT t.", pk_col, " FROM ", table_name, " AS t ",
-    "INNER JOIN _tb_pk_ord AS f ON t.", pk_col, " = f.", pk_col, " ",
-    "ORDER BY t.", order_by
-  )
-  result <- DBI::dbGetQuery(conn, query)[[pk_col]]
-  DBI::dbExecute(conn, "DROP TABLE _tb_pk_ord")
-  result
-}
-
-
 #' Execute a scalar UPDATE on a table column
 #'
 #' @param conn DuckDB connection
@@ -403,13 +368,14 @@ mutate_table_vector <- function(conn, table_name, field_name,
 #'
 #' @param tbl_obj A `tidybreed_table` object returned by [get_table()].
 #' @param ... Named arguments of the form `column_name = value`. `value` can
-#'   be a scalar (applied to all affected rows) or a vector whose length equals
-#'   the number of affected rows.
+#'   be a scalar (applied to all affected rows) or a tibble/data frame
+#'   containing the primary key column and a column named after the field.
+#'   Plain vectors (length > 1) are not allowed; use a tibble instead.
 #' @param .set_default Logical; if `TRUE`, creates new columns with a SQL
 #'   DEFAULT constraint set to the provided value. The DEFAULT applies to future
 #'   INSERT operations (e.g., from [add_founders()], [add_phenotype()]) when
 #'   the column is not explicitly specified in `...`. Only valid for scalar
-#'   values (length 1); an error is raised if used with vectors. Has no effect
+#'   values; an error is raised if used with tibbles. Has no effect
 #'   on columns that already exist (DuckDB does not support modifying existing
 #'   column defaults). Default: `FALSE`.
 #'
@@ -421,13 +387,19 @@ mutate_table_vector <- function(conn, table_name, field_name,
 #' `character` → VARCHAR) is performed automatically via
 #' `infer_duckdb_type()`.
 #'
-#' **Vector order**: when supplying a vector, values are matched to rows in
-#' insertion order (`ROWID` for `ind_meta`, `locus_id` order for
-#' `genome_meta`). This matches the order returned by a plain
-#' `get_table(pop, "ind_meta") |> collect()` call.
+#' **Per-row values (tibble path)**: to set different values for different rows,
+#' pass a tibble/data frame containing the primary key column plus a column named
+#' after the field being updated:
+#' ```
+#' mutate_table(gen = tibble::tibble(id_ind = c("A_1", "A_2"),
+#'                                    gen = c(1L, 2L)))
+#' ```
+#' The tibble is entirely self-contained; any upstream [filter()] is ignored
+#' for that field (but continues to apply to scalar fields in the same call).
+#' All IDs in the tibble must exist in the table; an error is raised for unknown IDs.
 #'
-#' **Filtering**: when a [filter()] is applied upstream, only the matching
-#' rows are updated. New columns created in this context will be `NULL` for
+#' **Filtering**: when a [filter()] is applied upstream, scalar values broadcast
+#' to all matching rows. New columns created in this context will be `NULL` for
 #' all non-matching rows.
 #'
 #' **Default constraints**: When `.set_default = TRUE`, new columns are created
@@ -590,29 +562,79 @@ mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
 
     validate_sql_identifier(field_name, what = "field name", reserved = reserved)
 
-    db_type <- infer_duckdb_type(value)
+    # Dispatch on input type: tibble (data frame), scalar, or invalid vector
+    if (is.data.frame(value)) {
+      # --- Tibble / keyed path ---
+      if (is.null(pk_col)) {
+        stop(
+          "Cannot use a tibble value in mutate_table() on table '", table_name,
+          "': no primary key registered for this table.",
+          call. = FALSE
+        )
+      }
+      if (!pk_col %in% names(value)) {
+        stop(
+          "Tibble for field '", field_name, "' must contain a column named '",
+          pk_col, "' (the primary key for '", table_name, "').",
+          call. = FALSE
+        )
+      }
+      if (!field_name %in% names(value)) {
+        stop(
+          "Tibble for field '", field_name, "' must contain a column named '",
+          field_name, "'.",
+          call. = FALSE
+        )
+      }
 
-    if (length(value) == 1) {
+      # Validate all IDs exist in the table
+      tbl_ids <- DBI::dbGetQuery(pop$db_conn,
+                                  paste0("SELECT ", pk_col, " FROM ", table_name))[[pk_col]]
+      unknown <- setdiff(value[[pk_col]], tbl_ids)
+      if (length(unknown) > 0) {
+        stop(
+          "Tibble for field '", field_name, "' contains ", length(unknown),
+          " ID(s) not found in '", table_name, "': ",
+          paste(head(unknown, 5), collapse = ", "),
+          if (length(unknown) > 5) ", …" else "",
+          call. = FALSE
+        )
+      }
+
+      is_vector      <- TRUE
+      n_effective    <- nrow(value)
+      db_type        <- infer_duckdb_type(value[[field_name]])
+      pks_tibble     <- value[[pk_col]]
+      vals_tibble    <- value[[field_name]]
+      tibble_filter  <- pks_tibble
+
+    } else if (length(value) == 1) {
+      # --- Scalar path (unchanged) ---
+      db_type <- infer_duckdb_type(value)
       is_vector <- FALSE
+      tibble_filter <- NULL
+
     } else {
-      # Block .set_default with vectors
-      if (!is.null(.set_default) && .set_default) {
-        stop(
-          "Cannot use .set_default = TRUE with vector values for field '",
-          field_name, "'. DEFAULT constraints require scalar values.",
-          call. = FALSE
-        )
-      }
-      if (length(value) != n_effective) {
-        stop(
-          "Vector length (", length(value), ") for field '", field_name,
-          "' must equal the number of ",
-          if (has_filter) "filtered " else "",
-          "rows (", n_effective, ") in '", table_name, "'.",
-          call. = FALSE
-        )
-      }
-      is_vector <- TRUE
+      # --- Plain vector (length > 1) — error ---
+      stop(
+        "Plain vectors are not allowed in mutate_table() — row order is not ",
+        "guaranteed and can silently assign wrong values to wrong rows.\n\n",
+        "Use a tibble with the primary key column instead:\n",
+        "  mutate_table(", field_name, " = tibble::tibble(\n",
+        "    ", pk_col %||% "pk", " = c(...),\n",
+        "    ", field_name, " = c(...)\n",
+        "  ))",
+        call. = FALSE
+      )
+    }
+
+    # Block .set_default with tibbles
+    if (is_vector && !is.null(.set_default) && .set_default) {
+      stop(
+        "Cannot use .set_default = TRUE with tibble/vector values for field '",
+        field_name, "'. DEFAULT constraints require scalar values.",
+        call. = FALSE
+      )
     }
 
     is_new_col <- !field_name %in% existing_cols
@@ -634,9 +656,11 @@ mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
     } else {
       # Count non-NULL rows among the affected rows BEFORE updating so we can
       # report exactly what changed (replacements vs. NULL fills).
-      if (has_filter) {
+      # For tibble path, use the tibble IDs; for filter/scalar, use filter_ids
+      affected_ids <- if (is_vector) tibble_filter else filter_ids
+      if (!is.null(affected_ids)) {
         n_replaced <- count_nonnull_in_filter(
-          pop$db_conn, table_name, field_name, pk_col, filter_ids
+          pop$db_conn, table_name, field_name, pk_col, affected_ids
         )
       } else {
         n_replaced <- DBI::dbGetQuery(
@@ -649,8 +673,7 @@ mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
     }
 
     if (is_vector) {
-      pks <- get_pks_in_order(pop$db_conn, table_name, pk_col, filter_ids)
-      mutate_table_vector(pop$db_conn, table_name, field_name, pks, value, pk_col)
+      mutate_table_vector(pop$db_conn, table_name, field_name, pks_tibble, vals_tibble, pk_col)
     } else {
       mutate_table_scalar(pop$db_conn, table_name, field_name, value, db_type,
                           filter_ids, pk_col)
