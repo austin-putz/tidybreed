@@ -68,6 +68,8 @@ validate_sql_identifier <- function(name, what = "identifier",
 #'
 #' @keywords internal
 TABLE_RESERVED_COLS <- list(
+  "_schema_meta"   = c("id_schema_meta", "object_type", "table_name",
+                       "column_name", "description", "notes"),
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
   genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
@@ -159,9 +161,12 @@ next_int_id <- function(conn, table, id_col) {
 #'
 #' @keywords internal
 SYSTEM_TABLES <- c(
+  "_schema_meta",
   "genome_meta", "genome_haplotype", "genome_genotype", "genome_effects",
+  "founder_haplotypes",
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-  "trait_meta", "trait_effects", "trait_effect_cov",
+  "trait_meta", "trait_effects", "trait_effect_cov", "trait_random_effects",
+  "phenotype_meta", "phenotype_components", "phenotype_residual_cov",
   "index_meta", "ind_index", "ind_true_index"
 )
 

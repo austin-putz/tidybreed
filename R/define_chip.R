@@ -110,5 +110,13 @@ define_chip <- function(tbl, chip_name, col_name = paste0("is_", chip_name)) {
     " SNPs in column '", col_name, "'"
   )
 
+  # Auto-register chip column description in _schema_meta
+  if ("_schema_meta" %in% DBI::dbListTables(pop$db_conn)) {
+    register_schema_meta(pop$db_conn, .sm_col(
+      "genome_meta", col_name,
+      paste0("Chip membership flag: TRUE if locus belongs to the '", chip_name, "' chip")
+    ))
+  }
+
   invisible(pop)
 }

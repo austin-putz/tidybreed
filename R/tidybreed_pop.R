@@ -78,7 +78,8 @@ print.tidybreed_pop <- function(x, ...) {
   cat("<tidybreed population>\n")
   cat("Population:", x$pop_name, "\n")
   cat("Database:", x$db_path, "\n")
-  cat("Tables:", paste(x$tables, collapse = ", "), "\n")
+  user_tables <- setdiff(x$tables, "_schema_meta")
+  cat("Tables:", paste(user_tables, collapse = ", "), "\n")
 
   # Show number of individuals if ind_meta exists
   if ("ind_meta" %in% x$tables) {
@@ -106,6 +107,8 @@ print.tidybreed_pop <- function(x, ...) {
     )$n
     cat("Traits:", n_traits, "\n")
   }
+
+  cat("Use schema(pop) or describe_table(pop, \"name\") to explore table structure.\n")
 
   invisible(x)
 }

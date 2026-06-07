@@ -1,21 +1,3 @@
-# Hard-coded descriptions for all core tables
-.TABLE_DESCRIPTIONS <- c(
-  genome_meta          = "Locus metadata (chr, position, chip flags, QTL flags)",
-  genome_haplotype     = "Phased haplotypes — 2 rows per individual",
-  genome_genotype      = "Genotypes in 0/1/2 encoding — 1 row per individual",
-  founder_haplotypes   = "Founder haplotype pool used by add_founders()",
-  ind_meta             = "Individual metadata (IDs, parents, line, sex, user cols)",
-  ind_phenotype        = "Phenotype records — long format",
-  ind_tbv              = "True breeding values",
-  ind_ebv              = "Estimated breeding values (BLUP/GBLUP)",
-  trait_meta           = "Trait definitions",
-  trait_effects        = "Fixed and random effect configurations per trait",
-  trait_effect_cov     = "Variance/covariance matrices (gen_add, residual, random)",
-  trait_random_effects = "Sampled random effect levels",
-  index_meta           = "Selection index definitions",
-  ind_index            = "Computed selection index values"
-)
-
 
 #' Summarize a tidybreed population
 #'
@@ -56,7 +38,7 @@ summary.tidybreed_pop <- function(object, tables = NULL, max_values = 12L, ...) 
   all_tables <- object$tables
 
   if (is.null(tables)) {
-    req_tables <- all_tables
+    req_tables <- setdiff(all_tables, "_schema_meta")
   } else {
     unknown <- setdiff(tables, all_tables)
     if (length(unknown) > 0) {
@@ -130,6 +112,10 @@ print.tidybreed_summary <- function(x, ...) {
     fill_w <- max(2L, width - nchar(left) - nchar(right))
     cat(left, strrep("─", fill_w), right, "\n", sep = "")
 
+    if (!is.null(tbl$description) && nzchar(tbl$description)) {
+      cat("  ", tbl$description, "\n", sep = "")
+    }
+
     if (tbl$n_rows == 0L) {
       cat("  (empty)\n")
       next
@@ -170,8 +156,15 @@ print.tidybreed_summary <- function(x, ...) {
 
 
 .tb_summarize_table <- function(conn, tbl_name, max_values) {
-  desc <- unname(.TABLE_DESCRIPTIONS[tbl_name])
-  if (is.na(desc)) desc <- ""
+  desc <- if ("_schema_meta" %in% DBI::dbListTables(conn)) {
+    tbl_esc <- gsub("'", "''", tbl_name)
+    res <- DBI::dbGetQuery(conn, paste0(
+      "SELECT description FROM _schema_meta ",
+      "WHERE object_type = 'table' AND table_name = '", tbl_esc, "' ",
+      "AND column_name IS NULL"
+    ))
+    if (nrow(res) > 0L) res$description[1L] else ""
+  } else ""
 
   all_cols   <- DBI::dbListFields(conn, tbl_name)
   locus_cols <- grep("^locus_[0-9]+$", all_cols, value = TRUE)

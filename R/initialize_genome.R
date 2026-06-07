@@ -169,6 +169,18 @@ initialize_genome <- function(pop_name,
   drv <- duckdb::duckdb()
   db_conn <- DBI::dbConnect(drv, dbdir = db_path)
 
+  # Create _schema_meta system table (must exist before any register_schema_meta calls)
+  DBI::dbExecute(db_conn, "
+    CREATE TABLE _schema_meta (
+      id_schema_meta INTEGER PRIMARY KEY,
+      object_type    VARCHAR NOT NULL,
+      table_name     VARCHAR NOT NULL,
+      column_name    VARCHAR,
+      description    VARCHAR NOT NULL,
+      notes          VARCHAR
+    )
+  ")
+
   # Generate locus names if not provided
   if (is.null(locus_names)) {
     locus_names <- paste0("Locus_", seq_len(n_loci))
@@ -327,8 +339,12 @@ initialize_genome <- function(pop_name,
     )
   ")
 
+  # Register genome-layer schema descriptions
+  register_schema_meta(db_conn, .genome_layer_descriptions())
+
   # Generate founder haplotypes if requested
-  tables_created <- c("genome_meta", "genome_haplotype", "genome_genotype",
+  tables_created <- c("_schema_meta",
+                      "genome_meta", "genome_haplotype", "genome_genotype",
                       "ind_meta", "trait_effect_cov", "genome_effects",
                       "phenotype_meta", "phenotype_components",
                       "phenotype_residual_cov")
@@ -377,6 +393,14 @@ initialize_genome <- function(pop_name,
 
     # Update tables list
     tables_created <- c(tables_created, "founder_haplotypes")
+
+    # Register founder_haplotypes schema descriptions
+    register_schema_meta(db_conn, rbind(
+      .sm_tbl("founder_haplotypes",
+              "Pool of founder haplotypes sampled from per-locus Bernoulli distributions. Used by add_founders() to assign phased alleles. Present only when n_haplotypes was supplied to initialize_genome()."),
+      .sm_col("founder_haplotypes", "hap_id",
+              "Haplotype identifier (e.g. 'hap_1', 'hap_2')")
+    ))
 
     message("  Created founder_haplotypes table")
   }

@@ -103,6 +103,14 @@ restore_pop <- function(db_path, pop_name = NULL) {
 
   validate_tidybreed_pop(pop)
 
+  if (!"_schema_meta" %in% existing_tables) {
+    warning(
+      "This database predates schema metadata (pre-v0.36.0). ",
+      "Run `migrate_schema_meta(pop)` to add descriptions.",
+      call. = FALSE
+    )
+  }
+
   n_ind <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
 
   message("Restored population '", pop_name, "' from '", db_path, "'")

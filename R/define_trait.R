@@ -415,6 +415,12 @@ ensure_trait_tables <- function(pop) {
   }
 
   pop$tables <- unique(c(pop$tables, names(ddl)))
+
+  # Register trait-layer schema descriptions (guarded for legacy databases)
+  if ("_schema_meta" %in% DBI::dbListTables(con)) {
+    register_schema_meta(con, .trait_layer_descriptions())
+  }
+
   pop
 }
 

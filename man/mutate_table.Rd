@@ -10,14 +10,15 @@ mutate_table(tbl_obj, ..., .set_default = FALSE)
 \item{tbl_obj}{A \code{tidybreed_table} object returned by \code{\link[=get_table]{get_table()}}.}
 
 \item{...}{Named arguments of the form \code{column_name = value}. \code{value} can
-be a scalar (applied to all affected rows) or a vector whose length equals
-the number of affected rows.}
+be a scalar (applied to all affected rows) or a tibble/data frame
+containing the primary key column and a column named after the field.
+Plain vectors (length > 1) are not allowed; use a tibble instead.}
 
 \item{.set_default}{Logical; if \code{TRUE}, creates new columns with a SQL
 DEFAULT constraint set to the provided value. The DEFAULT applies to future
 INSERT operations (e.g., from \code{\link[=add_founders]{add_founders()}}, \code{\link[=add_phenotype]{add_phenotype()}}) when
 the column is not explicitly specified in \code{...}. Only valid for scalar
-values (length 1); an error is raised if used with vectors. Has no effect
+values; an error is raised if used with tibbles. Has no effect
 on columns that already exist (DuckDB does not support modifying existing
 column defaults). Default: \code{FALSE}.}
 }
@@ -47,13 +48,20 @@ pop <- pop \%>\%
 \code{character} → VARCHAR) is performed automatically via
 \code{infer_duckdb_type()}.
 
-\strong{Vector order}: when supplying a vector, values are matched to rows in
-insertion order (\code{ROWID} for \code{ind_meta}, \code{locus_id} order for
-\code{genome_meta}). This matches the order returned by a plain
-\code{get_table(pop, "ind_meta") |> collect()} call.
+\strong{Per-row values (tibble path)}: to set different values for different rows,
+pass a tibble/data frame containing the primary key column plus a column named
+after the field being updated:
 
-\strong{Filtering}: when a \code{\link[=filter]{filter()}} is applied upstream, only the matching
-rows are updated. New columns created in this context will be \code{NULL} for
+\if{html}{\out{<div class="sourceCode">}}\preformatted{mutate_table(gen = tibble::tibble(id_ind = c("A_1", "A_2"),
+                                   gen = c(1L, 2L)))
+}\if{html}{\out{</div>}}
+
+The tibble is entirely self-contained; any upstream \code{\link[=filter]{filter()}} is ignored
+for that field (but continues to apply to scalar fields in the same call).
+All IDs in the tibble must exist in the table; an error is raised for unknown IDs.
+
+\strong{Filtering}: when a \code{\link[=filter]{filter()}} is applied upstream, scalar values broadcast
+to all matching rows. New columns created in this context will be \code{NULL} for
 all non-matching rows.
 
 \strong{Default constraints}: When \code{.set_default = TRUE}, new columns are created

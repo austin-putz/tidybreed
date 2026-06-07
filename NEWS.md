@@ -1,3 +1,37 @@
+# tidybreed 0.36.0 (2026-06-06)
+
+## New features
+
+* **In-database schema documentation** — descriptions for all tables and
+  columns are now stored in a `_schema_meta` system table inside the DuckDB
+  file. Descriptions persist across `restore_pop()` restores and travel with
+  the `.duckdb` file.
+* `schema(pop)` — returns an aligned tibble of all user-visible tables with
+  row counts, column counts, and descriptions.
+* `describe_table(pop, "table_name")` — prints column names, types, and
+  descriptions for any table; returns an invisible tibble.
+* `add_schema_description(pop, table_name, description, column_name, notes)` —
+  upserts a description for any table or column, including user-defined ones
+  added via `mutate_table()` or `...` in `add_founders()`.
+* `migrate_schema_meta(pop)` — adds `_schema_meta` to databases created before
+  v0.36.0 without recreating the database.
+* `print.tidybreed_pop()` now shows a hint to use `schema()` and
+  `describe_table()`, and hides the system `_schema_meta` table from the table
+  list.
+* `summary.tidybreed_pop()` now pulls table descriptions from `_schema_meta`
+  rather than a hard-coded internal vector and shows them below each table
+  header. The `_schema_meta` table is excluded from the summary output.
+* `define_chip()` now auto-registers a column description in `_schema_meta`
+  for the chip membership flag it creates.
+* `restore_pop()` now warns when opening a database that predates `_schema_meta`
+  and suggests running `migrate_schema_meta()`.
+
+## Internal
+
+* `SYSTEM_TABLES` in `sql_utils.R` extended to include `_schema_meta`,
+  `founder_haplotypes`, `phenotype_meta`, `phenotype_components`,
+  `phenotype_residual_cov`, and `trait_random_effects`.
+
 # tidybreed 0.35.1 (2026-06-06)
 
 ## Bug fixes
