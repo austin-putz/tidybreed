@@ -1,3 +1,15 @@
+# tidybreed 0.36.1 (2026-06-06)
+
+## Breaking changes
+
+* `add_schema_description()` renamed to `define_schema_description()` to match
+  the package naming convention (`define_*` = model configuration / metadata).
+* Signature changed from `(pop, table_name, description, column_name, notes)` to
+  `(tbl, column_name = NULL, description, notes = NULL)` where `tbl` is a
+  `tidybreed_table` from `get_table()`, consistent with `define_chip()` and all
+  other action functions. Column name is now the first positional argument so
+  `define_schema_description("sex", "Sex of individual")` works without named args.
+
 # tidybreed 0.36.0 (2026-06-06)
 
 ## New features

@@ -120,14 +120,14 @@ test_that("describe_table() errors on unknown table", {
 })
 
 
-test_that("add_schema_description() upserts a table-level description", {
+test_that("define_schema_description() upserts a table-level description", {
   pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop2 <- add_schema_description(pop, "ind_meta",
-                                 "Custom description for testing",
-                                 column_name = NULL)
+  pop2 <- pop |>
+    get_table("ind_meta") |>
+    define_schema_description(description = "Custom description for testing")
   row <- DBI::dbGetQuery(pop2$db_conn,
     "SELECT description FROM _schema_meta
      WHERE object_type = 'table' AND table_name = 'ind_meta' AND column_name IS NULL")
@@ -135,13 +135,14 @@ test_that("add_schema_description() upserts a table-level description", {
 })
 
 
-test_that("add_schema_description() upserts a column-level description", {
+test_that("define_schema_description() upserts a column-level description", {
   pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop <- add_schema_description(pop, "ind_meta", "Sex of the individual (M/F)",
-                                column_name = "sex")
+  pop <- pop |>
+    get_table("ind_meta") |>
+    define_schema_description("sex", "Sex of the individual (M/F)")
 
   d <- describe_table(pop, "ind_meta")
   sex_row <- d[d$column_name == "sex", ]
@@ -149,13 +150,13 @@ test_that("add_schema_description() upserts a column-level description", {
 })
 
 
-test_that("add_schema_description() upsert is idempotent (replaces prior value)", {
+test_that("define_schema_description() upsert is idempotent (replaces prior value)", {
   pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop <- add_schema_description(pop, "ind_meta", "First description", column_name = "sex")
-  pop <- add_schema_description(pop, "ind_meta", "Second description", column_name = "sex")
+  pop <- pop |> get_table("ind_meta") |> define_schema_description("sex", "First description")
+  pop <- pop |> get_table("ind_meta") |> define_schema_description("sex", "Second description")
 
   d <- describe_table(pop, "ind_meta")
   sex_row <- d[d$column_name == "sex", ]
@@ -164,13 +165,14 @@ test_that("add_schema_description() upsert is idempotent (replaces prior value)"
 })
 
 
-test_that("add_schema_description() errors when column does not exist", {
+test_that("define_schema_description() errors when column does not exist", {
   pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
   expect_error(
-    add_schema_description(pop, "ind_meta", "Bad desc", column_name = "nonexistent_col"),
+    pop |> get_table("ind_meta") |>
+      define_schema_description("nonexistent_col", "Bad desc"),
     regexp = "not found"
   )
 })
@@ -232,8 +234,9 @@ test_that("summary.tidybreed_pop() pulls descriptions from _schema_meta (not har
   on.exit(close_pop(pop))
 
   # Override the genome_meta table description so we can verify it was pulled from DB
-  pop <- add_schema_description(pop, "genome_meta",
-                                "CUSTOM_TEST_DESCRIPTION_XYZ")
+  pop <- pop |>
+    get_table("genome_meta") |>
+    define_schema_description(description = "CUSTOM_TEST_DESCRIPTION_XYZ")
 
   summ <- summary(pop)
   genome_desc <- summ$tables[["genome_meta"]]$description

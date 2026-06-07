@@ -760,21 +760,22 @@ print.tidybreed_table_desc <- function(x, ...) {
 }
 
 
-#' Add or update a description for a table or column
+#' Define or update a description for a table or column
 #'
 #' @description
 #' Upserts a description into `_schema_meta`. Use this to document custom
 #' columns added via `mutate_table()` or `...` in `add_founders()` etc.
+#' Pipe a `tidybreed_table` from [get_table()] as the first argument.
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param table_name Character. Name of the table.
-#' @param description Character. Human-readable description.
+#' @param tbl A `tidybreed_table` from [get_table()]. The table name is
+#'   inferred from `tbl$table_name`.
 #' @param column_name Character or `NULL`. When `NULL` (default), the
 #'   description applies to the table itself. When a column name is given,
 #'   the description applies to that specific column.
+#' @param description Character. Human-readable description.
 #' @param notes Character or `NULL`. Optional supplementary context.
 #'
-#' @return `pop`, invisibly.
+#' @return The `tidybreed_pop` object, invisibly.
 #'
 #' @seealso [describe_table()], [schema()]
 #'
@@ -784,24 +785,25 @@ print.tidybreed_table_desc <- function(x, ...) {
 #' pop <- pop |>
 #'   get_table("ind_meta") |>
 #'   mutate_table(gen = NA_integer_)
-#' pop <- add_schema_description(pop, "ind_meta",
-#'                               "Generation number (0 = founders)",
-#'                               column_name = "gen")
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   define_schema_description("gen", "Generation number (0 = founders)")
 #' describe_table(pop, "ind_meta")
+#'
+#' # Table-level description (column_name = NULL)
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   define_schema_description(description = "Individual metadata table")
 #' }
 #' @export
-add_schema_description <- function(pop, table_name, description,
-                                   column_name = NULL, notes = NULL) {
-  stopifnot(inherits(pop, "tidybreed_pop"))
-  stopifnot(is.character(table_name), length(table_name) == 1L)
-  stopifnot(is.character(description), length(description) == 1L)
+define_schema_description <- function(tbl, column_name = NULL, description,
+                                      notes = NULL) {
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  pop        <- tbl$pop
+  table_name <- tbl$table_name
+  validate_tidybreed_pop(pop)
 
-  if (!table_name %in% pop$tables) {
-    stop(
-      "Table '", table_name, "' does not exist in this population.",
-      call. = FALSE
-    )
-  }
+  stopifnot(is.character(description), length(description) == 1L)
 
   if (!is.null(column_name)) {
     stopifnot(is.character(column_name), length(column_name) == 1L)
