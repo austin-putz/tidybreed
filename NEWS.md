@@ -1,3 +1,13 @@
+# tidybreed 0.36.4 (2026-06-06)
+
+## Bug fixes
+
+* `define_schema_description()` restored to returning `tidybreed_table`
+  (v0.36.2 behaviour) so back-to-back chaining works without repeating
+  `get_table()`. `schema()` and `describe_table()` now also accept a
+  `tidybreed_table` as their first argument, so calling `schema(pop)` no
+  longer fails if `pop` was accidentally overwritten with the chain result.
+
 # tidybreed 0.36.3 (2026-06-06)
 
 ## Bug fixes

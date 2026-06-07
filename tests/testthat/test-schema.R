@@ -184,9 +184,10 @@ test_that("define_schema_description() can be chained for multiple columns", {
   on.exit(close_pop(pop))
 
   pop |>
-    get_table("ind_meta") |> define_schema_description("sex",       "Sex of individual")    |>
-    get_table("ind_meta") |> define_schema_description("id_ind",    "Unique identifier")    |>
-    get_table("ind_meta") |> define_schema_description("line_name", "Genetic line")
+    get_table("ind_meta") |>
+    define_schema_description("sex",       "Sex of individual")    |>
+    define_schema_description("id_ind",    "Unique identifier")    |>
+    define_schema_description("line_name", "Genetic line")
 
   d <- describe_table(pop, "ind_meta")
   expect_equal(d$description[d$column_name == "sex"],       "Sex of individual")

@@ -19,16 +19,11 @@ the description applies to that specific column.}
 \item{notes}{Character or \code{NULL}. Optional supplementary context.}
 }
 \value{
-The \code{tidybreed_pop}, invisibly. Because the DBI connection is a
-reference object, changes are reflected in the original \code{pop} variable
-without reassignment. To describe multiple columns in one pipe, repeat
-\code{get_table()} between each call (each \code{define_schema_description()} returns
-\code{pop}, which \code{get_table()} accepts):
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{pop |>
-  get_table("ind_meta") |> define_schema_description("sex",  "Sex (M/F)") |>
-  get_table("ind_meta") |> define_schema_description("id_ind", "Individual ID")
-}\if{html}{\out{</div>}}
+The \code{tidybreed_table}, invisibly, enabling back-to-back chained
+calls without repeating \code{get_table()}. The underlying database is modified
+in place via the DBI connection — do not assign the result back to \code{pop}
+(use as a side-effect or extract with \code{tbl$pop}). \code{schema()} and
+\code{describe_table()} accept either \code{tidybreed_pop} or \code{tidybreed_table}.
 }
 \description{
 Upserts a description into \verb{_schema_meta}. Use this to document custom
@@ -37,17 +32,13 @@ Pipe a \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} as the 
 }
 \examples{
 \dontrun{
-# Single column
+# Chain multiple column descriptions — no need to repeat get_table()
 pop |>
   get_table("ind_meta") |>
-  define_schema_description("sex", "Sex of individual (M or F)")
-
-# Multiple columns — repeat get_table() between calls
-pop |>
-  get_table("ind_meta") |> define_schema_description("id_ind",    "Unique individual identifier") |>
-  get_table("ind_meta") |> define_schema_description("sex",       "Sex of individual (M or F)")   |>
-  get_table("ind_meta") |> define_schema_description("line_name", "Genetic line name")
-describe_table(pop, "ind_meta")
+  define_schema_description("id_ind",    "Unique individual identifier") |>
+  define_schema_description("sex",       "Sex of individual (M or F)")   |>
+  define_schema_description("line_name", "Genetic line name")
+describe_table(pop, "ind_meta")  # pop still valid; DBI conn is a reference
 
 # Table-level description (column_name = NULL)
 pop |>
