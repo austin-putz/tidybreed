@@ -31,5 +31,5 @@ describe_table(pop, "genome_effects")
 }
 }
 \seealso{
-\code{\link[=schema]{schema()}}, \code{\link[=add_schema_description]{add_schema_description()}}
+\code{\link[=schema]{schema()}}, \code{\link[=define_schema_description]{define_schema_description()}}
 }

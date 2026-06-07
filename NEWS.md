@@ -1,3 +1,13 @@
+# tidybreed 0.36.2 (2026-06-06)
+
+## Bug fixes
+
+* `define_schema_description()` now returns the `tidybreed_table` invisibly
+  instead of `tidybreed_pop`, enabling back-to-back chained calls for
+  multiple column descriptions on the same table. The DBI connection is a
+  reference object so the original `pop` variable reflects all changes
+  without reassignment.
+
 # tidybreed 0.36.1 (2026-06-06)
 
 ## Breaking changes

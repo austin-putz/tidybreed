@@ -30,6 +30,6 @@ schema(pop)
 }
 }
 \seealso{
-\code{\link[=describe_table]{describe_table()}}, \code{\link[=add_schema_description]{add_schema_description()}}
+\code{\link[=describe_table]{describe_table()}}, \code{\link[=define_schema_description]{define_schema_description()}}
 }
 \keyword{internal}

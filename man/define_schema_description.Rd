@@ -19,7 +19,10 @@ the description applies to that specific column.}
 \item{notes}{Character or \code{NULL}. Optional supplementary context.}
 }
 \value{
-The \code{tidybreed_pop} object, invisibly.
+The \code{tidybreed_table}, invisibly, enabling chained calls for
+multiple column descriptions. The underlying database is modified in place
+via the DBI connection, so the original \code{pop} object reflects all changes
+without reassignment.
 }
 \description{
 Upserts a description into \verb{_schema_meta}. Use this to document custom
@@ -28,17 +31,23 @@ Pipe a \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} as the 
 }
 \examples{
 \dontrun{
-# Document a custom column added via mutate_table()
-pop <- pop |>
+# Chain multiple column descriptions in one pipe
+pop |>
   get_table("ind_meta") |>
-  mutate_table(gen = NA_integer_)
-pop <- pop |>
-  get_table("ind_meta") |>
-  define_schema_description("gen", "Generation number (0 = founders)")
+  define_schema_description("id_ind",    "Unique individual identifier") |>
+  define_schema_description("sex",       "Sex of individual (M or F)")   |>
+  define_schema_description("line_name", "Genetic line name")
 describe_table(pop, "ind_meta")
 
+# Document a custom column added via mutate_table()
+pop |>
+  get_table("ind_meta") |>
+  mutate_table(gen = NA_integer_) |>   # returns pop
+  get_table("ind_meta") |>
+  define_schema_description("gen", "Generation number (0 = founders)")
+
 # Table-level description (column_name = NULL)
-pop <- pop |>
+pop |>
   get_table("ind_meta") |>
   define_schema_description(description = "Individual metadata table")
 }

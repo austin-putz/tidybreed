@@ -125,10 +125,10 @@ test_that("define_schema_description() upserts a table-level description", {
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop2 <- pop |>
+  pop |>
     get_table("ind_meta") |>
     define_schema_description(description = "Custom description for testing")
-  row <- DBI::dbGetQuery(pop2$db_conn,
+  row <- DBI::dbGetQuery(pop$db_conn,
     "SELECT description FROM _schema_meta
      WHERE object_type = 'table' AND table_name = 'ind_meta' AND column_name IS NULL")
   expect_equal(row$description, "Custom description for testing")
@@ -140,7 +140,7 @@ test_that("define_schema_description() upserts a column-level description", {
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop <- pop |>
+  pop |>
     get_table("ind_meta") |>
     define_schema_description("sex", "Sex of the individual (M/F)")
 
@@ -155,8 +155,8 @@ test_that("define_schema_description() upsert is idempotent (replaces prior valu
                            chr_len_Mb = 50, db_path = ":memory:")
   on.exit(close_pop(pop))
 
-  pop <- pop |> get_table("ind_meta") |> define_schema_description("sex", "First description")
-  pop <- pop |> get_table("ind_meta") |> define_schema_description("sex", "Second description")
+  pop |> get_table("ind_meta") |> define_schema_description("sex", "First description")
+  pop |> get_table("ind_meta") |> define_schema_description("sex", "Second description")
 
   d <- describe_table(pop, "ind_meta")
   sex_row <- d[d$column_name == "sex", ]
@@ -175,6 +175,24 @@ test_that("define_schema_description() errors when column does not exist", {
       define_schema_description("nonexistent_col", "Bad desc"),
     regexp = "not found"
   )
+})
+
+
+test_that("define_schema_description() can be chained for multiple columns", {
+  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
+                           chr_len_Mb = 50, db_path = ":memory:")
+  on.exit(close_pop(pop))
+
+  pop |>
+    get_table("ind_meta") |>
+    define_schema_description("sex",       "Sex of individual")    |>
+    define_schema_description("id_ind",    "Unique identifier")    |>
+    define_schema_description("line_name", "Genetic line")
+
+  d <- describe_table(pop, "ind_meta")
+  expect_equal(d$description[d$column_name == "sex"],       "Sex of individual")
+  expect_equal(d$description[d$column_name == "id_ind"],    "Unique identifier")
+  expect_equal(d$description[d$column_name == "line_name"], "Genetic line")
 })
 
 
@@ -234,7 +252,7 @@ test_that("summary.tidybreed_pop() pulls descriptions from _schema_meta (not har
   on.exit(close_pop(pop))
 
   # Override the genome_meta table description so we can verify it was pulled from DB
-  pop <- pop |>
+  pop |>
     get_table("genome_meta") |>
     define_schema_description(description = "CUSTOM_TEST_DESCRIPTION_XYZ")
 
