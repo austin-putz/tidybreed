@@ -775,29 +775,32 @@ print.tidybreed_table_desc <- function(x, ...) {
 #' @param description Character. Human-readable description.
 #' @param notes Character or `NULL`. Optional supplementary context.
 #'
-#' @return The `tidybreed_table`, invisibly, enabling chained calls for
-#'   multiple column descriptions. The underlying database is modified in place
-#'   via the DBI connection, so the original `pop` object reflects all changes
-#'   without reassignment.
+#' @return The `tidybreed_pop`, invisibly. Because the DBI connection is a
+#'   reference object, changes are reflected in the original `pop` variable
+#'   without reassignment. To describe multiple columns in one pipe, repeat
+#'   `get_table()` between each call (each `define_schema_description()` returns
+#'   `pop`, which `get_table()` accepts):
+#'   ```r
+#'   pop |>
+#'     get_table("ind_meta") |> define_schema_description("sex",  "Sex (M/F)") |>
+#'     get_table("ind_meta") |> define_schema_description("id_ind", "Individual ID")
+#'   ```
 #'
 #' @seealso [describe_table()], [schema()]
 #'
 #' @examples
 #' \dontrun{
-#' # Chain multiple column descriptions in one pipe
+#' # Single column
 #' pop |>
 #'   get_table("ind_meta") |>
-#'   define_schema_description("id_ind",    "Unique individual identifier") |>
-#'   define_schema_description("sex",       "Sex of individual (M or F)")   |>
-#'   define_schema_description("line_name", "Genetic line name")
-#' describe_table(pop, "ind_meta")
+#'   define_schema_description("sex", "Sex of individual (M or F)")
 #'
-#' # Document a custom column added via mutate_table()
+#' # Multiple columns — repeat get_table() between calls
 #' pop |>
-#'   get_table("ind_meta") |>
-#'   mutate_table(gen = NA_integer_) |>   # returns pop
-#'   get_table("ind_meta") |>
-#'   define_schema_description("gen", "Generation number (0 = founders)")
+#'   get_table("ind_meta") |> define_schema_description("id_ind",    "Unique individual identifier") |>
+#'   get_table("ind_meta") |> define_schema_description("sex",       "Sex of individual (M or F)")   |>
+#'   get_table("ind_meta") |> define_schema_description("line_name", "Genetic line name")
+#' describe_table(pop, "ind_meta")
 #'
 #' # Table-level description (column_name = NULL)
 #' pop |>
@@ -832,7 +835,7 @@ define_schema_description <- function(tbl, column_name = NULL, description,
       "Run migrate_schema_meta(pop) first.",
       call. = FALSE
     )
-    return(invisible(tbl))
+    return(invisible(pop))
   }
 
   entry <- data.frame(
@@ -845,7 +848,7 @@ define_schema_description <- function(tbl, column_name = NULL, description,
   )
   register_schema_meta(pop$db_conn, entry)
 
-  invisible(tbl)
+  invisible(pop)
 }
 
 

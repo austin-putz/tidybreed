@@ -1,3 +1,14 @@
+# tidybreed 0.36.3 (2026-06-06)
+
+## Bug fixes
+
+* `define_schema_description()` reverted to returning `tidybreed_pop`
+  (consistent with all other action functions). Returning `tidybreed_table`
+  (v0.36.2) caused `schema(pop)` to fail when users assigned the result back
+  to `pop`. To chain multiple column descriptions, repeat `get_table()` between
+  each call — each `define_schema_description()` returns `pop`, which
+  `get_table()` accepts.
+
 # tidybreed 0.36.2 (2026-06-06)
 
 ## Bug fixes
