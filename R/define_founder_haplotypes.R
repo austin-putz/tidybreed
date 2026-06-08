@@ -6,8 +6,16 @@
 #' assign phased alleles to new individuals.
 #'
 #' Call this function after [initialize_genome()] and before [add_founders()].
+#' You may call it **multiple times** with different `line_name` values to
+#' create line-specific haplotype pools (e.g., different LD structures per
+#' line). [add_founders()] will then sample only from the pool matching its
+#' own `line_name` argument.
+#'
 #' Also writes a `founder_allele_freq` column to `genome_meta` recording the
-#' per-locus allele frequency (the empirical column mean for LD methods).
+#' per-locus allele frequency of the most recently generated pool (the empirical
+#' column mean for LD methods). For multi-line setups needing accurate
+#' per-line Falconer centering, use `base = "current_pop"` in
+#' [define_additive_effects()] instead.
 #'
 #' @section Methods:
 #' \describe{
@@ -66,6 +74,14 @@
 #' @param decay_rate *(method = "gaussian_copula" only)* LD decay rate λ in
 #'   ρ = exp(−λ × d_Mb). Higher values → faster LD decay. Default `1.0`
 #'   gives ρ ≈ 0.37 at 1 Mb.
+#' @param line_name Optional character scalar. A label for this haplotype pool
+#'   (e.g. `"LineA"`). Must start with a letter and contain only letters,
+#'   numbers, or underscores. When supplied, `founder_haplotypes` rows are
+#'   tagged with this label and `hap_id` values are prefixed
+#'   (`"LineA_hap_1"`, …). [add_founders()] with the same `line_name` will
+#'   sample exclusively from these rows. When `NULL` (default), rows are stored
+#'   with `line_name = NA` and [add_founders()] falls back to them when no
+#'   named pool exists for the requested line.
 #'
 #' @return The `tidybreed_pop` object (invisibly), with `founder_haplotypes`
 #'   registered in `pop$tables` and `founder_allele_freq` added to `genome_meta`.
@@ -99,6 +115,12 @@
 #' # Fast LD via Gaussian copula AR(1)
 #' pop |> define_founder_haplotypes(n_haplotypes = 200,
 #'                                  method = "gaussian_copula", decay_rate = 0.5)
+#'
+#' # Two lines with different LD structures
+#' pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "A",
+#'                                  method = "mosaic")
+#' pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "B",
+#'                                  method = "gaussian_copula", decay_rate = 0.5)
 #' }
 define_founder_haplotypes <- function(
     pop,
@@ -119,7 +141,9 @@ define_founder_haplotypes <- function(
     n_templates     = NULL,
     switch_rate     = NULL,
     # method = "gaussian_copula"
-    decay_rate      = NULL
+    decay_rate      = NULL,
+    # line label
+    line_name       = NULL
 ) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
@@ -130,6 +154,16 @@ define_founder_haplotypes <- function(
 
   method <- match.arg(method, c("fixed", "uniform", "beta",
                                  "balding_nichols", "mosaic", "gaussian_copula"))
+
+  if (!is.null(line_name)) {
+    stopifnot(is.character(line_name), length(line_name) == 1L, nchar(line_name) > 0)
+    if (!grepl("^[a-zA-Z][a-zA-Z0-9_]*$", line_name)) {
+      stop(
+        "line_name must start with a letter and contain only letters, numbers, or underscores.",
+        call. = FALSE
+      )
+    }
+  }
 
   # --- Wrong-method argument validation ---
   # Any non-NULL arg that belongs to a different method is an error.
@@ -174,13 +208,43 @@ define_founder_haplotypes <- function(
       call. = FALSE
     )
   }
-  if ("founder_haplotypes" %in% pop$tables ||
-      DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")) {
-    stop(
-      "founder_haplotypes table already exists in this population. ",
-      "Drop it before calling define_founder_haplotypes() again.",
-      call. = FALSE
-    )
+  if (DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")) {
+    fh_cols <- DBI::dbListFields(pop$db_conn, "founder_haplotypes")
+    if (!"line_name" %in% fh_cols) {
+      stop(
+        "founder_haplotypes table exists but has no line_name column (old format). ",
+        "Recreate the population to use the multi-line API.",
+        call. = FALSE
+      )
+    }
+    if (is.null(line_name)) {
+      n_null <- DBI::dbGetQuery(
+        pop$db_conn,
+        "SELECT COUNT(*) AS n FROM founder_haplotypes WHERE line_name IS NULL"
+      )$n
+      if (n_null > 0L) {
+        stop(
+          "founder_haplotypes already contains haplotypes with line_name = NULL. ",
+          "Supply a line_name or drop the table before calling again.",
+          call. = FALSE
+        )
+      }
+    } else {
+      n_line <- DBI::dbGetQuery(
+        pop$db_conn,
+        sprintf(
+          "SELECT COUNT(*) AS n FROM founder_haplotypes WHERE line_name = '%s'",
+          line_name
+        )
+      )$n
+      if (n_line > 0L) {
+        stop(
+          "founder_haplotypes already contains haplotypes for line '", line_name, "'. ",
+          "Drop the table or use a different line_name.",
+          call. = FALSE
+        )
+      }
+    }
   }
 
   n_loci <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
@@ -267,9 +331,10 @@ define_founder_haplotypes <- function(
     allele_freqs     <- colMeans(haplotype_matrix)
   }
 
-  pop <- .write_founder_haplotypes(pop, haplotype_matrix, allele_freqs)
+  pop <- .write_founder_haplotypes(pop, haplotype_matrix, allele_freqs, line_name)
 
-  message("  Created founder_haplotypes table (",
+  line_label <- if (!is.null(line_name)) paste0(" for line '", line_name, "'") else ""
+  message("  Created founder_haplotypes", line_label, " (",
           n_haplotypes, " haplotypes x ", n_loci, " loci)")
 
   invisible(pop)

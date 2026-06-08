@@ -178,31 +178,41 @@
 # Shared DB write (called by all methods)
 # ---------------------------------------------------------------------------
 
-.write_founder_haplotypes <- function(pop, haplotype_matrix, allele_freqs) {
+.write_founder_haplotypes <- function(pop, haplotype_matrix, allele_freqs,
+                                       line_name = NULL) {
   n_haplotypes <- nrow(haplotype_matrix)
   n_loci       <- ncol(haplotype_matrix)
 
-  # Write founder_allele_freq back to genome_meta
+  # Write founder_allele_freq back to genome_meta (last call wins for multi-line)
   genome_meta <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_meta")
   genome_meta$founder_allele_freq <- allele_freqs
   DBI::dbWriteTable(pop$db_conn, "genome_meta", genome_meta, overwrite = TRUE)
 
-  # Build founder_haplotypes tibble: hap_id + locus_1..locus_n
-  fh <- tibble::tibble(hap_id = paste0("hap_", seq_len(n_haplotypes)))
+  # Build founder_haplotypes tibble: hap_id + line_name + locus_1..locus_n
+  hap_id_prefix <- if (!is.null(line_name)) paste0(line_name, "_hap_") else "hap_"
+  fh <- tibble::tibble(
+    hap_id    = paste0(hap_id_prefix, seq_len(n_haplotypes)),
+    line_name = if (!is.null(line_name)) line_name else NA_character_
+  )
   for (j in seq_len(n_loci)) {
     fh[[paste0("locus_", j)]] <- haplotype_matrix[, j]
   }
 
-  DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, overwrite = FALSE)
+  is_new_table <- !DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")
+  DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, append = TRUE)
 
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
 
-  register_schema_meta(pop$db_conn, rbind(
-    .sm_tbl("founder_haplotypes",
-            "Pool of founder haplotypes sampled by define_founder_haplotypes(). Rows are sampled by add_founders() to assign phased alleles."),
-    .sm_col("founder_haplotypes", "hap_id",
-            "Haplotype identifier (e.g. 'hap_1', 'hap_2')")
-  ))
+  if (is_new_table) {
+    register_schema_meta(pop$db_conn, rbind(
+      .sm_tbl("founder_haplotypes",
+              "Pool of founder haplotypes sampled by define_founder_haplotypes(). Rows are sampled by add_founders() to assign phased alleles."),
+      .sm_col("founder_haplotypes", "hap_id",
+              "Haplotype identifier, prefixed with line_name when set (e.g. 'LineA_hap_1', 'hap_1')"),
+      .sm_col("founder_haplotypes", "line_name",
+              "Founder line label matching add_founders() line_name. NULL = shared pool for all lines.")
+    ))
+  }
 
   pop
 }

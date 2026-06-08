@@ -1,3 +1,25 @@
+# tidybreed 0.39.0 (2026-06-07)
+
+## New features
+
+* `define_founder_haplotypes()` gains a `line_name` argument. Supplying it tags
+  each haplotype row in `founder_haplotypes` with a line label and prefixes
+  `hap_id` values (`"LineA_hap_1"`, …). The function can now be called
+  multiple times with distinct `line_name` values, enabling per-line LD
+  structures (e.g. `"mosaic"` for one line, `"gaussian_copula"` for another).
+  Calling twice with the same `line_name` (or twice without any `line_name`)
+  still raises an error.
+
+* `add_founders()` now filters `founder_haplotypes` to only rows matching its
+  own `line_name` argument. When no matching rows exist it falls back to rows
+  with `line_name = NULL` (the shared pool from old-style single calls),
+  preserving backward compatibility.
+
+* `founder_haplotypes` table now includes a `line_name VARCHAR` column.
+  Existing in-memory populations are unaffected; on-disk populations created
+  before v0.39.0 that use `define_founder_haplotypes()` will receive a
+  migration-hint error and must be recreated.
+
 # tidybreed 0.38.1 (2026-06-07)
 
 ## Documentation

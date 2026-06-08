@@ -571,3 +571,85 @@ test_that("add_founders() ... preserves values across two cohort calls", {
 
   close_pop(pop)
 })
+
+
+# ─── line_name-specific haplotype pool tests ─────────────────────────────────
+
+test_that("add_founders samples only from the named line pool when one exists", {
+  pop <- initialize_genome(
+    pop_name = "lnpool", n_loci = 20, n_chr = 1,
+    chr_len_Mb = 50, db_path = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 30, line_name = "A") |>
+    define_founder_haplotypes(n_haplotypes = 40, line_name = "B")
+
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "B")
+
+  # Both lines created; total 20 founders
+  ind_meta <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(nrow(ind_meta), 20L)
+
+  # Genome tables: 2 haplotype rows per individual = 40; 1 genotype row = 20
+  haps  <- get_table(pop, "genome_haplotype") |> dplyr::collect()
+  genos <- get_table(pop, "genome_genotype")  |> dplyr::collect()
+  expect_equal(nrow(haps),  40L)
+  expect_equal(nrow(genos), 20L)
+
+  close_pop(pop)
+})
+
+
+test_that("add_founders falls back to NULL pool when no named pool matches", {
+  # define_founder_haplotypes called without line_name → stored as NULL
+  pop <- initialize_genome(
+    pop_name = "lnfallback", n_loci = 20, n_chr = 1,
+    chr_len_Mb = 50, db_path = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 25)  # line_name = NULL
+
+  # add_founders with a named line should fall back to the NULL pool
+  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+
+  ind_meta <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(nrow(ind_meta), 10L)
+  expect_true(all(ind_meta$line_name == "A"))
+
+  close_pop(pop)
+})
+
+
+test_that("add_founders errors when no matching line pool and no NULL pool exist", {
+  pop <- initialize_genome(
+    pop_name = "lnerr", n_loci = 10, n_chr = 1,
+    chr_len_Mb = 50, db_path = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20, line_name = "A")
+
+  expect_error(
+    add_founders(pop, n_males = 5, n_females = 5, line_name = "B"),
+    "No haplotypes found for line 'B'"
+  )
+
+  close_pop(pop)
+})
+
+
+test_that("add_founders with named pool uses correct hap_id prefix in pool", {
+  set.seed(42)
+  pop <- initialize_genome(
+    pop_name = "lnpfx", n_loci = 10, n_chr = 1,
+    chr_len_Mb = 50, db_path = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20, line_name = "Duroc")
+
+  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  expect_true(all(grepl("^Duroc_hap_", fh$hap_id)))
+  expect_true(all(fh$line_name == "Duroc"))
+
+  pop <- add_founders(pop, n_males = 3, n_females = 3, line_name = "Duroc")
+  ind_meta <- get_table(pop, "ind_meta") |> dplyr::collect()
+  expect_equal(nrow(ind_meta), 6L)
+
+  close_pop(pop)
+})

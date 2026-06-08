@@ -181,8 +181,8 @@ pop <- pop %>%
     line_name        = "D",
     n_haplotypes     = config$genome$n_haplotypes,
     method           = "balding_nichols",     # Balding-Nichols Method (no LD)
-    fst              = 0.1,          # fst value
-    mean_freq        = 0.5           # mean allele freq
+    fst              = 0.1,                   # fst value
+    mean_freq        = 0.5                    # mean allele freq
   )
 
 # line E
@@ -190,7 +190,7 @@ pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "E",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "mosaic",
+    method           = "mosaic",                       # mosaic generates simple LD
     n_templates      = ceiling(sqrt(config$genome$n_haplotypes)),
     switch_rate      = 1.0
   )

@@ -26,8 +26,10 @@ test_that("method = 'uniform' creates haplotypes with per-locus frequencies in r
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
   expect_equal(nrow(fh), 50L)
-  expect_equal(ncol(fh), 101L)   # hap_id + 100 loci
+  expect_equal(ncol(fh), 102L)   # hap_id + line_name + 100 loci
   expect_equal(fh$hap_id, paste0("hap_", 1:50))
+  expect_true("line_name" %in% colnames(fh))
+  expect_true(all(is.na(fh$line_name)))
 
   alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
   expect_true(all(alleles %in% c(0, 1)))
@@ -83,7 +85,7 @@ test_that("method = 'beta' generates valid haplotypes with correct dimensions", 
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
   expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 101L)
+  expect_equal(ncol(fh), 102L)
 
   alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
   expect_true(all(alleles %in% c(0, 1)))
@@ -123,7 +125,7 @@ test_that("method = 'balding_nichols' generates valid haplotypes", {
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
   expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 101L)
+  expect_equal(ncol(fh), 102L)
 
   alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
   expect_true(all(alleles %in% c(0, 1)))
@@ -181,7 +183,7 @@ test_that("method = 'mosaic' generates valid haplotypes", {
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
   expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 101L)
+  expect_equal(ncol(fh), 102L)
 
   alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
   expect_true(all(alleles %in% c(0, 1)))
@@ -243,7 +245,7 @@ test_that("method = 'gaussian_copula' generates valid haplotypes", {
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
   expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 101L)
+  expect_equal(ncol(fh), 102L)
 
   alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
   expect_true(all(alleles %in% c(0, 1)))
@@ -368,16 +370,61 @@ test_that("initialize_genome() alone does not create founder_haplotypes", {
 })
 
 
-test_that("define_founder_haplotypes() errors if called twice", {
+test_that("define_founder_haplotypes() errors if called twice with same (NULL) line_name", {
   pop <- make_fh_pop("fh_twice", n_loci = 10) |>
     define_founder_haplotypes(n_haplotypes = 10)
 
   expect_error(
     define_founder_haplotypes(pop, n_haplotypes = 10),
-    "already exists"
+    "line_name = NULL"
   )
 
   close_pop(pop)
+})
+
+
+test_that("define_founder_haplotypes() errors if called twice with same named line_name", {
+  pop <- make_fh_pop("fh_twice_named", n_loci = 10) |>
+    define_founder_haplotypes(n_haplotypes = 10, line_name = "A")
+
+  expect_error(
+    define_founder_haplotypes(pop, n_haplotypes = 10, line_name = "A"),
+    "line 'A'"
+  )
+
+  close_pop(pop)
+})
+
+
+test_that("define_founder_haplotypes() succeeds for two distinct line_names", {
+  pop <- make_fh_pop("fh_two_lines", n_loci = 20) |>
+    define_founder_haplotypes(n_haplotypes = 30, line_name = "A") |>
+    define_founder_haplotypes(n_haplotypes = 40, line_name = "B")
+
+  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  expect_equal(nrow(fh), 70L)
+  expect_equal(sort(unique(fh$line_name)), c("A", "B"))
+  expect_equal(sum(fh$line_name == "A"), 30L)
+  expect_equal(sum(fh$line_name == "B"), 40L)
+  expect_equal(fh$hap_id[1:3], c("A_hap_1", "A_hap_2", "A_hap_3"))
+  expect_equal(fh$hap_id[31:33], c("B_hap_1", "B_hap_2", "B_hap_3"))
+
+  close_pop(pop)
+})
+
+
+test_that("define_founder_haplotypes() invalid line_name format errors", {
+  pop0 <- make_fh_pop("fh_bad_line")
+  on.exit(close_pop(pop0))
+
+  expect_error(
+    define_founder_haplotypes(pop0, n_haplotypes = 10, line_name = "1bad"),
+    "must start with a letter"
+  )
+  expect_error(
+    define_founder_haplotypes(pop0, n_haplotypes = 10, line_name = "bad-name"),
+    "must start with a letter"
+  )
 })
 
 

@@ -17,7 +17,8 @@ define_founder_haplotypes(
   mean_freq = NULL,
   n_templates = NULL,
   switch_rate = NULL,
-  decay_rate = NULL
+  decay_rate = NULL,
+  line_name = NULL
 )
 }
 \arguments{
@@ -61,6 +62,15 @@ Mb. Higher values create shorter LD blocks. Default \code{1.0}.}
 \item{decay_rate}{\emph{(method = "gaussian_copula" only)} LD decay rate λ in
 ρ = exp(−λ × d_Mb). Higher values → faster LD decay. Default \code{1.0}
 gives ρ ≈ 0.37 at 1 Mb.}
+
+\item{line_name}{Optional character scalar. A label for this haplotype pool
+(e.g. \code{"LineA"}). Must start with a letter and contain only letters,
+numbers, or underscores. When supplied, \code{founder_haplotypes} rows are
+tagged with this label and \code{hap_id} values are prefixed
+(\code{"LineA_hap_1"}, …). \code{\link[=add_founders]{add_founders()}} with the same \code{line_name} will
+sample exclusively from these rows. When \code{NULL} (default), rows are stored
+with \code{line_name = NA} and \code{\link[=add_founders]{add_founders()}} falls back to them when no
+named pool exists for the requested line.}
 }
 \value{
 The \code{tidybreed_pop} object (invisibly), with \code{founder_haplotypes}
@@ -72,8 +82,16 @@ Generates a pool of founder haplotypes and stores them in the
 assign phased alleles to new individuals.
 
 Call this function after \code{\link[=initialize_genome]{initialize_genome()}} and before \code{\link[=add_founders]{add_founders()}}.
+You may call it \strong{multiple times} with different \code{line_name} values to
+create line-specific haplotype pools (e.g., different LD structures per
+line). \code{\link[=add_founders]{add_founders()}} will then sample only from the pool matching its
+own \code{line_name} argument.
+
 Also writes a \code{founder_allele_freq} column to \code{genome_meta} recording the
-per-locus allele frequency (the empirical column mean for LD methods).
+per-locus allele frequency of the most recently generated pool (the empirical
+column mean for LD methods). For multi-line setups needing accurate
+per-line Falconer centering, use \code{base = "current_pop"} in
+\code{\link[=define_additive_effects]{define_additive_effects()}} instead.
 }
 \section{Methods}{
 
@@ -130,6 +148,12 @@ pop |> define_founder_haplotypes(n_haplotypes = 200, method = "mosaic")
 
 # Fast LD via Gaussian copula AR(1)
 pop |> define_founder_haplotypes(n_haplotypes = 200,
+                                 method = "gaussian_copula", decay_rate = 0.5)
+
+# Two lines with different LD structures
+pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "A",
+                                 method = "mosaic")
+pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "B",
                                  method = "gaussian_copula", decay_rate = 0.5)
 }
 }

@@ -123,15 +123,35 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
   # 2. Read founder haplotypes
   # ============================================================================
 
-  # Read all founder haplotypes from database (once, into memory)
-  founder_haps_tbl <- get_table(pop, "founder_haplotypes") %>%
-    dplyr::collect()
+  # Filter to line-specific pool; fall back to shared pool (line_name IS NULL)
+  # for backward compatibility with tables created before line_name was added.
+  fh_cols <- DBI::dbListFields(pop$db_conn, "founder_haplotypes")
+  if ("line_name" %in% fh_cols) {
+    founder_haps_tbl <- DBI::dbGetQuery(
+      pop$db_conn,
+      "SELECT * FROM founder_haplotypes WHERE line_name = ?",
+      list(line_name)
+    )
+    if (nrow(founder_haps_tbl) == 0L) {
+      founder_haps_tbl <- DBI::dbGetQuery(
+        pop$db_conn,
+        "SELECT * FROM founder_haplotypes WHERE line_name IS NULL"
+      )
+    }
+  } else {
+    founder_haps_tbl <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  }
 
   # Get number of available haplotypes
   n_haplotypes <- nrow(founder_haps_tbl)
 
   if (n_haplotypes == 0) {
-    stop("founder_haplotypes table is empty. Cannot sample haplotypes.", call. = FALSE)
+    stop(
+      "No haplotypes found for line '", line_name, "' ",
+      "(and no shared pool with line_name = NULL exists). ",
+      "Call define_founder_haplotypes() with matching line_name before add_founders().",
+      call. = FALSE
+    )
   }
 
   # Get number of loci from founder_haplotypes columns
