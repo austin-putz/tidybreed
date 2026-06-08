@@ -1,3 +1,12 @@
+# tidybreed 0.38.1 (2026-06-07)
+
+## Documentation
+
+* Updated swine vignette to demonstrate all six `define_founder_haplotypes()` methods
+  (`"uniform"`, `"fixed"`, `"beta"`, `"balding_nichols"`, `"mosaic"`, `"gaussian_copula"`),
+  one per line (A–F).
+* Added `.quarto/*` and `.DS_Store` to `.gitignore`.
+
 # tidybreed 0.38.0 (2026-06-07)
 
 ## Breaking changes

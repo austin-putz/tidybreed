@@ -146,12 +146,62 @@ pop <- initialize_genome(
 # Add founder haplotypes
 #------------------------------------------------------------------------------#
 
+# line A
 pop <- pop %>%
   define_founder_haplotypes(
-    n_haplotypes     = config$genome$n_haplotypes,  # number of random haplotypes generated (no LD generated)
-    allele_freq_dist = "uniform",
-    min_allele_freq  = 0.01,
-    max_allele_freq  = 0.99
+    line_name        = "A",
+    n_haplotypes     = config$genome$n_haplotypes,  # number of haplotypes generated
+    method           = "uniform",                   # Uniform(min, max), no LD
+    min_allele_freq  = 0.01,                        # min allele freq
+    max_allele_freq  = 0.99                         # max allele freq
+  )
+
+# line B
+pop <- pop %>%
+  define_founder_haplotypes(
+    line_name        = "B",
+    n_haplotypes     = config$genome$n_haplotypes,
+    method           = "fixed",     # just 1 frequency (default = 0.5)
+    allele_freq      = 0.5          # all 50% 
+  )
+
+# line C
+pop <- pop %>%
+  define_founder_haplotypes(
+    line_name        = "C",
+    n_haplotypes     = config$genome$n_haplotypes,
+    method           = "beta",       # just 1 frequency (default = 0.5)
+    beta_shape1      = 0.5,          # beta shape 1 parameter value
+    beta_shape2      = 0.5           # beta shape 1 parameter value
+  )
+
+# line D
+pop <- pop %>%
+  define_founder_haplotypes(
+    line_name        = "D",
+    n_haplotypes     = config$genome$n_haplotypes,
+    method           = "balding_nichols",     # Balding-Nichols Method (no LD)
+    fst              = 0.1,          # fst value
+    mean_freq        = 0.5           # mean allele freq
+  )
+
+# line E
+pop <- pop %>%
+  define_founder_haplotypes(
+    line_name        = "E",
+    n_haplotypes     = config$genome$n_haplotypes,
+    method           = "mosaic",
+    n_templates      = ceiling(sqrt(config$genome$n_haplotypes)),
+    switch_rate      = 1.0
+  )
+
+# line F
+pop <- pop %>%
+  define_founder_haplotypes(
+    line_name        = "F",
+    n_haplotypes     = config$genome$n_haplotypes,
+    method           = "gaussian_copula",     # just 1 frequency (default = 0.5)
+    decay_rate       = 0.25                   # beta shape 1 parameter value
   )
 
 #------------------------------------------------------------------------------#
