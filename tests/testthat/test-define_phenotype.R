@@ -1,13 +1,12 @@
 make_pheno_base_pop <- function(pop_name = "defph") {
   pop <- initialize_genome(
-    pop_name          = pop_name,
-    n_loci            = 200,
-    n_chr             = 2,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 50,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = pop_name,
+    n_loci     = 200,
+    n_chr      = 2,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 50, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = 20, n_females = 20, line_name = "A")
   pop
 }

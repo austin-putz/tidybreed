@@ -239,7 +239,7 @@ flowchart TD
     A(["Start"]) --> P1
 
     subgraph P1["Phase 1 — Initialize"]
-        F1["initialize_genome()<br/>pop_name, n_loci, n_chr,<br/>chr_len_Mb, n_haplotypes"]
+        F1["initialize_genome()<br/>pop_name, n_loci, n_chr, chr_len_Mb<br/>+ define_founder_haplotypes()"]
     end
 
     subgraph P2["Phase 2 — Population"]
@@ -487,13 +487,13 @@ library(dplyr)
 
 # 1. Initialize
 pop <- initialize_genome(
-  pop_name      = "demo",
-  n_loci        = 10000,
-  n_chr         = 10,
-  chr_len_Mb    = 100,
-  n_haplotypes  = 1000,
-  db_path       = tempfile(fileext = ".duckdb")
-)
+  pop_name   = "demo",
+  n_loci     = 10000,
+  n_chr      = 10,
+  chr_len_Mb = 100,
+  db_path    = tempfile(fileext = ".duckdb")
+) |>
+  define_founder_haplotypes(n_haplotypes = 1000)
 
 # 2. Create founders (generation 0)
 pop <- pop |>

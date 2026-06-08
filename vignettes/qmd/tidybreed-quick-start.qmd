@@ -447,9 +447,9 @@ pop <- initialize_genome(
 		     n_loci     = 100,      # number of loci (nothing assigned as SNP or QTL yet...)
 		     n_chr      = 2,        # number of chromosomes
 		     chr_len_Mb = 50,       # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
-		     n_haplotypes = 200,    # number of random haplotypes generated (no LD generated)
 		     overwrite = TRUE       # overwrite the database if it exists from a previous run
-		  )
+		  ) |>
+  define_founder_haplotypes(n_haplotypes = 200)  # pool of haplotypes to sample from
 ```
 
 **Created tables:**

@@ -1,13 +1,13 @@
 # Helper: minimal population with founders
 make_test_pop <- function(n_loci = 100, n_chr = 2, n_males = 5, n_females = 5) {
   pop <- initialize_genome(
-    pop_name    = "test",
-    n_loci      = n_loci,
-    n_chr       = n_chr,
-    chr_len_Mb  = 100,
-    n_haplotypes = 50,
-    db_path     = ":memory:"
-  )
+    pop_name   = "test",
+    n_loci     = n_loci,
+    n_chr      = n_chr,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 50)
   add_founders(pop, n_males = n_males, n_females = n_females, line_name = "A")
 }
 
@@ -138,13 +138,13 @@ test_that("add_offspring: multiple sires per dam (pooled semen pattern)", {
 
 test_that("add_offspring: cross-line offspring with independent ID sequences", {
   pop <- initialize_genome(
-    pop_name    = "test",
-    n_loci      = 100,
-    n_chr       = 2,
-    chr_len_Mb  = 100,
-    n_haplotypes = 50,
-    db_path     = ":memory:"
-  )
+    pop_name   = "test",
+    n_loci     = 100,
+    n_chr      = 2,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 50)
   pop <- add_founders(pop, n_males = 2, n_females = 2, line_name = "A")
   pop <- add_founders(pop, n_males = 2, n_females = 2, line_name = "B")
 
@@ -320,13 +320,13 @@ test_that("add_offspring: genotype equals sum of the two offspring haplotypes", 
 test_that("add_offspring recombination produces variation across offspring", {
   set.seed(42)
   pop <- initialize_genome(
-    pop_name    = "test",
-    n_loci      = 500,
-    n_chr       = 5,
-    chr_len_Mb  = 100,
-    n_haplotypes = 100,
-    db_path     = ":memory:"
-  )
+    pop_name   = "test",
+    n_loci     = 500,
+    n_chr      = 5,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100)
   pop <- add_founders(pop, n_males = 1, n_females = 1, line_name = "A")
 
   # Produce 50 offspring from the same pair

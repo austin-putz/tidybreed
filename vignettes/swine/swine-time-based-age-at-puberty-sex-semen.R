@@ -139,13 +139,26 @@ pop <- initialize_genome(
 		     n_loci       = config$genome$n_loci,       # number of loci (nothing assigned as SNP or QTL yet...)
 		     n_chr        = config$genome$n_chr,        # number of chromosomes
 		     chr_len_Mb   = config$genome$chr_len,      # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
-		     n_haplotypes = config$genome$n_haplotypes, # number of random haplotypes generated (no LD generated)
 		     overwrite    = TRUE      # overwrite the database if it exists from a previous run
 		  )
 
 #------------------------------------------------------------------------------#
-# Add custom fields!
+# Add founder haplotypes
 #------------------------------------------------------------------------------#
+
+pop <- pop %>%
+  define_founder_haplotypes(
+    n_haplotypes     = config$genome$n_haplotypes,  # number of random haplotypes generated (no LD generated)
+    allele_freq_dist = "uniform",
+    min_allele_freq  = 0.01,
+    max_allele_freq  = 0.99
+  )
+
+#------------------------------------------------------------------------------#
+# Add custom fields to each table
+#------------------------------------------------------------------------------#
+
+#-------------------- ind_meta --------------------#
 
 # create 2 custom fields for simulation pipeline
 pop %>% 
@@ -175,7 +188,28 @@ pop %>%
     # here so when animals are born they are "active" by default, later culled
   )
 
-# add 'rep' + 'gen_pheno' field to 'ind_phenotype'
+pop %>%
+  get_table("ind_meta") %>%
+  define_schema_description("rep",          "Replicate number (1 to n)") %>%
+  define_schema_description("status",       "Production status of the animals (e.g. 'gestation')") %>%
+  define_schema_description("conc_date",    "Conception Date") %>%
+  define_schema_description("birth_date",   "Birth date") %>%
+  define_schema_description("on_test_date", "On-Test Date") %>%
+  define_schema_description("off_test_date", "Off-Test Date (often slaughter weight)") %>%
+  define_schema_description("puberty_date", "Puberty/estrus date (females only)") %>%
+  define_schema_description("mate_date",    "Mating date") %>%
+  define_schema_description("farrow_date",  "Farrow date (e.g. gave birth)") %>%
+  define_schema_description("wean_date",    "Weaning date") %>%
+  define_schema_description("cull_date",    "Cull date") %>%
+  define_schema_description("death_date",   "Death date") %>%
+  define_schema_description("alive",        "Is alive? (logical)") %>%
+  define_schema_description("active",       "Is active (reproductively)? (logical)")
+
+schema(pop)
+
+#-------------------- ind_phenotype --------------------#
+
+# add custom fields to ind_phenotype table
 pop %>%
   get_table("ind_phenotype") %>%
   mutate_table(
@@ -186,7 +220,13 @@ pop %>%
     # here we need to identify which generation they were phenotyped
   )
 
+pop %>%
+  get_table("ind_phenotype") %>%
+  define_schema_description("rep", "Replicate number (1 to n)")
+
 pop %>% get_table("ind_phenotype")
+
+#-------------------- ind_tbv --------------------#
 
 # add 'rep' to 'ind_tbv'
 pop %>%
@@ -198,6 +238,8 @@ pop %>%
 
 pop %>% get_table("ind_tbv")
 
+#-------------------- ind_ebv --------------------#
+
 # add 'rep' to 'ind_ebv'
 pop %>%
   get_table("ind_ebv") %>%
@@ -208,6 +250,8 @@ pop %>%
   )
 
 pop %>% get_table("ind_ebv")
+
+#-------------------- ind_index --------------------#
 
 # add 'rep' to 'ind_ebv'
 pop %>%
@@ -229,23 +273,39 @@ repl = 1
   
 warning("\n ----------    REPLICATE: ", repl, "    --------------------\n")
 
-# set min and max birth dates
-min_birth_date <- as.Date(config$general$start_date) - config$general$mean_puberty_age
+# set min birth dates
+min_birth_date <- as.Date(config$general$start_date) - config$general$mean_puberty_age - 60
+
+# set max birth date
 max_birth_date <- as.Date(config$general$start_date_selection) + 
                     config$general$gest_len +
                     config$general$lact_len + 
                     config$general$w2e_int + 
-                    config$testing$off_test_age 
+                    config$testing$off_test_age + 100
 
+# set days between founders
 days_between_founders <- as.numeric(max_birth_date - min_birth_date)
-  
+
+# print message
+message("min/max birth date: ", min_birth_date, " / ", max_birth_date, 
+        " (", days_between_founders, " days)")
+
 # sample birth dates
 sampled_birth_dates <- min_birth_date + 
   round(runif(n = (config$population$n_founder_male + config$population$n_founder_female),
          min = 0, max = days_between_founders))
 
-# hist of birth dates
-hist(sampled_birth_dates, breaks = 50, col="darkorange2")
+data.founder.birth.dates <- tibble(
+  birth_date = sampled_birth_dates
+)
+
+# plot birth dates
+data.founder.birth.dates %>%
+ggplot(aes(x=birth_date)) +
+  geom_histogram(fill="darkorange1", color="white") + 
+  labs(
+    title = "Founder Birth Dates"
+  )
 
 # add founders
 pop <- pop %>%
@@ -270,9 +330,9 @@ warning("Add 9k Chip")
 
 # add 9k SNP Chip
 pop %>%
-  get_table("genome_meta") %>%
-  slice_sample(n=9000) %>%
-  define_chip(chip_name = "9k")
+  get_table("genome_meta") %>%      # pass table with loci info (all loci)
+    slice_sample(n=9000) %>%        # sample 9000 SNP
+  define_chip(chip_name = "9k")     # define SNP Chip (give name -> assign loci)
 
 pop %>% get_table("genome_meta")
 
@@ -341,6 +401,9 @@ pop %>% get_table("phenotype_residual_cov")
 
 warning("Define index")
 
+# genetic SD per trait (WW = sqrt(Var_WWD + Var_WWM) = sqrt(0.04 + 0.13))
+gen_sd <- sqrt(diag(vars.mat.add))
+
 # percent inclusion
 pct <- c(
   AP  = 0.10,  # lower is better
@@ -350,6 +413,7 @@ pct <- c(
   WWD = 0.15,  # higher is better (weaning weight direct)
   WWM = 0.20   # higher is better (weaning weight maternal)
 )
+barplot(pct, col="steelblue", main="Target Percent")
 
 # direction required
 direction <- c(
@@ -361,27 +425,62 @@ direction <- c(
   WWM =  1
 )
 
-# genetic SD per trait (WW = sqrt(Var_WWD + Var_WWM) = sqrt(0.04 + 0.13))
-gen_sd <- c(
-  AP  = sqrt(200.00),
-  NW  = sqrt(0.90),
-  ADG = sqrt(1050.00),
-  BF  = sqrt(1.20),
-  WWD = sqrt(0.04),
-  WWM = sqrt(0.13)
+acc <- c(
+  AP  = 0.50,
+  NW  = 0.30,
+  ADG = 0.75,
+  BF  = 0.75,
+  WWD = 0.50,
+  WWM = 0.45
 )
 
-# raw weights
-raw_weights <- (pct * direction) / gen_sd
-round(raw_weights, 3)
+# G for EBV (not TBV)
+G_ebv <- diag(acc) %*% vars.mat.add %*% diag(acc)
+G_ebv
+
+# first-pass raw weights
+b <- pct * direction / gen_sd
+barplot(b, col="steelblue", main="b weights")
+
+# expected response in original trait units
+response_units <- G_ebv %*% b
+rownames(response_units) <- rownames(vars.mat.add)
+barplot(response_units[,1], col="steelblue", main="response (phenotype units)")
+
+# convert response to genetic SD units
+response_sd_units <- response_units / gen_sd
+barplot(response_sd_units[,1], col="steelblue", main="response (sd units)")
+
+# realized standardized emphasis
+realized_pct <- abs(response_sd_units) / sum(abs(response_sd_units))
+barplot(realized_pct[,1], col="steelblue", main="")
+
+
+# diagonal matrix with inverse of genetic SD on diagonal
+D_inv <- diag(1 / gen_sd)
+
+# maps raw weights to response in SD units
+M <- D_inv %*% G_ebv
+
+# target %
+target <- pct * direction
+barplot(target, col="steelblue", main="Target Percent")
+
+b_adjusted <- solve(M, target)
+names(b_adjusted) <- rownames(vars.mat.add)
+barplot(b_adjusted, col="steelblue", main="b weights (adjusted)")
+
+# check if it gives the same relative weights
+check <- M %*% b_adjusted
+abs(check) / sum(abs(check))
 
 # add maternal index (WW = composite weaning weight phenotype EBV)
 pop %>%
   define_index(
     index_name   = "maternal",
     trait_names  = c("AP", "NW", "ADG", "BF", "WWD", "WWM"),
-    index_wts    = raw_weights,
-    economic_wts = c(-0.5, 80, 2.0, -20, 0.25, 0.50)
+    index_wts    = b_adjusted,
+    economic_wts = c(-3.0, 40, 2.0, -20, 0.25, 0.50)
   )
 
 # print table with index values
@@ -402,8 +501,6 @@ pop <- pop %>%
   define_trait(
     trait_name      = "AP",
     target_add_mean = 0,
-    #target_add_var = 200,        # already added above!! 
-    #expressed_parent = "both",   # as in only from maternal or pat haplotype
     description     = "Age at Puberty",
     units           = "days",
     overwrite       = TRUE
@@ -411,7 +508,6 @@ pop <- pop %>%
   define_phenotype(
     phenotype_name = "AP",
     type           = "count",
-    #residual_var  = 400,                       # already added above!! 
     mean           = config$general$mean_puberty_age,
     expressed_sex  = "F", 
     repeatable     = FALSE,
@@ -419,9 +515,9 @@ pop <- pop %>%
     overwrite      = TRUE
   )
 
-pop %>% get_table("trait_meta")
-pop %>% get_table("phenotype_meta")
-pop %>% get_table("phenotype_components")
+pop %>% get_table("trait_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_components") %>% collect() %>% print(width=Inf)
 
 # add which loci are QTL and their effects
 pop %>%
@@ -459,7 +555,7 @@ pop %>%
   get_table("ind_meta") %>%
   extract_genotypes(chip_name = "9k")
 
-# pull out 
+# extract SNPs for this trait (2 animals)
 pop %>%
   get_table("ind_meta") %>%
     filter(
@@ -488,10 +584,10 @@ pop %>%
 # sample phenotype for all founder females
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
-  filter(
-    rep == repl,
-    sex == "F",
-  ) %>%
+    filter(
+      rep == repl,
+      sex == "F",
+    ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
     phenotype_name = "AP",    # phenotype name
     rep = repl                # set rep number
@@ -655,27 +751,23 @@ pop <- pop %>%
     units           = "g/d",                  # grams per day during testing period
     target_add_mean = 0,                      # mean TBV in 'base'
     overwrite       = TRUE                    # wipe this row if it exists and replace with this new data
-    #type        = "continuous",    # now at phenotype level, not trait level
-    #repeatable  = FALSE,           # now at phenotype level, not trait level
-    #recorded_on = "self",          # now at phenotype level, not trait level
   ) %>%
   define_phenotype(
     phenotype_name = "ADG", 
-    type = "continuous",
-    mean = 1000,
-    expressed_sex = "both",
-    min_value = 0, 
-    overwrite = TRUE
+    type           = "continuous",
+    mean           = 1000,
+    expressed_sex  = "both",
+    min_value      = 0, 
+    overwrite      = TRUE
   ) 
 
 pop %>% get_table("trait_meta")
-pop %>% get_table("phenotype_meta")
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
 
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
   filter(is_9k != TRUE) %>%
-  # set loci as QTL for this trait
   define_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
@@ -702,14 +794,14 @@ pop %>% get_table("ind_tbv")
 # test `add_phenotype()` function
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
-  filter(
-    rep == repl,
-    off_test_date < start_date
-    ) %>%
+    filter(
+      rep == repl,
+      off_test_date < start_date
+      ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    trait = "ADG",              # trait name
+    phenotype_name = "ADG",              # trait name
     rep = repl                  # set rep number
-  )  
+  )
 
 # check ADG phenotype count
 pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "ADG")
@@ -726,22 +818,22 @@ warning("Define BF")
 pop <- pop %>%
   define_trait(
     trait_name      = "BF",
-    description = "Ultrasound Backfat", 
-    units       = "mm", 
+    description     = "Ultrasound Backfat", 
+    units           = "mm", 
     target_add_mean = 0,                 # mean TBV in 'base'
     overwrite       = TRUE
   ) %>%
   define_phenotype(
     phenotype_name = "BF", 
-    type = "continuous",
-    mean = 10,
-    expressed_sex = "both",
-    min_value = 0, 
-    overwrite = TRUE
+    type           = "continuous",
+    mean           = 10,
+    expressed_sex  = "both",
+    min_value      = 0, 
+    overwrite      = TRUE
   ) 
 
 pop %>% get_table("trait_meta")
-pop %>% get_table("phenotype_meta")
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
 
 # add which loci are QTL and their effects
 pop %>%
@@ -774,10 +866,10 @@ pop %>%
 # test `add_phenotype()` function
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
-  filter(
-    rep == repl,
-    off_test_date < start_date
-  ) %>%
+    filter(
+      rep == repl,
+      off_test_date < start_date
+    ) %>%
   add_phenotype(                # add rows to 'ind_phenotype' table
     phenotype_name = "BF",          # phenotype name
     rep = repl                  # add rep
@@ -882,8 +974,8 @@ pop <- pop %>%
     overwrite                = TRUE
   )
 
-pop %>% get_table("phenotype_meta")
-pop %>% get_table("phenotype_components")
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_components") %>% collect() %>% print(width=Inf)
 
 #------------------------------------------------------------#
 # Trait: NW
@@ -902,11 +994,11 @@ pop <- pop %>%
   ) %>%
   define_phenotype(
     phenotype_name = "NW", 
-    type = "count",
-    mean = 10,
-    expressed_sex = "F",
-    min_value = 0, 
-    overwrite = TRUE
+    type           = "count",
+    mean           = 10,
+    expressed_sex  = "F",
+    min_value      = 0, 
+    overwrite      = TRUE
   )
 
 # add which loci are QTL and their effects
@@ -986,7 +1078,7 @@ pop %>%
 
 pop %>% get_table("ind_meta") %>% add_tbv(index_names = "maternal")
 
-pop %>% get_table("ind_true_index") %>% collect()
+pop %>% get_table("ind_true_index") %>% collect() %>% glimpse()
 
 
 
@@ -1477,10 +1569,10 @@ if (cur_date == female_selection_date){
   # phenotype selected dams first
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(
-      #rep == repl, 
-      status == "selected-female"
-    ) %>%
+      filter(
+        #rep == repl, 
+        status == "selected-female"
+      ) %>%
     add_phenotype(
       "NW",
       rep = repl,                      # add rep number
@@ -1704,13 +1796,13 @@ if (cur_date == female_selection_date){
   # sample phenotype for new gilts
   pop %>%
     get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
-    filter(
-      #rep == repl,
-      sex == "F",
-      conc_date == cur_date
-    ) %>%
+      filter(
+        #rep == repl,
+        sex == "F",
+        conc_date == cur_date
+      ) %>%
     add_phenotype(                # add rows to 'ind_phenotye' table
-      trait = "AP",               # trait name
+      phenotype_name = "AP",               # trait name
       rep = repl,                 # set rep number
       current_date = cur_date     # set current date (ONLY to filter right below, new phenotypes!)
     )

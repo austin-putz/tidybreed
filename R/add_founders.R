@@ -114,7 +114,7 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
   if (!"founder_haplotypes" %in% pop$tables) {
     stop(
       "founder_haplotypes table does not exist. ",
-      "Call initialize_genome() with n_haplotypes parameter to create founder haplotypes.",
+      "Call define_founder_haplotypes() after initialize_genome() to create founder haplotypes.",
       call. = FALSE
     )
   }

@@ -12,12 +12,7 @@ initialize_genome(
   db_path = NULL,
   locus_names = NULL,
   chr_names = NULL,
-  overwrite = FALSE,
-  n_haplotypes = NULL,
-  allele_freq_dist = "uniform",
-  min_allele_freq = 0.01,
-  max_allele_freq = 0.99,
-  fixed_allele_freq = NULL
+  overwrite = FALSE
 )
 }
 \arguments{
@@ -47,24 +42,6 @@ chromosome names. When \code{NULL} (default), chromosomes are numbered
 
 \item{overwrite}{Logical scalar. If \code{TRUE} and \code{db_path} already exists,
 the file is deleted and recreated. Default \code{FALSE}.}
-
-\item{n_haplotypes}{Integer scalar or \code{NULL}. Number of founder haplotypes
-to generate and store in \code{founder_haplotypes}. When \code{NULL} (default),
-no founder haplotypes are created and \code{add_founders()} cannot be called.}
-
-\item{allele_freq_dist}{Character scalar. Distribution for sampling
-per-locus allele frequencies. Currently only \code{"uniform"} is supported.
-Ignored when \code{fixed_allele_freq} is supplied.}
-
-\item{min_allele_freq}{Numeric scalar in (0, 1). Minimum allele frequency
-for the uniform distribution. Default \code{0.01}.}
-
-\item{max_allele_freq}{Numeric scalar in (0, 1). Maximum allele frequency
-for the uniform distribution. Default \code{0.99}.}
-
-\item{fixed_allele_freq}{Numeric scalar in (0, 1) or \code{NULL}. When
-supplied, every locus is assigned this allele frequency exactly.
-Overrides \code{allele_freq_dist}, \code{min_allele_freq}, and \code{max_allele_freq}.}
 }
 \value{
 A \code{tidybreed_pop} object containing:
@@ -72,7 +49,6 @@ A \code{tidybreed_pop} object containing:
 \item DuckDB connection
 \item Population metadata
 \item Genome tables (genome_meta, genome_haplotype, genome_genotype)
-\item Optionally: founder_haplotypes table (if \code{n_haplotypes} is provided)
 }
 }
 \description{
@@ -87,10 +63,8 @@ The function creates three core genome tables:
 \item \code{genome_genotype}: Genotypes coded as 0/1/2 for each individual
 }
 
-Optionally creates founder haplotypes for later sampling:
-\itemize{
-\item \code{founder_haplotypes}: Pool of haplotypes to sample from when adding founders
-}
+To create the founder haplotype pool needed by \code{\link[=add_founders]{add_founders()}}, call
+\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} after this function.
 }
 \examples{
 \dontrun{
@@ -121,25 +95,15 @@ pop <- initialize_genome(
   db_path = ":memory:"
 )
 
-# With founder haplotypes (uniform allele frequencies)
+# With founder haplotypes — call define_founder_haplotypes() after init
 pop <- initialize_genome(
   pop_name = "B",
   n_loci = 1000,
   n_chr = 10,
-  chr_len_Mb = 100,
-  n_haplotypes = 100,
-  min_allele_freq = 0.05,
-  max_allele_freq = 0.95
-)
-
-# With founder haplotypes (fixed 50\% allele frequency)
-pop <- initialize_genome(
-  pop_name = "C",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100,
-  n_haplotypes = 50,
-  fixed_allele_freq = 0.5
-)
+  chr_len_Mb = 100
+) |>
+  define_founder_haplotypes(n_haplotypes = 100,
+                            min_allele_freq = 0.05,
+                            max_allele_freq = 0.95)
 }
 }

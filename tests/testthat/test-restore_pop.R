@@ -1,13 +1,13 @@
 test_that("restore_pop() produces a valid pop object from a freshly initialized DB", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
-    pop_name     = "test_pop",
-    n_loci       = 100,
-    n_chr        = 2,
-    chr_len_Mb   = 50,
-    n_haplotypes = 30,
-    db_path      = tmp
-  )
+    pop_name   = "test_pop",
+    n_loci     = 100,
+    n_chr      = 2,
+    chr_len_Mb = 50,
+    db_path    = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 30)
   close_pop(pop)
 
   pop2 <- restore_pop(tmp, pop_name = "test_pop")
@@ -44,8 +44,9 @@ test_that("restore_pop() returns pop with correct individual count in ind_meta",
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name = "count_test", n_loci = 50, n_chr = 2,
-    chr_len_Mb = 50, n_haplotypes = 20, db_path = tmp
-  )
+    chr_len_Mb = 50, db_path = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
   pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
   close_pop(pop)
 
@@ -64,13 +65,13 @@ test_that("restore_pop() returns pop with correct individual count in ind_meta",
 test_that("restore_pop() handles heterogeneous chromosome lengths", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
-    pop_name     = "cattle",
-    n_loci       = 90,
-    n_chr        = 3,
-    chr_len_Mb   = c(158, 137, 121),
-    n_haplotypes = 20,
-    db_path      = tmp
-  )
+    pop_name   = "cattle",
+    n_loci     = 90,
+    n_chr      = 3,
+    chr_len_Mb = c(158, 137, 121),
+    db_path    = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
   close_pop(pop)
 
   pop2 <- restore_pop(tmp)
@@ -92,8 +93,9 @@ test_that("add_founders() works after restore_pop() on empty DB", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name = "fresh", n_loci = 50, n_chr = 2,
-    chr_len_Mb = 50, n_haplotypes = 20, db_path = tmp
-  )
+    chr_len_Mb = 50, db_path = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
   close_pop(pop)
 
   pop2 <- restore_pop(tmp)
@@ -114,8 +116,9 @@ test_that("add_offspring() works after restore; IDs continue without collision",
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name = "offspring_test", n_loci = 50, n_chr = 2,
-    chr_len_Mb = 50, n_haplotypes = 20, db_path = tmp
-  )
+    chr_len_Mb = 50, db_path = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
   close_pop(pop)
 
@@ -148,8 +151,9 @@ test_that("pop_name inferred from _tidybreed.duckdb suffix", {
 
   pop <- initialize_genome(
     pop_name = "mysim", n_loci = 50, n_chr = 2,
-    chr_len_Mb = 50, n_haplotypes = 10, db_path = db_path
-  )
+    chr_len_Mb = 50, db_path = db_path
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 10)
   close_pop(pop)
 
   pop2 <- restore_pop(db_path)
@@ -164,8 +168,9 @@ test_that("pop_name override parameter works", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- initialize_genome(
     pop_name = "original", n_loci = 50, n_chr = 2,
-    chr_len_Mb = 50, n_haplotypes = 10, db_path = tmp
-  )
+    chr_len_Mb = 50, db_path = tmp
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 10)
   close_pop(pop)
 
   pop2 <- restore_pop(tmp, pop_name = "replicate_01")

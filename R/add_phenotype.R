@@ -91,11 +91,21 @@ add_phenotype <- function(tbl,
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
+    # Check for common misspellings of phenotype_name
+    misspelled <- c("trait", "phenotype", "trait_name", "pheno_name")
+    for (mis in misspelled) {
+      if (mis %in% names(extra_cols)) {
+        stop("Did you mean 'phenotype_name'? Found argument '",
+             mis, "' in ...", call. = FALSE)
+      }
+    }
+
     for (nm in names(extra_cols)) {
       if (length(extra_cols[[nm]]) != 1L) {
-        stop("Custom field '", nm, "' in add_phenotype() must be a scalar ",
-             "(broadcast to all records). Supply per-record vectors with ",
-             "mutate_table() after the call.", call. = FALSE)
+        stop("Custom field '", nm,
+             "' in add_phenotype() must be a scalar ",
+             "(broadcast to all records). Supply per-record vectors ",
+             "with mutate_table() after the call.", call. = FALSE)
       }
     }
   }

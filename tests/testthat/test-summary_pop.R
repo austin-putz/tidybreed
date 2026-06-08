@@ -1,13 +1,12 @@
 make_summary_pop <- function() {
   pop <- initialize_genome(
-    pop_name = "SumTest",
-    n_loci = 100,
-    n_chr = 2,
+    pop_name   = "SumTest",
+    n_loci     = 100,
+    n_chr      = 2,
     chr_len_Mb = 50,
-    n_haplotypes = 30,
-    db_path = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 30, fixed_allele_freq = 0.5)
   add_founders(pop, n_males = 10, n_females = 10, line_name = "A", gen = 0L)
 }
 
@@ -123,14 +122,13 @@ test_that("empty table shows 0 rows with no per-column breakdown", {
 test_that("max_values = 1L forces 5-number summary for 2-unique INTEGER column", {
   # Build a pop with gen = 0 and gen = 1 so gen has 2 unique INTEGER values
   pop <- initialize_genome(
-    pop_name = "SumTest2",
-    n_loci = 50,
-    n_chr = 1,
+    pop_name   = "SumTest2",
+    n_loci     = 50,
+    n_chr      = 1,
     chr_len_Mb = 50,
-    n_haplotypes = 20,
-    db_path = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 0L)
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 

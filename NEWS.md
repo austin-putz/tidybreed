@@ -1,3 +1,32 @@
+# tidybreed 0.37.0 (2026-06-07)
+
+## Breaking changes
+
+* `initialize_genome()` no longer accepts `n_haplotypes`, `fixed_allele_freq`,
+  `allele_freq_dist`, `min_allele_freq`, or `max_allele_freq`. Founder haplotype
+  generation is now a separate step via `define_founder_haplotypes()`.
+
+  ```r
+  # Before:
+  pop <- initialize_genome(pop_name = "A", n_loci = 1000, n_chr = 10,
+                           chr_len_Mb = 100, n_haplotypes = 100)
+
+  # After:
+  pop <- initialize_genome(pop_name = "A", n_loci = 1000, n_chr = 10,
+                           chr_len_Mb = 100) |>
+    define_founder_haplotypes(n_haplotypes = 100)
+  ```
+
+## New functions
+
+* `define_founder_haplotypes(pop, n_haplotypes, fixed_allele_freq = NULL,
+  allele_freq_dist = "uniform", min_allele_freq = 0.01, max_allele_freq = 0.99)`
+  — generates a pool of founder haplotypes from per-locus Bernoulli distributions
+  and writes them to the `founder_haplotypes` table. Also writes
+  `founder_allele_freq` to `genome_meta`. Errors if `founder_haplotypes` already
+  exists. Follows the `define_*` convention: configures genetic structure, not
+  simulation output.
+
 # tidybreed 0.36.4 (2026-06-06)
 
 ## Bug fixes

@@ -93,7 +93,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("genome_meta", "pos_Mb",
             "Physical position in megabases along the chromosome"),
     .sm_col("genome_meta", "founder_allele_freq",
-            "Per-locus base allele frequency for founder haplotype sampling; present only when n_haplotypes was supplied to initialize_genome()"),
+            "Per-locus base allele frequency for founder haplotype sampling; present only when define_founder_haplotypes() has been called"),
 
     # genome_haplotype
     .sm_tbl("genome_haplotype",

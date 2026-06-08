@@ -1,13 +1,12 @@
 make_pheno_pop <- function(pop_name = "ph", n_ind = 200, n_loci = 400) {
   pop <- initialize_genome(
-    pop_name          = pop_name,
-    n_loci            = n_loci,
-    n_chr             = 4,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 100,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = pop_name,
+    n_loci     = n_loci,
+    n_chr      = 4,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = n_ind / 2, n_females = n_ind / 2,
                       line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
@@ -84,14 +83,13 @@ test_that("get_table() |> filter() restricts phenotyped subset", {
 test_that("categorical trait with prevalence respects target rate approximately", {
   set.seed(7)
   pop <- initialize_genome(
-    pop_name          = "ph_categorical",
-    n_loci            = 300,
-    n_chr             = 3,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 200,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = "ph_categorical",
+    n_loci     = 300,
+    n_chr      = 3,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 200, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = 500, n_females = 500, line_name = "A")
   pop <- define_trait(pop, "mort", target_add_var = 1)
   pop <- apply_random_qtl(pop, "mort", n_qtl = 50)
@@ -119,14 +117,13 @@ test_that("categorical trait with prevalence respects target rate approximately"
 test_that("categorical trait with explicit thresholds produces correct categories", {
   set.seed(42)
   pop <- initialize_genome(
-    pop_name          = "ph_cat_thresh",
-    n_loci            = 200,
-    n_chr             = 2,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 100,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = "ph_cat_thresh",
+    n_loci     = 200,
+    n_chr      = 2,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = 250, n_females = 250, line_name = "A")
   pop <- define_trait(pop, "body_score", target_add_var = 1)
   pop <- apply_random_qtl(pop, "body_score", n_qtl = 40)

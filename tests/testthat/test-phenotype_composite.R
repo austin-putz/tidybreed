@@ -11,14 +11,13 @@ make_composite_pop <- function(pop_name = "comp",
                                n_males = 20, n_females = 20,
                                n_loci = 300) {
   pop <- initialize_genome(
-    pop_name          = pop_name,
-    n_loci            = n_loci,
-    n_chr             = 3,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 100,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = pop_name,
+    n_loci     = n_loci,
+    n_chr      = 3,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
   pop <- add_founders(pop, n_males = n_males, n_females = n_females,
                       line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
@@ -326,14 +325,13 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
                          add_na_pen = FALSE) {
   n_pigs <- n_pens * pen_size
   pop <- initialize_genome(
-    pop_name          = pop_name,
-    n_loci            = 300,
-    n_chr             = 3,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 100,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = pop_name,
+    n_loci     = 300,
+    n_chr      = 3,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
   # Half males, half females
   pop <- add_founders(pop, n_males = n_pigs %/% 2L,
                       n_females = n_pigs - n_pigs %/% 2L,
@@ -512,14 +510,13 @@ test_that("group_column omitted for group contributor errors in define_phenotype
 test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in {0,1}", {
   set.seed(1301)
   pop <- initialize_genome(
-    pop_name          = "poultry",
-    n_loci            = 200,
-    n_chr             = 2,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 80,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = "poultry",
+    n_loci     = 200,
+    n_chr      = 2,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 80, fixed_allele_freq = 0.5)
   n_birds <- 40L
   pop <- add_founders(pop, n_males = n_birds %/% 2L,
                       n_females = n_birds - n_birds %/% 2L,
@@ -559,14 +556,13 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
 test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpected NAs", {
   set.seed(1401)
   pop <- initialize_genome(
-    pop_name          = "varpens",
-    n_loci            = 300,
-    n_chr             = 3,
-    chr_len_Mb        = 100,
-    n_haplotypes      = 100,
-    db_path           = ":memory:",
-    fixed_allele_freq = 0.5
-  )
+    pop_name   = "varpens",
+    n_loci     = 300,
+    n_chr      = 3,
+    chr_len_Mb = 100,
+    db_path    = ":memory:"
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
   # 2 small pens (5 each) + 2 large pens (10 each) = 30 animals
   pop <- add_founders(pop, n_males = 15L, n_females = 15L, line_name = "A")
   pen_ids <- c(rep("p1", 5), rep("p2", 5), rep("p3", 10), rep("p4", 10))

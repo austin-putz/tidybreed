@@ -10,11 +10,13 @@ pop1 <- initialize_genome(
   pop_name = "test_uniform",
   n_loci = 100,
   n_chr = 5,
-  chr_len_Mb = 100,
-  n_haplotypes = 50,
-  min_allele_freq = 0.05,
-  max_allele_freq = 0.95
-)
+  chr_len_Mb = 100
+) |>
+  define_founder_haplotypes(
+    n_haplotypes    = 50,
+    min_allele_freq = 0.05,
+    max_allele_freq = 0.95
+  )
 
 # Inspect the population
 print(pop1)
@@ -54,10 +56,12 @@ pop2 <- initialize_genome(
   pop_name = "test_fixed",
   n_loci = 100,
   n_chr = 5,
-  chr_len_Mb = 100,
-  n_haplotypes = 100,
-  fixed_allele_freq = 0.5
-)
+  chr_len_Mb = 100
+) |>
+  define_founder_haplotypes(
+    n_haplotypes      = 100,
+    fixed_allele_freq = 0.5
+  )
 
 print(pop2)
 

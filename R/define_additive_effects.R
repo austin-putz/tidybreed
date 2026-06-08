@@ -536,7 +536,7 @@ compute_base_allele_freq <- function(pop, base, base_ids = NULL) {
     if (!"founder_haplotypes" %in% pop$tables) {
       stop(
         "founder_haplotypes table not found. ",
-        "Did you call initialize_genome() with n_haplotypes? ",
+        "Did you call define_founder_haplotypes()? ",
         "Use base = 'current_pop' instead.",
         call. = FALSE
       )

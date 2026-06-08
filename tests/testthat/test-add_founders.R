@@ -5,9 +5,9 @@ test_that("add_founders creates ind_meta table with correct structure", {
     n_loci = 100,
     n_chr = 5,
     chr_len_Mb = 100,
-    n_haplotypes = 50,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 50)
 
   # Add founders
   pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
@@ -41,9 +41,9 @@ test_that("add_founders correctly assigns IDs and sex", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 10, line_name = "A")
 
@@ -76,9 +76,9 @@ test_that("add_founders creates correct genome_haplotype table", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
@@ -121,9 +121,9 @@ test_that("add_founders creates correct genome_genotype table", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
@@ -154,9 +154,9 @@ test_that("genotypes equal sum of haplotypes", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
@@ -192,9 +192,9 @@ test_that("add_founders works with multiple lines", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   # Add line A
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
@@ -233,9 +233,9 @@ test_that("sequential additions to same line continue numbering", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   # First batch
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
@@ -267,9 +267,9 @@ test_that("add_founders works with only males", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 10, n_females = 0, line_name = "A")
 
@@ -288,9 +288,9 @@ test_that("add_founders works with only females", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 0, n_females = 10, line_name = "A")
 
@@ -335,9 +335,9 @@ test_that("add_founders errors if n_males + n_females = 0", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   expect_error(
     add_founders(pop, n_males = 0, n_females = 0, line_name = "A"),
@@ -354,9 +354,9 @@ test_that("add_founders errors if line_name has invalid format", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   # Starts with number
   expect_error(
@@ -380,9 +380,9 @@ test_that("add_founders errors if n_males or n_females invalid", {
     n_loci = 50,
     n_chr = 2,
     chr_len_Mb = 100,
-    n_haplotypes = 20,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 20)
 
   # Negative values
   expect_error(
@@ -409,9 +409,9 @@ test_that("integration: initialize_genome -> add_founders -> mutate_table", {
     n_loci = 100,
     n_chr = 5,
     chr_len_Mb = 100,
-    n_haplotypes = 50,
     db_path = ":memory:"
-  ) %>%
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 50) |>
     add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
     get_table("ind_meta") %>%
     mutate_table(
@@ -442,9 +442,9 @@ test_that("haplotypes are sampled with replacement", {
     n_loci = 10,
     n_chr = 1,
     chr_len_Mb = 100,
-    n_haplotypes = 5,  # Small pool
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 5)  # Small pool
 
   # Add many founders (will require sampling with replacement)
   pop <- add_founders(pop, n_males = 20, n_females = 20, line_name = "A")
@@ -466,9 +466,9 @@ test_that("add_founders handles large lines efficiently", {
     n_loci = 1000,
     n_chr = 10,
     chr_len_Mb = 100,
-    n_haplotypes = 100,
     db_path = ":memory:"
-  )
+  ) |>
+    define_founder_haplotypes(n_haplotypes = 100)
 
   # Add 1000 founders
   expect_no_error({
@@ -492,7 +492,8 @@ test_that("add_founders handles large lines efficiently", {
 
 make_pop_for_extra <- function() {
   initialize_genome(pop_name = "t", n_loci = 20, n_chr = 1,
-                    chr_len_Mb = 10, n_haplotypes = 20, db_path = ":memory:")
+                    chr_len_Mb = 10, db_path = ":memory:") |>
+    define_founder_haplotypes(n_haplotypes = 20)
 }
 
 test_that("add_founders() accepts scalar ... fields and writes them to ind_meta", {

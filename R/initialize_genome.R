@@ -10,8 +10,8 @@
 #' - `genome_haplotype`: Phased haplotypes for each individual (2 rows per individual)
 #' - `genome_genotype`: Genotypes coded as 0/1/2 for each individual
 #'
-#' Optionally creates founder haplotypes for later sampling:
-#' - `founder_haplotypes`: Pool of haplotypes to sample from when adding founders
+#' To create the founder haplotype pool needed by [add_founders()], call
+#' [define_founder_haplotypes()] after this function.
 #'
 #' @param pop_name Character scalar. Name of the population; used as the prefix
 #'   for the default `.duckdb` filename.
@@ -32,25 +32,11 @@
 #'   `1, 2, ..., n_chr`.
 #' @param overwrite Logical scalar. If `TRUE` and `db_path` already exists,
 #'   the file is deleted and recreated. Default `FALSE`.
-#' @param n_haplotypes Integer scalar or `NULL`. Number of founder haplotypes
-#'   to generate and store in `founder_haplotypes`. When `NULL` (default),
-#'   no founder haplotypes are created and `add_founders()` cannot be called.
-#' @param allele_freq_dist Character scalar. Distribution for sampling
-#'   per-locus allele frequencies. Currently only `"uniform"` is supported.
-#'   Ignored when `fixed_allele_freq` is supplied.
-#' @param min_allele_freq Numeric scalar in (0, 1). Minimum allele frequency
-#'   for the uniform distribution. Default `0.01`.
-#' @param max_allele_freq Numeric scalar in (0, 1). Maximum allele frequency
-#'   for the uniform distribution. Default `0.99`.
-#' @param fixed_allele_freq Numeric scalar in (0, 1) or `NULL`. When
-#'   supplied, every locus is assigned this allele frequency exactly.
-#'   Overrides `allele_freq_dist`, `min_allele_freq`, and `max_allele_freq`.
 #'
 #' @return A `tidybreed_pop` object containing:
 #'   - DuckDB connection
 #'   - Population metadata
 #'   - Genome tables (genome_meta, genome_haplotype, genome_genotype)
-#'   - Optionally: founder_haplotypes table (if `n_haplotypes` is provided)
 #'
 #' @export
 #'
@@ -83,26 +69,16 @@
 #'   db_path = ":memory:"
 #' )
 #'
-#' # With founder haplotypes (uniform allele frequencies)
+#' # With founder haplotypes — call define_founder_haplotypes() after init
 #' pop <- initialize_genome(
 #'   pop_name = "B",
 #'   n_loci = 1000,
 #'   n_chr = 10,
-#'   chr_len_Mb = 100,
-#'   n_haplotypes = 100,
-#'   min_allele_freq = 0.05,
-#'   max_allele_freq = 0.95
-#' )
-#'
-#' # With founder haplotypes (fixed 50% allele frequency)
-#' pop <- initialize_genome(
-#'   pop_name = "C",
-#'   n_loci = 1000,
-#'   n_chr = 10,
-#'   chr_len_Mb = 100,
-#'   n_haplotypes = 50,
-#'   fixed_allele_freq = 0.5
-#' )
+#'   chr_len_Mb = 100
+#' ) |>
+#'   define_founder_haplotypes(n_haplotypes = 100,
+#'                             min_allele_freq = 0.05,
+#'                             max_allele_freq = 0.95)
 #' }
 initialize_genome <- function(pop_name,
                               n_loci,
@@ -111,35 +87,13 @@ initialize_genome <- function(pop_name,
                               db_path = NULL,
                               locus_names = NULL,
                               chr_names = NULL,
-                              overwrite = FALSE,
-                              n_haplotypes = NULL,
-                              allele_freq_dist = "uniform",
-                              min_allele_freq = 0.01,
-                              max_allele_freq = 0.99,
-                              fixed_allele_freq = NULL) {
+                              overwrite = FALSE) {
 
   # Input validation
   stopifnot(is.character(pop_name), length(pop_name) == 1)
   stopifnot(is.numeric(n_loci), length(n_loci) == 1, n_loci > 0)
   stopifnot(is.numeric(n_chr), length(n_chr) == 1, n_chr > 0)
   stopifnot(is.numeric(chr_len_Mb), length(chr_len_Mb) %in% c(1, n_chr))
-
-  # Validate founder haplotype parameters
-  if (!is.null(n_haplotypes)) {
-    stopifnot(is.numeric(n_haplotypes), length(n_haplotypes) == 1, n_haplotypes > 0)
-    stopifnot(allele_freq_dist %in% c("uniform"))
-
-    if (!is.null(fixed_allele_freq)) {
-      stopifnot(is.numeric(fixed_allele_freq), length(fixed_allele_freq) == 1)
-      stopifnot(fixed_allele_freq >= 0, fixed_allele_freq <= 1)
-    } else {
-      stopifnot(is.numeric(min_allele_freq), length(min_allele_freq) == 1)
-      stopifnot(is.numeric(max_allele_freq), length(max_allele_freq) == 1)
-      stopifnot(min_allele_freq >= 0, min_allele_freq <= 1)
-      stopifnot(max_allele_freq >= 0, max_allele_freq <= 1)
-      stopifnot(min_allele_freq < max_allele_freq)
-    }
-  }
 
   # Expand chr_len_Mb if single value
   if (length(chr_len_Mb) == 1) {
@@ -342,68 +296,11 @@ initialize_genome <- function(pop_name,
   # Register genome-layer schema descriptions
   register_schema_meta(db_conn, .genome_layer_descriptions())
 
-  # Generate founder haplotypes if requested
   tables_created <- c("_schema_meta",
                       "genome_meta", "genome_haplotype", "genome_genotype",
                       "ind_meta", "trait_effect_cov", "genome_effects",
                       "phenotype_meta", "phenotype_components",
                       "phenotype_residual_cov")
-
-  if (!is.null(n_haplotypes)) {
-    message("Generating ", n_haplotypes, " founder haplotypes...")
-
-    # Determine allele frequencies for each locus
-    if (!is.null(fixed_allele_freq)) {
-      # Use fixed allele frequency for all loci
-      allele_freqs <- rep(fixed_allele_freq, n_loci)
-      message("  Using fixed allele frequency: ", fixed_allele_freq)
-    } else {
-      # Sample allele frequencies from uniform distribution
-      if (allele_freq_dist == "uniform") {
-        allele_freqs <- stats::runif(n_loci, min = min_allele_freq, max = max_allele_freq)
-        message("  Allele frequencies sampled from uniform(", min_allele_freq, ", ", max_allele_freq, ")")
-      }
-    }
-
-    # Add allele frequencies to genome_meta table
-    genome_meta$founder_allele_freq <- allele_freqs
-    DBI::dbWriteTable(db_conn, "genome_meta", genome_meta, overwrite = TRUE)
-
-    # Generate haplotypes by sampling from Bernoulli(allele_freq) for each locus
-    # Create matrix: rows = haplotypes, columns = loci
-    haplotype_matrix <- matrix(0L, nrow = n_haplotypes, ncol = n_loci)
-
-    for (j in seq_len(n_loci)) {
-      # Sample alleles (0 or 1) from Bernoulli with probability = allele_freq
-      haplotype_matrix[, j] <- stats::rbinom(n_haplotypes, size = 1, prob = allele_freqs[j])
-    }
-
-    # Create founder_haplotypes table
-    founder_haplotypes <- tibble::tibble(
-      hap_id = paste0("hap_", seq_len(n_haplotypes))
-    )
-
-    # Add locus columns
-    for (j in seq_len(n_loci)) {
-      founder_haplotypes[[paste0("locus_", j)]] <- haplotype_matrix[, j]
-    }
-
-    # Write to database
-    DBI::dbWriteTable(db_conn, "founder_haplotypes", founder_haplotypes, overwrite = TRUE)
-
-    # Update tables list
-    tables_created <- c(tables_created, "founder_haplotypes")
-
-    # Register founder_haplotypes schema descriptions
-    register_schema_meta(db_conn, rbind(
-      .sm_tbl("founder_haplotypes",
-              "Pool of founder haplotypes sampled from per-locus Bernoulli distributions. Used by add_founders() to assign phased alleles. Present only when n_haplotypes was supplied to initialize_genome()."),
-      .sm_col("founder_haplotypes", "hap_id",
-              "Haplotype identifier (e.g. 'hap_1', 'hap_2')")
-    ))
-
-    message("  Created founder_haplotypes table")
-  }
 
   # Create tidybreed_pop object
   pop <- new_tidybreed_pop(
@@ -420,9 +317,6 @@ initialize_genome <- function(pop_name,
   pop <- ensure_trait_tables(pop)
 
   message("Initialized population '", pop_name, "' with ", n_loci, " loci across ", n_chr, " chromosomes")
-  if (!is.null(n_haplotypes)) {
-    message("  Generated ", n_haplotypes, " founder haplotypes")
-  }
   message("Database: ", db_path)
 
   return(pop)

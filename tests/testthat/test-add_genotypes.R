@@ -2,8 +2,9 @@ make_chip_pop <- function(pop_name = "geno_test", n_loci = 100, chip_name = "50k
                           n_males = 5, n_females = 5) {
   pop <- initialize_genome(
     pop_name = pop_name, n_loci = n_loci, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
+    chr_len_Mb = 100, db_path = ":memory:"
   ) |>
+    define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 
   # Filter to first chromosome as chip loci (stable, order-independent)
@@ -78,8 +79,9 @@ test_that("add_genotypes() with filter returns tidybreed_pop", {
 test_that("add_genotypes() errors if chip not defined", {
   pop <- initialize_genome(
     pop_name = "test_ag_noship", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, n_haplotypes = 20, db_path = ":memory:"
+    chr_len_Mb = 100, db_path = ":memory:"
   ) |>
+    define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   expect_error(
