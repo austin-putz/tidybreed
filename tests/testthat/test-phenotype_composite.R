@@ -17,7 +17,7 @@ make_composite_pop <- function(pop_name = "comp",
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   pop <- add_founders(pop, n_males = n_males, n_females = n_females,
                       line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
@@ -331,7 +331,7 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # Half males, half females
   pop <- add_founders(pop, n_males = n_pigs %/% 2L,
                       n_females = n_pigs - n_pigs %/% 2L,
@@ -516,7 +516,7 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 80, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 80, method = "fixed")
   n_birds <- 40L
   pop <- add_founders(pop, n_males = n_birds %/% 2L,
                       n_females = n_birds - n_birds %/% 2L,
@@ -562,7 +562,7 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # 2 small pens (5 each) + 2 large pens (10 each) = 30 animals
   pop <- add_founders(pop, n_males = 15L, n_females = 15L, line_name = "A")
   pen_ids <- c(rep("p1", 5), rep("p2", 5), rep("p3", 10), rep("p4", 10))

@@ -1,3 +1,49 @@
+# tidybreed 0.38.0 (2026-06-07)
+
+## Breaking changes
+
+* `define_founder_haplotypes()` no longer accepts `fixed_allele_freq` or
+  `allele_freq_dist`. Both are replaced by the new `method` dispatch argument.
+
+  ```r
+  # Before:
+  pop |> define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
+  pop |> define_founder_haplotypes(n_haplotypes = 100, allele_freq_dist = "uniform",
+                                   min_allele_freq = 0.05, max_allele_freq = 0.95)
+
+  # After:
+  pop |> define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
+  pop |> define_founder_haplotypes(n_haplotypes = 100, method = "uniform",
+                                   min_allele_freq = 0.05, max_allele_freq = 0.95)
+  ```
+
+## New features
+
+* `define_founder_haplotypes()` now supports six methods via the `method`
+  argument:
+  * `"uniform"` (default) — per-locus freq from Uniform(min, max); replaces
+    `allele_freq_dist = "uniform"`
+  * `"fixed"` — every locus gets the same `allele_freq` (default 0.5);
+    replaces `fixed_allele_freq`
+  * `"beta"` — per-locus freq from Beta(`beta_shape1`, `beta_shape2`); default
+    `shape1 = shape2 = 0.5` (Jeffreys prior, biologically realistic MAF
+    distribution)
+  * `"balding_nichols"` — Beta parameterised by Wright's `fst` and `mean_freq`;
+    models allele frequency drift around a mean
+  * `"mosaic"` — quick LD via haplotype block copying: `n_templates` template
+    haplotypes are generated and new haplotypes are mosaics that switch
+    templates at rate `switch_rate` per Mb; no external software required
+  * `"gaussian_copula"` — fast LD via AR(1) latent normal thresholding; fully
+    vectorised over haplotypes; inter-locus correlation decays as
+    ρ = exp(−`decay_rate` × d_Mb)
+
+* Passing a method-specific argument to the wrong method now raises an
+  informative error naming both the argument and the method it belongs to.
+
+* For LD methods (`"mosaic"`, `"gaussian_copula"`), `genome_meta$founder_allele_freq`
+  stores the empirical column means of the generated haplotype matrix rather
+  than the input parameters.
+
 # tidybreed 0.37.0 (2026-06-07)
 
 ## Breaking changes

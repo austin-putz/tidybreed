@@ -6,7 +6,7 @@ make_summary_pop <- function() {
     chr_len_Mb = 50,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 30, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 30, method = "fixed")
   add_founders(pop, n_males = 10, n_females = 10, line_name = "A", gen = 0L)
 }
 
@@ -128,7 +128,7 @@ test_that("max_values = 1L forces 5-number summary for 2-unique INTEGER column",
     chr_len_Mb = 50,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 20, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 0L)
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 

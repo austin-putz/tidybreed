@@ -16,7 +16,7 @@ make_formula_pop <- function(pop_name = "fp", n_males = 20, n_females = 20,
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 100, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   add_founders(pop, n_males = n_males, n_females = n_females, line_name = "A")
 }
 

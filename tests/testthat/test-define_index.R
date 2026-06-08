@@ -7,7 +7,7 @@ make_index_pop <- function(pop_name = "idx") {
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 50, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
   # Seed EBVs directly (bypasses BLUPF90)

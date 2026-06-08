@@ -198,7 +198,7 @@ test_that("define_chip() integration: chip column used downstream by add_genotyp
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 50, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
   pop <- add_founders(pop, n_males = 10, n_females = 10, line_name = "A")
 
   set.seed(99)

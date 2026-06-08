@@ -60,7 +60,7 @@ pop2 <- initialize_genome(
 ) |>
   define_founder_haplotypes(
     n_haplotypes      = 100,
-    fixed_allele_freq = 0.5
+    method = "fixed"
   )
 
 print(pop2)

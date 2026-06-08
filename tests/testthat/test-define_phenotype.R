@@ -6,7 +6,7 @@ make_pheno_base_pop <- function(pop_name = "defph") {
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 50, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
   pop <- add_founders(pop, n_males = 20, n_females = 20, line_name = "A")
   pop
 }

@@ -6,7 +6,7 @@ make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
     chr_len_Mb = 100,
     db_path    = ":memory:"
   ) |>
-    define_founder_haplotypes(n_haplotypes = 200, fixed_allele_freq = 0.5)
+    define_founder_haplotypes(n_haplotypes = 200, method = "fixed")
   pop <- add_founders(pop, n_males = n_ind / 2, n_females = n_ind / 2,
                       line_name = "A")
   pop

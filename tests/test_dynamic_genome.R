@@ -32,7 +32,7 @@ pop <- initialize_genome(
   chr_len_Mb        = 100,
   n_haplotypes      = 100,
   db_path           = ":memory:",
-  fixed_allele_freq = 0.5
+  method = "fixed"
 )
 
 pop <- add_founders(pop, n_males = 10, n_females = 10, line_name = "A")

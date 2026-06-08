@@ -21,8 +21,9 @@ check <- function(cond, msg) if (cond) PASS(msg) else FAIL(msg)
 make_base <- function(name, n_males = 20, n_females = 20) {
   initialize_genome(
     pop_name = name, n_loci = 300, n_chr = 3, chr_len_Mb = 100,
-    n_haplotypes = 100, db_path = ":memory:", fixed_allele_freq = 0.5
+    db_path = ":memory:"
   ) |>
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 }
 

@@ -7,71 +7,130 @@
 define_founder_haplotypes(
   pop,
   n_haplotypes,
-  fixed_allele_freq = NULL,
-  allele_freq_dist = "uniform",
-  min_allele_freq = 0.01,
-  max_allele_freq = 0.99
+  method = "uniform",
+  allele_freq = NULL,
+  min_allele_freq = NULL,
+  max_allele_freq = NULL,
+  beta_shape1 = NULL,
+  beta_shape2 = NULL,
+  fst = NULL,
+  mean_freq = NULL,
+  n_templates = NULL,
+  switch_rate = NULL,
+  decay_rate = NULL
 )
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object returned by \code{\link[=initialize_genome]{initialize_genome()}}.}
 
-\item{n_haplotypes}{Integer scalar. Number of founder haplotypes to generate.
-Must be positive.}
+\item{n_haplotypes}{Positive integer. Number of founder haplotypes to
+generate.}
 
-\item{fixed_allele_freq}{Numeric scalar in \link{0, 1} or \code{NULL}. When supplied,
-every locus is assigned this allele frequency exactly. Overrides
-\code{allele_freq_dist}, \code{min_allele_freq}, and \code{max_allele_freq}.}
+\item{method}{Character scalar. One of \code{"uniform"} (default), \code{"fixed"},
+\code{"beta"}, \code{"balding_nichols"}, \code{"mosaic"}, or \code{"gaussian_copula"}.
+Passing an argument that belongs to a different method raises an error.}
 
-\item{allele_freq_dist}{Character scalar. Distribution for sampling per-locus
-allele frequencies. Currently only \code{"uniform"} is supported. Ignored when
-\code{fixed_allele_freq} is supplied.}
+\item{allele_freq}{\emph{(method = "fixed" only)} Numeric scalar in [0, 1].
+Allele frequency applied to every locus. Default \code{0.5}.}
 
-\item{min_allele_freq}{Numeric scalar in (0, 1). Minimum allele frequency for
-the uniform distribution. Default \code{0.01}.}
+\item{min_allele_freq}{\emph{(method = "uniform" only)} Lower bound. Default
+\code{0.01}.}
 
-\item{max_allele_freq}{Numeric scalar in (0, 1). Maximum allele frequency for
-the uniform distribution. Default \code{0.99}.}
+\item{max_allele_freq}{\emph{(method = "uniform" only)} Upper bound. Default
+\code{0.99}.}
+
+\item{beta_shape1}{\emph{(method = "beta" only)} First Beta shape parameter (α).
+Must be > 0. Default \code{0.5}.}
+
+\item{beta_shape2}{\emph{(method = "beta" only)} Second Beta shape parameter (β).
+Must be > 0. Default \code{0.5}.}
+
+\item{fst}{\emph{(method = "balding_nichols" only)} Wright's F_ST. Scalar in
+(0, 1). Controls spread of frequencies around \code{mean_freq}; larger values
+produce more extreme frequencies. Default \code{0.1}.}
+
+\item{mean_freq}{\emph{(method = "balding_nichols" only)} Ancestral mean allele
+frequency. Scalar in (0, 1). Default \code{0.5}.}
+
+\item{n_templates}{\emph{(method = "mosaic" only)} Number of template haplotypes.
+Must be >= 2. Default \code{ceiling(sqrt(n_haplotypes))}.}
+
+\item{switch_rate}{\emph{(method = "mosaic" only)} Expected template switches per
+Mb. Higher values create shorter LD blocks. Default \code{1.0}.}
+
+\item{decay_rate}{\emph{(method = "gaussian_copula" only)} LD decay rate λ in
+ρ = exp(−λ × d_Mb). Higher values → faster LD decay. Default \code{1.0}
+gives ρ ≈ 0.37 at 1 Mb.}
 }
 \value{
 The \code{tidybreed_pop} object (invisibly), with \code{founder_haplotypes}
-registered in \code{pop$tables}.
+registered in \code{pop$tables} and \code{founder_allele_freq} added to \code{genome_meta}.
 }
 \description{
-Generates a pool of founder haplotypes from per-locus Bernoulli distributions
-and stores them in the \code{founder_haplotypes} table. This table is required by
-\code{\link[=add_founders]{add_founders()}} to assign phased alleles to new individuals.
+Generates a pool of founder haplotypes and stores them in the
+\code{founder_haplotypes} table. This table is required by \code{\link[=add_founders]{add_founders()}} to
+assign phased alleles to new individuals.
 
 Call this function after \code{\link[=initialize_genome]{initialize_genome()}} and before \code{\link[=add_founders]{add_founders()}}.
 Also writes a \code{founder_allele_freq} column to \code{genome_meta} recording the
-per-locus allele frequency used during sampling.
+per-locus allele frequency (the empirical column mean for LD methods).
 }
+\section{Methods}{
+
+\describe{
+\item{\code{"uniform"} (default)}{Per-locus allele frequency sampled from
+Uniform(\code{min_allele_freq}, \code{max_allele_freq}). No LD structure.}
+\item{\code{"fixed"}}{Every locus gets the same \code{allele_freq} (default 0.5).
+No LD structure. Useful for quick sanity checks.}
+\item{\code{"beta"}}{Per-locus allele frequency sampled from
+Beta(\code{beta_shape1}, \code{beta_shape2}). Default \code{shape1 = shape2 = 0.5}
+(Jeffreys prior) gives a U-shaped MAF distribution with many rare and
+common alleles — biologically realistic. No LD structure.}
+\item{\code{"balding_nichols"}}{Balding-Nichols model: per-locus frequency
+from Beta(α, β) where α = \code{mean_freq} × (1 − \code{fst}) / \code{fst} and
+β = (1 − \code{mean_freq}) × (1 − \code{fst}) / \code{fst}. Models allele frequency
+drift around a mean. No LD structure.}
+\item{\code{"mosaic"}}{Quick LD via haplotype block copying. Generates
+\code{n_templates} template haplotypes, then builds each new haplotype as a
+mosaic: copies from a template and switches templates with probability
+\verb{1 - exp(-switch_rate × d_Mb)} at each locus. Creates realistic LD
+blocks without external software. Requires \code{chr} and \code{pos_Mb} in
+\code{genome_meta}. Performance is O(n_haplotypes × n_loci); use
+\code{"gaussian_copula"} for very large simulations.}
+\item{\code{"gaussian_copula"}}{Fast LD via AR(1) latent normal. A latent
+Gaussian AR(1) process runs along each chromosome; adjacent-locus
+correlation decays as ρ = exp(−\code{decay_rate} × d_Mb). Haplotypes are
+generated by thresholding latent values at each locus's target allele
+frequency. Fully vectorised over haplotypes. Requires \code{chr} and \code{pos_Mb}
+in \code{genome_meta}.}
+}
+}
+
 \examples{
 \dontrun{
-# Uniform allele frequencies
 pop <- initialize_genome(
-  pop_name = "A",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100
-) |>
-  define_founder_haplotypes(
-    n_haplotypes  = 100,
-    min_allele_freq = 0.05,
-    max_allele_freq = 0.95
-  )
+  pop_name = "A", n_loci = 1000, n_chr = 10, chr_len_Mb = 100
+)
 
-# Fixed allele frequency
-pop <- initialize_genome(
-  pop_name = "B",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100
-) |>
-  define_founder_haplotypes(
-    n_haplotypes      = 50,
-    fixed_allele_freq = 0.5
-  )
+# Uniform allele frequencies (default)
+pop |> define_founder_haplotypes(n_haplotypes = 200)
+
+# Fixed allele frequency of 0.5
+pop |> define_founder_haplotypes(n_haplotypes = 200, method = "fixed")
+
+# Beta(0.5, 0.5) — biologically realistic MAF distribution
+pop |> define_founder_haplotypes(n_haplotypes = 200, method = "beta")
+
+# Balding-Nichols with FST = 0.05
+pop |> define_founder_haplotypes(n_haplotypes = 200,
+                                 method = "balding_nichols", fst = 0.05)
+
+# Quick LD via mosaic block copying
+pop |> define_founder_haplotypes(n_haplotypes = 200, method = "mosaic")
+
+# Fast LD via Gaussian copula AR(1)
+pop |> define_founder_haplotypes(n_haplotypes = 200,
+                                 method = "gaussian_copula", decay_rate = 0.5)
 }
 }
 \seealso{
