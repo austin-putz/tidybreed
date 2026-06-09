@@ -755,9 +755,9 @@ add_phenotype <- function(tbl,
       if (has_thresh) {
         thresh_vec <- as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]])
       } else {
-        va <- get_effect_var(pop, "gen_add", t)
+        va <- get_trait_var(pop, "gen_add", t)
         vr <- resid_info$residual_var_unconditional[t]
-        if (is.na(vr)) vr <- get_effect_var(pop, "residual", t)
+        if (is.na(vr)) vr <- get_phenotype_var(pop, "residual", t)
         va <- if (is.na(va)) 0 else va
         vr <- if (is.na(vr)) 0 else vr
         thresh_vec <- pheno_mean +

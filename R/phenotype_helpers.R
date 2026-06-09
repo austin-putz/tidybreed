@@ -222,7 +222,7 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
 
       new_lvls <- setdiff(unique_lvls, names(existing_map))
       if (length(new_lvls) > 0) {
-        effect_var <- get_effect_var(pop, e$effect_name, phenotype_name)
+        effect_var <- get_phenotype_var(pop, e$effect_name, phenotype_name)
         if (is.na(effect_var)) {
           stop("No variance stored for random effect '", e$effect_name,
                "' / phenotype '", phenotype_name, "'.", call. = FALSE)
