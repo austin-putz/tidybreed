@@ -28,19 +28,76 @@ if ("tidybreed" %in% installed.packages()){
   pak::pak("austin-putz/tidybreed", upgrade=TRUE)
 }
 
-library(DBI)
-library(glue)
-library(yaml)
-library(tidyverse)
-library(tidybreed)
+library(hrbrthemes)    # ggplot2 themes to try
+library(DBI)           # DBI -> main database connection/execution package
+library(glue)          # glue package for commands into DBI
+library(yaml)          # load/read yaml files for input options
+library(tidyverse)     # tidyverse
+library(tidybreed)     # tidybreed
+
+#------------------------------------------------------------------------------#
+# Options
+#------------------------------------------------------------------------------#
+
+options(
+  tidybreed.pop_name = "swine",
+  tidybreed.base_dir = getwd(),
+  tidybreed.output = "tidybreed_output",
+  tidybreed.scenario = "age_at_puberty",
+  tidybreed.tools = c("blupf90", "plink"),
+  tidybreed.db_name = "sim.duckdb"
+)
 
 #------------------------------------------------------------------------------#
 # Set other input options outside yaml file
 #------------------------------------------------------------------------------#
 
-hg_green      <- rgb(150, 200,  40, max=255)   # "yellowgreen"
-hg_blue       <- rgb(  0, 150, 180, max=255)   # "deepskyblue3"
-hypor_blue    <- rgb(  0,  65, 120, max=255)   # "navy"
+tb_theme <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(linewidth = 0.3),
+      axis.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold", size = rel(1.3)),
+      plot.subtitle = element_text(color = "grey40"),
+      strip.text = element_text(face = "bold"),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold"),
+      plot.title.position = "plot"
+    )
+}
+
+tb_colors <- c(
+  "#E67E22",
+  "#4E79A7",
+  "#59A14F",
+  "#E15759",
+  "#B07AA1",
+  "#EDC948",
+  "#2C3E50",
+  "#9D9D9D"
+)
+
+tb_science <- c(
+  "#D55E00", # orange
+  "#0072B2", # blue
+  "#009E73", # green
+  "#CC79A7", # purple
+  "#F0E442", # yellow
+  "#56B4E9", # light blue
+  "#999999"  # grey
+)
+
+# scale_fill_gradientn(
+#   colours = c(
+#     "#2C3E50",
+#     "#4E79A7",
+#     "#F5F5F5",
+#     "#E67E22",
+#     "#A04000"
+#   )
+# )
 
 #------------------------------------------------------------------------------#
 # yaml inputs
@@ -130,17 +187,27 @@ data.timing <- add_row(data.timing,
 )
 
 #------------------------------------------------------------------------------#
+# Open Population Object with database
+#------------------------------------------------------------------------------#
+
+pop <- open_pop(
+  clean = TRUE
+)
+
+#------------------------------------------------------------------------------#
 # Start Genome + Population Object with database
 #------------------------------------------------------------------------------#
 
 # start population by building a genome
-pop <- initialize_genome(
-         pop_name     = config$scenario_name,  # different than "line_name" below, this is the entire genome + DB name
-		     n_loci       = config$genome$n_loci,       # number of loci (nothing assigned as SNP or QTL yet...)
-		     n_chr        = config$genome$n_chr,        # number of chromosomes
-		     chr_len_Mb   = config$genome$chr_len,      # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
-		     overwrite    = TRUE      # overwrite the database if it exists from a previous run
-		  )
+pop <- pop %>%
+  define_genome(
+		n_loci       = config$genome$n_loci,       # number of loci (nothing assigned as SNP or QTL yet...)
+		n_chr        = config$genome$n_chr,        # number of chromosomes
+		chr_len_Mb   = config$genome$chr_len      # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
+	)
+
+# print genome info table (1 row per locus)
+pop %>% get_table("genome_meta")
 
 #------------------------------------------------------------------------------#
 # Add founder haplotypes
@@ -216,28 +283,29 @@ pop %>%
   mutate_table(
     rep           = NA_integer_,    # rep (replication) number as 'integer'
     status        = NA_character_,  # status [e.g. 'juvenile', 'off-test-gilt', 'gest', 'lact', etc]
-    conc_date     = as.Date(NA),
-    birth_date    = as.Date(NA),
-    on_test_date  = as.Date(NA),
-    off_test_date = as.Date(NA),
-    puberty_date  = as.Date(NA),
-    mate_date     = as.Date(NA),
-    farrow_date   = as.Date(NA),
-    wean_date     = as.Date(NA),
-    cull_date     = as.Date(NA),
-    death_date    = as.Date(NA)
+    conc_date     = as.Date(NA),    # conception date
+    birth_date    = as.Date(NA),    # birth date
+    on_test_date  = as.Date(NA),    # on-test date (~ 70 days old)
+    off_test_date = as.Date(NA),    # off-test date (~ 160 days old)
+    puberty_date  = as.Date(NA),    # puberty date (females only)
+    mate_date     = as.Date(NA),    # mating date
+    farrow_date   = as.Date(NA),    # farrowing date
+    wean_date     = as.Date(NA),    # weaning date
+    cull_date     = as.Date(NA),    # culling date
+    death_date    = as.Date(NA)     # death date
   )
 
-# add 'active' field, default to FALSE
+# add 'active' & 'alive' fields, set DEFAULT value (not missing)
+# here so when animals are born they are not "active" by default, only for repro active
 pop %>%
   get_table("ind_meta") %>%
   mutate_table(
     alive = TRUE,
     active = FALSE,          # this is the default value (no rows yet)
-    .set_default = TRUE     # if TRUE, sets default of given value
-    # here so when animals are born they are "active" by default, later culled
+    .set_default = TRUE      # if TRUE, sets default of given value
   )
 
+# define descriptions of user define fields
 pop %>%
   get_table("ind_meta") %>%
   define_schema_description("rep",          "Replicate number (1 to n)") %>%
@@ -255,64 +323,106 @@ pop %>%
   define_schema_description("alive",        "Is alive? (logical)") %>%
   define_schema_description("active",       "Is active (reproductively)? (logical)")
 
+pop %>% describe_table("ind_meta")
+
+# print schema
 schema(pop)
 
 #-------------------- ind_phenotype --------------------#
+
+# ind_phenotype stores individual phenotypes
 
 # add custom fields to ind_phenotype table
 pop %>%
   get_table("ind_phenotype") %>%
   mutate_table(
-    rep = NA_integer_,           # add rep to phenotypes
-    current_date = as.Date(NA),  # add current date (to subset ind later)
-    pheno_date = as.Date(NA),    # add phenotype date
-    .set_default = TRUE          # if TRUE, sets default of given value
-    # here we need to identify which generation they were phenotyped
+    rep          = NA_integer_,    # add rep to phenotypes
+    current_date = as.Date(NA),    # add current date (to subset ind later)
+    pheno_date   = as.Date(NA),    # add phenotype date
+    .set_default = TRUE            # if TRUE, sets default of given value
   )
 
+# set new schema descriptions
 pop %>%
   get_table("ind_phenotype") %>%
-  define_schema_description("rep", "Replicate number (1 to n)")
+  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  define_schema_description("current_date", "Current date") %>%
+  define_schema_description("pheno_date", "Phenotype date (could be in the future...)")
 
+# print field descriptions
+pop %>% describe_table("ind_phenotype")
+
+# print table (no rows)
 pop %>% get_table("ind_phenotype")
 
 #-------------------- ind_tbv --------------------#
+
+# ind_tbv stores the calculated TBV for each individual (only calculated once!)
 
 # add 'rep' to 'ind_tbv'
 pop %>%
   get_table("ind_tbv") %>%
   mutate_table(
-    rep = NA_integer_          # add rep
-    #.set_default = TRUE         # if TRUE, sets default of given value
+    rep = NA_integer_         # add replicate
   )
 
+# set new schema descriptions
+pop %>%
+  get_table("ind_tbv") %>%
+  define_schema_description("rep", "Replicate number (1 to n)")
+
+# print field descriptions
+pop %>% describe_table("ind_tbv")
+
+# print table (no rows)
 pop %>% get_table("ind_tbv")
 
 #-------------------- ind_ebv --------------------#
+
+# ind_ebv stores your individual EBVs for each trait, long format
 
 # add 'rep' to 'ind_ebv'
 pop %>%
   get_table("ind_ebv") %>%
   mutate_table(
-    rep = NA_integer_,          # add rep
-    eval_date = as.Date(NA),
-    .set_default = TRUE         # if TRUE, sets default of given value
+    rep          = NA_integer_,     # add replicate
+    eval_date    = as.Date(NA),     # add evaluation date
+    .set_default = TRUE             # if TRUE, sets default of given value
   )
 
+# set new schema descriptions
+pop %>%
+  get_table("ind_ebv") %>%
+  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  define_schema_description("eval_date", "Evaluation date")
+
+# print field descriptions
+pop %>% describe_table("ind_ebv")
+
+# print table (no rows)
 pop %>% get_table("ind_ebv")
 
 #-------------------- ind_index --------------------#
 
-# add 'rep' to 'ind_ebv'
+# add 'rep' to 'ind_index' table
 pop %>%
   get_table("ind_index") %>%
   mutate_table(
-    index_date = as.Date(NA),     # add gen of evaluation
-    rep = NA_integer_           # add rep
+    index_date = as.Date(NA),     # index calculation date
+    rep        = NA_integer_      # replicate
   )
 
+# set new schema descriptions
+pop %>%
+  get_table("ind_index") %>%
+  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  define_schema_description("index_date", "Index date of calculation")
+
+# print field descriptions
+pop %>% describe_table("ind_index")
+
+# print table (no rows)
 pop %>% get_table("ind_index")
-pop %>% get_table("index_meta")
 
 #------------------------------------------------------------------------------#
 # Add Founders
@@ -359,6 +469,10 @@ ggplot(aes(x=birth_date)) +
 
 # add founders
 pop <- pop %>%
+  get_table("founder_haplotypes") %>%
+  filter(
+    line_name == "A"
+  ) %>%
   add_founders(                                            # add founders
     n_males       = config$population$n_founder_male,      # sample male founders
     n_females     = config$population$n_founder_female,    # sample female founders
@@ -384,6 +498,7 @@ pop %>%
     slice_sample(n=9000) %>%        # sample 9000 SNP
   define_chip(chip_name = "9k")     # define SNP Chip (give name -> assign loci)
 
+# print genome_meta table
 pop %>% get_table("genome_meta")
 
 #------------------------------------------------------------------------------#
@@ -415,11 +530,13 @@ pop <- pop %>%
   )
 
 # print additive variance components
-pop %>% get_table("trait_effect_cov")
+pop %>% get_table("trait_var_comp")
 
 #------------------------------------------------------------#
 # Residual Covariance
 #------------------------------------------------------------#
+
+# go to CorrDB
 
 warning("Add residual covariance matrix")
 
@@ -443,7 +560,33 @@ pop <- pop %>%
   )
 
 # print residual variance components
-pop %>% get_table("phenotype_residual_cov")
+pop %>% get_table("phenotype_var_comp")
+
+#------------------------------------------------------------#
+# Pen Covariance
+#------------------------------------------------------------#
+
+warning("Add pen covariance matrix")
+
+# NOTE: Only 2 phenotypes have pen effects
+
+# residual (CO)VARIANCES
+vars.mat.pen <- matrix(c(100.00, 1.58,
+                           1.58, 0.10), 
+                      nrow = 2, byrow=TRUE, 
+                      dimnames = list(c("ADG", "BF"), 
+                                      c("ADG", "BF")))
+
+# add this residual covariance matrix to a table with function
+pop <- pop %>%
+  define_effect_cov_matrix(
+    effect_name = "pen",      # fixed term for residual (co)variance matrix
+    cov_matrix  = vars.mat.pen     # name for matrix with row/col names
+  )
+
+# print residual variance components
+pop %>% get_table("phenotype_var_comp")
+
 
 #------------------------------------------------------------------------------#
 # Index
@@ -1239,7 +1382,11 @@ pop %>%
     rep == repl,
     off_test_date  == cur_date
   ) %>%
-  add_phenotype("ADG", rep = repl, pheno_date = cur_date)
+  add_phenotype(
+    phenotype_names = c("ADG", "BF"), 
+    rep = repl, 
+    pheno_date = cur_date
+  )
 
 # ---------- BF ---------- #
 

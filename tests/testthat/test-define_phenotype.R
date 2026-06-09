@@ -2,7 +2,9 @@ make_pheno_base_pop <- function(pop_name = "defph") {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
-  pop <- add_founders(pop, n_males = 20, n_females = 20, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 20, n_females = 20, line_name = "A")
   pop
 }
 

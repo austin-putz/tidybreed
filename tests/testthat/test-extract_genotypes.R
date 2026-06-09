@@ -3,6 +3,7 @@ make_extract_pop <- function(pop_name = "extract_test", chip_name = "50k",
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 
   # Use chr == 1 loci as chip; with n_loci = 100, n_chr = 2 this is 50 loci
@@ -18,6 +19,7 @@ make_qtl_pop <- function(pop_name = "qtl_test", n_males = 5, n_females = 5) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A") |>
     define_trait("ADG", target_add_mean = 100, target_add_var = 400)
 
@@ -83,6 +85,7 @@ test_that("extract_genotypes() returns only chip loci columns with correct encod
   pop <- open_pop(pop_name = "test_eg_cols", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
 
   pop <- pop |>
@@ -119,6 +122,7 @@ test_that("extract_genotypes() errors if chip not defined", {
   pop <- open_pop(pop_name = "test_eg_nochip", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   expect_error(

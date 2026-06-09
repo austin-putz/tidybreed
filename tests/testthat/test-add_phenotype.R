@@ -2,7 +2,9 @@ make_pheno_pop <- function(pop_name = "ph", n_ind = 200, n_loci = 400) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 4, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
-  pop <- add_founders(pop, n_males = n_ind / 2, n_females = n_ind / 2,
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = n_ind / 2, n_females = n_ind / 2,
                       line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop
@@ -80,7 +82,9 @@ test_that("categorical trait with prevalence respects target rate approximately"
   pop <- open_pop(pop_name = "ph_categorical", db_name = ":memory:") |>
     define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 200, method = "fixed")
-  pop <- add_founders(pop, n_males = 500, n_females = 500, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 500, n_females = 500, line_name = "A")
   pop <- define_trait(pop, "mort", target_add_var = 1)
   pop <- apply_random_qtl(pop, "mort", n_qtl = 50)
   pop <- define_phenotype(pop, "mort",
@@ -109,7 +113,9 @@ test_that("categorical trait with explicit thresholds produces correct categorie
   pop <- open_pop(pop_name = "ph_cat_thresh", db_name = ":memory:") |>
     define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
-  pop <- add_founders(pop, n_males = 250, n_females = 250, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 250, n_females = 250, line_name = "A")
   pop <- define_trait(pop, "body_score", target_add_var = 1)
   pop <- apply_random_qtl(pop, "body_score", n_qtl = 40)
   pop <- define_phenotype(pop, "body_score",

@@ -4,10 +4,13 @@
 \alias{add_founders}
 \title{Add founder individuals to population}
 \usage{
-add_founders(pop, n_males, n_females, line_name, ...)
+add_founders(tbl, n_males, n_females, line_name, ...)
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object}
+\item{tbl}{A \code{tidybreed_table} from \code{get_table("founder_haplotypes")}
+(optionally piped through \code{dplyr::filter()}). The filtered rows supply
+the haplotype pool for sampling; use the filter to select a line-specific
+or custom subset.}
 
 \item{n_males}{Integer. Number of male founders to create}
 
@@ -65,34 +68,35 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 }
 \examples{
 \dontrun{
-# Initialize genome with founder haplotypes
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100,
-  n_haplotypes = 100
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
 
-# Add founders
-pop <- pop \%>\%
+# Simple — all haplotypes in the table
+pop <- pop |>
+  get_table("founder_haplotypes") |>
   add_founders(n_males = 10, n_females = 100, line_name = "A")
 
-# Option A — pass custom fields directly via ... (recommended)
+# Filtered by line
 pop <- pop |>
+  get_table("founder_haplotypes") |>
+  dplyr::filter(line_name == "Yorkshire") |>
+  add_founders(n_males = 10, n_females = 50, line_name = "Yorkshire")
+
+# With custom ind_meta columns via ...
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  dplyr::filter(line_name == "A") |>
   add_founders(n_males = 10, n_females = 100, line_name = "A",
-               gen = 0L, farm = "FarmA", date_birth = Sys.Date())
+               gen = 0L, farm = "FarmA")
 
-# Option B — add or update custom columns in a separate step
+# Add a second line
 pop <- pop |>
-  get_table("ind_meta") |>
-  mutate_table(gen = 0L, farm = "FarmA", date_birth = Sys.Date())
-
-# Add second line to same database
-pop <- pop \%>\%
+  get_table("founder_haplotypes") |>
+  dplyr::filter(line_name == "B") |>
   add_founders(n_males = 5, n_females = 50, line_name = "B")
 
 # View founders
-get_table(pop, "ind_meta") \%>\% collect()
+get_table(pop, "ind_meta") |> dplyr::collect()
 }
 }

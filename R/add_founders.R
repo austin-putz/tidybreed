@@ -8,7 +8,10 @@
 #' The `ind_meta` table is created (if it doesn't exist) or appended to with
 #' the new founders. Founder individuals have `NULL` for both parent IDs.
 #'
-#' @param pop A `tidybreed_pop` object
+#' @param tbl A \code{tidybreed_table} from \code{get_table("founder_haplotypes")}
+#'   (optionally piped through \code{dplyr::filter()}). The filtered rows supply
+#'   the haplotype pool for sampling; use the filter to select a line-specific
+#'   or custom subset.
 #' @param n_males Integer. Number of male founders to create
 #' @param n_females Integer. Number of female founders to create
 #' @param line_name Character. Line identifier used for individual IDs.
@@ -47,44 +50,58 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Initialize genome with founder haplotypes
-#' pop <- initialize_genome(
-#'   pop_name = "test",
-#'   n_loci = 1000,
-#'   n_chr = 10,
-#'   chr_len_Mb = 100,
-#'   n_haplotypes = 100
-#' )
+#' pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+#'   define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
 #'
-#' # Add founders
-#' pop <- pop %>%
+#' # Simple — all haplotypes in the table
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
 #'   add_founders(n_males = 10, n_females = 100, line_name = "A")
 #'
-#' # Option A — pass custom fields directly via ... (recommended)
+#' # Filtered by line
 #' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   dplyr::filter(line_name == "Yorkshire") |>
+#'   add_founders(n_males = 10, n_females = 50, line_name = "Yorkshire")
+#'
+#' # With custom ind_meta columns via ...
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   dplyr::filter(line_name == "A") |>
 #'   add_founders(n_males = 10, n_females = 100, line_name = "A",
-#'                gen = 0L, farm = "FarmA", date_birth = Sys.Date())
+#'                gen = 0L, farm = "FarmA")
 #'
-#' # Option B — add or update custom columns in a separate step
+#' # Add a second line
 #' pop <- pop |>
-#'   get_table("ind_meta") |>
-#'   mutate_table(gen = 0L, farm = "FarmA", date_birth = Sys.Date())
-#'
-#' # Add second line to same database
-#' pop <- pop %>%
+#'   get_table("founder_haplotypes") |>
+#'   dplyr::filter(line_name == "B") |>
 #'   add_founders(n_males = 5, n_females = 50, line_name = "B")
 #'
 #' # View founders
-#' get_table(pop, "ind_meta") %>% collect()
+#' get_table(pop, "ind_meta") |> dplyr::collect()
 #' }
-add_founders <- function(pop, n_males, n_females, line_name, ...) {
+add_founders <- function(tbl, n_males, n_females, line_name, ...) {
 
   # ============================================================================
   # 1. Validate inputs
   # ============================================================================
 
-  # Validate pop object
-  stopifnot(inherits(pop, "tidybreed_pop"))
+  if (!inherits(tbl, "tidybreed_table")) {
+    stop(
+      "'tbl' must be a tidybreed_table from get_table('founder_haplotypes') |> filter(...). ",
+      "Use: pop |> get_table('founder_haplotypes') |> add_founders()",
+      call. = FALSE
+    )
+  }
+  if (tbl$table_name != "founder_haplotypes") {
+    stop(
+      "'tbl' must be piped from get_table('founder_haplotypes'), not '",
+      tbl$table_name, "'.",
+      call. = FALSE
+    )
+  }
+  pop <- tbl$pop
   validate_tidybreed_pop(pop)
 
   # Validate n_males and n_females
@@ -110,36 +127,13 @@ add_founders <- function(pop, n_males, n_females, line_name, ...) {
     )
   }
 
-  # Check founder_haplotypes table exists
-  if (!"founder_haplotypes" %in% pop$tables) {
-    stop(
-      "founder_haplotypes table does not exist. ",
-      "Call define_founder_haplotypes() after initialize_genome() to create founder haplotypes.",
-      call. = FALSE
-    )
-  }
-
   # ============================================================================
   # 2. Read founder haplotypes
   # ============================================================================
 
-  # Filter to line-specific pool; fall back to shared pool (line_name IS NULL)
-  # for backward compatibility with tables created before line_name was added.
-  fh_cols <- DBI::dbListFields(pop$db_conn, "founder_haplotypes")
-  if ("line_name" %in% fh_cols) {
-    founder_haps_tbl <- DBI::dbGetQuery(
-      pop$db_conn,
-      "SELECT * FROM founder_haplotypes WHERE line_name = ?",
-      list(line_name)
-    )
-    if (nrow(founder_haps_tbl) == 0L) {
-      founder_haps_tbl <- DBI::dbGetQuery(
-        pop$db_conn,
-        "SELECT * FROM founder_haplotypes WHERE line_name IS NULL"
-      )
-    }
-  } else {
-    founder_haps_tbl <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  founder_haps_tbl <- dplyr::collect(tbl)
+  if (nrow(founder_haps_tbl) == 0L) {
+    stop("No haplotypes selected — your filter returned zero rows.", call. = FALSE)
   }
 
   # Get number of available haplotypes

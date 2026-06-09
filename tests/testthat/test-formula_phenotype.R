@@ -12,7 +12,9 @@ make_formula_pop <- function(pop_name = "fp", n_males = 20, n_females = 20,
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
-  add_founders(pop, n_males = n_males, n_females = n_females, line_name = "A")
+  pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = n_males, n_females = n_females, line_name = "A")
 }
 
 add_offspring_gen <- function(pop, n_off = 40) {
@@ -62,7 +64,9 @@ setup_sge_traits <- function(pop) {
   # Assign pens
   ids     <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
   pen_ids <- rep(paste0("pen", seq_len(ceiling(length(ids) / 10))), each = 10)[seq_along(ids)]
-  pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pen_ids)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(
+    pen_id = tibble::tibble(id_ind = ids, pen_id = pen_ids)
+  )
   pop
 }
 
@@ -358,7 +362,8 @@ test_that("formula_tbv multiple group terms in one formula work", {
   pen_ids  <- rep(paste0("pen",  seq_len(4)), each = 10)[seq_along(ids)]
   barn_ids <- rep(paste0("barn", seq_len(2)), each = 20)[seq_along(ids)]
   pop <- get_table(pop, "ind_meta") |>
-    mutate_table(pen_id = pen_ids, barn_id = barn_ids)
+    mutate_table(pen_id  = tibble::tibble(id_ind = ids, pen_id  = pen_ids),
+                 barn_id = tibble::tibble(id_ind = ids, barn_id = barn_ids))
 
   pop <- define_phenotype(pop, "ADG_multi",
     type        = "continuous",

@@ -2,7 +2,9 @@ make_tiny_pop <- function(pop_name = "t") {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
-  pop <- add_founders(pop, n_males = 25, n_females = 25, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 25, n_females = 25, line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop
 }

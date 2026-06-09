@@ -160,7 +160,9 @@ test_that("define_chip() errors when column already exists", {
 
 test_that("define_chip() errors when tbl has no locus_id column", {
   pop <- make_genome_pop("chip_wrong_tbl", n_loci = 100, n_chr = 5)
-  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 5, n_females = 5, line_name = "A")
 
   expect_error(
     pop |>
@@ -189,7 +191,9 @@ test_that("define_chip() integration: chip column used downstream by add_genotyp
   pop <- open_pop(pop_name = "chip_integration", db_name = ":memory:") |>
     define_genome(n_loci = 200, n_chr = 4, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
-  pop <- add_founders(pop, n_males = 10, n_females = 10, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 10, n_females = 10, line_name = "A")
 
   set.seed(99)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>

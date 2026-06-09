@@ -545,7 +545,7 @@ compute_base_allele_freq <- function(pop, base, base_ids = NULL) {
     if (nrow(df) == 0) {
       stop("founder_haplotypes table is empty.", call. = FALSE)
     }
-    locus_cols  <- setdiff(names(df), "hap_id")
+    locus_cols  <- grep("^locus_", names(df), value = TRUE)
     locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
     hap_mat     <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
     return(colMeans(hap_mat))

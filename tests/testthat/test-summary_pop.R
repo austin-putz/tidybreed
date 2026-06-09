@@ -2,7 +2,9 @@ make_summary_pop <- function() {
   pop <- open_pop(pop_name = "SumTest", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 30, method = "fixed")
-  add_founders(pop, n_males = 10, n_females = 10, line_name = "A", gen = 0L)
+  pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 10, n_females = 10, line_name = "A", gen = 0L)
 }
 
 
@@ -114,8 +116,12 @@ test_that("max_values = 1L forces 5-number summary for 2-unique INTEGER column",
   pop <- open_pop(pop_name = "SumTest2", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
-  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 0L)
-  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 1L)
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 5, n_females = 5, line_name = "A", gen = 0L)
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
   # With max_values = 2, gen (2 unique) gets a frequency table
   summ_freq <- summary(pop, tables = "ind_meta", max_values = 2L)

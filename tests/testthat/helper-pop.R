@@ -22,5 +22,6 @@ make_test_pop <- function(pop_name     = "t",
   open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = chr_len_Mb) |>
     define_founder_haplotypes(n_haplotypes = n_haplotypes) |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 }

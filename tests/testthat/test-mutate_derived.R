@@ -6,7 +6,9 @@ make_ap_pop <- function() {
   pop <- open_pop(pop_name = "cd_test", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 50)
-  pop <- add_founders(pop, n_males = 5, n_females = 10, line_name = "L")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 5, n_females = 10, line_name = "L")
   pop <- get_table(pop, "ind_meta") |>
     mutate_table(birth_date = as.Date("2024-01-01"))
   pop <- define_trait(pop, "AP", target_add_var = 1, target_add_mean = 180)

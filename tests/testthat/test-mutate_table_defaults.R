@@ -40,6 +40,7 @@ test_that("future INSERTs use DEFAULT value", {
 
   # Add founders WITHOUT specifying gen or active
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Verify defaults applied
@@ -60,6 +61,7 @@ test_that("explicit values override DEFAULT", {
 
   # Explicit override
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
   result <- pop |> get_table("ind_meta") |> collect()
@@ -73,6 +75,7 @@ test_that(".set_default works on populated table", {
 
   # Add founders first
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Add column with DEFAULT to populated table
@@ -86,6 +89,7 @@ test_that(".set_default works on populated table", {
 
   # New rows get DEFAULT
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 2, n_females = 2, line_name = "B")
 
   result2 <- pop |>
@@ -106,7 +110,7 @@ test_that("BOOLEAN type works with DEFAULT", {
     get_table("ind_meta") |>
     mutate_table(active = TRUE, .set_default = TRUE)
 
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(result$active == TRUE))
@@ -121,7 +125,7 @@ test_that("INTEGER type works with DEFAULT", {
     get_table("ind_meta") |>
     mutate_table(gen = 42L, .set_default = TRUE)
 
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(result$gen == 42L))
@@ -136,7 +140,7 @@ test_that("DOUBLE type works with DEFAULT", {
     get_table("ind_meta") |>
     mutate_table(weight = 3.14, .set_default = TRUE)
 
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(abs(result$weight - 3.14) < 1e-10))
@@ -151,7 +155,7 @@ test_that("VARCHAR type works with DEFAULT", {
     get_table("ind_meta") |>
     mutate_table(farm = "TestFarm", .set_default = TRUE)
 
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(result$farm == "TestFarm"))
@@ -167,7 +171,7 @@ test_that("DATE type works with DEFAULT", {
     get_table("ind_meta") |>
     mutate_table(birth_date = test_date, .set_default = TRUE)
 
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(result$birth_date == test_date))
@@ -202,7 +206,7 @@ test_that(".set_default with plain vector errors", {
   pop <- create_test_pop()
 
   # Add some rows
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Plain vectors are not allowed, so this errors on the vector first
   expect_error(
@@ -220,7 +224,7 @@ test_that(".set_default with tibble errors", {
   pop <- create_test_pop()
 
   # Add some rows
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Tibbles with .set_default should error
   ids <- dplyr::collect(get_table(pop, "ind_meta")) |> dplyr::pull(id_ind)
@@ -282,7 +286,7 @@ test_that("multiple columns with .set_default", {
   expect_true(all(!is.na(schema_info$column_default)))
 
   # Verify INSERTs use defaults
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
   result <- pop |> get_table("ind_meta") |> collect()
   expect_true(all(result$gen == 0L))
   expect_true(all(result$active == TRUE))
@@ -300,7 +304,7 @@ test_that(".set_default on existing column is ignored", {
     mutate_table(gen = 0L)
 
   # Add founders
-  pop <- pop |> add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("founder_haplotypes") |> add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Try to add DEFAULT to existing column (should be ignored, UPDATE still works)
   pop <- pop |>
@@ -329,6 +333,7 @@ test_that("partial override of defaults", {
 
   # Override only gen
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
   result <- pop |> get_table("ind_meta") |> collect()
@@ -349,6 +354,7 @@ test_that("DEFAULT works with add_phenotype()", {
     define_trait_simple("ADG", n_qtl = 10, target_add_var = 100, residual_var = 50)
 
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Set default for phenotype location
@@ -378,10 +384,12 @@ test_that("DEFAULT persists across multiple add_founders() calls", {
 
   # First batch
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
   # Second batch (different line, defaults still apply)
   pop <- pop |>
+    get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "B")
 
   result <- pop |> get_table("ind_meta") |> collect()

@@ -1,3 +1,51 @@
+# tidybreed 0.42.0 (2026-06-09)
+
+## Breaking changes
+
+* `add_founders()` now accepts a `tidybreed_table` (from
+  `get_table("founder_haplotypes") |> filter(...)`) as its first argument
+  instead of a `tidybreed_pop`. Migrate by inserting
+  `get_table("founder_haplotypes") |>` (and optionally `filter(...) |>`)
+  before each `add_founders()` call. The implicit `WHERE line_name = ?` /
+  fallback-to-NULL filter is removed; callers now own subset selection
+  explicitly via `filter()`.
+
+  ```r
+  # Before
+  pop <- add_founders(pop, n_males = 10, n_females = 50, line_name = "A")
+
+  # After
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 10, n_females = 50, line_name = "A")
+
+  # With explicit line filter
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    dplyr::filter(line_name == "Yorkshire") |>
+    add_founders(n_males = 10, n_females = 50, line_name = "Yorkshire")
+  ```
+
+## Bug fixes
+
+* Fixed `compute_base_allele_freq()` in `define_additive_effects()` to correctly
+  select only locus columns from `founder_haplotypes` (previously included the
+  `line_name` column added in v0.39.0, causing `colMeans()` to fail with a
+  non-numeric error when `base = "founder_haplotypes"`).
+
+# tidybreed 0.41.0 (2026-06-09)
+
+## New features
+
+* Styled startup message printed on `library(tidybreed)`. Shows package
+  version, license/disclaimer, citation hint, help pointers, DuckDB backend
+  version, a reminder that all data lives on disk in a `.duckdb` file, and the
+  active default options. Suppress with `options(tidybreed.quiet = TRUE)` in
+  `.Rprofile` or before loading the package.
+
+* New option `tidybreed.quiet` (default `FALSE`) — set to `TRUE` to suppress
+  the startup message entirely.
+
 # tidybreed 0.40.0 (2026-06-08)
 
 ## Breaking changes

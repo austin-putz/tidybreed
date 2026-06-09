@@ -40,7 +40,9 @@ test_that("restore_pop() returns pop with correct individual count in ind_meta",
   pop <- open_pop(pop_name = "count_test", db_name = tmp) |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20)
-  pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 10, n_females = 20, line_name = "A")
   close_pop(pop)
 
   pop2 <- restore_pop(tmp)
@@ -87,7 +89,9 @@ test_that("add_founders() works after restore_pop() on empty DB", {
   pop2 <- restore_pop(tmp)
 
   expect_no_error({
-    pop2 <- add_founders(pop2, n_males = 5, n_females = 5, line_name = "A")
+    pop2 <- pop2 |>
+      get_table("founder_haplotypes") |>
+      add_founders(n_males = 5, n_females = 5, line_name = "A")
   })
 
   ind_meta <- get_table(pop2, "ind_meta") |> dplyr::collect()
@@ -103,7 +107,9 @@ test_that("add_offspring() works after restore; IDs continue without collision",
   pop <- open_pop(pop_name = "offspring_test", db_name = tmp) |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20)
-  pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A")
   close_pop(pop)
 
   pop2 <- restore_pop(tmp)

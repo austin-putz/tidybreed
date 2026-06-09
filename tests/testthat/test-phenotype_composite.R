@@ -13,7 +13,9 @@ make_composite_pop <- function(pop_name = "comp",
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
-  pop <- add_founders(pop, n_males = n_males, n_females = n_females,
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = n_males, n_females = n_females,
                       line_name = "A")
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
   pop
@@ -323,7 +325,9 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
     define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # Half males, half females
-  pop <- add_founders(pop, n_males = n_pigs %/% 2L,
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = n_pigs %/% 2L,
                       n_females = n_pigs - n_pigs %/% 2L,
                       line_name = "A")
 
@@ -331,7 +335,9 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
   ids <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
   pen_ids <- rep(paste0("pen", seq_len(n_pens)), each = pen_size)
   if (add_na_pen) pen_ids[seq_len(3)] <- NA_character_
-  pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pen_ids)
+  pop <- get_table(pop, "ind_meta") |> mutate_table(
+    pen_id = tibble::tibble(id_ind = ids, pen_id = pen_ids)
+  )
 
   # Define direct + social traits
   G <- matrix(c(0.4, -0.1, -0.1, 0.15), 2, 2,
@@ -503,12 +509,17 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
     define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 80, method = "fixed")
   n_birds <- 40L
-  pop <- add_founders(pop, n_males = n_birds %/% 2L,
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = n_birds %/% 2L,
                       n_females = n_birds - n_birds %/% 2L,
                       line_name = "B")
 
   cage_ids <- rep(paste0("cage", 1:4), each = 10)
-  pop <- get_table(pop, "ind_meta") |> mutate_table(cage_id = cage_ids)
+  ind_ids  <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
+  pop <- get_table(pop, "ind_meta") |> mutate_table(
+    cage_id = tibble::tibble(id_ind = ind_ids, cage_id = cage_ids)
+  )
 
   pop <- define_trait(pop, "mort_direct", target_add_var = 0.05)
   pop <- define_trait(pop, "mort_social", target_add_var = 0.01)
@@ -544,9 +555,14 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
     define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # 2 small pens (5 each) + 2 large pens (10 each) = 30 animals
-  pop <- add_founders(pop, n_males = 15L, n_females = 15L, line_name = "A")
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders( n_males = 15L, n_females = 15L, line_name = "A")
   pen_ids <- c(rep("p1", 5), rep("p2", 5), rep("p3", 10), rep("p4", 10))
-  pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pen_ids)
+  ind_ids <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
+  pop <- get_table(pop, "ind_meta") |> mutate_table(
+    pen_id = tibble::tibble(id_ind = ind_ids, pen_id = pen_ids)
+  )
 
   pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
   pop <- define_trait(pop, "ADG_social", target_add_var = 0.15)
