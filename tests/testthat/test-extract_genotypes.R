@@ -1,9 +1,7 @@
 make_extract_pop <- function(pop_name = "extract_test", chip_name = "50k",
                              n_males = 5, n_females = 5) {
-  pop <- initialize_genome(
-    pop_name = pop_name, n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 
@@ -17,10 +15,8 @@ make_extract_pop <- function(pop_name = "extract_test", chip_name = "50k",
 }
 
 make_qtl_pop <- function(pop_name = "qtl_test", n_males = 5, n_females = 5) {
-  pop <- initialize_genome(
-    pop_name = pop_name, n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A") |>
     define_trait("ADG", target_add_mean = 100, target_add_var = 400)
@@ -84,10 +80,8 @@ test_that("extract_genotypes() intersects filter with has_<chip> == TRUE", {
 })
 
 test_that("extract_genotypes() returns only chip loci columns with correct encoding", {
-  pop <- initialize_genome(
-    pop_name = "test_eg_cols", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test_eg_cols", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
 
@@ -122,10 +116,8 @@ test_that("extract_genotypes() errors if add_genotypes() not called", {
 })
 
 test_that("extract_genotypes() errors if chip not defined", {
-  pop <- initialize_genome(
-    pop_name = "test_eg_nochip", n_loci = 100, n_chr = 2,
-    chr_len_Mb = 100, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test_eg_nochip", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20) |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 

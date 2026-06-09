@@ -1,11 +1,6 @@
 make_summary_pop <- function() {
-  pop <- initialize_genome(
-    pop_name   = "SumTest",
-    n_loci     = 100,
-    n_chr      = 2,
-    chr_len_Mb = 50,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "SumTest", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 30, method = "fixed")
   add_founders(pop, n_males = 10, n_females = 10, line_name = "A", gen = 0L)
 }
@@ -104,13 +99,8 @@ test_that("unknown table name in tables raises a warning", {
 
 
 test_that("empty table shows 0 rows with no per-column breakdown", {
-  pop  <- initialize_genome(
-    pop_name = "EmptyTest",
-    n_loci = 50,
-    n_chr = 1,
-    chr_len_Mb = 50,
-    db_path = ":memory:"
-  )
+  pop  <- open_pop(pop_name = "EmptyTest", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 1, chr_len_Mb = 50)
   summ <- summary(pop, tables = "ind_meta")
   meta <- summ$tables[["ind_meta"]]
   expect_equal(meta$n_rows, 0L)
@@ -121,13 +111,8 @@ test_that("empty table shows 0 rows with no per-column breakdown", {
 
 test_that("max_values = 1L forces 5-number summary for 2-unique INTEGER column", {
   # Build a pop with gen = 0 and gen = 1 so gen has 2 unique INTEGER values
-  pop <- initialize_genome(
-    pop_name   = "SumTest2",
-    n_loci     = 50,
-    n_chr      = 1,
-    chr_len_Mb = 50,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "SumTest2", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 0L)
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A", gen = 1L)

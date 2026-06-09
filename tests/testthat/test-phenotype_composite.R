@@ -10,13 +10,8 @@
 make_composite_pop <- function(pop_name = "comp",
                                n_males = 20, n_females = 20,
                                n_loci = 300) {
-  pop <- initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = n_loci,
-    n_chr      = 3,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   pop <- add_founders(pop, n_males = n_males, n_females = n_females,
                       line_name = "A")
@@ -324,13 +319,8 @@ test_that("define_trait_simple() creates both trait_meta and phenotype_meta rows
 make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
                          add_na_pen = FALSE) {
   n_pigs <- n_pens * pen_size
-  pop <- initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = 300,
-    n_chr      = 3,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # Half males, half females
   pop <- add_founders(pop, n_males = n_pigs %/% 2L,
@@ -509,13 +499,8 @@ test_that("group_column omitted for group contributor errors in define_phenotype
 
 test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in {0,1}", {
   set.seed(1301)
-  pop <- initialize_genome(
-    pop_name   = "poultry",
-    n_loci     = 200,
-    n_chr      = 2,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "poultry", db_name = ":memory:") |>
+    define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 80, method = "fixed")
   n_birds <- 40L
   pop <- add_founders(pop, n_males = n_birds %/% 2L,
@@ -555,13 +540,8 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
 
 test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpected NAs", {
   set.seed(1401)
-  pop <- initialize_genome(
-    pop_name   = "varpens",
-    n_loci     = 300,
-    n_chr      = 3,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "varpens", db_name = ":memory:") |>
+    define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   # 2 small pens (5 each) + 2 large pens (10 each) = 30 animals
   pop <- add_founders(pop, n_males = 15L, n_females = 15L, line_name = "A")

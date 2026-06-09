@@ -1,12 +1,7 @@
 # Helper: minimal pop (no founders needed for table tests)
 make_dt_pop <- function() {
-  initialize_genome(
-    pop_name   = "dt_test",
-    n_loci     = 50,
-    n_chr      = 1,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  )
+  open_pop(pop_name = "dt_test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 1, chr_len_Mb = 100)
 }
 
 

@@ -9,13 +9,8 @@
 
 make_formula_pop <- function(pop_name = "fp", n_males = 20, n_females = 20,
                               n_loci = 300) {
-  pop <- initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = n_loci,
-    n_chr      = 3,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 3, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
   add_founders(pop, n_males = n_males, n_females = n_females, line_name = "A")
 }

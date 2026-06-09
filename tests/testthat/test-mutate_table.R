@@ -1,12 +1,7 @@
 # Helper: create a population with an ind_meta table
 create_pop_for_mutate <- function(n_males = 5, n_females = 5) {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci   = 20,
-    n_chr    = 2,
-    chr_len_Mb = 50,
-    db_path  = ":memory:"
-  )
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 2, chr_len_Mb = 50)
   n_ind  <- n_males + n_females
   ind_df <- tibble::tibble(
     id_ind      = paste0("A_", seq_len(n_ind)),
@@ -99,8 +94,8 @@ test_that("mutate_table() adds a scalar INTEGER column to ind_meta", {
 
 
 test_that("mutate_table() adds a scalar column to genome_meta", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:")
+  pop <- open_pop(pop_name = "t", db_name = ":memory:") |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10)
   pop <- get_table(pop, "genome_meta") |> mutate_table(maf = 0.3)
   result <- dplyr::collect(get_table(pop, "genome_meta"))
   expect_true("maf" %in% colnames(result))
@@ -142,9 +137,9 @@ test_that("mutate_table() returns pop invisibly", {
 
 
 test_that("mutate_table() creates column schema on empty table without warning", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 5, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:")
-  # ind_meta is empty immediately after initialize_genome()
+  pop <- open_pop(pop_name = "t", db_name = ":memory:") |>
+    define_genome(n_loci = 5, n_chr = 1, chr_len_Mb = 10)
+  # ind_meta is empty immediately after define_genome()
   expect_message(
     get_table(pop, "ind_meta") |> mutate_table(gen = NA_integer_),
     "empty"
@@ -288,8 +283,8 @@ test_that("reserved columns are blocked in ind_meta", {
 
 
 test_that("reserved columns are blocked in genome_meta", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 5, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:")
+  pop <- open_pop(pop_name = "t", db_name = ":memory:") |>
+    define_genome(n_loci = 5, n_chr = 1, chr_len_Mb = 10)
   for (col in c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb")) {
     args <- setNames(list(1L), col)
     expect_error(

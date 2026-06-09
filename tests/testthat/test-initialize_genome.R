@@ -1,247 +1,64 @@
-test_that("initialize_genome creates population object", {
-
-  # Create temporary database
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  # Initialize genome
-  pop <- initialize_genome(
-    pop_name = "test_pop",
-    n_loci = 100,
-    n_chr = 2,
-    chr_len_Mb = 50,
-    db_path = temp_db
+test_that("initialize_genome() emits deprecation warning", {
+  expect_warning(
+    pop <- initialize_genome("t", 100, 2, 100, db_path = ":memory:"),
+    regexp = "deprecated"
   )
+  close_pop(pop)
+})
 
-  # Check object class
+
+test_that("initialize_genome() deprecated wrapper produces correct tables", {
+  pop <- suppressWarnings(
+    initialize_genome("t", 100, 2, 100, db_path = ":memory:")
+  )
+  on.exit(close_pop(pop))
+
   expect_s3_class(pop, "tidybreed_pop")
+  expect_true("genome_meta" %in% pop$tables)
+  expect_true("ind_meta"    %in% pop$tables)
 
-  # Check components
-  expect_equal(pop$pop_name, "test_pop")
-  expect_equal(pop$db_path, temp_db)
-  expect_true(file.exists(temp_db))
-
-  # Check tables exist
-  expect_true(all(c("genome_meta", "genome_haplotype", "genome_genotype") %in% pop$tables))
-
-  # Check genome_meta has correct number of rows
-  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
-  expect_equal(nrow(genome_meta), 100)
-  expect_equal(ncol(genome_meta), 5)  # locus_id, locus_name, chr, chr_name, pos_Mb
-
-  # Check chromosome assignment
-  expect_equal(unique(genome_meta$chr), c(1, 2))
-
-  # Clean up
-  close_pop(pop)
-  unlink(temp_db)
+  gm <- get_table(pop, "genome_meta") |> dplyr::collect()
+  expect_equal(nrow(gm), 100)
 })
 
 
-test_that("initialize_genome handles different chromosome lengths", {
+test_that("initialize_genome() deprecated wrapper produces same tables as open_pop() |> define_genome()", {
+  pop_new <- open_pop(pop_name = "t", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100)
+  on.exit(close_pop(pop_new))
 
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  pop <- initialize_genome(
-    pop_name = "test_pop",
-    n_loci = 100,
-    n_chr = 3,
-    chr_len_Mb = c(100, 50, 75),
-    db_path = temp_db
+  pop_old <- suppressWarnings(
+    initialize_genome("t", 100, 2, 100, db_path = ":memory:")
   )
+  on.exit(close_pop(pop_old), add = TRUE)
 
-  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
+  # Both should expose the same set of tables
+  expect_setequal(pop_new$tables, pop_old$tables)
 
-  # Check max position per chromosome
-  chr_max <- genome_meta %>%
-    dplyr::group_by(chr) %>%
-    dplyr::summarise(max_pos = max(pos_Mb)) %>%
-    dplyr::arrange(chr)
-
-  expect_true(all(chr_max$max_pos <= c(100, 50, 75)))
-  expect_true(all(chr_max$max_pos > c(90, 45, 70)))  # Close to max
-
-  close_pop(pop)
-  unlink(temp_db)
+  # Both should have 100 loci in genome_meta
+  gm_new <- get_table(pop_new, "genome_meta") |> dplyr::collect()
+  gm_old <- get_table(pop_old, "genome_meta") |> dplyr::collect()
+  expect_equal(nrow(gm_new), nrow(gm_old))
+  expect_equal(ncol(gm_new), ncol(gm_old))
 })
 
 
-test_that("initialize_genome prevents overwriting without permission", {
+test_that("initialize_genome() deprecated wrapper works with overwrite = TRUE", {
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(unlink(tmp))
 
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  # Create first population
-  pop1 <- initialize_genome(
-    pop_name = "test1",
-    n_loci = 10,
-    n_chr = 1,
-    chr_len_Mb = 100,
-    db_path = temp_db
+  pop1 <- suppressWarnings(
+    initialize_genome("t", 50, 1, 100, db_path = tmp)
   )
-
   close_pop(pop1)
 
-  # Try to create second without overwrite
-  expect_error(
-    initialize_genome(
-      pop_name = "test2",
-      n_loci = 20,
-      n_chr = 1,
-      chr_len_Mb = 100,
-      db_path = temp_db,
-      overwrite = FALSE
-    ),
-    "already exists"
+  # overwrite = TRUE -> clean = TRUE in open_pop
+  expect_warning(
+    pop2 <- initialize_genome("t", 80, 1, 100, db_path = tmp, overwrite = TRUE),
+    regexp = "deprecated"
   )
+  on.exit(close_pop(pop2), add = TRUE)
 
-  # Should work with overwrite = TRUE
-  expect_message(
-    pop2 <- initialize_genome(
-      pop_name = "test2",
-      n_loci = 20,
-      n_chr = 1,
-      chr_len_Mb = 100,
-      db_path = temp_db,
-      overwrite = TRUE
-    ),
-    "Overwriting"
-  )
-
-  # Check new population has correct loci
-  genome_meta <- get_table(pop2, "genome_meta") %>% dplyr::collect()
-  expect_equal(nrow(genome_meta), 20)
-
-  close_pop(pop2)
-  unlink(temp_db)
-})
-
-
-test_that("initialize_genome works with custom locus names", {
-
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  custom_names <- paste0("rs", 1:50)
-
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 1,
-    chr_len_Mb = 100,
-    db_path = temp_db,
-    locus_names = custom_names
-  )
-
-  genome_meta <- get_table(pop, "genome_meta") %>% dplyr::collect()
-
-  expect_equal(genome_meta$locus_name, custom_names)
-
-  close_pop(pop)
-  unlink(temp_db)
-})
-
-
-test_that("get_table returns lazy tibble", {
-
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 100,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = temp_db
-  )
-
-  genome <- get_table(pop, "genome_meta")
-
-  expect_s3_class(genome, "tidybreed_table")
-
-  # Test that dplyr verbs work
-  chr1_loci <- genome %>%
-    dplyr::filter(chr == 1) %>%
-    dplyr::collect()
-
-  expect_true(all(chr1_loci$chr == 1))
-  expect_true(nrow(chr1_loci) > 0)
-
-  close_pop(pop)
-  unlink(temp_db)
-})
-
-
-test_that("print method works", {
-
-  temp_db <- tempfile(fileext = ".duckdb")
-
-  pop <- initialize_genome(
-    pop_name = "TestPop",
-    n_loci = 100,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = temp_db
-  )
-
-  expect_output(print(pop), "tidybreed population")
-  expect_output(print(pop), "TestPop")
-  expect_output(print(pop), "Loci: 100")
-
-  close_pop(pop)
-  unlink(temp_db)
-})
-
-
-test_that("initialize_genome() eagerly creates all core tables", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:")
-
-  core_tables <- c("ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-                   "trait_meta", "trait_effects", "trait_effect_cov",
-                   "trait_random_effects")
-  for (tbl in core_tables) {
-    expect_true(tbl %in% pop$tables,
-                info = paste("Table", tbl, "should exist after initialize_genome()"))
-    expect_true(DBI::dbExistsTable(pop$db_conn, tbl),
-                info = paste("Table", tbl, "should be in DuckDB"))
-  }
-
-  close_pop(pop)
-})
-
-
-test_that("get_table() works on all core tables immediately after initialize_genome()", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:")
-
-  for (tbl in c("ind_meta", "ind_ebv", "ind_phenotype", "ind_tbv", "trait_meta")) {
-    result <- get_table(pop, tbl) |> dplyr::collect()
-    expect_true(is.data.frame(result))
-    expect_equal(nrow(result), 0L)
-  }
-
-  close_pop(pop)
-})
-
-
-test_that("mutate_table() pre-declares typed columns on empty ind_meta", {
-  pop <- initialize_genome(pop_name = "t", n_loci = 10, n_chr = 1,
-                           chr_len_Mb = 10, db_path = ":memory:") |>
-    define_founder_haplotypes(n_haplotypes = 10)
-
-  pop <- pop |>
-    get_table("ind_meta") |>
-    mutate_table(gen = NA_integer_, farm = NA_character_)
-
-  cols <- DBI::dbListFields(pop$db_conn, "ind_meta")
-  expect_true("gen" %in% cols)
-  expect_true("farm" %in% cols)
-
-  pop <- pop |>
-    add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 0L, farm = "Iowa")
-
-  result <- get_table(pop, "ind_meta") |> dplyr::collect()
-  expect_equal(nrow(result), 10L)
-  expect_true(all(result$gen == 0L))
-  expect_true(all(result$farm == "Iowa"))
-  expect_type(result$gen, "integer")
-
-  close_pop(pop)
+  gm <- get_table(pop2, "genome_meta") |> dplyr::collect()
+  expect_equal(nrow(gm), 80)
 })

@@ -1,11 +1,6 @@
 make_genome_pop <- function(pop_name = "chip_test", n_loci = 1000, n_chr = 10) {
-  initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = n_loci,
-    n_chr      = n_chr,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 }
 
@@ -191,13 +186,8 @@ test_that("define_chip() errors when first arg is not tidybreed_table", {
 
 
 test_that("define_chip() integration: chip column used downstream by add_genotypes", {
-  pop <- initialize_genome(
-    pop_name   = "chip_integration",
-    n_loci     = 200,
-    n_chr      = 4,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "chip_integration", db_name = ":memory:") |>
+    define_genome(n_loci = 200, n_chr = 4, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
   pop <- add_founders(pop, n_males = 10, n_females = 10, line_name = "A")
 

@@ -4,7 +4,13 @@
 \alias{new_tidybreed_pop}
 \title{Create a new tidybreed population object}
 \usage{
-new_tidybreed_pop(db_conn, pop_name, db_path, tables = character())
+new_tidybreed_pop(
+  db_conn,
+  pop_name,
+  db_path,
+  tables = character(),
+  run_dirs = character(0)
+)
 }
 \arguments{
 \item{db_conn}{A DuckDB connection object}
@@ -14,6 +20,11 @@ new_tidybreed_pop(db_conn, pop_name, db_path, tables = character())
 \item{db_path}{Path to the DuckDB database file}
 
 \item{tables}{Character vector of table names in the database}
+
+\item{run_dirs}{Named character vector mapping tool names to their pre-created
+layer-4 output directories. \code{character(0)} for in-memory databases or when
+no tools were declared. Always includes a \code{"base"} entry pointing to the
+layer-3 scenario directory when non-empty.}
 }
 \value{
 A \code{tidybreed_pop} object

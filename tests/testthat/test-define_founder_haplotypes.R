@@ -1,12 +1,7 @@
 # Helper: minimal pop (no founders needed)
 make_fh_pop <- function(pop_name = "fh_test", n_loci = 100, n_chr = 2) {
-  initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = n_loci,
-    n_chr      = n_chr,
-    chr_len_Mb = 50,
-    db_path    = ":memory:"
-  )
+  open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = 50)
 }
 
 # ============================================================
@@ -211,10 +206,8 @@ test_that("method = 'mosaic' stores empirical colMeans as founder_allele_freq", 
 test_that("method = 'mosaic' with switch_rate = 0 and n_chr = 1 produces at most n_templates unique haplotypes", {
   set.seed(99)
   n_templates_used <- 2L
-  pop <- initialize_genome(
-    pop_name = "fh_mosaic_sr0", n_loci = 20, n_chr = 1,
-    chr_len_Mb = 50, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "fh_mosaic_sr0", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(
       n_haplotypes = 30,
       method       = "mosaic",
@@ -272,10 +265,8 @@ test_that("method = 'gaussian_copula' stores empirical colMeans as founder_allel
 
 test_that("method = 'gaussian_copula' with very high decay_rate gives near-independent loci", {
   set.seed(17)
-  pop <- initialize_genome(
-    pop_name = "fh_gc_ind", n_loci = 50, n_chr = 1,
-    chr_len_Mb = 100, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "fh_gc_ind", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 1, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 2000, method = "gaussian_copula",
                               decay_rate = 1000)
 
@@ -360,7 +351,7 @@ test_that("invalid method string raises match.arg error", {
 # Existing guard tests (unchanged)
 # ============================================================
 
-test_that("initialize_genome() alone does not create founder_haplotypes", {
+test_that("open_pop() + define_genome() alone does not create founder_haplotypes", {
   pop <- make_fh_pop("fh_no_founders")
   on.exit(close_pop(pop))
 

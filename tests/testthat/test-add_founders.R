@@ -1,12 +1,7 @@
 test_that("add_founders creates ind_meta table with correct structure", {
   # Create test population
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 100,
-    n_chr = 5,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50)
 
   # Add founders
@@ -36,13 +31,8 @@ test_that("add_founders creates ind_meta table with correct structure", {
 
 
 test_that("add_founders correctly assigns IDs and sex", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 10, line_name = "A")
@@ -71,13 +61,8 @@ test_that("add_founders correctly assigns IDs and sex", {
 
 
 test_that("add_founders creates correct genome_haplotype table", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
@@ -116,13 +101,8 @@ test_that("add_founders creates correct genome_haplotype table", {
 
 
 test_that("add_founders creates correct genome_genotype table", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
@@ -149,13 +129,8 @@ test_that("add_founders creates correct genome_genotype table", {
 
 
 test_that("genotypes equal sum of haplotypes", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
@@ -187,13 +162,8 @@ test_that("genotypes equal sum of haplotypes", {
 
 
 test_that("add_founders works with multiple lines", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   # Add line A
@@ -228,13 +198,8 @@ test_that("add_founders works with multiple lines", {
 
 
 test_that("sequential additions to same line continue numbering", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   # First batch
@@ -262,13 +227,8 @@ test_that("sequential additions to same line continue numbering", {
 
 
 test_that("add_founders works with only males", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 10, n_females = 0, line_name = "A")
@@ -283,13 +243,8 @@ test_that("add_founders works with only males", {
 
 
 test_that("add_founders works with only females", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   pop <- add_founders(pop, n_males = 0, n_females = 10, line_name = "A")
@@ -304,14 +259,9 @@ test_that("add_founders works with only females", {
 
 
 test_that("add_founders errors if founder_haplotypes doesn't exist", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-    # Note: no n_haplotypes parameter
-  )
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100)
+    # Note: no define_founder_haplotypes() call
 
   expect_error(
     add_founders(pop, n_males = 5, n_females = 5, line_name = "A"),
@@ -330,13 +280,8 @@ test_that("add_founders errors if pop not valid tidybreed_pop", {
 
 
 test_that("add_founders errors if n_males + n_females = 0", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   expect_error(
@@ -349,13 +294,8 @@ test_that("add_founders errors if n_males + n_females = 0", {
 
 
 test_that("add_founders errors if line_name has invalid format", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   # Starts with number
@@ -375,13 +315,8 @@ test_that("add_founders errors if line_name has invalid format", {
 
 
 test_that("add_founders errors if n_males or n_females invalid", {
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 50,
-    n_chr = 2,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
 
   # Negative values
@@ -404,13 +339,8 @@ test_that("add_founders errors if n_males or n_females invalid", {
 
 test_that("integration: initialize_genome -> add_founders -> mutate_table", {
   # Full pipeline
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 100,
-    n_chr = 5,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50) |>
     add_founders(n_males = 10, n_females = 100, line_name = "A") %>%
     get_table("ind_meta") %>%
@@ -437,13 +367,8 @@ test_that("integration: initialize_genome -> add_founders -> mutate_table", {
 
 test_that("haplotypes are sampled with replacement", {
   # Create genome with small number of haplotypes
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 10,
-    n_chr = 1,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 5)  # Small pool
 
   # Add many founders (will require sampling with replacement)
@@ -461,13 +386,8 @@ test_that("haplotypes are sampled with replacement", {
 test_that("add_founders handles large lines efficiently", {
   skip_on_cran()
 
-  pop <- initialize_genome(
-    pop_name = "test",
-    n_loci = 1000,
-    n_chr = 10,
-    chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100)
 
   # Add 1000 founders
@@ -491,8 +411,8 @@ test_that("add_founders handles large lines efficiently", {
 # ─── ... forwarding tests ────────────────────────────────────────────────────
 
 make_pop_for_extra <- function() {
-  initialize_genome(pop_name = "t", n_loci = 20, n_chr = 1,
-                    chr_len_Mb = 10, db_path = ":memory:") |>
+  open_pop(pop_name = "t", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 10) |>
     define_founder_haplotypes(n_haplotypes = 20)
 }
 
@@ -576,10 +496,8 @@ test_that("add_founders() ... preserves values across two cohort calls", {
 # ─── line_name-specific haplotype pool tests ─────────────────────────────────
 
 test_that("add_founders samples only from the named line pool when one exists", {
-  pop <- initialize_genome(
-    pop_name = "lnpool", n_loci = 20, n_chr = 1,
-    chr_len_Mb = 50, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "lnpool", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 30, line_name = "A") |>
     define_founder_haplotypes(n_haplotypes = 40, line_name = "B")
 
@@ -602,10 +520,8 @@ test_that("add_founders samples only from the named line pool when one exists", 
 
 test_that("add_founders falls back to NULL pool when no named pool matches", {
   # define_founder_haplotypes called without line_name → stored as NULL
-  pop <- initialize_genome(
-    pop_name = "lnfallback", n_loci = 20, n_chr = 1,
-    chr_len_Mb = 50, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "lnfallback", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 25)  # line_name = NULL
 
   # add_founders with a named line should fall back to the NULL pool
@@ -620,10 +536,8 @@ test_that("add_founders falls back to NULL pool when no named pool matches", {
 
 
 test_that("add_founders errors when no matching line pool and no NULL pool exist", {
-  pop <- initialize_genome(
-    pop_name = "lnerr", n_loci = 10, n_chr = 1,
-    chr_len_Mb = 50, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "lnerr", db_name = ":memory:") |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20, line_name = "A")
 
   expect_error(
@@ -637,10 +551,8 @@ test_that("add_founders errors when no matching line pool and no NULL pool exist
 
 test_that("add_founders with named pool uses correct hap_id prefix in pool", {
   set.seed(42)
-  pop <- initialize_genome(
-    pop_name = "lnpfx", n_loci = 10, n_chr = 1,
-    chr_len_Mb = 50, db_path = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "lnpfx", db_name = ":memory:") |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20, line_name = "Duroc")
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()

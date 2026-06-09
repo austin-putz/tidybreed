@@ -2,11 +2,13 @@
 % Please edit documentation in R/schema.R
 \name{.genome_layer_descriptions}
 \alias{.genome_layer_descriptions}
-\title{Pre-built descriptions for genome-layer tables}
+\title{Combined genome-layer descriptions (core tables + genome tables)}
 \usage{
 .genome_layer_descriptions()
 }
 \description{
-Pre-built descriptions for genome-layer tables
+Convenience wrapper used by the deprecated initialize_genome() and
+migrate_schema_meta(). New code should call .core_layer_descriptions() and
+.genome_table_descriptions() separately.
 }
 \keyword{internal}

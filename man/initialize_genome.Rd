@@ -2,7 +2,7 @@
 % Please edit documentation in R/initialize_genome.R
 \name{initialize_genome}
 \alias{initialize_genome}
-\title{Initialize a breeding population with genome}
+\title{Initialize a breeding population with genome (deprecated)}
 \usage{
 initialize_genome(
   pop_name,
@@ -16,94 +16,36 @@ initialize_genome(
 )
 }
 \arguments{
-\item{pop_name}{Character scalar. Name of the population; used as the prefix
-for the default \code{.duckdb} filename.}
+\item{pop_name}{Character scalar. Name of the population.}
 
 \item{n_loci}{Integer scalar. Total number of loci to simulate.}
 
 \item{n_chr}{Integer scalar. Number of chromosomes.}
 
-\item{chr_len_Mb}{Numeric scalar or numeric vector of length \code{n_chr}.
-Chromosome length(s) in megabases. A single scalar applies the same
-length to all chromosomes; a vector specifies each chromosome separately.}
+\item{chr_len_Mb}{Numeric scalar or vector. Chromosome length(s) in Mb.}
 
-\item{db_path}{Character scalar. Path to the DuckDB database file. Default
-creates a file in the current directory named
-\verb{\{pop_name\}_tidybreed.duckdb}. Use \code{":memory:"} for an in-memory
-database (not recommended for large simulations).}
+\item{db_path}{Character scalar. Path to the DuckDB file, or \code{":memory:"}.
+Default creates \verb{\{pop_name\}_tidybreed.duckdb} in the working directory.}
 
-\item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}. Custom
-locus names. When \code{NULL} (default), names are auto-generated as
-\code{"Locus_1"}, \code{"Locus_2"}, etc.}
+\item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}.}
 
-\item{chr_names}{Character vector of length \code{n_chr} or \code{NULL}. Custom
-chromosome names. When \code{NULL} (default), chromosomes are numbered
-\verb{1, 2, ..., n_chr}.}
+\item{chr_names}{Character vector of length \code{n_chr} or \code{NULL}.}
 
-\item{overwrite}{Logical scalar. If \code{TRUE} and \code{db_path} already exists,
-the file is deleted and recreated. Default \code{FALSE}.}
+\item{overwrite}{Logical. If \code{TRUE}, delete and recreate an existing database.}
 }
 \value{
-A \code{tidybreed_pop} object containing:
-\itemize{
-\item DuckDB connection
-\item Population metadata
-\item Genome tables (genome_meta, genome_haplotype, genome_genotype)
-}
+A \code{tidybreed_pop} object.
 }
 \description{
-Creates a new \code{tidybreed_pop} object with a DuckDB backend and initializes
-the genome tables. This is typically the first function called when setting
-up a breeding program simulation.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-The function creates three core genome tables:
-\itemize{
-\item \code{genome_meta}: Locus metadata (position, chromosome, etc.)
-\item \code{genome_haplotype}: Phased haplotypes for each individual (2 rows per individual)
-\item \code{genome_genotype}: Genotypes coded as 0/1/2 for each individual
+\code{initialize_genome()} is deprecated as of tidybreed 0.40.0. Replace with
+the new two-step API:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{pop <- open_pop(pop_name = "A", db_name = "A_tidybreed.duckdb") |>
+  define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100)
+}\if{html}{\out{</div>}}
 }
-
-To create the founder haplotype pool needed by \code{\link[=add_founders]{add_founders()}}, call
-\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} after this function.
-}
-\examples{
-\dontrun{
-# Simple initialization
-pop <- initialize_genome(
-  pop_name = "A",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100
-)
-
-# Different chromosome lengths
-pop <- initialize_genome(
-  pop_name = "Cattle",
-  n_loci = 50000,
-  n_chr = 30,
-  chr_len_Mb = c(158, 137, 121, 120, 121, 119, 112, 113, 105, 104,
-                 107, 91, 84, 84, 85, 81, 75, 66, 64, 72,
-                 71, 61, 52, 62, 42, 51, 45, 46, 51, 42)
-)
-
-# In-memory (not recommended for large simulations)
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 100,
-  n_chr = 2,
-  chr_len_Mb = 100,
-  db_path = ":memory:"
-)
-
-# With founder haplotypes — call define_founder_haplotypes() after init
-pop <- initialize_genome(
-  pop_name = "B",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100
-) |>
-  define_founder_haplotypes(n_haplotypes = 100,
-                            min_allele_freq = 0.05,
-                            max_allele_freq = 0.95)
-}
+\seealso{
+\code{\link[=open_pop]{open_pop()}}, \code{\link[=define_genome]{define_genome()}}
 }

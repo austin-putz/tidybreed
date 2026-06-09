@@ -1,23 +1,26 @@
 #' Reconnect to an existing tidybreed database
 #'
 #' @description
-#' Re-opens a `.duckdb` file created by `initialize_genome()` and reconstructs
-#' the `tidybreed_pop` R object so that simulation can continue. No metadata is
-#' stored on the object; all genome statistics are derived from live DB queries
-#' when needed by individual functions.
+#' Re-opens a `.duckdb` file and reconstructs the `tidybreed_pop` R object so
+#' that simulation can continue. No metadata is stored on the object; all
+#' genome statistics are derived from live DB queries when needed.
 #'
-#' This is the intended way to resume a simulation after `close_pop()`, after a
-#' crash, or in a new R session. A common pattern is to call
-#' `initialize_genome()` once, configure all traits and covariances, then start
-#' each replicate with `restore_pop()` followed by `add_founders()`.
+#' This is the intended way to resume a simulation after [close_pop()], after a
+#' crash, or in a new R session. A common pattern is to call [open_pop()] once,
+#' configure all traits and covariances, then start each replicate with
+#' `restore_pop()` followed by [add_founders()].
 #'
-#' @param db_path Character. Path to an existing `.duckdb` file created by
-#'   `initialize_genome()`.
+#' `run_dirs` are reconstructed from the database location and the `tools`
+#' argument. Set `options(tidybreed.tools = ...)` before calling `restore_pop()`
+#' to get the same tool dirs back automatically.
+#'
+#' @param db_path Character. Path to an existing `.duckdb` file.
 #' @param pop_name Character or `NULL`. Population name to assign to the
 #'   restored object. When `NULL` (default) the name is inferred from the
-#'   filename by stripping a trailing `_tidybreed.duckdb` suffix; if the file
-#'   does not follow that convention the base filename (without extension) is
-#'   used.
+#'   filename by stripping a trailing `_tidybreed.duckdb` or `.duckdb` suffix.
+#' @param tools Character vector or `NULL`. Tool subdirectory names to
+#'   reconstruct in `pop$run_dirs`. Defaults to
+#'   `getOption("tidybreed.tools", NULL)`.
 #'
 #' @return A fully operational `tidybreed_pop` object.
 #'
@@ -26,14 +29,8 @@
 #' @examples
 #' \dontrun{
 #' # One-time setup
-#' pop <- initialize_genome(
-#'   pop_name     = "cattle",
-#'   n_loci       = 50000,
-#'   n_chr        = 29,
-#'   chr_len_Mb   = 100,
-#'   n_haplotypes = 200,
-#'   db_path      = "cattle_sim.duckdb"
-#' )
+#' pop <- open_pop(pop_name = "cattle", db_name = "cattle_sim.duckdb") |>
+#'   define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100)
 #' pop <- define_trait(pop, trait_name = "milk", ...)
 #' close_pop(pop)
 #'
@@ -41,7 +38,9 @@
 #' pop <- restore_pop("cattle_sim.duckdb")
 #' pop <- add_founders(pop, n_males = 50, n_females = 200, line_name = "A")
 #' }
-restore_pop <- function(db_path, pop_name = NULL) {
+restore_pop <- function(db_path,
+                        pop_name = NULL,
+                        tools    = getOption("tidybreed.tools", NULL)) {
 
   stopifnot(is.character(db_path), length(db_path) == 1)
 
@@ -71,34 +70,57 @@ restore_pop <- function(db_path, pop_name = NULL) {
 
   existing_tables <- DBI::dbListTables(db_conn)
 
-  if (!"genome_meta" %in% existing_tables) {
+  # ind_meta is always created by open_pop() — use it as the minimum check
+  if (!"ind_meta" %in% existing_tables) {
     DBI::dbDisconnect(db_conn, shutdown = TRUE)
     stop(
-      "Table 'genome_meta' not found in '", db_path, "'. ",
-      "Is this a valid tidybreed database created by initialize_genome()?",
+      "Table 'ind_meta' not found in '", db_path, "'. ",
+      "Is this a valid tidybreed database created by open_pop()?",
       call. = FALSE
     )
   }
 
-  n_loci <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
-
-  if (n_loci == 0L) {
-    DBI::dbDisconnect(db_conn, shutdown = TRUE)
-    stop("'genome_meta' is empty in '", db_path, "'.", call. = FALSE)
+  # genome_meta is optional (pop may not have called define_genome() yet)
+  has_genome <- "genome_meta" %in% existing_tables
+  if (has_genome) {
+    n_loci <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
+    if (n_loci == 0L) {
+      warning("'genome_meta' is empty in '", db_path, "'.", call. = FALSE)
+      n_loci <- 0L
+    }
+  } else {
+    n_loci <- NA_integer_
+    warning(
+      "No 'genome_meta' table found in '", db_path, "'. ",
+      "Call define_genome() to add genome structure.",
+      call. = FALSE
+    )
   }
 
   # Infer pop_name from filename when not supplied
   if (is.null(pop_name)) {
-    base <- basename(db_path)
+    base     <- basename(db_path)
+    # Strip _tidybreed.duckdb or .duckdb suffix
     stripped <- sub("_tidybreed\\.duckdb$", "", base, ignore.case = TRUE)
+    stripped <- sub("\\.duckdb$", "", stripped, ignore.case = TRUE)
     pop_name <- if (stripped != base) stripped else tools::file_path_sans_ext(base)
+  }
+
+  # Reconstruct run_dirs from db location + tools
+  if (!is.null(tools) && length(tools) > 0) {
+    db_dir   <- dirname(normalizePath(db_path))
+    run_dirs <- setNames(file.path(db_dir, tools), tools)
+    run_dirs <- c(base = db_dir, run_dirs)
+  } else {
+    run_dirs <- character(0)
   }
 
   pop <- new_tidybreed_pop(
     db_conn  = db_conn,
     pop_name = pop_name,
     db_path  = db_path,
-    tables   = existing_tables
+    tables   = existing_tables,
+    run_dirs = run_dirs
   )
 
   validate_tidybreed_pop(pop)
@@ -114,7 +136,10 @@ restore_pop <- function(db_path, pop_name = NULL) {
   n_ind <- DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
 
   message("Restored population '", pop_name, "' from '", db_path, "'")
-  message("  Loci: ", n_loci, ", Individuals: ", n_ind)
+  if (!is.na(n_loci))
+    message("  Loci: ", n_loci, ", Individuals: ", n_ind)
+  else
+    message("  Individuals: ", n_ind)
 
   pop
 }

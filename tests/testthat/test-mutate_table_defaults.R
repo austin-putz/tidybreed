@@ -2,13 +2,8 @@
 
 # Helper to create test population
 create_test_pop <- function(n_haplotypes = 50) {
-  initialize_genome(
-    pop_name   = "test_defaults",
-    n_loci     = 100,
-    n_chr      = 5,
-    chr_len_Mb = 50,
-    db_path    = ":memory:"
-  ) |>
+  open_pop(pop_name = "test_defaults", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = n_haplotypes)
 }
 

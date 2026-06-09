@@ -4,43 +4,45 @@
 \alias{restore_pop}
 \title{Reconnect to an existing tidybreed database}
 \usage{
-restore_pop(db_path, pop_name = NULL)
+restore_pop(
+  db_path,
+  pop_name = NULL,
+  tools = getOption("tidybreed.tools", NULL)
+)
 }
 \arguments{
-\item{db_path}{Character. Path to an existing \code{.duckdb} file created by
-\code{initialize_genome()}.}
+\item{db_path}{Character. Path to an existing \code{.duckdb} file.}
 
 \item{pop_name}{Character or \code{NULL}. Population name to assign to the
 restored object. When \code{NULL} (default) the name is inferred from the
-filename by stripping a trailing \verb{_tidybreed.duckdb} suffix; if the file
-does not follow that convention the base filename (without extension) is
-used.}
+filename by stripping a trailing \verb{_tidybreed.duckdb} or \code{.duckdb} suffix.}
+
+\item{tools}{Character vector or \code{NULL}. Tool subdirectory names to
+reconstruct in \code{pop$run_dirs}. Defaults to
+\code{getOption("tidybreed.tools", NULL)}.}
 }
 \value{
 A fully operational \code{tidybreed_pop} object.
 }
 \description{
-Re-opens a \code{.duckdb} file created by \code{initialize_genome()} and reconstructs
-the \code{tidybreed_pop} R object so that simulation can continue. No metadata is
-stored on the object; all genome statistics are derived from live DB queries
-when needed by individual functions.
+Re-opens a \code{.duckdb} file and reconstructs the \code{tidybreed_pop} R object so
+that simulation can continue. No metadata is stored on the object; all
+genome statistics are derived from live DB queries when needed.
 
-This is the intended way to resume a simulation after \code{close_pop()}, after a
-crash, or in a new R session. A common pattern is to call
-\code{initialize_genome()} once, configure all traits and covariances, then start
-each replicate with \code{restore_pop()} followed by \code{add_founders()}.
+This is the intended way to resume a simulation after \code{\link[=close_pop]{close_pop()}}, after a
+crash, or in a new R session. A common pattern is to call \code{\link[=open_pop]{open_pop()}} once,
+configure all traits and covariances, then start each replicate with
+\code{restore_pop()} followed by \code{\link[=add_founders]{add_founders()}}.
+
+\code{run_dirs} are reconstructed from the database location and the \code{tools}
+argument. Set \code{options(tidybreed.tools = ...)} before calling \code{restore_pop()}
+to get the same tool dirs back automatically.
 }
 \examples{
 \dontrun{
 # One-time setup
-pop <- initialize_genome(
-  pop_name     = "cattle",
-  n_loci       = 50000,
-  n_chr        = 29,
-  chr_len_Mb   = 100,
-  n_haplotypes = 200,
-  db_path      = "cattle_sim.duckdb"
-)
+pop <- open_pop(pop_name = "cattle", db_name = "cattle_sim.duckdb") |>
+  define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100)
 pop <- define_trait(pop, trait_name = "milk", ...)
 close_pop(pop)
 

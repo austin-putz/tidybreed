@@ -1,6 +1,6 @@
-test_that("_schema_meta table exists after initialize_genome()", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+test_that("_schema_meta table exists after open_pop() |> define_genome()", {
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   expect_true("_schema_meta" %in% pop$tables)
@@ -8,9 +8,9 @@ test_that("_schema_meta table exists after initialize_genome()", {
 })
 
 
-test_that("_schema_meta is populated with table and column entries after initialize_genome()", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+test_that("_schema_meta is populated with table and column entries after open_pop() |> define_genome()", {
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   n_tbl <- DBI::dbGetQuery(
@@ -28,8 +28,8 @@ test_that("_schema_meta is populated with table and column entries after initial
 
 
 test_that("ensure_trait_tables() registers trait-layer descriptions in _schema_meta", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   n_trait_tbl <- DBI::dbGetQuery(
@@ -47,8 +47,8 @@ test_that("ensure_trait_tables() registers trait-layer descriptions in _schema_m
 
 
 test_that("schema() returns correct class and columns", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   s <- schema(pop)
@@ -58,8 +58,8 @@ test_that("schema() returns correct class and columns", {
 
 
 test_that("schema() covers all user-visible tables and excludes _schema_meta", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   s <- schema(pop)
@@ -70,8 +70,8 @@ test_that("schema() covers all user-visible tables and excludes _schema_meta", {
 
 
 test_that("schema() includes descriptions for core tables", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   s <- schema(pop)
@@ -86,8 +86,8 @@ test_that("schema() includes descriptions for core tables", {
 
 
 test_that("describe_table() returns correct class and columns", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   d <- describe_table(pop, "ind_meta")
@@ -97,8 +97,8 @@ test_that("describe_table() returns correct class and columns", {
 
 
 test_that("describe_table() includes core columns of ind_meta", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   d <- describe_table(pop, "ind_meta")
@@ -111,8 +111,8 @@ test_that("describe_table() includes core columns of ind_meta", {
 
 
 test_that("describe_table() errors on unknown table", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   expect_error(describe_table(pop, "does_not_exist"),
@@ -121,8 +121,8 @@ test_that("describe_table() errors on unknown table", {
 
 
 test_that("define_schema_description() upserts a table-level description", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   pop |>
@@ -136,8 +136,8 @@ test_that("define_schema_description() upserts a table-level description", {
 
 
 test_that("define_schema_description() upserts a column-level description", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   pop |>
@@ -151,8 +151,8 @@ test_that("define_schema_description() upserts a column-level description", {
 
 
 test_that("define_schema_description() upsert is idempotent (replaces prior value)", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   pop |> get_table("ind_meta") |> define_schema_description("sex", "First description")
@@ -166,8 +166,8 @@ test_that("define_schema_description() upsert is idempotent (replaces prior valu
 
 
 test_that("define_schema_description() errors when column does not exist", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   expect_error(
@@ -179,8 +179,8 @@ test_that("define_schema_description() errors when column does not exist", {
 
 
 test_that("define_schema_description() can be chained for multiple columns", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   pop |>
@@ -197,8 +197,8 @@ test_that("define_schema_description() can be chained for multiple columns", {
 
 
 test_that("print.tidybreed_pop() hides _schema_meta from table list", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   output <- capture.output(print(pop))
@@ -208,8 +208,8 @@ test_that("print.tidybreed_pop() hides _schema_meta from table list", {
 
 
 test_that("print.tidybreed_pop() shows schema() hint", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   output <- paste(capture.output(print(pop)), collapse = "\n")
@@ -218,8 +218,8 @@ test_that("print.tidybreed_pop() shows schema() hint", {
 
 
 test_that("define_chip() auto-registers column description in _schema_meta", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   pop <- pop |>
@@ -237,8 +237,8 @@ test_that("define_chip() auto-registers column description in _schema_meta", {
 
 
 test_that("migrate_schema_meta() is idempotent", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   # Already has _schema_meta — calling again should message, not error
@@ -247,8 +247,8 @@ test_that("migrate_schema_meta() is idempotent", {
 
 
 test_that("summary.tidybreed_pop() pulls descriptions from _schema_meta (not hard-coded)", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   # Override the genome_meta table description so we can verify it was pulled from DB
@@ -263,8 +263,8 @@ test_that("summary.tidybreed_pop() pulls descriptions from _schema_meta (not har
 
 
 test_that("summary.tidybreed_pop() excludes _schema_meta from results", {
-  pop <- initialize_genome("schema_test", n_loci = 100, n_chr = 2,
-                           chr_len_Mb = 50, db_path = ":memory:")
+  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   summ <- summary(pop)

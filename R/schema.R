@@ -59,26 +59,10 @@ register_schema_meta <- function(conn, entries) {
 }
 
 
-#' Pre-built descriptions for genome-layer tables
+#' Pre-built descriptions for genome table columns (genome_meta, haplotype, genotype)
 #' @keywords internal
-.genome_layer_descriptions <- function() {
+.genome_table_descriptions <- function() {
   rbind(
-    # _schema_meta itself
-    .sm_tbl("_schema_meta",
-            "System table storing table and column descriptions for all tidybreed database objects."),
-    .sm_col("_schema_meta", "id_schema_meta",
-            "Auto-incrementing primary key"),
-    .sm_col("_schema_meta", "object_type",
-            "Entry type: 'table' for table descriptions, 'column' for column descriptions"),
-    .sm_col("_schema_meta", "table_name",
-            "Name of the table this entry describes"),
-    .sm_col("_schema_meta", "column_name",
-            "Column name; NULL for table-level entries"),
-    .sm_col("_schema_meta", "description",
-            "Human-readable description of the table or column"),
-    .sm_col("_schema_meta", "notes",
-            "Optional supplementary context (NULL if unused)"),
-
     # genome_meta
     .sm_tbl("genome_meta",
             "Locus-level metadata. One row per locus. Stores chromosome assignment, physical position, and chip membership flags added by define_chip()."),
@@ -107,7 +91,30 @@ register_schema_meta <- function(conn, entries) {
     .sm_tbl("genome_genotype",
             "Genotypes in 0/1/2 dosage encoding. One row per individual. Computed from genome_haplotype as the sum of both haplotypes at each locus."),
     .sm_col("genome_genotype", "id_ind",
-            "Individual identifier; FK to ind_meta.id_ind"),
+            "Individual identifier; FK to ind_meta.id_ind")
+  )
+}
+
+
+#' Pre-built descriptions for core (non-genome) tables created by open_pop()
+#' @keywords internal
+.core_layer_descriptions <- function() {
+  rbind(
+    # _schema_meta itself
+    .sm_tbl("_schema_meta",
+            "System table storing table and column descriptions for all tidybreed database objects."),
+    .sm_col("_schema_meta", "id_schema_meta",
+            "Auto-incrementing primary key"),
+    .sm_col("_schema_meta", "object_type",
+            "Entry type: 'table' for table descriptions, 'column' for column descriptions"),
+    .sm_col("_schema_meta", "table_name",
+            "Name of the table this entry describes"),
+    .sm_col("_schema_meta", "column_name",
+            "Column name; NULL for table-level entries"),
+    .sm_col("_schema_meta", "description",
+            "Human-readable description of the table or column"),
+    .sm_col("_schema_meta", "notes",
+            "Optional supplementary context (NULL if unused)"),
 
     # ind_meta
     .sm_tbl("ind_meta",
@@ -251,6 +258,17 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_residual_cov", "poly_order",
             "Polynomial order for legendre weight type")
   )
+}
+
+
+#' Combined genome-layer descriptions (core tables + genome tables)
+#'
+#' Convenience wrapper used by the deprecated initialize_genome() and
+#' migrate_schema_meta(). New code should call .core_layer_descriptions() and
+#' .genome_table_descriptions() separately.
+#' @keywords internal
+.genome_layer_descriptions <- function() {
+  rbind(.core_layer_descriptions(), .genome_table_descriptions())
 }
 
 

@@ -3,13 +3,8 @@
 # Minimal pop with 5 males + 10 females, birth_date in ind_meta,
 # a count trait "AP" phenotyped for all females (pheno_number = 1).
 make_ap_pop <- function() {
-  pop <- initialize_genome(
-    pop_name   = "cd_test",
-    n_loci     = 50,
-    n_chr      = 2,
-    chr_len_Mb = 50,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "cd_test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 50)
   pop <- add_founders(pop, n_males = 5, n_females = 10, line_name = "L")
   pop <- get_table(pop, "ind_meta") |>

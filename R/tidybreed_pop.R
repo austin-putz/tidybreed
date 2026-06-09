@@ -8,24 +8,31 @@
 #' @param pop_name Character string naming the population
 #' @param db_path Path to the DuckDB database file
 #' @param tables Character vector of table names in the database
+#' @param run_dirs Named character vector mapping tool names to their pre-created
+#'   layer-4 output directories. `character(0)` for in-memory databases or when
+#'   no tools were declared. Always includes a `"base"` entry pointing to the
+#'   layer-3 scenario directory when non-empty.
 #'
 #' @return A `tidybreed_pop` object
 #' @keywords internal
 new_tidybreed_pop <- function(db_conn,
                                pop_name,
                                db_path,
-                               tables = character()) {
+                               tables   = character(),
+                               run_dirs = character(0)) {
 
   stopifnot(inherits(db_conn, "duckdb_connection"))
   stopifnot(is.character(pop_name))
   stopifnot(is.character(db_path))
+  stopifnot(is.character(run_dirs))
 
   structure(
     list(
       db_conn  = db_conn,
       pop_name = pop_name,
       db_path  = db_path,
-      tables   = tables
+      tables   = tables,
+      run_dirs = run_dirs
     ),
     class = c("tidybreed_pop", "list")
   )
@@ -107,6 +114,11 @@ print.tidybreed_pop <- function(x, ...) {
     )$n
     cat("Traits:", n_traits, "\n")
   }
+
+  # Show tool dirs if any are registered
+  tool_dirs <- x$run_dirs[names(x$run_dirs) != "base"]
+  if (length(tool_dirs) > 0)
+    cat("Tool dirs:", paste(names(tool_dirs), collapse = ", "), "\n")
 
   cat("Use schema(pop) or describe_table(pop, \"name\") to explore table structure.\n")
 

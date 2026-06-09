@@ -1,12 +1,7 @@
 # Helper: tiny pop with two traits and fake EBVs for 10 individuals
 make_index_pop <- function(pop_name = "idx") {
-  pop <- initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = 100,
-    n_chr      = 2,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50, method = "fixed")
   pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
 
@@ -634,14 +629,9 @@ test_that("define_index() overwrite = TRUE updates economic_weight", {
 })
 
 
-test_that("index_meta and ind_index tables exist after initialize_genome()", {
-  pop <- initialize_genome(
-    pop_name = "idx_init_test",
-    n_loci   = 50,
-    n_chr    = 2,
-    chr_len_Mb = 50,
-    db_path  = ":memory:"
-  )
+test_that("index_meta and ind_index tables exist after open_pop() |> define_genome()", {
+  pop <- open_pop(pop_name = "idx_init_test", db_name = ":memory:") |>
+    define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
   tables <- DBI::dbListTables(pop$db_conn)

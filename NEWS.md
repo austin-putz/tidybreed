@@ -1,3 +1,44 @@
+# tidybreed 0.40.0 (2026-06-08)
+
+## Breaking changes
+
+* `initialize_genome()` is deprecated. Replace with the new two-step API:
+  ```r
+  pop <- open_pop(pop_name = "sim", db_name = "sim.duckdb") |>
+    define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100)
+  ```
+
+## New features
+
+* `open_pop()` — the new simulation entry point. Creates the DuckDB database,
+  all core metadata tables, and the per-scenario folder structure (layers 2–4).
+  Reads six global options: `tidybreed.base_dir`, `tidybreed.output`,
+  `tidybreed.scenario`, `tidybreed.tools`, `tidybreed.db_name`,
+  `tidybreed.pop_name`. Folder creation is skipped for in-memory databases
+  (`db_name = ":memory:"`).
+
+* `define_genome()` — pipe-friendly function that adds genome tables
+  (`genome_meta`, `genome_haplotype`, `genome_genotype`) to an existing pop.
+  Accepts `pop`, `n_loci`, `n_chr`, `chr_len_Mb`, `locus_names`, `chr_names`.
+
+* `pop$run_dirs` — named character vector on every `tidybreed_pop` object
+  mapping tool names to their pre-created layer-4 output directories. Always
+  includes a `"base"` entry pointing to the layer-3 scenario directory.
+  `character(0)` for in-memory databases.
+
+* `.create_run_dir(pop, tool)` (internal) — creates a timestamped
+  `YYYYMMDD_HHMMSS_rrrrrr` run subdirectory inside `pop$run_dirs[[tool]]`.
+  Errors immediately if `tool` is not registered in `pop$run_dirs`.
+
+* `restore_pop()` gains a `tools` argument (default:
+  `getOption("tidybreed.tools", NULL)`) that reconstructs `pop$run_dirs` from
+  the database location and declared tool names.
+
+* Six global options are registered on package load via `.onLoad()`:
+  `tidybreed.base_dir`, `tidybreed.output`, `tidybreed.scenario`,
+  `tidybreed.tools`, `tidybreed.db_name`, `tidybreed.pop_name`. Pre-existing
+  user options are preserved.
+
 # tidybreed 0.39.0 (2026-06-07)
 
 ## New features

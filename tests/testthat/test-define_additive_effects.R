@@ -1,11 +1,6 @@
 make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
-  pop <- initialize_genome(
-    pop_name   = pop_name,
-    n_loci     = n_loci,
-    n_chr      = 5,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 200, method = "fixed")
   pop <- add_founders(pop, n_males = n_ind / 2, n_females = n_ind / 2,
                       line_name = "A")

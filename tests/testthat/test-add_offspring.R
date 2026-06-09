@@ -1,19 +1,14 @@
 # Helper: minimal population with founders
-make_test_pop <- function(n_loci = 100, n_chr = 2, n_males = 5, n_females = 5) {
-  pop <- initialize_genome(
-    pop_name   = "test",
-    n_loci     = n_loci,
-    n_chr      = n_chr,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+make_offspring_test_pop <- function(n_loci = 100, n_chr = 2, n_males = 5, n_females = 5) {
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50)
   add_founders(pop, n_males = n_males, n_females = n_females, line_name = "A")
 }
 
 
 test_that("add_offspring creates rows in all three tables", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings <- tibble::tibble(
     id_parent_1 = "A_1",
@@ -39,7 +34,7 @@ test_that("add_offspring creates rows in all three tables", {
 
 
 test_that("add_offspring writes correct parent IDs and sex to ind_meta", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings <- tibble::tibble(
     id_parent_1 = "A_1",
@@ -65,7 +60,7 @@ test_that("add_offspring writes correct parent IDs and sex to ind_meta", {
 
 
 test_that("add_offspring assigns sequential IDs continuing from founders", {
-  pop <- make_test_pop(n_males = 3, n_females = 3)
+  pop <- make_offspring_test_pop(n_males = 3, n_females = 3)
 
   matings <- tibble::tibble(
     id_parent_1 = c("A_1", "A_1", "A_2"),
@@ -88,7 +83,7 @@ test_that("add_offspring assigns sequential IDs continuing from founders", {
 
 
 test_that("add_offspring: multiple offspring per dam (same dam repeated)", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings <- tibble::tibble(
     id_parent_1 = rep("A_1", 5),
@@ -113,7 +108,7 @@ test_that("add_offspring: multiple offspring per dam (same dam repeated)", {
 
 
 test_that("add_offspring: multiple sires per dam (pooled semen pattern)", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings <- tibble::tibble(
     id_parent_1 = c("A_1", "A_2", "A_3"),
@@ -137,13 +132,8 @@ test_that("add_offspring: multiple sires per dam (pooled semen pattern)", {
 
 
 test_that("add_offspring: cross-line offspring with independent ID sequences", {
-  pop <- initialize_genome(
-    pop_name   = "test",
-    n_loci     = 100,
-    n_chr      = 2,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50)
   pop <- add_founders(pop, n_males = 2, n_females = 2, line_name = "A")
   pop <- add_founders(pop, n_males = 2, n_females = 2, line_name = "B")
@@ -170,7 +160,7 @@ test_that("add_offspring: cross-line offspring with independent ID sequences", {
 
 
 test_that("add_offspring writes extra column (gen) to ind_meta", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings <- tibble::tibble(
     id_parent_1 = "A_1",
@@ -194,7 +184,7 @@ test_that("add_offspring writes extra column (gen) to ind_meta", {
 
 
 test_that("add_offspring adds a new extra column not previously in ind_meta", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   # ind_meta currently has no 'farm' column
   existing_cols <- DBI::dbListFields(pop$db_conn, "ind_meta")
@@ -224,7 +214,7 @@ test_that("add_offspring adds a new extra column not previously in ind_meta", {
 
 
 test_that("add_offspring accepts id_sire / id_dam aliases", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   matings_alias <- tibble::tibble(
     id_sire   = "A_1",
@@ -248,7 +238,7 @@ test_that("add_offspring accepts id_sire / id_dam aliases", {
 
 
 test_that("add_offspring: genome_haplotype has 2 rows per offspring with correct structure", {
-  pop <- make_test_pop(n_loci = 50)
+  pop <- make_offspring_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
     id_parent_1 = c("A_1", "A_2"),
@@ -283,7 +273,7 @@ test_that("add_offspring: genome_haplotype has 2 rows per offspring with correct
 
 
 test_that("add_offspring: genotype equals sum of the two offspring haplotypes", {
-  pop <- make_test_pop(n_loci = 50)
+  pop <- make_offspring_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
     id_parent_1 = "A_1",
@@ -319,13 +309,8 @@ test_that("add_offspring: genotype equals sum of the two offspring haplotypes", 
 
 test_that("add_offspring recombination produces variation across offspring", {
   set.seed(42)
-  pop <- initialize_genome(
-    pop_name   = "test",
-    n_loci     = 500,
-    n_chr      = 5,
-    chr_len_Mb = 100,
-    db_path    = ":memory:"
-  ) |>
+  pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+    define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 100)
   pop <- add_founders(pop, n_males = 1, n_females = 1, line_name = "A")
 
@@ -364,14 +349,14 @@ test_that("add_offspring recombination produces variation across offspring", {
 # ============================================================================
 
 test_that("add_offspring errors on non-data.frame matings", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
   expect_error(add_offspring(pop, list(id_parent_1 = "A_1")), "data.frame")
   close_pop(pop)
 })
 
 
 test_that("add_offspring errors on empty matings", {
-  pop  <- make_test_pop()
+  pop  <- make_offspring_test_pop()
   empty <- tibble::tibble(id_parent_1 = character(), id_parent_2 = character(),
                           sex = character(), line_name = character())
   expect_error(add_offspring(pop, empty), "at least 1 row")
@@ -380,7 +365,7 @@ test_that("add_offspring errors on empty matings", {
 
 
 test_that("add_offspring errors on missing required columns", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   no_sex <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6", line_name = "A")
   expect_error(add_offspring(pop, no_sex), "sex")
@@ -393,7 +378,7 @@ test_that("add_offspring errors on missing required columns", {
 
 
 test_that("add_offspring errors on invalid sex values", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "X", line_name = "A")
@@ -404,7 +389,7 @@ test_that("add_offspring errors on invalid sex values", {
 
 
 test_that("add_offspring errors on invalid line names", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "M", line_name = "1badline")
@@ -415,7 +400,7 @@ test_that("add_offspring errors on invalid line names", {
 
 
 test_that("add_offspring errors on non-existent parent IDs", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   bad <- tibble::tibble(id_parent_1 = "Z_999", id_parent_2 = "A_6",
                         sex = "M", line_name = "A")
@@ -426,7 +411,7 @@ test_that("add_offspring errors on non-existent parent IDs", {
 
 
 test_that("add_offspring errors on reserved extra column name (id_ind)", {
-  pop <- make_test_pop()
+  pop <- make_offspring_test_pop()
 
   bad <- tibble::tibble(id_parent_1 = "A_1", id_parent_2 = "A_6",
                         sex = "M", line_name = "A", id_ind = "fake")
