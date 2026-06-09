@@ -88,7 +88,10 @@ TABLE_RESERVED_COLS <- list(
   trait_effects    = c("trait_name", "effect_name", "effect_class", "source_column",
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value"),
-  trait_effect_cov = c("id_trait_effect_cov", "effect_name", "trait_name_1", "trait_name_2", "cov_value"),
+  trait_var_comp   = c("id_trait_var_comp", "effect_name", "trait_name_1", "trait_name_2", "cov_value"),
+  phenotype_var_comp = c("id_phenotype_var_comp", "effect_name", "phenotype_name_1",
+                         "phenotype_name_2", "cov_value", "condition_column",
+                         "condition_table", "condition_level", "weight_type", "poly_order"),
   index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight", "economic_weight"),
   ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value"),
   ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "true_index_value")
@@ -106,8 +109,9 @@ TABLE_PRIMARY_KEYS <- list(
   ind_tbv          = "id_tbv",
   ind_ebv          = "id_ebv",
   trait_meta       = "id_trait",
-  trait_effect_cov = "id_trait_effect_cov",
-  index_meta       = "id_index_name",
+  trait_var_comp     = "id_trait_var_comp",
+  phenotype_var_comp = "id_phenotype_var_comp",
+  index_meta         = "id_index_name",
   ind_index        = "id_index",
   ind_true_index   = "id_true_index"
 )
@@ -133,8 +137,9 @@ TABLE_ROW_KEYS <- list(
   genome_haplotype = c("id_ind", "parent_origin"),
   genome_genotype  = "id_ind",
   trait_effects    = c("trait_name", "effect_name"),
-  trait_effect_cov = "id_trait_effect_cov",
-  index_meta       = "id_index_name"
+  trait_var_comp     = "id_trait_var_comp",
+  phenotype_var_comp = "id_phenotype_var_comp",
+  index_meta         = "id_index_name"
 )
 
 
@@ -165,8 +170,8 @@ SYSTEM_TABLES <- c(
   "genome_meta", "genome_haplotype", "genome_genotype", "genome_effects",
   "founder_haplotypes",
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-  "trait_meta", "trait_effects", "trait_effect_cov", "trait_random_effects",
-  "phenotype_meta", "phenotype_components", "phenotype_residual_cov",
+  "trait_meta", "trait_effects", "trait_var_comp", "trait_random_effects",
+  "phenotype_meta", "phenotype_components", "phenotype_var_comp",
   "index_meta", "ind_index", "ind_true_index"
 )
 

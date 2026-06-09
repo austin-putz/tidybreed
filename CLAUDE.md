@@ -43,7 +43,7 @@ given as options again.
 
 2. **All primary numeric value columns follow the `{prefix}_value` pattern.**
    Examples: `pheno_value` in `ind_phenotype`, `tbv_value` in `ind_tbv`,
-   `ebv_value` in `ind_ebv`, `cov_value` in `trait_effect_cov`,
+   `ebv_value` in `ind_ebv`, `cov_value` in `trait_var_comp`,
    `index_value` in `ind_index`.
 
 3. **All name/label columns end in `_name`.**
@@ -63,7 +63,7 @@ The model is split into two distinct layers with a strict boundary between them:
 
 **Genetic component layer** — managed by `define_trait()`:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
-- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_effect_cov`
+- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_var_comp`
 - Arguments: `target_add_var`, `target_add_mean`, `expressed_parent`, `description`, `units`
 - No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
@@ -214,24 +214,23 @@ random effects). One row per (trait × effect).
 | center        | DOUBLE  | For fixed_cov effects: centering value                   |
 | value         | DOUBLE  | Rarely used scalar                                       |
 
-### `trait_effect_cov`
+### `trait_var_comp`
 
-Unified variance/covariance table for all random effects (additive genetic,
-residual, and named random effects). One row per (effect_name, trait_name_1, trait_name_2).
-Both `(i,j)` and `(j,i)` pairs stored. Populated by `define_effect_cov_matrix()`,
-`define_trait()`, and `define_effect_random()`.
+Genetic-layer variance components. One row per (effect_name, trait_name_1, trait_name_2).
+Both `(i,j)` and `(j,i)` pairs stored. Populated by `define_effect_cov_matrix()` and
+`define_trait()`. Stores **only** genetic effects — no phenotype-level variances.
 
-Reserved `effect_name` values: `"gen_add"` (additive genetic G matrix),
-`"residual"` (residual R matrix). Any other name maps to a user-defined random
-effect matching `effect_name` in `trait_effects`.
+Valid `effect_name` values: `"gen_add"` (additive genetic G matrix);
+future: `"dominance"`, `"epistasis"`. Named random effects (HYS, litter, pen)
+go to `phenotype_var_comp`, not here.
 
-| Column             | Type    | Notes                                              |
-|--------------------|---------|----------------------------------------------------|
-| id_trait_effect_cov| INTEGER | Primary key (auto-incrementing)                    |
-| effect_name        | VARCHAR | `"gen_add"`, `"residual"`, or random effect name   |
-| trait_name_1       | VARCHAR |                                                    |
-| trait_name_2       | VARCHAR |                                                    |
-| cov_value          | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
+| Column           | Type    | Notes                                              |
+|------------------|---------|----------------------------------------------------|
+| id_trait_var_comp| INTEGER | Primary key (auto-incrementing)                    |
+| effect_name      | VARCHAR | `"gen_add"`; future: `"dominance"`, `"epistasis"`  |
+| trait_name_1     | VARCHAR |                                                    |
+| trait_name_2     | VARCHAR |                                                    |
+| cov_value        | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |
 
 ### `phenotype_meta`
 
@@ -288,23 +287,30 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
 
-### `phenotype_residual_cov`
+### `phenotype_var_comp`
 
-Residual (co)variance entries. One row per (phenotype₁, phenotype₂, condition).
-Both (i,j) and (j,i) pairs stored for off-diagonal entries. Populated by
-`define_phenotype(..., residual_var = ...)` and `add_residual_cov()`.
+Phenotype-layer variance components. One row per (effect_name, phenotype₁, phenotype₂,
+condition). Both (i,j) and (j,i) pairs stored for off-diagonal entries. Populated by
+`define_phenotype(..., residual_var = ...)`, `define_residual_cov()`, and
+`define_effect_random()`.
 
-| Column          | Type    | Notes                                                              |
-|-----------------|---------|--------------------------------------------------------------------|
-| id_residual_cov | INTEGER | Primary key (auto-incrementing)                                    |
-| phenotype_name_1| VARCHAR |                                                                    |
-| phenotype_name_2| VARCHAR |                                                                    |
-| cov_value       | DOUBLE  |                                                                    |
-| condition_column| VARCHAR | NULL = unconditional; column in `condition_table` for heterogeneous residuals |
-| condition_table | VARCHAR | Default `"ind_meta"`                                               |
-| condition_level | VARCHAR | Value of `condition_column` for this row                           |
-| weight_type     | VARCHAR | Default `"fixed"`                                                  |
-| poly_order      | INTEGER | Polynomial order for `"legendre"` weight type                      |
+`effect_name = 'residual'` is reserved for residual noise. All named random effects
+(HYS, litter, pen, etc.) use their own string (e.g. `'hys'`, `'litter'`).
+The `condition_column` / `condition_level` columns are used only for `'residual'`
+to model heterogeneous residual variance by sex, group, etc.
+
+| Column               | Type    | Notes                                                              |
+|----------------------|---------|--------------------------------------------------------------------|
+| id_phenotype_var_comp| INTEGER | Primary key (auto-incrementing)                                    |
+| effect_name          | VARCHAR | `'residual'` or any named random effect (e.g. `'hys'`, `'litter'`)|
+| phenotype_name_1     | VARCHAR |                                                                    |
+| phenotype_name_2     | VARCHAR |                                                                    |
+| cov_value            | DOUBLE  |                                                                    |
+| condition_column     | VARCHAR | NULL = unconditional; used only for `effect_name = 'residual'`     |
+| condition_table      | VARCHAR | Default `"ind_meta"`                                               |
+| condition_level      | VARCHAR | Value of `condition_column` for this row                           |
+| weight_type          | VARCHAR | Default `"fixed"`                                                  |
+| poly_order           | INTEGER | Polynomial order for `"legendre"` weight type                      |
 
 ### `ind_phenotype`
 
@@ -411,7 +417,7 @@ eagerly, including genome tables and all individual/trait tables:
 - Genome: `genome_meta`, `genome_haplotype` (empty), `genome_genotype` (empty)
 - Optionally: `founder_haplotypes` (if `n_haplotypes` provided)
 - Individual/trait (all empty): `ind_meta`, `ind_phenotype`, `ind_tbv`,
-  `ind_ebv`, `trait_meta`, `trait_effects`, `trait_effect_cov`,
+  `ind_ebv`, `trait_meta`, `trait_effects`, `trait_var_comp`,
   `trait_random_effects`
 
 All tables are registered in `pop$tables` immediately. Users can call
@@ -587,7 +593,7 @@ pop |>
 - `define_trait()` — **genetic layer only**. Writes one row to `trait_meta` and
   a global `(index_name = NULL, trait_name, economic_weight = 0)` row to
   `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
-  `trait_effect_cov`), `target_add_mean`, `expressed_parent`, `description`,
+  `trait_var_comp`), `target_add_mean`, `expressed_parent`, `description`,
   `units`, `overwrite`. **Never** pass observation-layer arguments here
   (`type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
   in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
@@ -598,9 +604,9 @@ pop |>
   `trait_name` accepts a scalar **or vector** of trait names:
   - **Single trait** — manual (`effects` vector) or sampled (`distribution =
     "normal"/"gamma"`) with optional Falconer rescale. Reads `target_add_var`
-    from `trait_effect_cov`.
+    from `trait_var_comp`.
   - **Multiple traits** — draws correlated effects from `MVN(0, G)` via
-    `MASS::mvrnorm`. `G = NULL` reads from `trait_effect_cov`. `method =
+    `MASS::mvrnorm`. `G = NULL` reads from `trait_var_comp`. `method =
     "shared"` (all traits use the filtered loci) or `"union"` (per-trait QTL
     sets from existing `genome_effects` rows, restricted to the filtered loci).
 
@@ -627,17 +633,19 @@ pop |>
 `R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_int.R`
 
 - `define_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
-  point for all variance/covariance data**. Stores symmetric matrix in
-  `trait_effect_cov`. Use `effect_name = "gen_add"` or `"residual"` for
-  reserved effects. Can be called before `define_trait()` or `define_effect_random()`.
-- `define_effect_random()` — `variance` optional if already in `trait_effect_cov`.
+  point for all variance/covariance data**. Routes by `effect_name`:
+  genetic effects (`"gen_add"`, `"dominance"`, `"epistasis"`) → `trait_var_comp`;
+  `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
+  any other name → `phenotype_var_comp` with that `effect_name`.
+  Can be called before `define_trait()` or `define_effect_random()`.
+- `define_effect_random()` — `variance` optional if already in `phenotype_var_comp`.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
 - `define_effect_int()` — sets intercept (`target_add_mean`) for a trait.
 
-### `define_phenotype()` / `add_residual_cov()`
+### `define_phenotype()` / `define_residual_cov()`
 
-`R/define_phenotype.R`, `R/add_residual_cov.R`
+`R/define_phenotype.R`, `R/define_residual_cov.R`
 
 - `define_phenotype(pop, phenotype_name, type, mean, expressed_sex, repeatable, ...)` —
   registers an observed phenotype in `phenotype_meta`. For simple traits
@@ -647,8 +655,8 @@ pop |>
 
   Key arguments:
   - `residual_var` — scalar; writes one unconditional diagonal entry to
-    `phenotype_residual_cov`. For correlated or heterogeneous residuals use
-    `add_residual_cov()` afterwards.
+    `phenotype_var_comp` (with `effect_name = 'residual'`). For correlated or
+    heterogeneous residuals use `define_residual_cov()` afterwards.
   - `components` — data frame with columns `source_trait_name` and
     `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
     columns: `weight`, `weight_type`, `aggregation`, `group_column`,
@@ -660,11 +668,12 @@ pop |>
     etc.). `"skip"` excludes the individual and warns with a count + up to 5
     example IDs. `"error"` stops immediately.
 
-- `add_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, ...)` —
+- `define_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, ...)` —
   writes conditional or unconditional residual (co)variance entries to
-  `phenotype_residual_cov`. Supply a named matrix for multi-phenotype correlated
-  residuals, or call once per sex/group level with `condition_column = "sex"` and
-  `condition_level = "M"` / `"F"` for heterogeneous residuals.
+  `phenotype_var_comp` (always with `effect_name = 'residual'`). Supply a named
+  matrix for multi-phenotype correlated residuals, or call once per sex/group
+  level with `condition_column = "sex"` and `condition_level = "M"` / `"F"` for
+  heterogeneous residuals.
 
 ### `add_trait_covariate()` *(deprecated)*
 

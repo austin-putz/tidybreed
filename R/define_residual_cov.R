@@ -1,9 +1,10 @@
 #' Define residual covariance entries for observed phenotypes
 #'
 #' @description
-#' Writes rows to `phenotype_residual_cov` representing the residual
-#' (co)variance matrix for one or more phenotypes, optionally conditioned on a
-#' group variable (e.g. farm, sex). Both `(i,j)` and `(j,i)` pairs are stored.
+#' Writes rows to `phenotype_var_comp` (with `effect_name = "residual"`)
+#' representing the residual (co)variance matrix for one or more phenotypes,
+#' optionally conditioned on a group variable (e.g. farm, sex). Both `(i,j)`
+#' and `(j,i)` pairs are stored.
 #'
 #' Three typical call patterns:
 #'
@@ -90,8 +91,9 @@ define_residual_cov <- function(pop,
   }
 
   pop <- ensure_trait_tables(pop)
+  pop <- ensure_phenotype_var_comp(pop)
 
-  # Delete existing rows for this exact (phenotype pair, condition) combination
+  # Delete existing rows for this exact (phenotype pair, effect, condition) combination
   pn1_in <- paste0("'", gsub("'", "''", phenotype_names), "'", collapse = ", ")
   cond_col_sql <- if (is.null(condition_column)) "IS NULL"
                   else paste0("= '", gsub("'", "''", condition_column), "'")
@@ -99,8 +101,9 @@ define_residual_cov <- function(pop,
                   else paste0("= '", gsub("'", "''", condition_level), "'")
 
   DBI::dbExecute(pop$db_conn, paste0(
-    "DELETE FROM phenotype_residual_cov ",
-    "WHERE phenotype_name_1 IN (", pn1_in, ")",
+    "DELETE FROM phenotype_var_comp ",
+    "WHERE effect_name = 'residual' ",
+    "  AND phenotype_name_1 IN (", pn1_in, ")",
     "  AND phenotype_name_2 IN (", pn1_in, ")",
     "  AND condition_column ", cond_col_sql,
     "  AND condition_level  ", cond_lvl_sql
@@ -111,34 +114,35 @@ define_residual_cov <- function(pop,
   pn_order <- phenotype_names
 
   rows <- list()
-  first_id <- next_int_id(pop$db_conn, "phenotype_residual_cov", "id_residual_cov")
+  first_id <- next_int_id(pop$db_conn, "phenotype_var_comp", "id_phenotype_var_comp")
   k <- 0L
 
   for (i in seq_len(n)) {
     for (j in seq_len(n)) {
       k <- k + 1L
       rows[[k]] <- list(
-        id_residual_cov  = first_id + k - 1L,
-        phenotype_name_1 = pn_order[i],
-        phenotype_name_2 = pn_order[j],
-        cov_value        = cov_matrix[pn_order[i], pn_order[j]],
-        condition_column = if (is.null(condition_column)) NA_character_
-                           else condition_column,
-        condition_table  = condition_table,
-        condition_level  = if (is.null(condition_level)) NA_character_
-                           else as.character(condition_level)
+        id_phenotype_var_comp = first_id + k - 1L,
+        effect_name           = "residual",
+        phenotype_name_1      = pn_order[i],
+        phenotype_name_2      = pn_order[j],
+        cov_value             = cov_matrix[pn_order[i], pn_order[j]],
+        condition_column      = if (is.null(condition_column)) NA_character_
+                                else condition_column,
+        condition_table       = condition_table,
+        condition_level       = if (is.null(condition_level)) NA_character_
+                                else as.character(condition_level)
       )
     }
   }
 
   cov_df <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  cov_df$id_residual_cov  <- as.integer(cov_df$id_residual_cov)
-  cov_df$cov_value        <- as.numeric(cov_df$cov_value)
-  cov_df$condition_column <- as.character(cov_df$condition_column)
-  cov_df$condition_table  <- as.character(cov_df$condition_table)
-  cov_df$condition_level  <- as.character(cov_df$condition_level)
+  cov_df$id_phenotype_var_comp <- as.integer(cov_df$id_phenotype_var_comp)
+  cov_df$cov_value              <- as.numeric(cov_df$cov_value)
+  cov_df$condition_column       <- as.character(cov_df$condition_column)
+  cov_df$condition_table        <- as.character(cov_df$condition_table)
+  cov_df$condition_level        <- as.character(cov_df$condition_level)
 
-  DBI::dbWriteTable(pop$db_conn, "phenotype_residual_cov", cov_df, append = TRUE)
+  DBI::dbWriteTable(pop$db_conn, "phenotype_var_comp", cov_df, append = TRUE)
 
   invisible(pop)
 }

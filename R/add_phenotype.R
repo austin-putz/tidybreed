@@ -17,7 +17,7 @@
 #' * For **composite** phenotypes (rows in `phenotype_components`), `TBV_i` is
 #'   the weighted sum of contributor TBVs (self, dam, sire, or group).
 #' * `e_i` is residual: drawn from `MVN(0, R)` across phenotypes when a
-#'   covariance matrix is stored in `phenotype_residual_cov` and multiple
+#'   covariance matrix is stored in `phenotype_var_comp` and multiple
 #'   phenotypes share the same subset; otherwise drawn independently.
 #'
 #' **Subset selection**: pipe a `tidybreed_table` (from [get_table()] and
@@ -401,29 +401,29 @@ add_phenotype <- function(tbl,
 
   # ── 7.5. Pre-draw correlated random effects (joint MVN across phenotypes) ──
 
-  if ("trait_effect_cov" %in% pop$tables && length(phenos) >= 2) {
+  if ("phenotype_var_comp" %in% pop$tables && length(phenos) >= 2) {
     phenos_sql  <- paste0("'", gsub("'", "''", phenos), "'", collapse = ", ")
     cov_effects <- DBI::dbGetQuery(
       pop$db_conn,
-      paste0("SELECT DISTINCT effect_name FROM trait_effect_cov ",
-             "WHERE effect_name NOT IN ('gen_add', 'residual') ",
-             "AND trait_name_1 IN (", phenos_sql, ") ",
-             "AND trait_name_2 IN (", phenos_sql, ")")
+      paste0("SELECT DISTINCT effect_name FROM phenotype_var_comp ",
+             "WHERE effect_name NOT IN ('residual') ",
+             "AND phenotype_name_1 IN (", phenos_sql, ") ",
+             "AND phenotype_name_2 IN (", phenos_sql, ")")
     )$effect_name
 
     for (eff in cov_effects) {
       eff_safe    <- gsub("'", "''", eff)
       eff_phenos_q <- DBI::dbGetQuery(
         pop$db_conn,
-        paste0("SELECT DISTINCT trait_name_1 AS p FROM trait_effect_cov ",
+        paste0("SELECT DISTINCT phenotype_name_1 AS p FROM phenotype_var_comp ",
                "WHERE effect_name = '", eff_safe, "' ",
-               "AND trait_name_1 IN (", phenos_sql, ") ",
-               "AND trait_name_2 IN (", phenos_sql, ")")
+               "AND phenotype_name_1 IN (", phenos_sql, ") ",
+               "AND phenotype_name_2 IN (", phenos_sql, ")")
       )$p
       eff_phenos <- intersect(phenos, eff_phenos_q)
       if (length(eff_phenos) < 2) next
 
-      R_eff <- load_effect_cov(pop, eff, eff_phenos)
+      R_eff <- load_phenotype_cov(pop, eff, eff_phenos)
       if (is.null(R_eff)) next
 
       eff_rows <- DBI::dbGetQuery(
@@ -725,8 +725,8 @@ add_phenotype <- function(tbl,
       # Independent per-phenotype draw
       resid_var <- resid_info$residual_var_unconditional[t]
       if (is.na(resid_var)) {
-        # Backward-compat fallback for databases without phenotype_residual_cov
-        resid_var <- get_effect_var(pop, "residual", t)
+        # Backward-compat fallback for databases without phenotype_var_comp residual rows
+        resid_var <- get_phenotype_var(pop, "residual", t)
       }
       if (is.na(resid_var)) {
         stop("No residual variance found for phenotype '", t, "'. ",

@@ -29,7 +29,7 @@ test_that("define_phenotype() inserts a row into phenotype_meta", {
 })
 
 
-test_that("define_phenotype() residual_var writes to phenotype_residual_cov", {
+test_that("define_phenotype() residual_var writes to phenotype_var_comp", {
   pop <- make_pheno_base_pop("dp_resid")
   on.exit(close_pop(pop))
 
@@ -37,7 +37,7 @@ test_that("define_phenotype() residual_var writes to phenotype_residual_cov", {
   pop <- define_phenotype(pop, "ADG", residual_var = 150)
 
   rcov <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM phenotype_residual_cov WHERE phenotype_name_1 = 'ADG'")
+    "SELECT * FROM phenotype_var_comp WHERE effect_name = 'residual' AND phenotype_name_1 = 'ADG'")
   expect_equal(nrow(rcov), 1L)
   expect_equal(rcov$cov_value, 150)
   expect_true(is.na(rcov$condition_column))
@@ -68,8 +68,8 @@ test_that("define_phenotype() overwrite = TRUE replaces the row", {
   expect_equal(row$mean, 999)
 
   rcov <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT cov_value FROM phenotype_residual_cov
-     WHERE phenotype_name_1 = 'ADG' AND condition_column IS NULL")
+    "SELECT cov_value FROM phenotype_var_comp
+     WHERE effect_name = 'residual' AND phenotype_name_1 = 'ADG' AND condition_column IS NULL")
   expect_equal(rcov$cov_value, 77)
 })
 
@@ -230,7 +230,7 @@ test_that("define_residual_cov() writes conditional residual rows", {
                           condition_level  = "F")
 
   rcov <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM phenotype_residual_cov WHERE phenotype_name_1 = 'BW'
+    "SELECT * FROM phenotype_var_comp WHERE effect_name = 'residual' AND phenotype_name_1 = 'BW'
      ORDER BY condition_level")
   expect_equal(nrow(rcov), 3L)  # unconditional + M + F
   conds <- rcov$condition_level[!is.na(rcov$condition_level)]
@@ -238,7 +238,7 @@ test_that("define_residual_cov() writes conditional residual rows", {
 })
 
 
-test_that("define_effect_cov_matrix() with effect_name='residual' routes to phenotype_residual_cov", {
+test_that("define_effect_cov_matrix() with effect_name='residual' routes to phenotype_var_comp", {
   pop <- make_pheno_base_pop("dp_cov_mat_route")
   on.exit(close_pop(pop))
 
@@ -252,7 +252,7 @@ test_that("define_effect_cov_matrix() with effect_name='residual' routes to phen
   pop <- define_effect_cov_matrix(pop, "residual", R)
 
   rcov <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM phenotype_residual_cov WHERE condition_column IS NULL
+    "SELECT * FROM phenotype_var_comp WHERE effect_name = 'residual' AND condition_column IS NULL
      ORDER BY phenotype_name_1, phenotype_name_2")
   # Should have 4 rows: (ADG,ADG), (ADG,BW), (BW,ADG), (BW,BW)
   expect_equal(nrow(rcov), 4L)

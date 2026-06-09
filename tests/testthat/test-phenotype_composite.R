@@ -211,9 +211,9 @@ test_that("heterogeneous residuals by sex produce different variance groups", {
                              condition_table  = "ind_meta",
                              condition_level  = "F")
 
-  # Verify three rows in phenotype_residual_cov
+  # Verify three rows in phenotype_var_comp (residual effect)
   rcov <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM phenotype_residual_cov WHERE phenotype_name_1 = 'BW'")
+    "SELECT * FROM phenotype_var_comp WHERE effect_name = 'residual' AND phenotype_name_1 = 'BW'")
   expect_equal(nrow(rcov), 3L)
 
   # Phenotype everyone; variances should differ by sex

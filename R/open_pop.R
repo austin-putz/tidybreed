@@ -154,8 +154,8 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   register_schema_meta(db_conn, .core_layer_descriptions())
 
   tables_created <- c(
-    "_schema_meta", "ind_meta", "trait_effect_cov", "genome_effects",
-    "phenotype_meta", "phenotype_components", "phenotype_residual_cov"
+    "_schema_meta", "ind_meta", "trait_var_comp", "genome_effects",
+    "phenotype_meta", "phenotype_components", "phenotype_var_comp"
   )
 
   pop <- new_tidybreed_pop(
@@ -266,12 +266,12 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   ")
 
   DBI::dbExecute(db_conn, "
-    CREATE TABLE trait_effect_cov (
-      id_trait_effect_cov INTEGER PRIMARY KEY,
-      effect_name         VARCHAR,
-      trait_name_1        VARCHAR,
-      trait_name_2        VARCHAR,
-      cov_value           DOUBLE
+    CREATE TABLE trait_var_comp (
+      id_trait_var_comp INTEGER PRIMARY KEY,
+      effect_name       VARCHAR,
+      trait_name_1      VARCHAR,
+      trait_name_2      VARCHAR,
+      cov_value         DOUBLE
     )
   ")
 
@@ -331,18 +331,63 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   ")
 
   DBI::dbExecute(db_conn, "
-    CREATE TABLE phenotype_residual_cov (
-      id_residual_cov  INTEGER PRIMARY KEY,
-      phenotype_name_1 VARCHAR NOT NULL,
-      phenotype_name_2 VARCHAR NOT NULL,
-      cov_value        DOUBLE  NOT NULL,
-      condition_column VARCHAR,
-      condition_table  VARCHAR DEFAULT 'ind_meta',
-      condition_level  VARCHAR,
-      weight_type      VARCHAR DEFAULT 'fixed',
-      poly_order       INTEGER
+    CREATE TABLE phenotype_var_comp (
+      id_phenotype_var_comp INTEGER PRIMARY KEY,
+      effect_name           VARCHAR NOT NULL DEFAULT 'residual',
+      phenotype_name_1      VARCHAR NOT NULL,
+      phenotype_name_2      VARCHAR NOT NULL,
+      cov_value             DOUBLE  NOT NULL,
+      condition_column      VARCHAR,
+      condition_table       VARCHAR DEFAULT 'ind_meta',
+      condition_level       VARCHAR,
+      weight_type           VARCHAR DEFAULT 'fixed',
+      poly_order            INTEGER
     )
   ")
+
+  invisible(NULL)
+}
+
+
+#' Migrate old variance-component table names to the v0.42.0 naming convention
+#'
+#' Renames `trait_effect_cov` → `trait_var_comp` and
+#' `phenotype_residual_cov` → `phenotype_var_comp` in an existing database,
+#' adding the `effect_name` column (backfilled as 'residual') when needed.
+#' Called automatically by [restore_pop()].
+#'
+#' @param con An active DuckDB connection.
+#' @keywords internal
+.migrate_var_comp_tables <- function(con) {
+  existing <- DBI::dbListTables(con)
+
+  if ("trait_effect_cov" %in% existing && !"trait_var_comp" %in% existing) {
+    DBI::dbExecute(con, "ALTER TABLE trait_effect_cov RENAME TO trait_var_comp")
+    tryCatch(
+      DBI::dbExecute(con,
+        "ALTER TABLE trait_var_comp RENAME id_trait_effect_cov TO id_trait_var_comp"),
+      error = function(e) NULL  # column rename not supported in older DuckDB; harmless
+    )
+    message("[tidybreed] Migrated trait_effect_cov -> trait_var_comp")
+  }
+
+  if ("phenotype_residual_cov" %in% existing && !"phenotype_var_comp" %in% existing) {
+    DBI::dbExecute(con, "ALTER TABLE phenotype_residual_cov RENAME TO phenotype_var_comp")
+    tryCatch(
+      DBI::dbExecute(con,
+        "ALTER TABLE phenotype_var_comp RENAME id_residual_cov TO id_phenotype_var_comp"),
+      error = function(e) NULL
+    )
+    # Add effect_name column if not yet present; backfill existing rows as 'residual'
+    col_info <- DBI::dbGetQuery(con, "PRAGMA table_info('phenotype_var_comp')")
+    if (!"effect_name" %in% col_info$name) {
+      DBI::dbExecute(con,
+        "ALTER TABLE phenotype_var_comp ADD COLUMN effect_name VARCHAR DEFAULT 'residual'")
+      DBI::dbExecute(con,
+        "UPDATE phenotype_var_comp SET effect_name = 'residual' WHERE effect_name IS NULL")
+    }
+    message("[tidybreed] Migrated phenotype_residual_cov -> phenotype_var_comp")
+  }
 
   invisible(NULL)
 }

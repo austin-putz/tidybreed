@@ -3,7 +3,7 @@
 #' @description
 #' Creates one row in `trait_meta` describing a **genetic component trait**: a
 #' quantity with QTL effects in `genome_effects`, TBVs in `ind_tbv`, and
-#' additive genetic variance in `trait_effect_cov`. Contains no
+#' additive genetic variance in `trait_var_comp`. Contains no
 #' phenotype-level information.
 #'
 #' To register the **observed phenotype** that individuals receive records for,
@@ -14,7 +14,7 @@
 #' @param trait_name Character. Unique identifier for this genetic component
 #'   trait. Must be a valid SQL identifier.
 #' @param target_add_var Numeric. Target additive genetic variance. Written to
-#'   `trait_effect_cov` as a diagonal entry under `effect_name = "gen_add"`.
+#'   `trait_var_comp` as a diagonal entry under `effect_name = "gen_add"`.
 #'   Used by [define_additive_effects()] to rescale effects. If already set via
 #'   [define_effect_cov_matrix()], leave `NULL`.
 #' @param target_add_mean Numeric. TBV centering mean for the base population.
@@ -106,8 +106,8 @@ define_trait <- function(pop,
         is.na(target_add_var) || target_add_var < 0) {
       stop("`target_add_var` must be a non-negative number.", call. = FALSE)
     }
-    pop <- write_effect_cov_diagonal(pop, "gen_add", trait_name,
-                                     as.numeric(target_add_var))
+    pop <- write_trait_var_diag(pop, "gen_add", trait_name,
+                               as.numeric(target_add_var))
   }
 
   row <- tibble::tibble(
@@ -317,17 +317,18 @@ ensure_trait_tables <- function(pop) {
       )
     ",
 
-    phenotype_residual_cov = "
-      CREATE TABLE phenotype_residual_cov (
-        id_residual_cov  INTEGER PRIMARY KEY,
-        phenotype_name_1 VARCHAR NOT NULL,
-        phenotype_name_2 VARCHAR NOT NULL,
-        cov_value        DOUBLE  NOT NULL,
-        condition_column VARCHAR,
-        condition_table  VARCHAR DEFAULT 'ind_meta',
-        condition_level  VARCHAR,
-        weight_type      VARCHAR DEFAULT 'fixed',
-        poly_order       INTEGER
+    phenotype_var_comp = "
+      CREATE TABLE phenotype_var_comp (
+        id_phenotype_var_comp INTEGER PRIMARY KEY,
+        effect_name           VARCHAR NOT NULL DEFAULT 'residual',
+        phenotype_name_1      VARCHAR NOT NULL,
+        phenotype_name_2      VARCHAR NOT NULL,
+        cov_value             DOUBLE  NOT NULL,
+        condition_column      VARCHAR,
+        condition_table       VARCHAR DEFAULT 'ind_meta',
+        condition_level       VARCHAR,
+        weight_type           VARCHAR DEFAULT 'fixed',
+        poly_order            INTEGER
       )
     "
   )

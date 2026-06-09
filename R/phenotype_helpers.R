@@ -261,7 +261,7 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
 }
 
 
-#' Look up residual covariance information from phenotype_residual_cov
+#' Look up residual covariance information from phenotype_var_comp
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_names Character vector of phenotype names.
@@ -278,7 +278,7 @@ get_residual_cov <- function(pop, phenotype_names, subset_df = NULL) {
   n <- length(phenotype_names)
   pn_in <- paste0("'", gsub("'", "''", phenotype_names), "'", collapse = ", ")
 
-  if (!"phenotype_residual_cov" %in% DBI::dbListTables(pop$db_conn)) {
+  if (!"phenotype_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
     return(list(R_unconditional = NULL, condition_column = NULL,
                 condition_table = NULL, R_by_level = NULL,
                 residual_var_unconditional = stats::setNames(rep(NA_real_, n),
@@ -286,8 +286,9 @@ get_residual_cov <- function(pop, phenotype_names, subset_df = NULL) {
   }
 
   all_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT * FROM phenotype_residual_cov ",
-    "WHERE phenotype_name_1 IN (", pn_in, ") ",
+    "SELECT * FROM phenotype_var_comp ",
+    "WHERE effect_name = 'residual' ",
+    "  AND phenotype_name_1 IN (", pn_in, ") ",
     "  AND phenotype_name_2 IN (", pn_in, ")"
   ))
 

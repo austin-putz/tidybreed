@@ -11,9 +11,9 @@ test_that("open_pop() creates all core tables before define_genome()", {
   pop <- open_pop(db_name = ":memory:")
   on.exit(close_pop(pop))
 
-  core_tables <- c("_schema_meta", "ind_meta", "trait_effect_cov",
+  core_tables <- c("_schema_meta", "ind_meta", "trait_var_comp",
                    "genome_effects", "phenotype_meta", "phenotype_components",
-                   "phenotype_residual_cov")
+                   "phenotype_var_comp")
   expect_true(all(core_tables %in% pop$tables))
 
   # Genome tables are NOT present yet

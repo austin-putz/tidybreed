@@ -47,8 +47,8 @@
 #'   `effects` is `NULL` and `length(trait_name) == 1`. Ignored for multi-trait.
 #' @param G Optional numeric matrix of additive-genetic (co)variances (multi-trait
 #'   only). Must be square and symmetric with side length `length(trait_name)`.
-#'   When supplied, stored to `trait_effect_cov` under `"gen_add"`. When `NULL`,
-#'   read from `trait_effect_cov`.
+#'   When supplied, stored to `trait_var_comp` under `"gen_add"`. When `NULL`,
+#'   read from `trait_var_comp`.
 #' @param method Character. `"shared"` (default) or `"union"`. Multi-trait only.
 #'   `"shared"` — all listed traits use the filtered loci as their shared QTL
 #'   set. `"union"` — per-trait QTL sets are read from existing `genome_effects`
@@ -149,7 +149,7 @@ define_additive_effects <- function(tbl,
         )) == 0L) {
       stop("Trait '", trait_name, "' not found in trait_meta.", call. = FALSE)
     }
-    target_add_var <- get_effect_var(pop, "gen_add", trait_name)
+    target_add_var <- get_trait_var(pop, "gen_add", trait_name)
 
     loci_df <- dplyr::collect(tbl)
     if (!"locus_name" %in% names(loci_df)) {
@@ -268,7 +268,7 @@ define_additive_effects <- function(tbl,
          "Install with install.packages('MASS').", call. = FALSE)
   }
 
-  # Resolve G: if not supplied, read from trait_effect_cov
+  # Resolve G: if not supplied, read from trait_var_comp
   if (!is.null(G)) {
     if (!is.matrix(G) || nrow(G) != length(trait_name) || ncol(G) != length(trait_name)) {
       stop("`G` must be a square matrix with side = length(trait_name).", call. = FALSE)
@@ -278,7 +278,7 @@ define_additive_effects <- function(tbl,
     dimnames(g_named) <- list(trait_name, trait_name)
     pop <- define_effect_cov_matrix(pop, "gen_add", g_named)
   } else {
-    G_stored <- load_effect_cov(pop, "gen_add", trait_name)
+    G_stored <- load_trait_cov(pop, "gen_add", trait_name)
     if (is.null(G_stored)) {
       stop("No 'gen_add' covariance matrix found for traits: ",
            paste(trait_name, collapse = ", "),
@@ -301,7 +301,7 @@ define_additive_effects <- function(tbl,
   }
 
   target_var <- stats::setNames(
-    vapply(trait_name, function(t) get_effect_var(pop, "gen_add", t), numeric(1)),
+    vapply(trait_name, function(t) get_trait_var(pop, "gen_add", t), numeric(1)),
     trait_name
   )
 

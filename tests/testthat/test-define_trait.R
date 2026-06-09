@@ -20,10 +20,10 @@ test_that("define_trait() creates the trait tables and inserts the row", {
                       target_add_mean = 850)
 
   tables <- DBI::dbListTables(pop$db_conn)
-  for (tbl in c("trait_meta", "trait_effects", "trait_effect_cov",
+  for (tbl in c("trait_meta", "trait_effects", "trait_var_comp",
                 "ind_phenotype", "ind_tbv", "ind_ebv",
                 "phenotype_meta", "phenotype_components",
-                "phenotype_residual_cov")) {
+                "phenotype_var_comp")) {
     expect_true(tbl %in% tables, info = paste("missing table:", tbl))
   }
 
@@ -33,8 +33,8 @@ test_that("define_trait() creates the trait tables and inserts the row", {
   expect_equal(row$units, "g/day")
   expect_equal(row$target_add_mean, 850)
 
-  # Additive genetic variance stored in trait_effect_cov
-  expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.25)
+  # Additive genetic variance stored in trait_var_comp
+  expect_equal(get_trait_var(pop, "gen_add", "ADG"), 0.25)
 
   close_pop(pop)
 })
@@ -47,7 +47,7 @@ test_that("define_trait() refuses duplicate names without overwrite", {
   expect_error(define_trait(pop, "ADG"), "already exists")
 
   pop <- define_trait(pop, "ADG", target_add_var = 0.1, overwrite = TRUE)
-  expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.1)
+  expect_equal(get_trait_var(pop, "gen_add", "ADG"), 0.1)
 
   close_pop(pop)
 })
@@ -110,7 +110,7 @@ test_that("define_trait() overwrite = TRUE replaces trait_meta row", {
     "SELECT * FROM trait_meta WHERE trait_name = 'ADG'")
   expect_equal(nrow(row), 1L)
   expect_equal(row$units, "kg/day")
-  expect_equal(get_effect_var(pop, "gen_add", "ADG"), 0.10)
+  expect_equal(get_trait_var(pop, "gen_add", "ADG"), 0.10)
 })
 
 

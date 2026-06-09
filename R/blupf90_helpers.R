@@ -507,11 +507,11 @@ parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
 }
 
 
-#' Stub for VCE writeback — parse blupf90.out and update trait_effect_cov
+#' Stub for VCE writeback — parse blupf90.out and update trait_var_comp
 #' @keywords internal
 update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
   message("VCE writeback: automated parsing not yet implemented. ",
-          "Inspect blupf90.out and update trait_effect_cov manually via ",
+          "Inspect blupf90.out and update trait_var_comp manually via ",
           "define_effect_cov_matrix().")
   invisible(NULL)
 }

@@ -2,6 +2,43 @@
 
 ## Breaking changes
 
+* **Schema rename: `trait_effect_cov` → `trait_var_comp`.**
+  The table now stores only genetic-layer variance components (`gen_add`;
+  future: `dominance`, `epistasis`). The primary key column is renamed
+  `id_trait_var_comp`. Existing `.duckdb` files are migrated automatically by
+  `restore_pop()` via `ALTER TABLE RENAME`.
+
+* **Schema rename: `phenotype_residual_cov` → `phenotype_var_comp` + new
+  `effect_name` column.**
+  The table now stores ALL phenotype-level variance components: residual noise
+  (`effect_name = 'residual'`) and named random effects (e.g. `'hys'`,
+  `'litter'`, `'pen'`). The primary key column is renamed
+  `id_phenotype_var_comp`. Existing `.duckdb` files are migrated automatically
+  by `restore_pop()`.
+
+* **`define_effect_random()` routing change.**
+  Variance for named random effects (HYS, litter, pen, etc.) is now written to
+  `phenotype_var_comp` instead of `trait_var_comp`, correctly placing those
+  components at the observation layer rather than the genetic layer.
+
+* **`define_effect_cov_matrix()` routing change.**
+  Genetic effects (`gen_add`, `dominance`, `epistasis`) route to
+  `trait_var_comp`; `"residual"` routes to `define_residual_cov()` →
+  `phenotype_var_comp`; any other name routes directly to `phenotype_var_comp`
+  with that name as `effect_name`.
+
+* **Internal helper renames** (affect code that called private helpers directly):
+
+  | Old name | New name |
+  |---|---|
+  | `get_effect_var()` | `get_trait_var()` |
+  | `load_effect_cov()` | `load_trait_cov()` |
+  | `write_effect_cov_diagonal()` | `write_trait_var_diag()` |
+  | `ensure_effect_cov_table()` | `ensure_trait_var_comp()` |
+
+  New helpers added: `get_phenotype_var()`, `load_phenotype_cov()`,
+  `write_phenotype_var_diag()`, `ensure_phenotype_var_comp()`.
+
 * `add_founders()` now accepts a `tidybreed_table` (from
   `get_table("founder_haplotypes") |> filter(...)`) as its first argument
   instead of a `tidybreed_pop`. Migrate by inserting

@@ -336,8 +336,8 @@ define_phenotype <- function(pop,
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM phenotype_components WHERE phenotype_name = '", pn_safe, "'"))
     DBI::dbExecute(pop$db_conn,
-      paste0("DELETE FROM phenotype_residual_cov ",
-             "WHERE phenotype_name_1 = '", pn_safe, "'",
+      paste0("DELETE FROM phenotype_var_comp ",
+             "WHERE effect_name = 'residual' AND phenotype_name_1 = '", pn_safe, "'",
              " AND condition_column IS NULL"))
   }
 

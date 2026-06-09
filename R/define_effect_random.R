@@ -63,13 +63,13 @@ define_effect_random <- function(pop,
   stopifnot(is.character(source_table), nzchar(source_table))
   distribution <- match.arg(distribution)
 
-  # Resolve variance: check trait_effect_cov first (keyed by phenotype_name for random effs)
-  stored_var <- get_effect_var(pop, effect_name, phenotype_name)
+  # Resolve variance: check phenotype_var_comp first
+  stored_var <- get_phenotype_var(pop, effect_name, phenotype_name)
   if (!is.na(stored_var)) {
     variance <- stored_var
   } else {
     if (is.null(variance)) {
-      stop("No variance found in trait_effect_cov for effect '", effect_name,
+      stop("No variance found in phenotype_var_comp for effect '", effect_name,
            "' / phenotype '", phenotype_name, "'. ",
            "Either call define_effect_cov_matrix() first or supply `variance`.",
            call. = FALSE)
@@ -78,8 +78,8 @@ define_effect_random <- function(pop,
         is.na(variance) || variance < 0) {
       stop("`variance` must be a non-negative number.", call. = FALSE)
     }
-    pop <- write_effect_cov_diagonal(pop, effect_name, phenotype_name,
-                                     as.numeric(variance))
+    pop <- write_phenotype_var_diag(pop, effect_name, phenotype_name,
+                                    as.numeric(variance))
   }
 
   if (!"trait_effects" %in% pop$tables) {
