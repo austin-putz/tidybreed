@@ -27,6 +27,11 @@ vignettes/qmd/*.duckdb.wal
 vignettes/qmd/eval_blup_*/
 vignettes/R/*.png
 
+# testthat failure artifacts
+tests/testthat/_problems/
+tests/testthat/testthat-problems.rds
+test_results.txt
+
 # lint
 .markdownlint*
 
