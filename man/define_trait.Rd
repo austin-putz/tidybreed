@@ -22,7 +22,7 @@ define_trait(
 trait. Must be a valid SQL identifier.}
 
 \item{target_add_var}{Numeric. Target additive genetic variance. Written to
-\code{trait_effect_cov} as a diagonal entry under \code{effect_name = "gen_add"}.
+\code{trait_var_comp} as a diagonal entry under \code{effect_name = "gen_add"}.
 Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to rescale effects. If already set via
 \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave \code{NULL}.}
 
@@ -49,7 +49,7 @@ The modified \code{tidybreed_pop} (invisibly).
 \description{
 Creates one row in \code{trait_meta} describing a \strong{genetic component trait}: a
 quantity with QTL effects in \code{genome_effects}, TBVs in \code{ind_tbv}, and
-additive genetic variance in \code{trait_effect_cov}. Contains no
+additive genetic variance in \code{trait_var_comp}. Contains no
 phenotype-level information.
 
 To register the \strong{observed phenotype} that individuals receive records for,

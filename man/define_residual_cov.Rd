@@ -38,9 +38,10 @@ this row applies to. \code{NULL} (default) = unconditional fallback row.}
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Writes rows to \code{phenotype_residual_cov} representing the residual
-(co)variance matrix for one or more phenotypes, optionally conditioned on a
-group variable (e.g. farm, sex). Both \verb{(i,j)} and \verb{(j,i)} pairs are stored.
+Writes rows to \code{phenotype_var_comp} (with \code{effect_name = "residual"})
+representing the residual (co)variance matrix for one or more phenotypes,
+optionally conditioned on a group variable (e.g. farm, sex). Both \verb{(i,j)}
+and \verb{(j,i)} pairs are stored.
 
 Three typical call patterns:
 \enumerate{

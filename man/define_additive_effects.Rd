@@ -34,8 +34,8 @@ trait only), in ascending \code{locus_id} order. Error if \code{length(trait_nam
 
 \item{G}{Optional numeric matrix of additive-genetic (co)variances (multi-trait
 only). Must be square and symmetric with side length \code{length(trait_name)}.
-When supplied, stored to \code{trait_effect_cov} under \code{"gen_add"}. When \code{NULL},
-read from \code{trait_effect_cov}.}
+When supplied, stored to \code{trait_var_comp} under \code{"gen_add"}. When \code{NULL},
+read from \code{trait_var_comp}.}
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}. Multi-trait only.
 \code{"shared"} — all listed traits use the filtered loci as their shared QTL

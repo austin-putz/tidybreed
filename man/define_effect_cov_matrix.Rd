@@ -16,14 +16,14 @@ define_effect_cov_matrix(
 \item{pop}{A \code{tidybreed_pop} object.}
 
 \item{effect_name}{Character. Label for the variance component, e.g.
-\code{"gen_add"}, \code{"residual"}, \code{"litter"}.}
+\code{"gen_add"}, \code{"residual"}, \code{"hys"}.}
 
 \item{cov_matrix}{A numeric square matrix. Must be symmetric within \code{tol}.
-Row and column names are used as trait names when \code{trait_names} is not
-supplied.}
+Row and column names are used as trait/phenotype names when \code{trait_names}
+is not supplied.}
 
-\item{trait_names}{Optional character vector of trait names (length ==
-\code{nrow(cov_matrix)}). Overrides the matrix's \code{rownames} / \code{colnames}.}
+\item{trait_names}{Optional character vector of trait/phenotype names (length
+== \code{nrow(cov_matrix)}). Overrides the matrix's \code{rownames} / \code{colnames}.}
 
 \item{tol}{Numeric. Tolerance for symmetry check (default \code{1e-9}).}
 }
@@ -31,52 +31,53 @@ supplied.}
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Writes a symmetric variance-covariance matrix into the unified
-\code{trait_effect_cov} table under a user-supplied \code{effect_name}. This is the
-single entry point for storing all variance and covariance data in
-tidybreed.
+Single entry point for storing all variance and covariance data in tidybreed.
+Routes to \code{trait_var_comp} for genetic effects and to \code{phenotype_var_comp} for
+phenotype-level effects.
 
 Common \code{effect_name} values:
 \itemize{
-\item \code{"gen_add"} — additive genetic (co)variances (G matrix). Used by
-\code{\link[=define_additive_effects]{define_additive_effects()}} when rescaling to target variance and by
-\code{\link[=define_additive_effects]{define_additive_effects()}} as the sampling distribution for multi-trait draws.
-\item \code{"residual"} — residual (co)variances (R matrix). \strong{Routed to
-\code{phenotype_residual_cov}} (not \code{trait_effect_cov}). Matrix row/column
-names are treated as \code{phenotype_name} values. Equivalent to calling
-\code{\link[=define_residual_cov]{define_residual_cov()}} with \code{condition_column = NULL}. Use this for a
-multi-phenotype correlated residual matrix; for a single scalar residual
-use \code{residual_var} in \code{\link[=define_phenotype]{define_phenotype()}} instead.
-\item Any named random effect (\code{"litter"}, \code{"herd"}, \code{"dam"}, …) — must match
-the \code{effect_name} used in \code{\link[=define_effect_random]{define_effect_random()}}.
+\item \code{"gen_add"} — additive genetic (co)variances (G matrix). Written to
+\code{trait_var_comp}. Used by \code{\link[=define_additive_effects]{define_additive_effects()}} when rescaling to
+target variance and as the sampling distribution for multi-trait draws.
+\item \code{"dominance"}, \code{"epistasis"} — future genetic effects. Written to
+\code{trait_var_comp}. Row/column names are trait names.
+\item \code{"residual"} — residual (co)variances (R matrix). Routed to
+\code{phenotype_var_comp} with \code{effect_name = "residual"}. Row/column names are
+phenotype names. Equivalent to calling \code{\link[=define_residual_cov]{define_residual_cov()}} with
+\code{condition_column = NULL}. Use this for a multi-phenotype correlated
+residual matrix; for a single scalar residual use \code{residual_var} in
+\code{\link[=define_phenotype]{define_phenotype()}} instead.
+\item Any named random effect (\code{"hys"}, \code{"litter"}, \code{"pen"}, …) — written to
+\code{phenotype_var_comp}. Must match the \code{effect_name} used in
+\code{\link[=define_effect_random]{define_effect_random()}}. Row/column names are phenotype names.
 }
 
 \code{define_effect_cov_matrix()} can be called \strong{before} \code{\link[=define_trait]{define_trait()}} or
-\code{\link[=define_effect_random]{define_effect_random()}} — no prior setup is required. Intended to be called
-early in a simulation so that downstream functions can look up stored
-variances automatically.
+\code{\link[=define_effect_random]{define_effect_random()}} — no prior setup is required.
 
-All n² pairs (diagonal and both off-diagonal directions) are stored to
-support lookups in either (trait_name_1, trait_name_2) order. Previous entries for
-this \code{effect_name} × traits combination are replaced.
+All n² pairs are stored. Previous entries for this \code{effect_name} × names
+combination are replaced.
 }
 \examples{
 \dontrun{
-# Define additive genetic covariance matrix early in simulation setup
+# Additive genetic covariance matrix → trait_var_comp
 G <- matrix(c(100, -20, -20, 50), 2, 2,
             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
   define_effect_cov_matrix("gen_add", G)
 
+# Residual → phenotype_var_comp (effect_name = "residual")
 R <- matrix(c(30, 5, 5, 10), 2, 2,
             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
   define_effect_cov_matrix("residual", R)
 
-# Single-trait variance (1x1 matrix)
+# Multi-phenotype HYS covariance → phenotype_var_comp (effect_name = "hys")
+R_hys <- matrix(c(0.2, 0.05, 0.05, 0.3), 2, 2,
+                dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
-  define_effect_cov_matrix("gen_add",
-    matrix(100, 1, 1, dimnames = list("ADG", "ADG")))
+  define_effect_cov_matrix("hys", R_hys)
 }
 }
 \seealso{

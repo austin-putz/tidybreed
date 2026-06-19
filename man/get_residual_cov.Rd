@@ -2,7 +2,7 @@
 % Please edit documentation in R/phenotype_helpers.R
 \name{get_residual_cov}
 \alias{get_residual_cov}
-\title{Look up residual covariance information from phenotype_residual_cov}
+\title{Look up residual covariance information from phenotype_var_comp}
 \usage{
 get_residual_cov(pop, phenotype_names, subset_df = NULL)
 }
@@ -25,6 +25,6 @@ A list:
 }
 }
 \description{
-Look up residual covariance information from phenotype_residual_cov
+Look up residual covariance information from phenotype_var_comp
 }
 \keyword{internal}

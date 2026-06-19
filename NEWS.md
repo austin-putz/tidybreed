@@ -1,3 +1,22 @@
+# tidybreed 0.42.1 (2026-06-18)
+
+## Documentation
+
+* Regenerated `man/` docs to complete the v0.42.0 internal helper renames:
+  deleted stale `ensure_effect_cov_table.Rd`, `get_effect_var.Rd`,
+  `load_effect_cov.Rd`, `write_effect_cov_diagonal.Rd`; added
+  `ensure_trait_var_comp.Rd`, `ensure_phenotype_var_comp.Rd`,
+  `get_trait_var.Rd`, `get_phenotype_var.Rd`, `load_trait_cov.Rd`,
+  `load_phenotype_cov.Rd`, `write_trait_var_diag.Rd`,
+  `write_phenotype_var_diag.Rd`, `dot-migrate_var_comp_tables.Rd`.
+
+## Vignettes
+
+* Updated swine vignette (`swine-time-based-age-at-puberty-sex-semen.R`) to
+  add `ADFI` as a seventh genetic trait and sixth phenotype. Updated additive
+  genetic, residual, and pen variance/covariance matrices to include `ADFI`.
+  Added symmetry checks (`isSymmetric()`) for all three matrices.
+
 # tidybreed 0.42.0 (2026-06-09)
 
 ## Breaking changes

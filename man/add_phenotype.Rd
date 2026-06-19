@@ -54,7 +54,7 @@ standard additive TBV from \code{genome_effects}.
 \item For \strong{composite} phenotypes (rows in \code{phenotype_components}), \code{TBV_i} is
 the weighted sum of contributor TBVs (self, dam, sire, or group).
 \item \code{e_i} is residual: drawn from \code{MVN(0, R)} across phenotypes when a
-covariance matrix is stored in \code{phenotype_residual_cov} and multiple
+covariance matrix is stored in \code{phenotype_var_comp} and multiple
 phenotypes share the same subset; otherwise drawn independently.
 }
 

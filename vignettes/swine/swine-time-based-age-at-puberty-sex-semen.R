@@ -512,15 +512,22 @@ pop %>% get_table("genome_meta")
 warning("Add genetic covariance matrix")
 
 # additive genetic (CO)VARIANCES
-vars.mat.add <- matrix(c(200.00,  0.00,    0.00,  0.00, 0.00, 0.00,
-                               0.00,  0.90,    3.07,  0.21, 0.00, 0.00,
-                               0.00,  3.07, 1050.00, 17.80, 0.00, 0.00,
-                               0.00,  0.21,   17.80,  1.20, 0.00, 0.00,
-                               0.00,  0.00,    0.00,  0.00, 0.04, 0.00,
-                               0.00,  0.00,    0.00,  0.00, 0.00, 0.13), 
-                      nrow = 6, byrow=TRUE, 
-                      dimnames = list(c("AP", "NW", "ADG", "BF", "WWD", "WWM"), 
-                                      c("AP", "NW", "ADG", "BF", "WWD", "WWM")))
+vars.mat.add <- matrix(c(200.00,  0.00,    0.00,  0.00,    0.00, 0.00, 0.00,
+                           0.00,  0.90,    3.07,  0.00,    0.21, 0.00, 0.00,
+                           0.00,  3.07,  0.0045,  0.0058, 17.80, 0.00, 0.00,
+                           0.00,  0.00,  0.0058,  0.03,    0.00, 0.00, 0.00,
+                           0.00,  0.21,   17.80,  0.00,    1.20, 0.00, 0.00,
+                           0.00,  0.00,    0.00,  0.00,    0.00, 0.04, 0.00,
+                           0.00,  0.00,    0.00,  0.00,    0.00, 0.00, 0.13), 
+                      nrow = 7, byrow=TRUE, 
+                      dimnames = list(c("AP", "NW", "ADG", "ADFI", "BF", "WWD", "WWM"), 
+                                      c("AP", "NW", "ADG", "ADFI", "BF", "WWD", "WWM")))
+
+if (isSymmetric(vars.mat.add)){
+  message("Check: Additive genetic (co)variance matrix is symmetric")
+} else {
+  stop("Check: Additive genetic (co)varianc matrix NOT symmetric")
+}
 
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
@@ -543,14 +550,21 @@ warning("Add residual covariance matrix")
 # NOTE: Only 5 phenotypes, while 6 "traits" above
 
 # residual (CO)VARIANCES
-vars.mat.res <- matrix(c(400,  0.00,    0.00,  0.00, 0.00,
-                         0.0,  8.10,   10.00,  0.65, 0.00,
-                         0.0, 10.00, 2100.00, 10.00, 0.00,
-                         0.0,  0.65,   10.00,  1.30, 0.00,
-                         0.0,  0.00,    0.00,  0.00, 0.45), 
-                      nrow = 5, byrow=TRUE, 
-                      dimnames = list(c("AP", "NW", "ADG", "BF", "WW"), 
-                                      c("AP", "NW", "ADG", "BF", "WW")))
+vars.mat.res <- matrix(c(400,  0.00,  0.00,   0.0000,  0.00, 0.00,
+                         0.0,  8.10,  0.00,   0.0000,  0.65, 0.00,
+                         0.0,  0.00,  0.0067, 0.0077, 10.00, 0.00,
+                         0.0,  0.00,  0.0077, 0.0560,  0.00, 0.00,
+                         0.0,  0.65, 10.00,   0.0000,  1.30, 0.00,
+                         0.0,  0.00,  0.00,   0.0000,  0.00, 0.45), 
+                      nrow = 6, byrow=TRUE, 
+                      dimnames = list(c("AP", "NW", "ADG", "ADFI", "BF", "WW"), 
+                                      c("AP", "NW", "ADG", "ADFI", "BF", "WW")))
+
+if (isSymmetric(vars.mat.res)){
+  message("Check: Residual (co)variance matrix is symmetric")
+} else {
+  stop("Check: Residual (co)varianc matrix NOT symmetric")
+}
 
 # add this residual covariance matrix to a table with function
 pop <- pop %>%
@@ -571,13 +585,20 @@ warning("Add pen covariance matrix")
 # NOTE: Only 2 phenotypes have pen effects
 
 # residual (CO)VARIANCES
-vars.mat.pen <- matrix(c(100.00, 1.58,
-                           1.58, 0.10), 
-                      nrow = 2, byrow=TRUE, 
-                      dimnames = list(c("ADG", "BF"), 
-                                      c("ADG", "BF")))
+vars.mat.pen <- matrix(c(0.0005, 0.00,   0.00,
+                         0.00,   0.0072, 0.00,
+                         0.00,   0.00,   0.3125), 
+                      nrow = 3, byrow=TRUE, 
+                      dimnames = list(c("ADG", "ADFI", "BF"), 
+                                      c("ADG", "ADFI", "BF")))
 
-# add this residual covariance matrix to a table with function
+if (isSymmetric(vars.mat.pen)){
+  message("Check: Pen (co)variance matrix is symmetric")
+} else {
+  stop("Check: Pen (co)varianc matrix NOT symmetric")
+}
+
+# add this pen covariance matrix to a table with function
 pop <- pop %>%
   define_effect_cov_matrix(
     effect_name = "pen",      # fixed term for residual (co)variance matrix
@@ -585,7 +606,7 @@ pop <- pop %>%
   )
 
 # print residual variance components
-pop %>% get_table("phenotype_var_comp")
+pop %>% get_table("phenotype_var_comp") %>% filter(effect_name=="pen")
 
 
 #------------------------------------------------------------------------------#
@@ -599,33 +620,38 @@ gen_sd <- sqrt(diag(vars.mat.add))
 
 # percent inclusion
 pct <- c(
-  AP  = 0.10,  # lower is better
-  NW  = 0.25,  # higher is better
-  ADG = 0.20,  # higher is better
-  BF  = 0.10,  # lower is better
-  WWD = 0.15,  # higher is better (weaning weight direct)
-  WWM = 0.20   # higher is better (weaning weight maternal)
+  AP   = 0.10,  # lower is better
+  NW   = 0.15,  # higher is better
+  ADG  = 0.20,  # higher is better
+  ADFI = 0.10,  # lower is better
+  BF   = 0.10,  # lower is better
+  WWD  = 0.15,  # higher is better (weaning weight direct)
+  WWM  = 0.20   # higher is better (weaning weight maternal)
 )
 barplot(pct, col="steelblue", main="Target Percent")
 
 # direction required
 direction <- c(
-  AP  = -1,
-  NW  =  1,
-  ADG =  1,
-  BF  = -1,
-  WWD =  1,
-  WWM =  1
+  AP   = -1,
+  NW   =  1,
+  ADG  =  1,
+  ADFI = -1,
+  BF   = -1,
+  WWD  =  1,
+  WWM  =  1
 )
+barplot(direction, col="steelblue", main="Direction (+1 or -1)")
 
 acc <- c(
-  AP  = 0.50,
-  NW  = 0.30,
-  ADG = 0.75,
-  BF  = 0.75,
-  WWD = 0.50,
-  WWM = 0.45
+  AP   = 0.50,
+  NW   = 0.30,
+  ADG  = 0.75,
+  ADFI = 0.65,
+  BF   = 0.75,
+  WWD  = 0.50,
+  WWM  = 0.45
 )
+barplot(acc, col="steelblue", main="Accuracy (Guess)")
 
 # G for EBV (not TBV)
 G_ebv <- diag(acc) %*% vars.mat.add %*% diag(acc)
@@ -730,7 +756,10 @@ pop %>% get_table("genome_effects")
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     filter(rep == repl) %>%
-  add_tbv("AP", rep = repl)
+  add_tbv(
+    trait_name = "AP", 
+    rep = repl
+  )
 
 # print TBV table
 pop %>% get_table("ind_tbv")
@@ -741,7 +770,7 @@ pop %>%
   add_genotypes(chip_name = "9k")
 
 # print ind_meta table with new field for genotyped or not
-pop %>% get_table("ind_meta")
+pop %>% get_table("ind_meta") %>% slice_sample(n=2) %>% collect() %>% print(width=Inf)
 
 # extract genotypes on these animals
 pop %>%
@@ -831,7 +860,7 @@ if (all(list_founder_AP_ids == data.birth.date$id_ind) == FALSE){
 
 # ----- UPDATE 'puberty_date' in 'ind_meta' ----- #
 
-# add phenotype date within phenotype table
+# pull IDs of animals
 puberty_ids <- pop %>%
   get_table("ind_meta") %>%
   filter(
@@ -840,6 +869,7 @@ puberty_ids <- pop %>%
   ) %>%
   pull(id_ind)
 
+# add back phenotype date as "puberty_date" in ind_meta
 pop <- pop %>%
   get_table("ind_meta") %>%
   mutate_table(
@@ -861,6 +891,7 @@ pheno_rec_ids <- pop %>%
   ) %>%
   pull(id_phenotype)
 
+# add phenotype date now based on birth date + age at puberty
 pop <- pop %>%
   get_table("ind_phenotype") %>%
   mutate_table(
@@ -941,14 +972,14 @@ pop <- pop %>%
   define_trait(
     trait_name      = "ADG",
     description     = "Average Daily Gain",   # 
-    units           = "g/d",                  # grams per day during testing period
+    units           = "kg/d",                  # grams per day during testing period
     target_add_mean = 0,                      # mean TBV in 'base'
     overwrite       = TRUE                    # wipe this row if it exists and replace with this new data
   ) %>%
   define_phenotype(
     phenotype_name = "ADG", 
     type           = "continuous",
-    mean           = 1000,
+    mean           = 0.92,
     expressed_sex  = "both",
     min_value      = 0, 
     overwrite      = TRUE
@@ -960,7 +991,7 @@ pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
-  filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%
   define_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
@@ -972,7 +1003,10 @@ pop %>%
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     filter(rep == repl) %>%
-  add_tbv("ADG", rep = repl)
+  add_tbv(
+    trait_name = "ADG", 
+    rep = repl
+  )
 
 # print TBV table
 pop %>% get_table("ind_tbv")
@@ -992,7 +1026,7 @@ pop %>%
       off_test_date < start_date
       ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    phenotype_name = "ADG",              # trait name
+    phenotype_name = "ADG",     # trait name
     rep = repl                  # set rep number
   )
 
@@ -1025,7 +1059,7 @@ pop <- pop %>%
     overwrite      = TRUE
   ) 
 
-pop %>% get_table("trait_meta")
+pop %>% get_table("trait_meta") %>% collect() %>% print(width=Inf)
 pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
 
 # add which loci are QTL and their effects
@@ -1073,6 +1107,113 @@ pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "BF")
 
 # count new phenotypes
 pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "BF") %>% 
+  collect() %>% count()
+
+#------------------------------------------------------------#
+# Trait + Phenotype: Average Daily Feed Intake (ADFI)
+#------------------------------------------------------------#
+
+warning("Define ADFI")
+
+# add ADFI as a trait + phenotype
+pop <- pop %>%
+  define_trait(
+    trait_name      = "ADFI",
+    description     = "Average Daily Feed Intake", 
+    units           = "kg/d", 
+    target_add_mean = 0,                 # mean TBV in 'base'
+    overwrite       = TRUE
+  ) %>%
+  define_phenotype(
+    phenotype_name = "ADFI", 
+    type           = "continuous",
+    mean           = 2.52,
+    expressed_sex  = "both",
+    min_value      = 0, 
+    overwrite      = TRUE
+  ) 
+
+pop %>% get_table("trait_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
+
+# add which loci are QTL and their effects
+pop %>%
+  get_table("genome_meta") %>%
+    filter(is_9k != TRUE) %>%
+  # set loci as QTL for this trait
+  define_additive_effects(
+    trait_name      = "ADFI",        # trait name
+    distribution    = "normal",     # distribution of QTL effects
+    scale_to_target = TRUE,         # scale to meet additive variance target
+    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+  )
+
+# add all TBV for ADFI
+pop <- pop %>%
+  get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
+    filter(rep == repl) %>%
+  add_tbv("ADFI", rep = repl)
+
+# look at TBV table
+pop %>% get_table("ind_tbv") %>% filter(trait_name == "ADFI")
+
+# test `add_phenotype()` function
+pop %>%
+  get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
+    filter(
+      rep == repl,
+      off_test_date < start_date
+    ) %>%
+  add_phenotype(                # add rows to 'ind_phenotype' table
+    phenotype_name = "ADFI",          # phenotype name
+    rep = repl                  # add rep
+  )
+
+# print table
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "ADFI")
+
+# count new phenotypes
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "ADFI") %>% 
+  collect() %>% count()
+
+#------------------------------------------------------------#
+# Phenotype: Feed Conversion Ratio
+#------------------------------------------------------------#
+
+warning("Define FCR")
+
+# add ADFI as a trait + phenotype
+pop <- pop %>%
+  define_phenotype(
+    phenotype_name = "FCR", 
+    formula        = "ADFI / ADG", 
+    type           = "derived_formula",
+    #mean           = 2.52,
+    expressed_sex  = "both",
+    min_value      = 0, 
+    overwrite      = TRUE
+  ) 
+
+pop %>% get_table("trait_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
+
+# test `add_phenotype()` function
+pop %>%
+  get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
+    filter(
+      rep == repl,
+      off_test_date < start_date
+    ) %>%
+  add_phenotype(                # add rows to 'ind_phenotype' table
+    phenotype_name = "FCR",          # phenotype name
+    rep = repl                  # add rep
+  )
+
+# print table
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "FCR")
+
+# count new phenotypes
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "FCR") %>% 
   collect() %>% count()
 
 #------------------------------------------------------------------------------#
