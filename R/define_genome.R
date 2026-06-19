@@ -130,7 +130,16 @@ define_genome <- function(pop,
   # Update pop$tables
   pop$tables <- c(pop$tables, "genome_meta", "genome_haplotype", "genome_genotype")
 
-  message("Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes")
+  chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
+    paste0("all equal to ", chr_len_Mb[1], " Mb")
+  } else {
+    paste(paste0(chr_names, ":", chr_len_Mb), collapse = ", ")
+  }
+  message(
+    "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
+    " | chr lengths (Mb): ", chr_len_str,
+    "\n  Tables written: genome_meta, genome_haplotype, genome_genotype"
+  )
 
   pop
 }
