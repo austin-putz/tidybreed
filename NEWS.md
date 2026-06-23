@@ -1,3 +1,19 @@
+# tidybreed 0.43.1 (2026-06-23)
+
+## Bug fixes
+
+* `add_ebv()`: directory creation for BLUPF90 runs now routes through
+  `.create_run_dir()` when `pop$run_dirs` is non-empty (i.e. when [open_pop()]
+  was called with `tools`). Previously the eval directory was always created
+  relative to the `run_dir` parameter (defaulting to the working directory),
+  ignoring the managed folder structure entirely. In managed mode the directory
+  now lands inside `pop$run_dirs[["blupf90"]]` with the standard
+  `YYYYMMDD_HHMMSS_<6-char-random>` naming. If `"blupf90"` is not registered
+  in `pop$run_dirs`, `add_ebv()` stops with a clear message explaining how to
+  add it via `open_pop(..., tools = c("blupf90"))`. Passing `run_dir` or
+  `eval_id` in managed mode now produces an informative warning that they are
+  being ignored.
+
 # tidybreed 0.43.0 (2026-06-22)
 
 ## Bug fixes
