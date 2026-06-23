@@ -11,7 +11,7 @@ general:
   gest_len: 116
   lact_len: 21
   w2e_int: 4
-  wean_weight_mean: 6.5
+  wean_weight_mean: 6.0
 
 genome:
   n_loci: 10000

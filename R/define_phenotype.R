@@ -357,6 +357,14 @@ define_phenotype <- function(pop,
 
   # ── Insert into phenotype_meta ─────────────────────────────────────────────
 
+  if (is.null(mean) || length(mean) == 0) {
+    stop(
+      "`mean` for phenotype '", phenotype_name, "' is NULL or empty. ",
+      "Check that the config value is defined (e.g. config$general$wean_weight_mean).",
+      call. = FALSE
+    )
+  }
+
   new_id <- next_int_id(pop$db_conn, "phenotype_meta", "id_phenotype_meta")
 
   row <- tibble::tibble(

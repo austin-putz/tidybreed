@@ -1,3 +1,20 @@
+# tidybreed 0.43.0 (2026-06-22)
+
+## Bug fixes
+
+* `define_phenotype()`: added an explicit null/empty check on `mean` before
+  building the insert tibble. Previously, passing `mean = NULL` (e.g. from a
+  missing config key) caused `as.numeric(NULL)` → `numeric(0)`, which made
+  `tibble::tibble()` throw a silent length-mismatch error and left no row in
+  `phenotype_meta`. Now stops immediately with a clear message pointing to the
+  missing config value.
+
+## Vignettes
+
+* `age_at_puberty_sexed_semen.yaml`: added missing `wean_weight_mean: 6.0`
+  under `general`; its absence was the root cause of WW not being registered
+  in `phenotype_meta`.
+
 # tidybreed 0.42.1 (2026-06-18)
 
 ## Documentation
