@@ -1,3 +1,24 @@
+# tidybreed 0.45.0 (2026-06-24)
+
+## New functions
+
+* `mutate_group_seq()` — assigns sequential integer group IDs (pen 1, 2, 3 …)
+  to filtered rows. Supports fixed size, size range `c(min, max)`, and
+  `n_groups` modes. Auto-continues from `MAX + 1` or restarts with `start`.
+  Label reuse across unrelated rows never requires `overwrite = TRUE`.
+* `mutate_group_named()` — assigns named VARCHAR group labels by explicit
+  `counts` or `proportions`. The `prop_method` argument selects
+  largest-remainder (`"exact"`) or independent-draw (`"random"`) rounding.
+  `underfill_action` handles the case where fewer animals are available than
+  requested counts.
+* `mutate_group_concatenate()` — creates a deterministic VARCHAR composite
+  label by concatenating existing columns with a separator. `null_action`
+  controls NULL propagation (`"propagate"` / `"skip"` / `"literal"`).
+
+All three functions accept any `tidybreed_table` (not just `ind_meta`), use
+sorted primary-key ordering before shuffling for reproducibility, and share
+`overwrite`, `quiet`, and `seed` arguments following the tidybreed conventions.
+
 # tidybreed 0.44.1 (2026-06-24)
 
 ## Improvements
