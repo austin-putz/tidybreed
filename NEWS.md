@@ -1,3 +1,33 @@
+# tidybreed 0.44.1 (2026-06-24)
+
+## Improvements
+
+* `archive_replicate()`: added detailed progress messages after each phase —
+  archived tables with row counts, store_once tables copied vs. skipped,
+  tables wiped from the working DB, and an explicit note that
+  `tidybreed.replicate` was auto-incremented so users know not to manage the
+  counter themselves.
+
+# tidybreed 0.44.0 (2026-06-24)
+
+## New functions
+
+* `archive_replicate()` — accumulates multi-replicate simulation results in a
+  separate archive DuckDB file without ballooning the working DB. Archives
+  per-replicate tables (stamped with a `replicate` column), copies static
+  metadata tables once, then deletes working-DB rows so the next replicate
+  starts clean. Pipe-friendly (`pop |> archive_replicate()`). Controlled by
+  three new global options: `tidybreed.replicate` (default `1L`),
+  `tidybreed.archive_path` (directory), and `tidybreed.db_name_archive`
+  (filename). Supports both in-process loops and HPC/SLURM array jobs (one
+  archive file per job).
+
+## Internal changes
+
+* `"replicate"` added to `TABLE_RESERVED_COLS` for `ind_meta`, `ind_phenotype`,
+  `ind_tbv`, `ind_ebv`, `ind_index`, and `ind_true_index` so `mutate_table()`
+  blocks this column name (it is reserved for `archive_replicate()`).
+
 # tidybreed 0.43.1 (2026-06-23)
 
 ## Bug fixes

@@ -14,13 +14,16 @@ NULL
 .onLoad <- function(libname, pkgname) {
   op      <- options()
   defaults <- list(
-    tidybreed.base_dir  = getwd(),
-    tidybreed.output    = "tidybreed_output",
-    tidybreed.scenario  = NULL,
-    tidybreed.tools     = NULL,
-    tidybreed.db_name   = "sim.duckdb",
-    tidybreed.pop_name  = "sim",
-    tidybreed.quiet     = FALSE
+    tidybreed.base_dir        = getwd(),
+    tidybreed.output          = "tidybreed_output",
+    tidybreed.scenario        = NULL,
+    tidybreed.tools           = NULL,
+    tidybreed.db_name         = "sim.duckdb",
+    tidybreed.pop_name        = "sim",
+    tidybreed.quiet           = FALSE,
+    tidybreed.replicate       = 1L,
+    tidybreed.archive_path    = NULL,
+    tidybreed.db_name_archive = NULL
   )
   toset <- !(names(defaults) %in% names(op))
   if (any(toset)) options(defaults[toset])

@@ -70,14 +70,14 @@ validate_sql_identifier <- function(name, what = "identifier",
 TABLE_RESERVED_COLS <- list(
   "_schema_meta"   = c("id_schema_meta", "object_type", "table_name",
                        "column_name", "description", "notes"),
-  ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex"),
+  ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex", "replicate"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
   genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
                        "genome_effect_type", "genome_value", "base_allele_freq"),
   ind_phenotype    = c("id_phenotype", "id_ind", "trait_name", "pheno_value", "pheno_number",
-                       "liability_value", "cat_name"),
-  ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value"),
-  ind_ebv          = c("id_ebv", "id_ind", "trait_name", "model", "ebv_value", "acc", "se", "eval_number"),
+                       "liability_value", "cat_name", "replicate"),
+  ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value", "replicate"),
+  ind_ebv          = c("id_ebv", "id_ind", "trait_name", "model", "ebv_value", "acc", "se", "eval_number", "replicate"),
   trait_meta       = c("id_trait", "trait_name", "description", "units",
                        "expressed_parent", "target_add_mean"),
   phenotype_meta   = c("id_phenotype_meta", "phenotype_name", "type", "mean",
@@ -93,8 +93,8 @@ TABLE_RESERVED_COLS <- list(
                          "phenotype_name_2", "cov_value", "condition_column",
                          "condition_table", "condition_level", "weight_type", "poly_order"),
   index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight", "economic_weight"),
-  ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value"),
-  ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "true_index_value")
+  ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value", "replicate"),
+  ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "true_index_value", "replicate")
 )
 
 

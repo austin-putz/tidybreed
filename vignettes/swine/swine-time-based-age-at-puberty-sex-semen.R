@@ -28,6 +28,7 @@ if ("tidybreed" %in% installed.packages()){
   pak::pak("austin-putz/tidybreed", upgrade=TRUE)
 }
 
+# load libraries
 library(hrbrthemes)    # ggplot2 themes to try
 library(DBI)           # DBI -> main database connection/execution package
 library(glue)          # glue package for commands into DBI
@@ -39,17 +40,24 @@ library(tidybreed)     # tidybreed
 # Options
 #------------------------------------------------------------------------------#
 
+# set based on yaml in the future or command line argument
+cur_scenario_name = "age_at_puberty"
+
+# set options
 options(
   tidybreed.pop_name = "swine",
-  tidybreed.base_dir = getwd(),
-  tidybreed.output = "tidybreed_output",
-  tidybreed.scenario = "age_at_puberty",
-  tidybreed.tools = c("blupf90", "plink"),
-  tidybreed.db_name = "sim.duckdb"
+  tidybreed.base_dir = "~/Claude/tidybreed/vignettes/swine/",  # default is 'getwd()'
+  tidybreed.output   = "tidybreed_output",
+  tidybreed.scenario = cur_scenario_name,
+  tidybreed.tools    = c("blupf90", "plink"),
+  tidybreed.db_name  = "sim.duckdb",
+  tidybreed.replicate = 1L,                             # set with input later
+  tidybreed.archive_path = "~/Claude/tidybreed/vignettes/swine/results/",
+  tidybreed.db_name_archive = paste0(cur_scenario_name, "_all_reps.duckdb") # added with archive_rep() later
 )
 
 #------------------------------------------------------------------------------#
-# Set other input options outside yaml file
+# Set other input options 
 #------------------------------------------------------------------------------#
 
 tb_theme <- function(base_size = 12) {
@@ -68,35 +76,13 @@ tb_theme <- function(base_size = 12) {
     )
 }
 
-tb_colors <- c(
-  "#E67E22",
-  "#4E79A7",
-  "#59A14F",
-  "#E15759",
-  "#B07AA1",
-  "#EDC948",
-  "#2C3E50",
-  "#9D9D9D"
-)
-
-tb_science <- c(
-  "#D55E00", # orange
-  "#0072B2", # blue
-  "#009E73", # green
-  "#CC79A7", # purple
-  "#F0E442", # yellow
-  "#56B4E9", # light blue
-  "#999999"  # grey
-)
+tb_colors <- c("#E67E22","#4E79A7","#59A14F","#E15759","#B07AA1","#EDC948",
+               "#2C3E50","#9D9D9D")
+tb_science <- c("#D55E00","#0072B2","#009E73","#CC79A7","#F0E442","#56B4E9",
+                "#999999")
 
 # scale_fill_gradientn(
-#   colours = c(
-#     "#2C3E50",
-#     "#4E79A7",
-#     "#F5F5F5",
-#     "#E67E22",
-#     "#A04000"
-#   )
+#   colours = c("#2C3E50","#4E79A7","#F5F5F5","#E67E22","#A04000")
 # )
 
 #------------------------------------------------------------------------------#
@@ -124,7 +110,10 @@ if (!file.exists(config_path)) {
 message("reading yaml file now...")
 config <- yaml::read_yaml(config_path)
 
+# summary of config file
 data.config <- summary(config) %>% as.data.frame()
+
+# summarize yaml config file
 summary(config)
 
 # create output directory
@@ -133,13 +122,18 @@ if (dir.exists(config$output$save_dir)){
 } else {
   warning("Output directory will be created for user")
   # create directory if it doesn't exist
-  dir.create(config$output$save_dir, recursive=TRUE, showWarnings = TRUE)
+  dir.create(purrr::chuck(config, "output", "save_dir"), recursive=TRUE, showWarnings = TRUE)
 }
 
+# why use purrr::chuck() function? 
+#  - answer: purrr::chuck() will throw an error instead of 
+#    'config$level_1$level_2' will silently break and return NULL and not alert users
+
+# print numbers
 message("Number of matings per cycle: ", 
-        config$selection$n_dams_per_breeding)
+        purrr::chuck(config, "selection", "n_dams_per_breeding"))
 message("Number of top females to produce males only (rest female): ", 
-        config$sexed_semen$n_females_produce_males_per_breeding)
+        purrr::chuck(config, "sexed_semen", "n_females_produce_males_per_breeding"))
 
 #------------------------------------------------------------------------------#
 # general inputs
@@ -186,13 +180,20 @@ data.timing <- add_row(data.timing,
   cumulative_sec = NA
 )
 
+# print
+print(data.timing)
+
 #------------------------------------------------------------------------------#
 # Open Population Object with database
 #------------------------------------------------------------------------------#
 
+# start/open the population object and initialize the .duckdb database
 pop <- open_pop(
   clean = TRUE
 )
+
+# print pop object
+print(pop)
 
 #------------------------------------------------------------------------------#
 # Start Genome + Population Object with database
@@ -201,9 +202,9 @@ pop <- open_pop(
 # start population by building a genome
 pop <- pop %>%
   define_genome(
-		n_loci       = config$genome$n_loci,       # number of loci (nothing assigned as SNP or QTL yet...)
-		n_chr        = config$genome$n_chr,        # number of chromosomes
-		chr_len_Mb   = config$genome$chr_len      # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
+		n_loci       = config$genome$n_loci,  # number of loci (all* -> SNP/QTL/etc)
+		n_chr        = config$genome$n_chr,   # number of chromosomes
+		chr_len_Mb   = config$genome$chr_len  # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
 	)
 
 # print genome info table (1 row per locus)
@@ -229,7 +230,7 @@ pop <- pop %>%
     line_name        = "B",
     n_haplotypes     = config$genome$n_haplotypes,
     method           = "fixed",     # just 1 frequency (default = 0.5)
-    allele_freq      = 0.5          # all 50% 
+    allele_freq      = 0.5          # all p=0.50 
   )
 
 # line C
@@ -277,11 +278,13 @@ pop <- pop %>%
 
 #-------------------- ind_meta --------------------#
 
-# create 2 custom fields for simulation pipeline
+# ind_meta stores 1 row per individual and would track the pedigree, sex, etc
+
+# add custom fields for simulation pipeline
 pop %>% 
   get_table("ind_meta") %>% 
   mutate_table(
-    rep           = NA_integer_,    # rep (replication) number as 'integer'
+    #rep           = NA_integer_,    # rep (replication) number as 'integer'
     status        = NA_character_,  # status [e.g. 'juvenile', 'off-test-gilt', 'gest', 'lact', etc]
     conc_date     = as.Date(NA),    # conception date
     birth_date    = as.Date(NA),    # birth date
@@ -296,7 +299,6 @@ pop %>%
   )
 
 # add 'active' & 'alive' fields, set DEFAULT value (not missing)
-# here so when animals are born they are not "active" by default, only for repro active
 pop %>%
   get_table("ind_meta") %>%
   mutate_table(
@@ -305,10 +307,10 @@ pop %>%
     .set_default = TRUE      # if TRUE, sets default of given value
   )
 
-# define descriptions of user define fields
+# define descriptions of user define fields for schema() and describe_table()
 pop %>%
   get_table("ind_meta") %>%
-  define_schema_description("rep",          "Replicate number (1 to n)") %>%
+  #define_schema_description("rep",          "Replicate number (1 to n)") %>%
   define_schema_description("status",       "Production status of the animals (e.g. 'gestation')") %>%
   define_schema_description("conc_date",    "Conception Date") %>%
   define_schema_description("birth_date",   "Birth date") %>%
@@ -336,7 +338,7 @@ schema(pop)
 pop %>%
   get_table("ind_phenotype") %>%
   mutate_table(
-    rep          = NA_integer_,    # add rep to phenotypes
+    #rep          = NA_integer_,    # add rep to phenotypes
     current_date = as.Date(NA),    # add current date (to subset ind later)
     pheno_date   = as.Date(NA),    # add phenotype date
     .set_default = TRUE            # if TRUE, sets default of given value
@@ -345,7 +347,7 @@ pop %>%
 # set new schema descriptions
 pop %>%
   get_table("ind_phenotype") %>%
-  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  #define_schema_description("rep", "Replicate number (1 to n)") %>%
   define_schema_description("current_date", "Current date") %>%
   define_schema_description("pheno_date", "Phenotype date (could be in the future...)")
 
@@ -358,18 +360,6 @@ pop %>% get_table("ind_phenotype")
 #-------------------- ind_tbv --------------------#
 
 # ind_tbv stores the calculated TBV for each individual (only calculated once!)
-
-# add 'rep' to 'ind_tbv'
-pop %>%
-  get_table("ind_tbv") %>%
-  mutate_table(
-    rep = NA_integer_         # add replicate
-  )
-
-# set new schema descriptions
-pop %>%
-  get_table("ind_tbv") %>%
-  define_schema_description("rep", "Replicate number (1 to n)")
 
 # print field descriptions
 pop %>% describe_table("ind_tbv")
@@ -385,7 +375,7 @@ pop %>% get_table("ind_tbv")
 pop %>%
   get_table("ind_ebv") %>%
   mutate_table(
-    rep          = NA_integer_,     # add replicate
+    #rep          = NA_integer_,     # add replicate
     eval_date    = as.Date(NA),     # add evaluation date
     .set_default = TRUE             # if TRUE, sets default of given value
   )
@@ -393,7 +383,7 @@ pop %>%
 # set new schema descriptions
 pop %>%
   get_table("ind_ebv") %>%
-  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  #define_schema_description("rep", "Replicate number (1 to n)") %>%
   define_schema_description("eval_date", "Evaluation date")
 
 # print field descriptions
@@ -408,14 +398,14 @@ pop %>% get_table("ind_ebv")
 pop %>%
   get_table("ind_index") %>%
   mutate_table(
-    index_date = as.Date(NA),     # index calculation date
-    rep        = NA_integer_      # replicate
+    index_date = as.Date(NA)     # index calculation date
+    #rep        = NA_integer_      # replicate
   )
 
 # set new schema descriptions
 pop %>%
   get_table("ind_index") %>%
-  define_schema_description("rep", "Replicate number (1 to n)") %>%
+  #define_schema_description("rep", "Replicate number (1 to n)") %>%
   define_schema_description("index_date", "Index date of calculation")
 
 # print field descriptions
@@ -450,11 +440,13 @@ days_between_founders <- as.numeric(max_birth_date - min_birth_date)
 message("min/max birth date: ", min_birth_date, " / ", max_birth_date, 
         " (", days_between_founders, " days)")
 
-# sample birth dates
+# sample birth dates for founders to simulate starting a farm with a ladder 
+# of different ages
 sampled_birth_dates <- min_birth_date + 
   round(runif(n = (config$population$n_founder_male + config$population$n_founder_female),
          min = 0, max = days_between_founders))
 
+# now create a tibble with sampled birth dates
 data.founder.birth.dates <- tibble(
   birth_date = sampled_birth_dates
 )
@@ -469,15 +461,15 @@ ggplot(aes(x=birth_date)) +
 
 # add founders
 pop <- pop %>%
-  get_table("founder_haplotypes") %>%
+  get_table("founder_haplotypes") %>%      # filter specific haplotypes
   filter(
     line_name == "A"
   ) %>%
   add_founders(                                            # add founders
     n_males       = config$population$n_founder_male,      # sample male founders
     n_females     = config$population$n_founder_female,    # sample female founders
-    line_name     = "A",                               # name this line
-    rep           = repl,                                  # USER DEFINED - replicate
+    line_name     = "A",                                   # name this line
+    #rep           = repl,                                  # USER DEFINED - replicate
     conc_date     = sampled_birth_dates - config$general$gest_len, 
     birth_date    = sampled_birth_dates, 
     on_test_date  = sampled_birth_dates + config$testing$on_test_age,
@@ -495,11 +487,13 @@ warning("Add 9k Chip")
 # add 9k SNP Chip
 pop %>%
   get_table("genome_meta") %>%      # pass table with loci info (all loci)
-    slice_sample(n=9000) %>%        # sample 9000 SNP
+    slice_sample(n=9000) %>%        # sample 9000 SNP randomly
   define_chip(chip_name = "9k")     # define SNP Chip (give name -> assign loci)
 
 # print genome_meta table
 pop %>% get_table("genome_meta")
+
+# define_chip() added field name "is_9k" to genome_meta
 
 #------------------------------------------------------------------------------#
 # Add Traits
@@ -514,9 +508,9 @@ warning("Add genetic covariance matrix")
 # additive genetic (CO)VARIANCES
 vars.mat.add <- matrix(c(200.00,  0.00,    0.00,  0.00,    0.00, 0.00, 0.00,
                            0.00,  0.90,    3.07,  0.00,    0.21, 0.00, 0.00,
-                           0.00,  3.07,  0.0045,  0.0058, 17.80, 0.00, 0.00,
+                           0.00,  3.07,  0.0045,  0.0058,  0.01, 0.00, 0.00,
                            0.00,  0.00,  0.0058,  0.03,    0.00, 0.00, 0.00,
-                           0.00,  0.21,   17.80,  0.00,    1.20, 0.00, 0.00,
+                           0.00,  0.21,    0.01,  0.00,    1.20, 0.00, 0.00,
                            0.00,  0.00,    0.00,  0.00,    0.00, 0.04, 0.00,
                            0.00,  0.00,    0.00,  0.00,    0.00, 0.00, 0.13), 
                       nrow = 7, byrow=TRUE, 
@@ -532,8 +526,8 @@ if (isSymmetric(vars.mat.add)){
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   define_effect_cov_matrix(
-    effect_name = "gen_add",          # fixed term for additive genetic (co)variance matrix
-    cov_matrix  = vars.mat.add    # name of matrix with row/col names
+    effect_name = "gen_add",    # fixed term for additive genetic (co)variance matrix
+    cov_matrix  = vars.mat.add  # name of matrix with row/col names
   )
 
 # print additive variance components
@@ -543,18 +537,16 @@ pop %>% get_table("trait_var_comp")
 # Residual Covariance
 #------------------------------------------------------------#
 
-# go to CorrDB
-
 warning("Add residual covariance matrix")
 
-# NOTE: Only 5 phenotypes, while 6 "traits" above
+# NOTE: Only 6 phenotypes, while 7 "traits" above
 
 # residual (CO)VARIANCES
 vars.mat.res <- matrix(c(400,  0.00,  0.00,   0.0000,  0.00, 0.00,
                          0.0,  8.10,  0.00,   0.0000,  0.65, 0.00,
-                         0.0,  0.00,  0.0067, 0.0077, 10.00, 0.00,
+                         0.0,  0.00,  0.0067, 0.0077,  0.05, 0.00,
                          0.0,  0.00,  0.0077, 0.0560,  0.00, 0.00,
-                         0.0,  0.65, 10.00,   0.0000,  1.30, 0.00,
+                         0.0,  0.65,  0.05,   0.0000,  1.30, 0.00,
                          0.0,  0.00,  0.00,   0.0000,  0.00, 0.45), 
                       nrow = 6, byrow=TRUE, 
                       dimnames = list(c("AP", "NW", "ADG", "ADFI", "BF", "WW"), 
@@ -575,6 +567,8 @@ pop <- pop %>%
 
 # print residual variance components
 pop %>% get_table("phenotype_var_comp")
+
+# phenotype_var_comp will also store other random effect cov matrices
 
 #------------------------------------------------------------#
 # Pen Covariance
@@ -606,7 +600,8 @@ pop <- pop %>%
   )
 
 # print residual variance components
-pop %>% get_table("phenotype_var_comp") %>% filter(effect_name=="pen")
+pop %>% get_table("phenotype_var_comp") %>% 
+  filter(effect_name=="pen")
 
 
 #------------------------------------------------------------------------------#
@@ -628,7 +623,7 @@ pct <- c(
   WWD  = 0.15,  # higher is better (weaning weight direct)
   WWM  = 0.20   # higher is better (weaning weight maternal)
 )
-barplot(pct, col="steelblue", main="Target Percent")
+barplot(pct, col="steelblue", main="Target Percent of Index")
 
 # direction required
 direction <- c(
@@ -655,11 +650,11 @@ barplot(acc, col="steelblue", main="Accuracy (Guess)")
 
 # G for EBV (not TBV)
 G_ebv <- diag(acc) %*% vars.mat.add %*% diag(acc)
-G_ebv
+G_ebv %>% round(4)
 
 # first-pass raw weights
 b <- pct * direction / gen_sd
-barplot(b, col="steelblue", main="b weights")
+barplot(b, col="steelblue", main="b raw weights")
 
 # expected response in original trait units
 response_units <- G_ebv %*% b
@@ -672,8 +667,7 @@ barplot(response_sd_units[,1], col="steelblue", main="response (sd units)")
 
 # realized standardized emphasis
 realized_pct <- abs(response_sd_units) / sum(abs(response_sd_units))
-barplot(realized_pct[,1], col="steelblue", main="")
-
+barplot(realized_pct[,1], col="steelblue", main="Realized Percent")
 
 # diagonal matrix with inverse of genetic SD on diagonal
 D_inv <- diag(1 / gen_sd)
@@ -683,7 +677,7 @@ M <- D_inv %*% G_ebv
 
 # target %
 target <- pct * direction
-barplot(target, col="steelblue", main="Target Percent")
+barplot(target, col="steelblue", main="Target Percent (+/-)")
 
 b_adjusted <- solve(M, target)
 names(b_adjusted) <- rownames(vars.mat.add)
@@ -697,9 +691,9 @@ abs(check) / sum(abs(check))
 pop %>%
   define_index(
     index_name   = "maternal",
-    trait_names  = c("AP", "NW", "ADG", "BF", "WWD", "WWM"),
+    trait_names  = names(b_adjusted),
     index_wts    = b_adjusted,
-    economic_wts = c(-3.0, 40, 2.0, -20, 0.25, 0.50)
+    economic_wts = b_adjusted
   )
 
 # print table with index values
@@ -741,7 +735,7 @@ pop %>% get_table("phenotype_components") %>% collect() %>% print(width=Inf)
 # add which loci are QTL and their effects
 pop %>%
   get_table("genome_meta") %>%
-    filter(is_9k != TRUE) %>%
+    filter(is_9k != TRUE) %>%            # QTL will not be on 9k SNP chip
   define_additive_effects(
     trait_name      = "AP", 
     distribution    = "normal", 
@@ -755,10 +749,9 @@ pop %>% get_table("genome_effects")
 # calculate all TBV for AP
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    filter(rep == repl) %>%
+    #filter(rep == repl) %>%
   add_tbv(
-    trait_name = "AP", 
-    rep = repl
+    trait_name = "AP"
   )
 
 # print TBV table
@@ -772,12 +765,12 @@ pop %>%
 # print ind_meta table with new field for genotyped or not
 pop %>% get_table("ind_meta") %>% slice_sample(n=2) %>% collect() %>% print(width=Inf)
 
-# extract genotypes on these animals
+# extract genotypes on 9k (all with 9k genotype)
 pop %>%
   get_table("ind_meta") %>%
   extract_genotypes(chip_name = "9k")
 
-# extract SNPs for this trait (2 animals)
+# extract QTL for this trait (2 animals)
 pop %>%
   get_table("ind_meta") %>%
     filter(
@@ -807,12 +800,11 @@ pop %>%
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
     filter(
-      rep == repl,
-      sex == "F",
+      #rep == repl,
+      sex == "F"
     ) %>%
-  add_phenotype(                # add rows to 'ind_phenotye' table
-    phenotype_name = "AP",    # phenotype name
-    rep = repl                # set rep number
+  add_phenotype(              # add rows to 'ind_phenotye' table
+    phenotype_name = "AP"     # phenotype name
   )
 
 # print phenotype table
@@ -824,7 +816,7 @@ pop %>% get_table("ind_phenotype")
 data.age.puberty <- pop %>%
   get_table("ind_phenotype") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     phenotype_name == "AP"
   ) %>%
   select(id_ind, pheno_value) %>%
@@ -839,7 +831,7 @@ list_founder_AP_ids <- as.character(data.age.puberty$id_ind)
 data.birth.date <- pop %>%
   get_table("ind_meta") %>%
     filter(
-      rep == repl,
+      #rep == repl,
       id_ind %in% list_founder_AP_ids
     ) %>%
   select(id_ind, birth_date) %>%
@@ -864,7 +856,7 @@ if (all(list_founder_AP_ids == data.birth.date$id_ind) == FALSE){
 puberty_ids <- pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F"
   ) %>%
   pull(id_ind)
@@ -885,7 +877,7 @@ pop <- pop %>%
 pheno_rec_ids <- pop %>%
   get_table("ind_phenotype") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     phenotype_name == "AP",
     id_ind %in% list_founder_AP_ids
   ) %>%
@@ -921,7 +913,7 @@ message("Change Status - 'after-test-gilt'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     off_test_date < start_date
   ) %>%
@@ -935,7 +927,7 @@ message("Change Status - 'puberty-gilt'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     puberty_date < start_date
   ) %>%
@@ -952,7 +944,7 @@ cur_gilt_cull_date <- start_date - config$culling$gilt_cull_days_after_off_test
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     status == "after-test-gilt" | status == "puberty-gilt",
     off_test_date < cur_gilt_cull_date       # paste X days, cull them if not in puberty
@@ -1002,10 +994,9 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    filter(rep == repl) %>%
+    #filter(rep == repl) %>%
   add_tbv(
-    trait_name = "ADG", 
-    rep = repl
+    trait_name = "ADG"
   )
 
 # print TBV table
@@ -1022,12 +1013,11 @@ pop %>% get_table("ind_tbv")
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
     filter(
-      rep == repl,
+      #rep == repl,
       off_test_date < start_date
       ) %>%
   add_phenotype(                # add rows to 'ind_phenotye' table
-    phenotype_name = "ADG",     # trait name
-    rep = repl                  # set rep number
+    phenotype_name = "ADG"      # trait name
   )
 
 # check ADG phenotype count
@@ -1077,7 +1067,7 @@ pop %>%
 # add all TBV for BF
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    filter(rep == repl) %>%
+    #filter(rep == repl) %>%
   add_tbv("BF", rep = repl)
 
 # look at TBV table
@@ -1094,12 +1084,11 @@ pop %>%
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
     filter(
-      rep == repl,
+      #rep == repl,
       off_test_date < start_date
     ) %>%
   add_phenotype(                # add rows to 'ind_phenotype' table
-    phenotype_name = "BF",          # phenotype name
-    rep = repl                  # add rep
+    phenotype_name = "BF"       # phenotype name
   )
 
 # print table
@@ -1151,8 +1140,8 @@ pop %>%
 # add all TBV for ADFI
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    filter(rep == repl) %>%
-  add_tbv("ADFI", rep = repl)
+    #filter(rep == repl) %>%
+  add_tbv("ADFI")
 
 # look at TBV table
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "ADFI")
@@ -1161,12 +1150,11 @@ pop %>% get_table("ind_tbv") %>% filter(trait_name == "ADFI")
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
     filter(
-      rep == repl,
+      #rep == repl,
       off_test_date < start_date
     ) %>%
   add_phenotype(                # add rows to 'ind_phenotype' table
-    phenotype_name = "ADFI",          # phenotype name
-    rep = repl                  # add rep
+    phenotype_name = "ADFI"     # phenotype name
   )
 
 # print table
@@ -1201,12 +1189,11 @@ pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
 pop %>%
   get_table("ind_meta") %>%     # will phenotype all individuals in this table with no filter
     filter(
-      rep == repl,
+      #rep == repl,
       off_test_date < start_date
     ) %>%
   add_phenotype(                # add rows to 'ind_phenotype' table
-    phenotype_name = "FCR",          # phenotype name
-    rep = repl                  # add rep
+    phenotype_name = "FCR"      # phenotype name
   )
 
 # print table
@@ -1251,8 +1238,8 @@ pop %>%
 
 pop <- pop %>%
   get_table("ind_meta") %>%
-    filter(rep == repl) %>%
-  add_tbv("WWD", rep = repl)
+    #filter(rep == repl) %>%
+  add_tbv("WWD")
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWD")
 
@@ -1284,10 +1271,28 @@ pop %>%
 
 pop <- pop %>%
   get_table("ind_meta") %>%
-    filter(rep == repl) %>%
-  add_tbv("WWM", rep = repl)
+    #filter(rep == repl) %>%
+  add_tbv("WWM")
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWM")
+
+pop %>% get_table("trait_meta") %>% collect() %>% print(n=Inf, width=Inf)
+
+#------------------------------------------------------------#
+# Add additive effects for both WWD and WWM
+#------------------------------------------------------------#
+
+# add which loci are QTL and their effects
+pop %>%
+  get_table("genome_meta") %>%
+    filter(is_9k != TRUE) %>%
+  # set loci as QTL for this trait
+  define_additive_effects(
+    trait_name      = c("WWD", "WWM"), # trait names
+    distribution    = "normal",        # distribution of QTL effects
+    scale_to_target = TRUE,            # scale to meet additive variance target
+    base            = "current_pop"    # use all animals in pop to standardized (or if filtered)
+  )
 
 #------------------------------------------------------------#
 # Phenotype: WW - Weaning Weight (composite: WWD + dam(WWM))
@@ -1308,7 +1313,7 @@ pop <- pop %>%
     overwrite                = TRUE
   )
 
-pop %>% get_table("phenotype_meta") %>% collect() %>% print(width=Inf)
+pop %>% get_table("phenotype_meta") %>% collect() %>% print(n=Inf, width=Inf)
 pop %>% get_table("phenotype_components") %>% collect() %>% print(width=Inf)
 
 #------------------------------------------------------------#
@@ -1350,8 +1355,8 @@ pop %>%
 # add all TBV for ADG
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    filter(rep == repl) %>%
-  add_tbv("NW", rep = repl)
+    #filter(rep == repl) %>%
+  add_tbv("NW")
 
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
 
@@ -1384,7 +1389,7 @@ pop %>%
   collect() %>%
   group_by(rep, trait_name) %>%
   summarise(
-    MeanTBV = mean(tbv_value),
+    MeanTBV = round(mean(tbv_value), 3),
     .groups = "drop_last"
   ) %>%
   print(n=10)
@@ -1397,13 +1402,12 @@ pop %>%
 pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
-  group_by(rep, phenotype_name) %>%
+  group_by(phenotype_name) %>%
   summarise(
     MeanP = mean(pheno_value),
     .groups = "drop_last"
   ) %>%
   print(n=10)
-
 
 
 #------------------------------------------------------------#
@@ -1466,11 +1470,13 @@ data.timing <- add_row(data.timing,
   cumulative_sec = startup_elapsed
 )
 
+#----------------- START LOOP -------------------------------------------------#
+
 warning("Begin Date Loop")
 
 # big date "loop" but continuous
 for (cur_date in seq(as.Date(start_date), as.Date(end_date))){
-  
+
 # loop start time
 loop_start <- proc.time()
 
@@ -1513,33 +1519,21 @@ warning("Phenotypes will be added to the evaluation by filtering by 'pheno_date'
 # CHECKS: 
 #   - do not mess up the order... 
 
-# ---------- ADG ---------- #
+# ---------- ADG + BF ---------- #
 
 message("Add ADG Phenotype")
 
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     off_test_date  == cur_date
   ) %>%
   add_phenotype(
-    phenotype_names = c("ADG", "BF"), 
-    rep = repl, 
+    phenotype_name = c("ADG", "BF"),
+    #rep = repl, 
     pheno_date = cur_date
   )
-
-# ---------- BF ---------- #
-
-message("Add BF Phenotype")
-
-pop %>%
-  get_table("ind_meta") %>%
-  filter(
-    rep == repl,
-    off_test_date  == cur_date
-  ) %>%
-  add_phenotype("BF", rep = repl, pheno_date = cur_date)
 
 # ---------- WW ---------- #
 
@@ -1548,12 +1542,10 @@ message("Add WW Phenotype (weaning weight on piglets weaned today)")
 pop <- pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     birth_date == (cur_date - config$general$lact_len)  # piglets being weaned today
   ) %>%
-  add_phenotype("WW", rep = repl, pheno_date = cur_date)
-
-
+  add_phenotype("WW", pheno_date = cur_date)
 
 
 # ------------------------------ UPDATE STATUS: MALES ------------------------ #
@@ -1564,7 +1556,7 @@ message("Change Status - Males - 'after-test-boar'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "M",
     off_test_date == cur_date
   ) %>%
@@ -1578,7 +1570,7 @@ message("Change Status - Males - 'cull-juvenile-boar'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "M",
     status == "after-test-boar",
     off_test_date < as.Date(cur_date - config$culling$boar_cull_days_after_off_test)
@@ -1595,7 +1587,7 @@ message("Change Status - 'after-test-gilt'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     off_test_date == cur_date,
     puberty_date > off_test_date         # skip if puberty age < off-test age
@@ -1610,7 +1602,7 @@ message("Change Status - 'puberty-gilt'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     puberty_date == cur_date
   ) %>%
@@ -1627,7 +1619,7 @@ cur_gilt_cull_date <- cur_date - config$culling$gilt_cull_days_after_off_test
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     sex == "F",
     status == "after-test-gilt" | status == "puberty-gilt",
     off_test_date < cur_gilt_cull_date       # past X days, cull them if not in puberty
@@ -1648,65 +1640,230 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
   # run EBV for AP
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(rep == repl) %>%
+      #filter(rep == repl) %>%
     add_ebv("AP", software="blupf90", model="blup",
-            phenotype = pop %>% get_table("ind_phenotype") %>% 
-              filter(pheno_date < cur_date | is.na(pheno_date)),
-            eval_date = cur_date, rep = repl)
+      phenotype = pop %>% 
+        get_table("ind_phenotype") %>% 
+        filter(
+          pheno_date < cur_date |    # make sure to remove future observations
+          is.na(pheno_date)          # or if phenotype date is NULL/NA
+        ),
+      eval_date = cur_date           # add eval date
+    )
   
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "AP", rep == repl)
+    filter(trait_name == "AP")
   
   # run EBV for ADG
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(rep == repl) %>%
+      #filter(rep == repl) %>%
     add_ebv("ADG", software="blupf90", model="blup",
-            phenotype = pop %>% get_table("ind_phenotype") %>% 
-              filter(pheno_date < cur_date | is.na(pheno_date)),
-            eval_date = cur_date, rep = repl)
+      phenotype = pop %>% 
+        get_table("ind_phenotype") %>% 
+        filter(
+          pheno_date < cur_date |    # make sure to remove future observations
+          is.na(pheno_date)          # or if phenotype date is NULL/NA
+        ),
+      eval_date = cur_date           # add data to output table
+    )
   
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "ADG", rep == repl)
+    filter(trait_name == "ADG")
   
   # run EBV for BF
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(rep == repl) %>%
+      #filter(rep == repl) %>%
     add_ebv("BF", software="blupf90", model="blup",
-            phenotype = pop %>% get_table("ind_phenotype") %>% 
-              filter(pheno_date < cur_date | is.na(pheno_date)),
-            eval_date = cur_date, rep = repl)
+      phenotype = pop %>% 
+        get_table("ind_phenotype") %>% 
+        filter(
+          pheno_date < cur_date |    # make sure to remove future observations
+          is.na(pheno_date)          # or if phenotype date is NULL/NA
+        ),
+      eval_date = cur_date           # add data to output table
+    )
   
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "BF", rep == repl)
+    filter(trait_name == "BF")
   
   # run EBV for NW
   pop <- pop %>%
     get_table("ind_meta") %>%
-    filter(rep == repl) %>%
+      #filter(rep == repl) %>%
     add_ebv("NW", software="blupf90", model="blup",
-            phenotype = pop %>% get_table("ind_phenotype") %>% 
-              filter(pheno_date < cur_date | is.na(pheno_date)),
-            eval_date = cur_date, rep = repl)
+      phenotype = pop %>% 
+        get_table("ind_phenotype") %>% 
+        filter(
+          pheno_date < cur_date |    # make sure to remove future observations
+          is.na(pheno_date)          # or if phenotype date is NULL/NA
+        ),
+      eval_date = cur_date           # add data to output table
+    )
 
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "NW", rep == repl)
-
-  # run EBV for WW
-  pop <- pop %>%
+    filter(trait_name == "NW")
+  
+  
+  
+  
+  #---------------- Weaning Weight (WW) --------------------#
+  
+  # create run directory
+  run_dir <- tidybreed:::.create_run_dir(pop, tool = "blupf90")
+  
+  # extract pedigree
+  ped_df <- pop %>%
     get_table("ind_meta") %>%
-    filter(rep == repl) %>%
-    add_ebv("WW", software="blupf90", model="blup",
-            phenotype = pop %>% get_table("ind_phenotype") %>%
-              filter(pheno_date < cur_date | is.na(pheno_date)),
-            eval_date = cur_date, rep = repl)
+    collect() %>%
+    select(id_ind, id_parent_1, id_parent_2)
+  
+  # extract dataset
+  data_ind_meta <- pop %>%
+    get_table("ind_meta")
+  
+  # extract phenotypes
+  data_phenotype <- pop %>%
+    get_table("ind_phenotype") %>%
+    filter(
+      pheno_date < cur_date,
+      phenotype_name == "WW"
+    ) %>%
+    collect()
+  
+  # function to convet matrix to string for glue
+  matrix_to_string <- function(matrix) {
+    rows <- apply(matrix, 1, function(row) paste(row, collapse = " "))
+    paste(rows, collapse = "\n")
+  }
+  
+  # Then in your glue block:
+  G_WW <- vars.mat.add[c("WWD", "WWM"), c("WWD", "WWM")]
+  R_WW <- as.matrix(vars.mat.res[c("WW"), c("WW")])
+  
+  matrix_to_string(G_WW)
+  matrix_to_string(R_WW)
+  
+  # write paramter file directly within R
+  par_lines <- glue("
+DATAFILE
+data.txt
+SKIP_HEADER
+1
+TRAITS
+4
+FIELDS_PASSED TO OUTPUT
+2
+WEIGHT(S)
+
+RESIDUAL_VARIANCE
+{matrix_to_string(R_WW)}
+EFFECT
+5 cov
+EFFECT
+2 cross alpha
+RANDOM
+animal
+OPTIONAL
+mat
+FILE
+pedigree.txt
+SKIP_HEADER
+1
+FILE_POS
+1 2 3 0 0
+PED_DEPTH
+0
+(CO)VARIANCES
+{matrix_to_string(G_WW)}
+OPTION origID
+OPTION missing 0
+OPTION method BLUP
+")
+  
+  # WRITE OUT FILES
+  
+  # write pedigree
+  write_delim(ped_df, file.path(run_dir, "pedigree.txt"), delim = " ", 
+              na = "0")
+  # write phenotype file
+  write_delim(data_phenotype, file.path(run_dir, "data.txt"), delim = " ")
+  # write parameter file
+  writeLines(as.character(par_lines), file.path(run_dir, "renum.par"))
+  
+  # set current working directory
+  old_wd <- getwd()
+  
+  # change to new folder we created to run the evaluation (temp directory)
+  setwd(run_dir)
+  
+  # RUN BLUPF90
+  
+  # run renumf90
+  system2("renumf90", args = "renum.par", stdout = "renumf90.out", stderr = "renumf90.err")
+  # run blupf90+ with no VC, just BLUP
+  system2("blupf90+", args = "renf90.par", stdout = "blupf90.out", stderr = "blupf90.err")
+  
+  # read in table of solutions
+  solutions.ww <- read.table(file.path(run_dir, "solutions.orig"),
+                             skip = 1) %>%
+    tibble() %>%
+    select(trait_renum = V1, effect_renum = V2, 
+           level_renum = V3, id_ind = V4, 
+           ebv_value = V5) %>%
+    filter(effect_renum == 2 | effect_renum == 3) %>%
+    mutate(
+      trait_name = case_when(
+        effect_renum == 2 ~ "WWD",
+        effect_renum == 3 ~ "WWM",
+        .default = "missing"
+      )
+    ) %>% 
+    mutate(
+      model = "blupf90", acc = NA, se = NA,
+      eval_number = 1, eval_date = cur_date
+    ) %>%
+    select(-trait_renum, -level_renum, -effect_renum)
+  
+  # read in solutions
+  solutions.ww <- solutions.ww %>%
+    mutate(
+      id_ebv = seq.int(
+        tidybreed:::next_int_id(pop$db_conn, "ind_ebv", "id_ebv"),
+        length.out = nrow(solutions.ww)
+      )
+    ) %>%
+    relocate(id_ebv, .before = id_ind)
+    
+  # Insert rows into 'ind_ebv' table via DBI::dbAppendTable()
+  DBI::dbAppendTable(pop$db_conn, "ind_ebv", solutions.ww)
+  
+  # print ebv table
+  pop %>% get_table("ind_ebv") %>% print(n=5)
+  
+  # reset to original wd
+  setwd(old_wd)
+  
+  # # run EBV for WW
+  # pop <- pop %>%
+  #   get_table("ind_meta") %>%
+  #     filter(rep == repl) %>%
+  #   add_ebv("WW", software="blupf90", model="blup",
+  #     phenotype = pop %>% 
+  #       get_table("ind_phenotype") %>% 
+  #       filter(
+  #         pheno_date < cur_date |    # make sure to remove future observations
+  #         is.na(pheno_date)          # or if phenotype date is NULL/NA
+  #       ),
+  #     eval_date = cur_date           # add data to output table
+  #   )
 
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "WW", rep == repl)
+    filter(trait_name == "WW")
 
 } else {  # END CALCULATE EBVs
-  warning("EBVs NOT RUN TODAY")
+  warning("EVALUATIONS NOT RUN TODAY")
 }
 
 # ------------------------------ CALC INDEX ---------------------------------- #
@@ -1719,13 +1876,12 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
   pop %>%
     get_table("ind_ebv") %>%    # must pass 'ind_ebv' because it contains the EBVs needed
     filter(
-      rep == repl,
+      #rep == repl,
       eval_date == cur_date
     ) %>%
     add_index(
       "maternal",          # just give the index name and it will grab weights
-      index_date = cur_date,
-      rep = repl
+      index_date = cur_date
     )
 } else {  # END INDEX CALCULATION
   warning("No new EBVs, no need to calculate INDEXES")
@@ -1744,7 +1900,7 @@ if (cur_date == male_selection_date){
   male_candidates <- pop %>%
     get_table("ind_meta") %>%
     filter(
-      rep == repl,
+      #rep == repl,
       sex == "M",
       status %in% c("after-test-boar", "breeding-boar")
     ) %>%
@@ -1825,7 +1981,7 @@ if (cur_date == female_selection_date){
   female_candidates <- pop %>%
     get_table("ind_meta") %>%
     filter(
-      rep == repl,
+      #rep == repl,
       sex == "F",
       status %in% c("puberty-gilt", "open-sow")
     ) %>%
@@ -1844,6 +2000,18 @@ if (cur_date == female_selection_date){
       ) %>%
       slice_sample(n=config$selection$n_dams_per_breeding) %>%
       pull(id_ind)
+    
+    message("  n Females Selected (Index): ", length(selected_females))
+    
+    non_selected_females = pop %>%
+      get_table("ind_meta") %>%
+      filter(
+        id_ind %in% female_candidates,
+        !(id_ind %in% selected_females)
+      ) %>%
+      pull(id_ind)
+    
+    message("  n Non-Selected Females: ", length(non_selected_females))
     
     message("randomly selected females:")
     print(selected_females)
@@ -1867,7 +2035,19 @@ if (cur_date == female_selection_date){
       ) %>%
       slice_max(index_value, n=config$selection$n_dams_per_breeding) %>%
       pull(id_ind)
-
+    
+    message("  n Females Selected (Index): ", length(selected_females))
+    
+    non_selected_females <- pop %>%
+      get_table("ind_index") %>%
+      filter(
+        id_ind %in% selected_females_candidates,
+        !(id_ind %in% selected_females)
+      ) %>%
+      pull(id_ind)
+    
+    message("  n Non-Selected Females: ", length(non_selected_females))
+    
     message("index selected females:")
     print(selected_females)
 
@@ -1885,6 +2065,19 @@ if (cur_date == female_selection_date){
     ) %>%
     mutate_table(
       status = "selected-female"
+    )
+  
+  message("Change non-selected females status = 'cull-sow'")
+  
+  # set females to selected to pull later
+  pop <- pop %>%
+    get_table("ind_meta") %>%
+    filter(
+      status %in% "open-sow",
+      id_ind %in% non_selected_females
+    ) %>%
+    mutate_table(
+      status = "cull-sow"
     )
 
 } # END FEMALE SELECTION STEP
@@ -1913,7 +2106,7 @@ if (cur_date == female_selection_date){
       ) %>%
     add_phenotype(
       "NW",
-      rep = repl,                      # add rep number
+      #rep = repl,                      # add rep number
       pheno_date = cur_NW_pheno_date   # add future phenotype date for 'NW'
     )
   
@@ -1928,7 +2121,7 @@ if (cur_date == female_selection_date){
   #   list_cur_selected_females <- pop %>%
   #     get_table("ind_meta") %>%
   #     filter(
-  #       rep == repl,
+  #       #rep == repl,
   #       status %in% c("selected-female")
   #     ) %>%
   #     pull(id_ind)
@@ -1944,7 +2137,7 @@ if (cur_date == female_selection_date){
     list_cur_selected_females <- pop %>%
       get_table("ind_meta") %>%
       filter(
-        rep == repl, 
+        #rep == repl, 
         status %in% c("selected-female")
       ) %>%
       collect() %>%
@@ -1954,7 +2147,7 @@ if (cur_date == female_selection_date){
     list_cur_selected_females_sexed_males <- pop %>%
       get_table("ind_meta") %>%
       filter(
-        rep == repl, 
+        #rep == repl, 
         status %in% c("selected-female")
       ) %>%
       collect() %>% 
@@ -1974,7 +2167,7 @@ if (cur_date == female_selection_date){
     list_cur_selected_females <- pop %>%
       get_table("ind_meta") %>%
       filter(
-        rep == repl, 
+        #rep == repl, 
         status %in% c("selected-female")
       ) %>%
       collect() %>%
@@ -2003,8 +2196,8 @@ if (cur_date == female_selection_date){
   data.nw <- pop %>%
     get_table("ind_phenotype") %>%
     filter(
-      rep == repl, 
-      trait_name == "NW",
+      #rep == repl, 
+      phenotype_name == "NW",
       id_ind %in% list_cur_selected_females,
       pheno_date == cur_NW_pheno_date
     ) %>%
@@ -2031,7 +2224,7 @@ if (cur_date == female_selection_date){
   cur_active_boars <- pop %>%
     get_table("ind_meta") %>%
     filter(
-      rep == repl,
+      #rep == repl,
       sex == "M",
       status == "breeding-boar"
     ) %>%
@@ -2052,7 +2245,7 @@ if (cur_date == female_selection_date){
     id_parent_2 = rep(c(data.nw.males$id_ind), time=data.nw.males$pheno_value),
     line_name     = "A",
     sex           = "M",       # SEXED SEMEN -> males only
-    rep           = repl,
+    #rep           = repl,
     conc_date     = cur_date,
     birth_date    = cur_date + config$general$gest_len,
     on_test_date  = cur_date + config$general$gest_len + config$testing$on_test_age,
@@ -2067,7 +2260,7 @@ if (cur_date == female_selection_date){
     id_parent_2 = rep(c(data.nw.females$id_ind), time=data.nw.females$pheno_value),
     line_name     = "A",
     sex           = "F",         # SEXED SEMEN -> females only
-    rep           = repl,
+    #rep           = repl,
     conc_date     = cur_date,
     birth_date    = cur_date + config$general$gest_len,
     on_test_date  = cur_date + config$general$gest_len + config$testing$on_test_age,
@@ -2099,7 +2292,7 @@ if (cur_date == female_selection_date){
   pop %>%
     get_table("ind_meta") %>%
     filter(
-      rep == repl,
+      #rep == repl,
       status == "selected-female"
     ) %>%
     mutate_table(
@@ -2141,7 +2334,7 @@ if (cur_date == female_selection_date){
       ) %>%
     add_phenotype(                # add rows to 'ind_phenotye' table
       phenotype_name = "AP",               # trait name
-      rep = repl,                 # set rep number
+      #rep = repl,                 # set rep number
       current_date = cur_date     # set current date (ONLY to filter right below, new phenotypes!)
     )
   
@@ -2227,7 +2420,7 @@ if (cur_date == female_selection_date){
     get_table("ind_phenotype") %>%
     filter(
       #rep == repl,
-      trait_name == "AP",
+      phenotype_name == "AP",
       id_ind %in% list_cur_AP_ids,
       current_date == cur_date
     ) %>%
@@ -2252,7 +2445,11 @@ if (cur_date == female_selection_date){
   # count how many rows added to AP phenotype data
   pop %>% 
     get_table("ind_phenotype") %>% 
-    filter(trait_name == "AP", current_date == cur_date, id_ind %in% list_cur_AP_ids) %>% 
+    filter(
+      phenotype_name == "AP", 
+      current_date == cur_date, 
+      id_ind %in% list_cur_AP_ids
+    ) %>% 
     collect() %>% 
     count()
   
@@ -2266,7 +2463,7 @@ message("Update farrowed sows to status = 'lactation'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     farrow_date == cur_date
   ) %>%
   mutate_table(
@@ -2279,7 +2476,7 @@ message("Update weaned sows to status = 'post-wean-sow'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     wean_date == cur_date
   ) %>%
   mutate_table(
@@ -2292,7 +2489,7 @@ message("Update weaned sows to status = 'open-sow'")
 pop %>%
   get_table("ind_meta") %>%
   filter(
-    rep == repl,
+    #rep == repl,
     wean_date == (cur_date - config$general$w2e_int)
   ) %>%
   mutate_table(
