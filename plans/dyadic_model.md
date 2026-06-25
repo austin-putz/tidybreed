@@ -50,7 +50,7 @@ Two covariance structures:
 
 ## Schema Changes
 
-### New table: `ind_dyadic_phenotype`
+### New table: `dyadic_phenotype`
 
 Do **not** add a nullable `id_partner` to `ind_phenotype`. A nullable column that
 fundamentally changes the row's semantics forces every downstream query to filter on
@@ -58,18 +58,27 @@ fundamentally changes the row's semantics forces every downstream query to filte
 A separate table gives explicit, unambiguous semantics.
 
 ```sql
-CREATE TABLE ind_dyadic_phenotype (
+CREATE TABLE dyadic_phenotype (
   id_dyadic      INTEGER PRIMARY KEY,
-  id_ind_1       VARCHAR NOT NULL,   -- actor / initiator
-  id_ind_2       VARCHAR NOT NULL,   -- partner / receiver
+  id_ind_1       VARCHAR NOT NULL,    -- actor / initiator
+  id_ind_2       VARCHAR NOT NULL,    -- partner / receiver
   phenotype_name VARCHAR NOT NULL,
   pheno_value    DOUBLE,
-  pheno_number   INTEGER DEFAULT 1
-  -- user columns added via mutate_table() or ... in add_phenotype()
+  pheno_number   INTEGER DEFAULT 1,   -- increments per (id_ind_1, id_ind_2, phenotype_name)
+  group_name     VARCHAR              -- resolved group value (e.g. "pen_42") shared by both individuals
+  -- user columns added via ... in add_phenotype() or mutate_table() afterwards
 )
 ```
 
 `add_phenotype()` dispatches to this table when `phenotype_class = "dyadic"`.
+
+**`group_name` rationale**: storing the resolved group value (e.g. `"pen_42"`, not the
+column name) in every row lets users:
+- Filter or join by pen without re-joining `ind_meta`
+- Add a random pen-level variance component via `define_effect_random()` referencing
+  this column as the grouping variable
+- Compute pair-level fixed covariates (e.g. weight difference between id_ind_1 and
+  id_ind_2) via `mutate_table()` after phenotype generation, stored directly in this table
 
 ---
 
@@ -104,13 +113,20 @@ updating the PE covariance).
 ```sql
 phenotype_class VARCHAR DEFAULT 'individual',  -- 'individual' or 'dyadic'
 group_column    VARCHAR,    -- column in group_table that assigns individuals to groups
-group_table     VARCHAR DEFAULT 'ind_meta',
-directed        BOOLEAN DEFAULT TRUE   -- TRUE = A→B and B→A are separate records
+group_table     VARCHAR DEFAULT 'ind_meta',    -- table containing group_column
+directed        BOOLEAN DEFAULT TRUE           -- TRUE = A→B and B→A are separate records
 ```
 
+**Why `group_column` and `group_table` belong in `phenotype_meta`** (not in
+`phenotype_components`): they govern pair *enumeration* — a phenotype-level concern
+that happens before any component is evaluated. `add_phenotype()` reads these first
+to know where to look for group membership and generate all pairs. This mirrors how
+the existing SGE group logic uses `group_column`/`group_table` in `phenotype_components`,
+but here it applies to the whole dyadic phenotype.
+
 `group_column` references the column written by the `define_group_*()` functions
-currently being implemented (e.g. `pen_id` in `ind_meta`). No coupling between
-`define_phenotype()` and the group machinery — just a name reference.
+(e.g. `pen_id` in `ind_meta`). No coupling between `define_phenotype()` and the group
+machinery — just a name reference.
 
 ---
 
@@ -149,6 +165,18 @@ Two new valid values for the existing `contributor_type` column:
 
 These are additive to the existing vocabulary (`"self"`, `"dam"`, `"sire"`, `"group"`).
 
+**How TBV sourcing differs from other contributor types:**
+- `"self"`, `"dam"`, `"sire"` — pull one TBV per focal individual from `ind_tbv`
+- `"group"` — aggregate TBVs of all group-mates (excluding self) from `ind_tbv`
+- `"dyadic_actor"` — pull TBV of `id_ind_1` (the attacker in a specific pair)
+- `"dyadic_partner"` — pull TBV of `id_ind_2` (the receiver in a specific pair)
+
+The last two are fundamentally pair-level lookups, not individual-level. For a given
+directed pair (A→B), `add_phenotype()` looks up A's TBV for the actor trait and B's TBV
+for the partner trait separately — there is no aggregation. This makes dyadic TBV
+sourcing unique even compared to the maternal weaning weight model (dam/sire TBV is
+still one lookup per focal individual; dyadic requires two different lookups per pair).
+
 ---
 
 ## API
@@ -176,11 +204,12 @@ pop <- pop |>
 pop <- pop |>
   define_phenotype(
     phenotype_name = "time_attacking",
-    class          = "dyadic",
+    class          = "dyadic",         # new: "individual" (default) or "dyadic"
     type           = "continuous",
-    mean           = 30,              # population mean in minutes
-    group_column   = "pen_id",        # column in ind_meta (written by define_group_*)
-    directed       = TRUE,
+    mean           = 30,               # population mean in minutes
+    group_column   = "pen_id",         # column in group_table holding group membership
+    group_table    = "ind_meta",       # default; where group_column lives
+    directed       = TRUE,             # default; A→B and B→A are separate records
     components     = data.frame(
       source_trait_name = c("attack_direct",  "attack_received"),
       contributor_type  = c("dyadic_actor",   "dyadic_partner"),
@@ -204,42 +233,95 @@ pop <- pop |>
   get_table("ind_meta") |>
   filter(gen == 1L) |>
   add_phenotype("time_attacking")
+
+# ── Add fixed/random effects using stored group_name ──────────────────────────
+
+# Random pen effect (iid variance not explained by genetics/PE)
+pop <- pop |>
+  define_effect_random("time_attacking", "pen",
+    source_column = "group_name",
+    source_table  = "dyadic_phenotype",   # group_name is stored here
+    variance      = 2.0)
+
+# Fixed covariate: weight difference added to dyadic_phenotype via mutate_table()
+pop |>
+  get_table("dyadic_phenotype") |>
+  filter(phenotype_name == "time_attacking") |>
+  mutate_table(wt_diff = ...)   # user computes weight of id_ind_1 minus id_ind_2
 ```
 
 ---
 
 ## What `add_phenotype()` Does Internally for Dyadic
 
-When `phenotype_class = "dyadic"`:
+When `phenotype_class = "dyadic"`, dispatch to internal helper `.add_dyadic_phenotype()`.
+All existing individual-class code paths are unchanged.
 
-1. **Get group assignments** — fetch `group_column` from `group_table` for all
-   candidate individuals in the filter set.
+### Step 1 — Validate metadata
 
-2. **Enumerate pairs** — generate all ordered pairs `(i, j)` where `i ≠ j` and
-   both `i` and `j` share the same group value. If `directed = TRUE`, both `(i,j)`
-   and `(j,i)` are included. If `directed = FALSE`, only one of each unordered pair.
+Read `phenotype_meta` for the requested phenotype. Confirm `phenotype_class = "dyadic"`,
+`group_column` is set, and `group_table` is set.
 
-3. **Compute TBVs** — call `add_tbv()` for all required source traits (`attack_direct`,
-   `attack_received`) for all individuals in the candidate set, if not already computed.
+### Step 2 — Enumerate pairs
 
-4. **Sample PE effects** — fetch `PE_cov` from `phenotype_var_comp` where
-   `effect_name = "pe"` and `phenotype_name_1 = phenotype_name`. Sample jointly from
-   `MVN(0, PE_cov)` for any individuals not already in `ind_pe` for this phenotype.
-   Write new PE values to `ind_pe`. Skip individuals that already have an `ind_pe` entry
-   (`overwrite_pe = FALSE` default).
+Resolve group membership for all candidate individuals in the filter set:
 
-5. **Assemble phenotype values** — for each pair `(i, j)`:
+```r
+# Join filtered individuals to their group values from group_table
+focal_groups <- DBI::dbGetQuery(pop$db_conn,
+  'SELECT id_ind, "{group_column}" AS group_name
+   FROM {group_table}
+   WHERE id_ind IN (...)'
+)
 
-   ```
-   y_ij = mean
-        + TBV_actor(i)   [from ind_tbv: id_ind=i, trait_name="attack_direct"]
-        + TBV_partner(j) [from ind_tbv: id_ind=j, trait_name="attack_received"]
-        + PE_actor(i)    [from ind_pe:  id_ind=i, role_name="dyadic_actor"]
-        + PE_partner(j)  [from ind_pe:  id_ind=j, role_name="dyadic_partner"]
-        + ε_ij           [drawn from N(0, residual_var)]
-   ```
+# Cross-join within the same group_name, exclude self-pairs
+pairs <- inner_join(focal_groups, focal_groups, by = "group_name") |>
+  filter(id_ind.x != id_ind.y) |>
+  rename(id_ind_1 = id_ind.x, id_ind_2 = id_ind.y)
 
-6. **Write to `ind_dyadic_phenotype`** — not `ind_phenotype`.
+# If directed = FALSE, keep lexicographically first of each unordered pair
+if (!directed) pairs <- pairs |> filter(id_ind_1 < id_ind_2)
+```
+
+Individuals with a NULL group value are excluded with a warning (count + up to 5
+example IDs), same pattern as `missing_component_action = "skip"`.
+
+### Step 3 — Compute TBVs
+
+Call `add_tbv()` (internal) for all required source traits for the union of all
+`id_ind_1` and `id_ind_2` values across all pairs. Uses the same pre-computation
+pattern as the existing SGE group logic — all TBVs are fetched once before assembly.
+
+### Step 4 — Sample PE effects
+
+1. Read PE covariance from `phenotype_var_comp` where `effect_name = "pe"` and
+   `phenotype_name_1 = phenotype_name`. Reconstruct the 2×2 matrix from the 4 rows.
+2. Find individuals not yet in `ind_pe` for this phenotype.
+3. Sample jointly from `MVN(0, PE_cov)` for new individuals only.
+4. Write new rows to `ind_pe`; skip existing individuals unless `overwrite_pe = TRUE`.
+5. If no PE covariance is defined, skip this step entirely (PE contribution = 0).
+
+### Step 5 — Assemble phenotype values
+
+For each pair `(i, j)`:
+
+```
+y_ij = mean
+     + TBV_actor(i)   [from ind_tbv: id_ind=i, trait_name="attack_direct"]
+     + TBV_partner(j) [from ind_tbv: id_ind=j, trait_name="attack_received"]
+     + PE_actor(i)    [from ind_pe:  id_ind=i, role_name="dyadic_actor"]
+     + PE_partner(j)  [from ind_pe:  id_ind=j, role_name="dyadic_partner"]
+     + ε_ij           [drawn from N(0, residual_var)]
+```
+
+Multiple `"dyadic_actor"` or `"dyadic_partner"` rows in `phenotype_components` are
+summed with their respective weights, same as composite traits.
+
+### Step 6 — Write to `dyadic_phenotype`
+
+Append rows with columns: `id_ind_1`, `id_ind_2`, `phenotype_name`, `pheno_value`,
+`pheno_number` (auto-incremented per pair), `group_name`, plus any scalar `...` from
+the `add_phenotype()` call.
 
 ---
 
@@ -274,11 +356,11 @@ a `contributor_role` argument (`"dyadic_actor"` or `"dyadic_partner"`) that tell
 pop <- pop |>
   define_effect_fixed_class(
     "time_attacking",
-    effect_name    = "sex_actor",
-    source_column  = "sex",
-    source_table   = "ind_meta",
-    contributor_role = "dyadic_actor",        # look up by id_ind_1
-    levels_json    = '{"M": 5, "F": 0}'
+    effect_name      = "sex_actor",
+    source_column    = "sex",
+    source_table     = "ind_meta",
+    contributor_role = "dyadic_actor",    # look up by id_ind_1
+    levels_json      = '{"M": 5, "F": 0}'
   )
 ```
 
@@ -379,12 +461,17 @@ derived column in `ind_pair_meta` computed by the user before `add_phenotype()`.
 
 5. **Export format** — downstream BLUP software (e.g. BLUPF90) expects a specific flat
    file structure for dyadic records. Does this table structure (separate
-   `ind_dyadic_phenotype`) make the export function straightforward, or is a combined
+   `dyadic_phenotype`) make the export function straightforward, or is a combined
    view more useful?
 
 6. **Threshold/categorical dyadic traits** — e.g. "did A attack B? (yes/no)" would be
    a binary dyadic phenotype. Does the liability threshold model apply here the same way
    it does for individual phenotypes?
+
+7. **Random pen effect** — the `group_name` column in `dyadic_phenotype` enables a
+   pen-level random effect (variance shared within a barn that is not genetics or PE).
+   Should we provide a convenience path for this, or leave it as user-driven via
+   `define_effect_random()` targeting `dyadic_phenotype.group_name`?
 
 ---
 
@@ -396,3 +483,5 @@ derived column in `ind_pair_meta` computed by the user before `add_phenotype()`.
 - All individual (`class = "individual"`) phenotype paths — fully backward compatible.
 - The `define_phenotype()` entry point is retained; `class = "dyadic"` is a new argument,
   not a new function.
+- `define_trait()` and `define_additive_effects()` — unchanged (the genetic layer already
+  handles correlated `attack_direct` / `attack_received` effects via the G matrix).

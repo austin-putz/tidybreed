@@ -9,9 +9,6 @@ inst/doc
 memory/
 .quarto/*
 
-# plans
-plans/*
-
 # markdowns
 
 # and duckdb files
@@ -26,6 +23,8 @@ vignettes/qmd/*.duckdb
 vignettes/qmd/*.duckdb.wal
 vignettes/qmd/eval_blup_*/
 vignettes/R/*.png
+vignetts/swine/tidybreed_output
+vignetts/swine/tidybreed_output/*
 
 # testthat failure artifacts
 tests/testthat/_problems/

@@ -1004,10 +1004,26 @@ pop %>% get_table("ind_tbv")
 
 # # add overall mean for ADG
 # pop %>%
-#   add_effect_int(
+#   define_effect_int(
 #     trait_name = "ADG",              # trait (need to change to "trait_name")
 #     mean = 1000
 #   )
+
+# add sex effect for ADG
+pop %>%
+  define_effect_fixed_class(
+    "ADG",
+    effect_name = "sex",
+    source_column = "sex",
+    levels = c(M = 0.08, F = 0),
+    source_table = "ind_meta",
+    overwrite = TRUE
+  )
+
+# trait effects
+pop |> get_table("trait_effects")            # fixed effects
+pop |> get_table("trait_random_effects")     # random effects sampled
+pop |> get_table("phenotype_components")     # for special cases but I forget now why we left it
 
 # test `add_phenotype()` function
 pop %>%
@@ -1337,6 +1353,7 @@ pop <- pop %>%
     mean           = 10,
     expressed_sex  = "F",
     min_value      = 0, 
+    repeatable     = TRUE,
     overwrite      = TRUE
   )
 
@@ -1636,7 +1653,7 @@ pop %>%
 if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week == "Friday"){
   
   message("Calculate EBVs by Trait")
-
+  
   # run EBV for AP
   pop <- pop %>%
     get_table("ind_meta") %>%
