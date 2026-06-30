@@ -9,16 +9,14 @@ and is queried lazily via `dplyr`.
 
 ## License
 
-**GNU General Public License v3 (GPL-3)**
+**MIT License**
 
-`tidybreed` is free software: you can redistribute it and/or modify it under the terms of the
-[GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
-Any modified or derivative version that you distribute publicly **must also be released under GPL-3**,
-ensuring that improvements flow back to the community.
+`tidybreed` is released under the [MIT License](LICENSE). You are free to use,
+modify, and distribute it, including in commercial and proprietary projects, provided
+the copyright notice is retained.
 
 > **NO WARRANTY** — This software is provided **as-is**, without warranty of any kind, express or
 > implied. The authors accept **no liability** for any damages or losses arising from its use.
-> See GPL-3 §15 (Disclaimer of Warranty) and §16 (Limitation of Liability) for the full legal text.
 
 ## Design
 

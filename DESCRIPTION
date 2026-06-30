@@ -1,7 +1,7 @@
 Package: tidybreed
 Type: Package
 Title: Tidy Breeding Program Simulation
-Version: 0.45.0
+Version: 0.46.1
 Authors@R:
     person("Austin", "Putz", , "putz.austin@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-6459-7123"))
@@ -10,7 +10,7 @@ Description: A next-generation R package for breeding program simulation that
     memory-efficient tools for simulating animal and plant breeding programs
     with support for complex mating designs, trait architectures, and selection
     strategies.
-License: GPL-3
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:

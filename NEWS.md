@@ -1,3 +1,29 @@
+# tidybreed 0.46.1 (2026-06-30)
+
+## Minor changes
+
+* License changed from GPL-3 back to **MIT**. You are free to use, modify, and
+  distribute tidybreed in commercial and proprietary projects provided the
+  copyright notice is retained.
+
+# tidybreed 0.46.0 (2026-06-26)
+
+## Breaking changes
+
+* `drop_rows()` renamed to `remove_rows()` — `drop_` is not a defined prefix in
+  the tidybreed naming convention.
+
+## New features
+
+* `remove_rows()` now requires a prior `filter()` by default. Calling without a
+  filter stops with a clear error showing the row count and how to proceed.
+  Pass `confirm_all = TRUE` to intentionally wipe an entire table.
+* Bug fix: `ind_true_index` was missing from `IND_TABLE_ID_IND_COLS`, so
+  `remove_rows(tables = "all")` did not clean up true index rows when removing
+  individuals. Now included.
+
+---
+
 # tidybreed 0.45.0 (2026-06-24)
 
 ## New functions

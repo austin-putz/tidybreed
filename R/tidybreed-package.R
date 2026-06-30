@@ -43,7 +43,7 @@ NULL
       width = 72
     ),
     paste0("  ", cli::col_grey("Tidy Breeding Program Simulation")),
-    paste0("  ", cli::col_grey("License: GPL-3 · No warranty; use at your own risk")),
+    paste0("  ", cli::col_grey("License: MIT · No warranty; use at your own risk")),
     "",
     paste0("  ", cli::style_bold("Citation:"), "  citation(\"tidybreed\")"),
     paste0("  ", cli::style_bold("Help:    "), "  ?tidybreed  ·  browseVignettes(\"tidybreed\")"),

@@ -757,10 +757,9 @@ define_additive_effects()`.
 
 ## License
 
-`tidybreed` is licensed under the **GNU General Public License v3 (GPL-3)**.
-This means any modified or derived version that is distributed publicly must
-also be released under GPL-3. Use `License: GPL-3` in `DESCRIPTION` — no
-`+ file LICENSE` suffix is needed (GPL-3 is a standard R license).
+`tidybreed` is licensed under the **MIT License**. Use `License: MIT + file LICENSE`
+in `DESCRIPTION`. The `LICENSE` file must contain the standard MIT license text with
+the year and copyright holder.
 
 ## Versioning Policy
 
