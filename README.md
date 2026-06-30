@@ -37,7 +37,7 @@ This is the new `repos` that is recommended by Posit.
 # install pak package
 install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
 
-# laod pak
+# load pak
 library(pak)
 
 # install the tidybreed package
@@ -47,9 +47,25 @@ pak::pak("austin-putz/tidybreed")
 library(tidybreed)
 ```
 
-Pay attention to the `version` of the package as it may change rapidly pre-version `1.0.0`, you were warned... 
+> **WARNING:** Pre-`v1.0.0` packages are considered beta and subject to breaking changes between any release. **Pin your version** (see below) to avoid surprises when the package updates.
 
-> DISCLAIMER: Pre `v1.0.0` packages are considered in 'beta' testing and subject to make many breaking changes
+### Pinning a specific version
+
+Check which version you have installed:
+
+```r
+packageVersion("tidybreed")
+# e.g. '0.46.1'
+```
+
+Then pin that version at the top of your script so you always install the exact same release:
+
+```r
+# Pin to a specific release — replace "0.46.1" with your version
+pak::pak("austin-putz/tidybreed@v0.46.1")
+```
+
+You can also browse all available releases on the [GitHub Releases page](https://github.com/austin-putz/tidybreed/releases) and copy the tag for any version you want.
 
 ## Core Concept
 
