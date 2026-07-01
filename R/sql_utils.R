@@ -120,7 +120,7 @@ TABLE_PRIMARY_KEYS <- list(
 #' Composite row keys per table (used for exact single-table DELETE)
 #'
 #' For tables with a single PK this is length-1. For composite-PK tables all
-#' key columns are listed so that `drop_rows()` can target exact rows rather
+#' key columns are listed so that `remove_rows()` can target exact rows rather
 #' than over-deleting by `id_ind` alone.
 #'
 #' @keywords internal
@@ -181,7 +181,7 @@ SYSTEM_TABLES <- c(
 #' @keywords internal
 IND_TABLE_ID_IND_COLS <- c(
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-  "ind_index", "genome_haplotype", "genome_genotype"
+  "ind_index", "ind_true_index", "genome_haplotype", "genome_genotype"
 )
 
 

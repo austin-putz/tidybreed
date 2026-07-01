@@ -95,19 +95,25 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 
 # ---- Exported function ------------------------------------------------------
 
-#' Delete rows from one or more population tables
+#' Remove rows from one or more population tables
 #'
 #' Removes rows from the database based on a filtered `tidybreed_table`.
-#' Chain after [get_table()] (and optionally [filter()]) to target specific
-#' rows. Returns the population invisibly — consistent with all other action
-#' functions.
+#' Chain after [get_table()] and [filter()] to target specific rows. Returns
+#' the population invisibly — consistent with all other action functions.
 #'
-#' @param tbl A `tidybreed_table` from [get_table()], optionally filtered.
+#' A filter is **required** by default. Calling `remove_rows()` without a
+#' prior [filter()] will stop with an error explaining how to opt in to
+#' full-table deletion via `confirm_all = TRUE`.
+#'
+#' @param tbl A `tidybreed_table` from [get_table()], with a [filter()] applied.
 #' @param tables `NULL` (default) to delete from the current table only;
 #'   `"all"` to delete from every `ind_*` table plus `genome_haplotype` and
 #'   `genome_genotype` that exist in the population; or a character vector of
 #'   specific table names (each must have an `id_ind` column). When not `NULL`,
 #'   the source table must also have an `id_ind` column.
+#' @param confirm_all Logical. Set to `TRUE` to allow deletion of all rows when
+#'   no filter has been applied. This is a deliberate safeguard — you must
+#'   explicitly opt in to wiping an entire table. Default `FALSE`.
 #' @param dry_run Logical. If `TRUE`, report what would be deleted without
 #'   modifying the database. Default `FALSE`.
 #' @param verbose Logical. If `TRUE`, print a message after each deletion
@@ -125,8 +131,9 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' **Cross-table mode** (`tables != NULL`): extracts unique `id_ind` values
 #' from the filtered table and issues a `DELETE ... WHERE id_ind IN (...)`
 #' for each target table via a temp-table JOIN. `tables = "all"` targets every
-#' `ind_*` table plus `genome_haplotype` and `genome_genotype` that currently
-#' exist in the population (including `ind_meta`).
+#' `ind_*` table plus `genome_haplotype`, `genome_genotype`, and
+#' `ind_true_index` that currently exist in the population (including
+#' `ind_meta`).
 #'
 #' A temporary DuckDB table is used for both modes to avoid SQL injection risk
 #' and to handle large ID sets efficiently.
@@ -137,29 +144,35 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' pop |>
 #'   get_table("ind_phenotype") |>
 #'   dplyr::filter(id_ind %in% culled_ids, trait_name == "litter_size") |>
-#'   drop_rows()
+#'   remove_rows()
 #'
 #' # Remove all data for culled animals across every individual table
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   drop_rows(tables = "all")
+#'   remove_rows(tables = "all")
 #'
 #' # Delete from an explicit subset of tables only
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   drop_rows(tables = c("ind_phenotype", "ind_tbv"))
+#'   remove_rows(tables = c("ind_phenotype", "ind_tbv"))
 #'
 #' # Preview before deleting
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   drop_rows(tables = "all", dry_run = TRUE)
+#'   remove_rows(tables = "all", dry_run = TRUE)
+#'
+#' # Wipe an entire table (requires confirm_all = TRUE)
+#' pop |>
+#'   get_table("ind_phenotype") |>
+#'   remove_rows(confirm_all = TRUE)
 #' }
 #'
 #' @export
-drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
+remove_rows <- function(tbl, tables = NULL, confirm_all = FALSE,
+                        dry_run = FALSE, verbose = TRUE) {
 
   # ---- A. Input validation --------------------------------------------------
   if (!inherits(tbl, "tidybreed_table")) {
@@ -171,7 +184,24 @@ drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
   conn       <- pop$db_conn
   table_name <- tbl$table_name
 
-  # ---- B. Collect filtered rows ---------------------------------------------
+  # ---- B. Guard: require a filter unless confirm_all = TRUE -----------------
+  if (length(tbl$pending_filter) == 0L && !isTRUE(confirm_all)) {
+    n_total <- DBI::dbGetQuery(
+      conn, paste0("SELECT COUNT(*) AS n FROM ", table_name)
+    )$n
+    stop(
+      "remove_rows(): no filter applied — this would delete ALL ",
+      n_total, " row", if (n_total != 1L) "s" else "",
+      " from '", table_name, "'.\n",
+      "  To delete an entire table, pass confirm_all = TRUE:\n",
+      "    get_table(\"", table_name, "\") |> remove_rows(confirm_all = TRUE)\n",
+      "  To preview what a filter would delete, use dry_run = TRUE:\n",
+      "    get_table(\"", table_name, "\") |> filter(...) |> remove_rows(dry_run = TRUE)",
+      call. = FALSE
+    )
+  }
+
+  # ---- C. Collect filtered rows ---------------------------------------------
   collected_df <- dplyr::collect(tbl$tbl)
 
   if (nrow(collected_df) == 0L) {
@@ -180,7 +210,7 @@ drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
     return(invisible(pop))
   }
 
-  # ---- C. Single-table mode -------------------------------------------------
+  # ---- D. Single-table mode -------------------------------------------------
   if (is.null(tables)) {
 
     key_cols <- TABLE_ROW_KEYS[[table_name]]
@@ -206,9 +236,9 @@ drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
     return(invisible(pop))
   }
 
-  # ---- D. Cross-table mode --------------------------------------------------
+  # ---- E. Cross-table mode --------------------------------------------------
   if (!"id_ind" %in% names(collected_df)) {
-    stop("drop_rows() with tables != NULL requires the source table '",
+    stop("remove_rows() with tables != NULL requires the source table '",
          table_name, "' to have an 'id_ind' column.",
          call. = FALSE)
   }
@@ -227,16 +257,16 @@ drop_rows <- function(tbl, tables = NULL, dry_run = FALSE, verbose = TRUE) {
            call. = FALSE)
     }
     db_tables  <- DBI::dbListTables(conn)
-    bad_known  <- setdiff(tables, IND_TABLE_ID_IND_COLS)
-    if (length(bad_known) > 0L) {
-      stop("The following tables do not have an 'id_ind' column: ",
-           paste(bad_known, collapse = ", "),
-           call. = FALSE)
-    }
     bad_exist  <- setdiff(tables, db_tables)
     if (length(bad_exist) > 0L) {
       stop("The following tables do not exist in this population: ",
            paste(bad_exist, collapse = ", "),
+           call. = FALSE)
+    }
+    bad_known  <- setdiff(tables, IND_TABLE_ID_IND_COLS)
+    if (length(bad_known) > 0L) {
+      stop("The following tables do not have an 'id_ind' column: ",
+           paste(bad_known, collapse = ", "),
            call. = FALSE)
     }
     target_tables <- tables

@@ -5,3 +5,6 @@
 ^\.github$
 ^PACKAGE_OUTLINE\.md$
 ^\.claude$
+^vignettes/.*/tidybreed_output$
+^plans$
+^results$

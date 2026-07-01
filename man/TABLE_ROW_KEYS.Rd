@@ -8,7 +8,7 @@ TABLE_ROW_KEYS
 }
 \description{
 For tables with a single PK this is length-1. For composite-PK tables all
-key columns are listed so that \code{drop_rows()} can target exact rows rather
+key columns are listed so that \code{remove_rows()} can target exact rows rather
 than over-deleting by \code{id_ind} alone.
 }
 \keyword{internal}
