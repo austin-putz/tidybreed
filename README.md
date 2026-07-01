@@ -51,19 +51,46 @@ Browse all releases on the [GitHub Releases page](https://github.com/austin-putz
 
 ## Global Options
 
-Set package-wide options at the top of your script. These control where files are written, the scenario name, and which external tools are available.
+Set package-wide options at the top of your script (or in a startup / config
+script) so simulations can be parameterized without changing function calls
+throughout the codebase. Every option has a built-in default and is entirely
+optional — set only the ones you need. Options prefixed `tidybreed.` are read
+by `open_pop()` (folder layout) and `archive_replicate()` (multi-replicate
+archiving).
 
 ```r
 options(
-  tidybreed.pop_name   = "swine",
-  tidybreed.base_dir   = "~/projects/swine/",    # default: getwd()
-  tidybreed.output     = "tidybreed_output",      # output subfolder name
-  tidybreed.scenario   = "baseline",              # scenario label used in file paths
-  tidybreed.tools      = c("blupf90", "plink"),   # external tools available
-  tidybreed.db_name    = "sim.duckdb",            # DuckDB file name
-  tidybreed.replicate  = 1L                       # replicate number (integer)
+  tidybreed.pop_name        = "my_project",                    # label stored on the pop object
+  tidybreed.base_dir        = "~/path/to/project/",             # root folder (layer 1)
+  tidybreed.output          = "tidybreed_output",                # output subfolder name (layer 2)
+  tidybreed.scenario        = "baseline",                        # scenario subfolder name (layer 3)
+  tidybreed.tools           = c("blupf90", "plink"),             # external tool subfolders (layer 4)
+  tidybreed.db_name         = "sim.duckdb",                      # working DuckDB file name
+  tidybreed.replicate       = 1L,                                # current replicate number
+  tidybreed.archive_path    = "~/path/to/project/archive/",      # directory for the archive DuckDB file
+  tidybreed.db_name_archive = "all_reps.duckdb",                 # archive DuckDB file name
+  tidybreed.quiet           = FALSE                              # suppress the startup banner
 )
 ```
+
+| Option | Default | Used by | Description |
+|--------|---------|---------|-------------|
+| `tidybreed.pop_name` | `"sim"` | `open_pop()` | Optional label stored on the `tidybreed_pop` object (`pop$pop_name`); shown in `print(pop)`. Purely descriptive — does not affect file paths. |
+| `tidybreed.base_dir` | `getwd()` | `open_pop()` | Root folder (layer 1) under which the output folder, scenario folder, and database file are created. Set this once per project so every script writes to the same place. |
+| `tidybreed.output` | `"tidybreed_output"` | `open_pop()` | Name of the output subfolder (layer 2) created inside `base_dir`, e.g. `<base_dir>/tidybreed_output/`. Groups all simulation runs together, separate from other project files. |
+| `tidybreed.scenario` | `NULL` | `open_pop()` | Name of the scenario subfolder (layer 3), e.g. `<base_dir>/<output>/<scenario>/`. When `NULL` (default), a `YYYYMMDD_HHMMSS` timestamp folder is auto-generated so every run is isolated and nothing gets overwritten by accident. Set explicitly (e.g. `"baseline"`) to reuse the same folder across runs, such as in an HPC array job. |
+| `tidybreed.tools` | `NULL` | `open_pop()` | Character vector of external-tool subfolder names to create at layer 4 inside the scenario folder, e.g. `c("blupf90", "plink")` creates `.../blupf90/` and `.../plink/` for those tools' input/output files. `NULL` skips tool folder creation. |
+| `tidybreed.db_name` | `"sim.duckdb"` | `open_pop()` | File name of the **working** DuckDB database, placed inside the scenario folder. Use `":memory:"` for an in-memory database (skips all folder creation entirely — useful for tests and quick prototyping). |
+| `tidybreed.replicate` | `1L` | `archive_replicate()` | Integer replicate number stamped on every row written to the archive by `archive_replicate()`. Auto-increments by 1 after each successful archive call, so a loop over replicates does not need to manage a counter manually. |
+| `tidybreed.archive_path` | `NULL` | `archive_replicate()` | Directory where the **archive** DuckDB file is written (as opposed to the working database set by `base_dir`/`output`/`scenario`/`db_name`). Combined with `tidybreed.db_name_archive` to form the full archive file path. When `NULL`, the archive lands next to the working database instead (see `tidybreed.db_name_archive`). |
+| `tidybreed.db_name_archive` | `NULL` | `archive_replicate()` | File name of the **archive** DuckDB database that `archive_replicate()` appends each replicate's results to (multi-replicate analysis file, distinct from the per-run working database). When `NULL`, `archive_replicate()` skips writing an archive entirely and only resets the working database. |
+| `tidybreed.quiet` | `FALSE` | package startup (`.onAttach`) | When `TRUE`, suppresses the `tidybreed` startup banner printed on `library(tidybreed)`. Useful for scripts, RMarkdown, and non-interactive/batch jobs. |
+
+> **Archive path resolution** (used by `archive_replicate()`) — the first non-`NULL` result wins:
+> 1. An explicit `archive_path` argument passed directly to `archive_replicate()`.
+> 2. `file.path(tidybreed.archive_path, tidybreed.db_name_archive)` when both options are set.
+> 3. `file.path(dirname(pop$db_path), tidybreed.db_name_archive)` when only `tidybreed.db_name_archive` is set — the archive lands next to the working database.
+> 4. If `tidybreed.db_name_archive` is also `NULL`, no archive is written; only the reset phases of `archive_replicate()` run.
 
 ---
 
@@ -570,7 +597,7 @@ archive_replicate(pop, rep = 1L)
 Restore a population from an existing DuckDB file (e.g. to resume a run):
 
 ```r
-pop <- restore_pop(db_path = "~/projects/swine/tidybreed_output/sim.duckdb")
+pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 ```
 
 ---

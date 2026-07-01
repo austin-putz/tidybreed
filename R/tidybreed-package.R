@@ -35,7 +35,22 @@ NULL
 
   ver      <- as.character(utils::packageVersion("tidybreed"))
   duck_ver <- as.character(utils::packageVersion("duckdb"))
-  base_dir <- getOption("tidybreed.base_dir", getwd())
+
+  fmt_opt <- function(name) {
+    val <- getOption(name)
+    if (is.null(val)) return("NULL")
+    if (is.character(val)) return(paste0("\"", paste(val, collapse = "\", \""), "\""))
+    paste(val, collapse = ", ")
+  }
+
+  opt_names <- c("tidybreed.pop_name", "tidybreed.base_dir", "tidybreed.output",
+                 "tidybreed.scenario", "tidybreed.tools", "tidybreed.db_name",
+                 "tidybreed.replicate", "tidybreed.archive_path",
+                 "tidybreed.db_name_archive", "tidybreed.quiet")
+  opt_width <- max(nchar(opt_names))
+  opt_lines <- vapply(opt_names, function(name) {
+    paste0("    ", formatC(name, width = -opt_width), " = ", fmt_opt(name))
+  }, character(1))
 
   msg <- paste(c(
     cli::rule(
@@ -51,12 +66,8 @@ NULL
     paste0("  ", cli::style_bold("Backend: "), "  DuckDB ", duck_ver),
     paste0("  ", cli::style_bold("Storage: "), "  All data lives on disk in a .duckdb file, not in R memory"),
     "",
-    paste0("  ", cli::style_bold("Options"), " ", cli::col_grey("(set with options()):")),
-    paste0("    tidybreed.base_dir  = \"", base_dir, "\""),
-    paste0("    tidybreed.db_name   = \"sim.duckdb\""),
-    paste0("    tidybreed.pop_name  = \"sim\""),
-    paste0("    tidybreed.output    = \"tidybreed_output\""),
-    paste0("    tidybreed.quiet     = FALSE"),
+    paste0("  ", cli::style_bold("Options"), " ", cli::col_grey("(current values, set with options()):")),
+    opt_lines,
     cli::rule(width = 72)
   ), collapse = "\n")
 
