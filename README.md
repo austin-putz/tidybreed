@@ -247,27 +247,33 @@ pop |>
 Use a single entry point for all variance/covariance matrices. `effect_name = "gen_add"` routes to `trait_var_comp`; `"residual"` and named random effects (e.g. `"pen"`) route to `phenotype_var_comp`.
 
 ```r
-# Additive genetic (co)variance — 7 traits
+# Additive genetic (co)variance — 3 traits (ADG, WWD, WWM)
 vars.mat.add <- matrix(c(
-  200.00,  0.00,   0.00,  0.00,   0.00, 0.00, 0.00,
-    0.00,  0.90,   3.07,  0.00,   0.21, 0.00, 0.00,
-    0.00,  3.07, 0.0045, 0.0058,  0.01, 0.00, 0.00,
-    0.00,  0.00, 0.0058,  0.03,   0.00, 0.00, 0.00,
-    0.00,  0.21,   0.01,  0.00,   1.20, 0.00, 0.00,
-    0.00,  0.00,   0.00,  0.00,   0.00, 0.04, 0.00,
-    0.00,  0.00,   0.00,  0.00,   0.00, 0.00, 0.13),
-  nrow = 7, byrow = TRUE,
-  dimnames = list(c("AP","NW","ADG","ADFI","BF","WWD","WWM"),
-                  c("AP","NW","ADG","ADFI","BF","WWD","WWM")))
+  0.0045, 0.00, 0.00,
+  0.00,   0.04, 0.00,
+  0.00,   0.00, 0.13),
+  nrow = 3, byrow = TRUE,
+  dimnames = list(c("ADG", "WWD", "WWM"),
+                  c("ADG", "WWD", "WWM")))
 
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "gen_add", cov_matrix = vars.mat.add)
 
-# Residual (co)variance — 6 phenotypes
+# Residual (co)variance — 2 phenotypes (ADG, WW)
+vars.mat.res <- matrix(c(
+  0.0067, 0.00,
+  0.00,   0.45),
+  nrow = 2, byrow = TRUE,
+  dimnames = list(c("ADG", "WW"),
+                  c("ADG", "WW")))
+
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "residual", cov_matrix = vars.mat.res)
 
-# Named random effect (e.g. pen)
+# Named random effect — pen effect on ADG only (1x1)
+vars.mat.pen <- matrix(0.0005, nrow = 1, byrow = TRUE,
+  dimnames = list("ADG", "ADG"))
+
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "pen", cov_matrix = vars.mat.pen)
 ```
@@ -385,12 +391,22 @@ pop |>
   summarise(MeanTBV = mean(tbv_value))
 ```
 
-Compute true index values from TBVs (ground truth for monitoring):
+Define a selection index first, then compute true index values from TBVs (ground truth for monitoring genetic trend):
 
 ```r
+# Define the index weights (must exist before add_tbv uses index_names)
+pop |>
+  define_index(
+    index_name   = "maternal",
+    trait_names  = c("ADG", "WWD", "WWM"),
+    index_wts    = c(ADG = 0.5, WWD = 0.3, WWM = 0.2),
+    economic_wts = c(ADG = 0.5, WWD = 0.3, WWM = 0.2)
+  )
+
+# Compute true index values from TBVs and write to ind_true_index
 pop |>
   get_table("ind_meta") |>
-  add_tbv(index_names = "maternal")   # writes to ind_true_index
+  add_tbv(index_names = "maternal")
 
 pop |> get_table("ind_true_index") |> collect()
 ```
