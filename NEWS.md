@@ -1,3 +1,14 @@
+# tidybreed 0.46.2 (2026-07-01)
+
+## Minor changes
+
+* README "Global Options" section now documents all 10 `tidybreed.*` options
+  (previously missing `tidybreed.archive_path`, `tidybreed.db_name_archive`,
+  and `tidybreed.quiet`), with a full description table and archive path
+  resolution order.
+* The `library(tidybreed)` startup banner now prints all 10 options with their
+  live current values instead of a hardcoded partial list of 5.
+
 # tidybreed 0.46.1 (2026-06-30)
 
 ## Minor changes

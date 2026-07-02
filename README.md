@@ -51,27 +51,44 @@ Browse all releases on the [GitHub Releases page](https://github.com/austin-putz
 
 ## Global Options
 
-Set package-wide options at the top of your script:
+Set package-wide options at the top of your script (or in a startup / config
+script) so simulations can be parameterized without changing function calls
+throughout the codebase. Every option has a built-in default and is entirely
+optional — set only the ones you need. Options prefixed `tidybreed.` are read
+by `open_pop()` (folder layout) and `archive_replicate()` (multi-replicate
+archiving).
 
 ```r
 options(
-  tidybreed.pop_name   = "swine",
-  tidybreed.base_dir   = "~/projects/swine/",
-  tidybreed.output     = "tidybreed_output",
-  tidybreed.scenario   = "baseline",
-  tidybreed.tools      = c("blupf90", "plink"),
-  tidybreed.db_name    = "sim.duckdb",
-  tidybreed.replicate  = 1L
+  tidybreed.pop_name        = "my_project",
+  tidybreed.base_dir        = "~/path/to/project/",
+  tidybreed.output          = "tidybreed_output",
+  tidybreed.scenario        = "baseline",
+  tidybreed.tools           = c("blupf90", "plink"),
+  tidybreed.db_name         = "sim.duckdb",
+  tidybreed.replicate       = 1L,
+  tidybreed.archive_path    = "~/path/to/project/archive/",
+  tidybreed.db_name_archive = "all_reps.duckdb",
+  tidybreed.quiet           = FALSE
 )
 ```
 
-- **`tidybreed.pop_name`** — Population label used in output paths
-- **`tidybreed.base_dir`** — Root directory for all output; default: `getwd()`
-- **`tidybreed.output`** — Output subfolder name; default: `"tidybreed_output"`
-- **`tidybreed.scenario`** — Scenario label embedded in file paths
-- **`tidybreed.tools`** — External tools available on PATH (e.g. `"blupf90"`, `"plink"`)
-- **`tidybreed.db_name`** — DuckDB file name; default: `"sim.duckdb"`
-- **`tidybreed.replicate`** — Replicate number (integer); default: `1L`
+- **`tidybreed.pop_name`** — Label stored on the pop object (`pop$pop_name`); shown in `print(pop)`. Default: `"sim"`. Purely descriptive — does not affect file paths.
+- **`tidybreed.base_dir`** — Root folder (layer 1); default: `getwd()`
+- **`tidybreed.output`** — Output subfolder name (layer 2); default: `"tidybreed_output"`
+- **`tidybreed.scenario`** — Scenario subfolder (layer 3). Default `NULL` auto-generates a `YYYYMMDD_HHMMSS` folder so runs never overwrite each other. Set explicitly (e.g. `"baseline"`) to reuse the same folder, such as in an HPC array job.
+- **`tidybreed.tools`** — Character vector of tool subfolders created at layer 4 (e.g. `c("blupf90", "plink")`). Default `NULL` skips tool folder creation.
+- **`tidybreed.db_name`** — Working DuckDB file name; default: `"sim.duckdb"`. Use `":memory:"` for an in-memory database (skips all folder creation — useful for tests).
+- **`tidybreed.replicate`** — Integer replicate number stamped on archive rows; default: `1L`. Auto-increments after each successful `archive_replicate()` call.
+- **`tidybreed.archive_path`** — Directory for the archive DuckDB file. Default `NULL` places the archive next to the working database.
+- **`tidybreed.db_name_archive`** — Archive DuckDB file name (e.g. `"all_reps.duckdb"`). Default `NULL` skips archiving entirely.
+- **`tidybreed.quiet`** — Suppress the startup banner on `library(tidybreed)`; default: `FALSE`.
+
+> **Archive path resolution** (`archive_replicate()`) — first non-`NULL` wins:
+> 1. Explicit `archive_path` argument passed to `archive_replicate()`.
+> 2. `file.path(tidybreed.archive_path, tidybreed.db_name_archive)` — when both options are set.
+> 3. `file.path(dirname(pop$db_path), tidybreed.db_name_archive)` — archive lands next to the working database.
+> 4. `tidybreed.db_name_archive` is `NULL` — no archive written; only reset phases run.
 
 ---
 
@@ -638,7 +655,7 @@ archive_replicate(pop, rep = 1L)
 Restore a population from an existing DuckDB file (e.g. to resume a run):
 
 ```r
-pop <- restore_pop(db_path = "~/projects/swine/tidybreed_output/sim.duckdb")
+pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 ```
 
 ---
