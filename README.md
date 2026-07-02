@@ -20,12 +20,25 @@ the copyright notice is retained.
 
 ## Design
 
-| Main | → | Reason or Description |
+| Main |  | Reason or Description |
 | ---- | - | --------------------- |
 | [R](https://www.r-project.org) | → | Standard for most scientists; flexible design of custom breeding programs |
-| **DuckDB** | → | Columnar, embedded, no server needed; handles datasets larger than RAM |
+| [DuckDB](https://duckdb.org/) | → | Columnar, embedded, no server needed; handles datasets larger than RAM |
 | Pipe everything | → | Filter individuals, add phenotypes/genotypes/EBVs/index with `tidyverse` verbs |
-| Fully customizable | → | Add any column to any table with `mutate_table()`; query with standard `dplyr` |
+| Customizable | → | Add your own table, any column within any table with `mutate_table()`; query with standard `dplyr` and SQL will function in the background |
+
+- **Databases** are efficient enough for our large simulations, both in speed and memory savings. Users can pull from different tables using the `get_table()` function. We no  longer need to fill up our RAM with data from generation 1 in a long term simulation pipeline. 
+- **SQL** can add any custom table or field/column of any type, allowing users to define a DATE that would allow almost near perfect "digital twins". My understanding is DuckDB was written very efficiently with C++ mostly. 
+- **R** is great for many things and has become a standard for us in research, however memory is a massive issue compared to python/julia/etc and it's simply not efficient enough for massive datasets of this size. This will be moderated by the use of SQL and C++ down the road with Rcpp and many operations will (hopefully) never be pulled into R, but can be orchestrated through R. 
+- **Pipes** allow users to insert `filter` steps that is critical for most operations to "point" to certain individuals or groups to calculate TBVs, EBVs, phenotypes, or to extract data such as genotypes/QTL. 
+
+**What I try to AVOID:**
+
+- Storing metadata
+  - such a n_loci or such, a truly modular system using SQL can easily calculate this from a table as needed with very little "cost" to timing of the simulation
+  - metadata is stored, just in tables such as the variance components but other fixed metadata is silly most of the time when it can be taken from a table at any moment in time cheaply
+- helper/wrapper functions
+  - users love them, developers love them, but they are *almost* always a *bad idea* leading to spaghetti code long term. **Why?** :right_arrow: There is a nearly infinite number of ways users could mate a list of dams to a list of sires, I cannot program every possible option for users, therefore I designed a simple tibble as input and users just list exactly what offspring they want per row (sire, dam, sex, etc). No helper function needed to create the mating design, you can do this yourself easily without a function using `sample()`, `rep()`, etc. and building a tibble yourself. This also avoids me having to break your code later changing functions and arguments. 
 
 ## Installation
 
