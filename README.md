@@ -28,7 +28,7 @@ the copyright notice is retained.
 | Customizable | → | Add your own table, any column within any table with `mutate_table()`; query with standard `dplyr` and SQL will function in the background |
 
 - **Databases** are efficient enough for our large simulations, both in speed and memory savings. Users can pull from different tables using the `get_table()` function. We no  longer need to fill up our RAM with data from generation 1 in a long term simulation pipeline. 
-- **SQL** can add any custom table or field/column of any type, allowing users to define a DATE that would allow almost near perfect "digital twins". My understanding is DuckDB was written very efficiently with C++ mostly. 
+- **SQL** can add any custom table or field/column of any type, allowing users to define a DATE that would allow almost near perfect "digital twins". My understanding is DuckDB was written very efficiently with C++ mostly. Users can `DBI` their way to modifying any table at any time and often do not have to worry about "breaking" `tidybreed` if I build the functions correctly and truly modular. 
 - **R** is great for many things and has become a standard for us in research, however memory is a massive issue compared to python/julia/etc and it's simply not efficient enough for massive datasets of this size. This will be moderated by the use of SQL and C++ down the road with Rcpp and many operations will (hopefully) never be pulled into R, but can be orchestrated through R. 
 - **Pipes** allow users to insert `filter` steps that is critical for most operations to "point" to certain individuals or groups to calculate TBVs, EBVs, phenotypes, or to extract data such as genotypes/QTL. 
 
@@ -39,6 +39,11 @@ the copyright notice is retained.
   - metadata is stored, just in tables such as the variance components but other fixed metadata is silly most of the time when it can be taken from a table at any moment in time cheaply
 - helper/wrapper functions
   - users love them, developers love them, but they are *almost* always a *bad idea* leading to spaghetti code long term. **Why?** :right_arrow: There is a nearly infinite number of ways users could mate a list of dams to a list of sires, I cannot program every possible option for users, therefore I designed a simple tibble as input and users just list exactly what offspring they want per row (sire, dam, sex, etc). No helper function needed to create the mating design, you can do this yourself easily without a function using `sample()`, `rep()`, etc. and building a tibble yourself. This also avoids me having to break your code later changing functions and arguments. 
+- generation is silly
+  - generation was a leftover artifact from QMSim and the original AlphaSim I believe. 
+  - generation has no useful application besides making some simulations easier to follow
+  - generation only exists in simple simulations and selection experiments, not real breeding programs (for the most part)
+  - users can add a field/column called "gen" or "generation" in every table they want, however I do not enforce you to use such a silly idea unless doing some simple simulations and need to create something quick/easy
 
 ## Installation
 
@@ -76,12 +81,12 @@ options(
   tidybreed.pop_name        = "my_project",
   tidybreed.base_dir        = "~/path/to/project/",
   tidybreed.output          = "tidybreed_output",
-  tidybreed.scenario        = "baseline",
-  tidybreed.tools           = c("blupf90", "plink"),
+  tidybreed.scenario        = "baseline_scenario",
+  tidybreed.tools           = c("blupf90", "plink", "JWAS"),
   tidybreed.db_name         = "sim.duckdb",
   tidybreed.replicate       = 1L,
   tidybreed.archive_path    = "~/path/to/project/archive/",
-  tidybreed.db_name_archive = "all_reps.duckdb",
+  tidybreed.db_name_archive = "baseline_scenario_all_reps.duckdb",
   tidybreed.quiet           = FALSE
 )
 ```
@@ -116,18 +121,20 @@ The recommended project structure separates scenario configs, per-scenario simul
 │   ├── baseline.yaml
 │   └── scenario_b.yaml                  ← next scenario to run
 │
-├── results/                             ← merged multi-replicate archive
-│   └── all_reps.duckdb                  ← written by archive_replicate()
+├── results/                                ← merged multi-replicate archive
+│   └── baseline_scenario_all_reps.duckdb   ← written by archive_replicate()
 │
 └── tidybreed_output/                    ← tidybreed.output
     ├── baseline/                        ← tidybreed.scenario = "baseline"
     │   ├── sim.duckdb                   ← tidybreed.db_name
     │   ├── blupf90/                     ← subfolder per tool in tidybreed.tools
+    |   |-- JWAS/
     │   └── plink/
     │
     └── scenario_b/                      ← tidybreed.scenario = "scenario_b"
         ├── sim.duckdb
         ├── blupf90/
+    |   |-- JWAS/
         └── plink/
 ```
 
@@ -163,6 +170,8 @@ options(
 
 Swap scenarios by pointing to a different YAML file; the rest of the script stays identical.
 
+**NOTE:** I HIGHLY encourage the use of `purrr:chuck()` to pull from the stored yaml structure (`cfg` above), because it will throw an error unlike this structure when it returns nothing and will silently break your pipeline without a clear warning. 
+
 ---
 
 ## Core Concept
@@ -172,7 +181,10 @@ Every function accepts and returns a `tidybreed_pop` object — a thin wrapper a
 ```r
 pop <- pop |>
   get_table("ind_meta") |>       # identify which DB table to work with
-  filter(sex == "F", gen == 1L) |>  # filter to the individuals you want
+  filter(                        # filter to the individuals you want
+    sex == "M",                  # filter to males
+    gen == 1L                    # filter to generation 1 (this was "user defined") 
+  ) |>  
   add_phenotype("ADG")           # add records to ind_phenotype
 ```
 
@@ -254,15 +266,15 @@ Sample haplotypes for founders. Pass any custom `ind_meta` column as `...` argum
 
 ```r
 pop <- pop |>
-  get_table("founder_haplotypes") |>
-  filter(line_name == "A") |>
+  get_table("founder_haplotypes") |>  # pass this table only
+    filter(line_name == "A") |>       # neat way to filter and pass only haplotypes related to founder line "A"
   add_founders(
     n_males    = 400,
     n_females  = 1600,
-    line_name  = "A",
-    birth_date = sampled_birth_dates,   # Date vector (one per founder)
-    alive      = TRUE,
-    active     = FALSE
+    line_name  = "A",                   # required
+    birth_date = sampled_birth_dates,   # user sampled birth dates earlier
+    alive      = TRUE,                  # user defined - show as alive to filter by later
+    active     = FALSE                  # user defined - or set 'status' with character/VARCHAR
   )
 ```
 
@@ -273,21 +285,21 @@ The real power of `tidybreed` is freely adding columns to any table so your simu
 ```r
 # Add user-defined fields to ind_meta (declare schema before data arrives)
 pop |>
-  get_table("ind_meta") |>
+  get_table("ind_meta") |>     # stores 1 row / individual to store pedigree (sire/dam) and sex
   mutate_table(
-    status        = NA_character_,   # VARCHAR: production status
-    birth_date    = as.Date(NA),     # DATE
+    status        = NA_character_,   # VARCHAR: production status (update with `mutate_table()`)
+    birth_date    = as.Date(NA),     # DATE, initialize column with missing
     puberty_date  = as.Date(NA),
     mate_date     = as.Date(NA),
     farrow_date   = as.Date(NA),
     wean_date     = as.Date(NA),
     cull_date     = as.Date(NA),
+    off_test_date = as.Date(NA),
     alive         = TRUE,            # BOOLEAN with default value
     active        = FALSE,
-    .set_default  = TRUE             # write this value as the column default
+    .set_default  = TRUE             # if TRUE -> write this value as the column default when creating new rows
   )
 ```
-
 Types are inferred from R values:
 
 | R value | DuckDB type |
@@ -299,17 +311,24 @@ Types are inferred from R values:
 | `as.Date(...)` | `DATE` |
 | `Sys.time()` | `TIMESTAMP` |
 
-Update filtered rows after data exists:
+Users can then update the 'status' of an animal to closely mimic a real program
 
 ```r
-# Mark animals that reached off-test today
-pop |>
-  get_table("ind_meta") |>
-  filter(sex == "F", off_test_date == cur_date) |>
-  mutate_table(status = "after-test-gilt")
+pop |> 
+  get_table("ind_meta") |>     # stores 1 row / individual to store pedigree (sire/dam) and sex
+    filter(
+      sex == "M",
+      off_test_date == current_date
+    ) |> 
+  mutate_table(
+    status = "after-test-boar"
+  ) 
 ```
 
-Add per-individual descriptions to columns for documentation:
+Which now replaces the old 'status' of "on-test" perhaps. The next filter you set
+can filter out "after-test-boar" animals only to perform selection in any way you want. 
+
+Add descriptions to columns for documentation:
 
 ```r
 pop |>
@@ -317,9 +336,20 @@ pop |>
   define_schema_description("status",     "Production status (e.g. gestation, lactation)") |>
   define_schema_description("birth_date", "Date of birth") |>
   define_schema_description("alive",      "Is the animal alive?")
+```
 
-pop |> describe_table("ind_meta")   # view all column descriptions
-schema(pop)                          # view all table schemas
+**If you get lost with tables** (and you will...) please use `schema(pop)`, `summary(pop)`,
+and `pop |> describe_table("table_name")` to get your feet back. 
+
+```r
+schema(pop)       # info and name of all tables
+```
+
+Pick out one table to focus on: 
+
+```r
+pop |> describe_table("ind_meta")    # view all column descriptions
+
 ```
 
 ### 6. Define a SNP chip
@@ -330,15 +360,19 @@ Filter `genome_meta` to the loci you want, then call `define_chip()`. Adds an `i
 # Random 9,000-locus chip
 pop |>
   get_table("genome_meta") |>
-  slice_sample(n = 9000) |>
-  define_chip(chip_name = "9k")
+    slice_sample(n = 9000) |>         # simple dplyr function you already know
+  define_chip(chip_name = "9k")       # just name the chip, now `is_9k` field in `genome_meta`
 
 # QTL are defined as loci NOT on the chip
 pop |>
   get_table("genome_meta") |>
-  filter(is_9k != TRUE) |>          # non-chip loci become QTL candidates
+    filter(is_9k != TRUE) |>          # filter out SNP chip loci to become QTL
   define_additive_effects(...)
 ```
+
+This power architecture allows users to basically pass whatever they want and since you can define your
+own field to `genome_meta` and filter yourself, the possibilities are quite advanced and you know 
+**exactly** what is going on. 
 
 ### 7. Define variance components
 
@@ -354,6 +388,7 @@ vars.mat.add <- matrix(c(
   dimnames = list(c("ADG", "WWD", "WWM"),
                   c("ADG", "WWD", "WWM")))
 
+# store matrix in a table called 'trait_var_comp'
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "gen_add", cov_matrix = vars.mat.add)
 
@@ -365,6 +400,7 @@ vars.mat.res <- matrix(c(
   dimnames = list(c("ADG", "WW"),
                   c("ADG", "WW")))
 
+# store matrix in 'phenotype_var_comp' table
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "residual", cov_matrix = vars.mat.res)
 
@@ -372,13 +408,14 @@ pop <- pop |>
 vars.mat.pen <- matrix(0.0005, nrow = 1, byrow = TRUE,
   dimnames = list("ADG", "ADG"))
 
+# add pen covariances to the 'phenotype_var_comp' table
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "pen", cov_matrix = vars.mat.pen)
 ```
 
 ### 8. Define traits and phenotypes (two-layer design)
 
-**Genetic layer** (`define_trait`) — one row per underlying genetic quantity:
+**Genetic layer** (`define_trait`) — one row per underlying genetic "trait":
 
 ```r
 pop <- pop |>
@@ -405,14 +442,35 @@ pop <- pop |>
   )
 ```
 
+**Why the split?** - composite traits exist that can be made up of multiple underlying "traits", while the
+phenotype is physically observed. Some phenotypes are actually a combination of 3 "traits" such as the 
+direct/maternal/nurse dam model from Egbert Knols research. Or social genetic effects where the phenotype
+is a combination of individual genetics but also the effects from different pen mates genetics. 
+
 For composite phenotypes (e.g. weaning weight = direct + maternal):
 
 ```r
 pop <- pop |>
+  define_trait(
+    trait_name      = "WWD",
+    description     = "Weaning Weight - Direct",
+    units           = "kg",
+    target_add_mean = 0,      # TBV mean in base population
+    overwrite       = TRUE
+  ) |>
+  define_trait(
+    trait_name      = "WWM",
+    description     = "Weaning Weight - Maternal",
+    units           = "kg",
+    target_add_mean = 0,      # TBV mean in base population
+    overwrite       = TRUE
+  )
+
+pop <- pop |>
   define_phenotype(
     phenotype_name           = "WW",
-    type                     = "continuous",
-    formula_tbv              = "WWD + dam(WWM)",   # DSL: self + dam component
+    type                     = "continuous",         # simple continuous phenotype, 
+    formula_tbv              = "WWD + dam(WWM)",     # DSL: self + dam TBV for 'MILK'
     mean                     = 6.0,
     expressed_sex            = "both",
     missing_component_action = "skip",   # skip founders with no dam record
@@ -426,8 +484,8 @@ Derived phenotypes computed from other phenotypes:
 pop <- pop |>
   define_phenotype(
     phenotype_name = "FCR",
-    type           = "derived_formula",
-    formula        = "ADFI / ADG",
+    type           = "derived_formula",  # specify to make sure it builds this phenotype relative to other phenotypes observed
+    formula        = "ADFI / ADG",       # DSL allows for more than just division, but this is most common
     expressed_sex  = "both",
     overwrite      = TRUE
   )
@@ -439,10 +497,10 @@ Add QTL effects for a trait (or multiple correlated traits at once):
 # Single trait
 pop |>
   get_table("genome_meta") |>
-  filter(is_9k != TRUE) |>           # QTL are non-chip loci
+    filter(is_9k != TRUE) |>           # QTL are non-SNP-chip loci
   define_additive_effects(
     trait_name      = "ADG",
-    distribution    = "normal",
+    distribution    = "normal",      # mostly set to normal for now until I can figure out other ways to sample multivariate
     scale_to_target = TRUE,          # scale to target additive variance
     base            = "current_pop"  # standardize to current animals
   )
@@ -450,9 +508,9 @@ pop |>
 # Multiple correlated traits in one call (draws from MVN with G matrix)
 pop |>
   get_table("genome_meta") |>
-  filter(is_9k != TRUE) |>
+    filter(is_9k != TRUE) |>
   define_additive_effects(
-    trait_name      = c("WWD", "WWM"),
+    trait_name      = c("WWD", "WWM"),   # need to add together since they are genetically correlated
     distribution    = "normal",
     scale_to_target = TRUE,
     base            = "current_pop"
@@ -464,10 +522,10 @@ Add fixed effects:
 ```r
 pop |>
   define_effect_fixed_class(
-    "ADG",
+    phenotype_name = "ADG",
     effect_name    = "sex",
     source_column  = "sex",
-    levels         = c(M = 0.08, F = 0),   # male advantage in ADG
+    levels         = c(M = 0.08, F = 0),     # male advantage in ADG
     source_table   = "ind_meta",
     overwrite      = TRUE
   )
@@ -478,13 +536,18 @@ pop |>
 ```r
 # All animals in ind_meta
 pop <- pop |>
-  get_table("ind_meta") |>
-  add_tbv(trait_name = "ADG")
+    get_table("ind_meta") |>      # pass table with no filter, so "select all" 
+  add_tbv(trait_name = "ADG")     # calculate TBV for all individuals (notice we use "traitn_name" here)
+```
 
+Then the real great part of the package is to simply extract any table, and utilize
+the functions you already know to verify it worked (or didn't...). 
+
+```r
 # Check means by trait
 pop |>
   get_table("ind_tbv") |>
-  collect() |>
+  collect() |>                              # pull into R memory
   group_by(trait_name) |>
   summarise(MeanTBV = mean(tbv_value))
 ```
@@ -504,9 +567,11 @@ pop |>
 # Compute true index values from TBVs and write to ind_true_index
 pop |>
   get_table("ind_meta") |>
-  add_tbv(index_names = "maternal")
+  add_tbv(index_names = "maternal")       # will save the true breeding value index in 'ind_true_index' table)
 
-pop |> get_table("ind_true_index") |> collect()
+pop |> 
+  get_table("ind_true_index") |> 
+  collect()
 ```
 
 ### 10. Add Genotypes
@@ -515,13 +580,22 @@ pop |> get_table("ind_true_index") |> collect()
 # Add 9k genotypes to all animals
 pop |>
   get_table("ind_meta") |>
+    filter(
+      sex == "M"
+    ) |>
   add_genotypes(chip_name = "9k")
 
 # Extract genotypes for downstream analysis
 pop |>
   get_table("ind_meta") |>
+    filter(
+      sex == "M"          # extract only for males
+    ) |> 
   extract_genotypes(chip_name = "9k")
 ```
+
+Of course, you can all use `pull(id_ind)` to extract a character vector and ues that to filter rows as well
+to get a more precise set of animals for genotyping, phenotyping, or whatever you want. 
 
 ### 11. Add Phenotypes
 
@@ -529,23 +603,29 @@ pop |>
 # Phenotype animals that reached off-test today
 pop |>
   get_table("ind_meta") |>
-  filter(off_test_date == cur_date) |>
+    filter(
+      off_test_date == cur_date         # power to loop over dates allows real breeding program dynamics
+    ) |>
   add_phenotype(
-    phenotype_name = c("ADG", "BF"),
-    pheno_date     = cur_date
+    phenotype_name = c("ADG", "BF"),   # add both ADG and BF for these filtered animals
+    pheno_date     = cur_date          # this is a user defined column in the 'ind_phenotype' table, pass it here
   )
 
 # Phenotype all females for age at puberty (sex-limited trait)
 pop |>
   get_table("ind_meta") |>
-  filter(sex == "F") |>
+    filter(sex == "F") |>              # only females get age at puberty
   add_phenotype(phenotype_name = "AP")
 ```
 
 Check counts:
 
 ```r
-pop |> get_table("ind_phenotype") |> filter(phenotype_name == "ADG") |> collect() |> count()
+pop |> 
+  get_table("ind_phenotype") |> 
+  filter(phenotype_name == "ADG") |> 
+  collect() |> 
+  count()
 ```
 
 ### 12. Run Evaluations (EBVs)
@@ -559,9 +639,9 @@ pop <- pop |>
     "ADG",
     software  = "blupf90",
     model     = "blup",
-    phenotype = pop |>
+    phenotype = pop |>                      # this was critical to implement as some records will need to be sampled "early"
       get_table("ind_phenotype") |>
-      filter(pheno_date < cur_date | is.na(pheno_date)),  # exclude future records
+      filter(pheno_date < cur_date | is.na(pheno_date)),  # exclude future records for evaluations
     eval_date = cur_date
   )
 
@@ -575,35 +655,48 @@ pop |> get_table("ind_ebv") |> filter(trait_name == "ADG")
 pop |>
   define_index(
     index_name   = "maternal",
-    trait_names  = c("AP", "NW", "ADG", "ADFI", "BF", "WWD", "WWM"),
-    index_wts    = b_adjusted,    # economic index weights (named vector)
-    economic_wts = b_adjusted
+    trait_names  = c("ADG", "WWD", "WWM"),
+    index_wts    = c(1,2,3),    # simple vector of index weights
+    economic_wts = c(4,5,6)     # we can use later to establish profitability
   )
 
 # Calculate index values from latest EBVs (run after add_ebv)
 pop |>
   get_table("ind_ebv") |>
-  filter(eval_date == cur_date) |>
+    filter(
+      eval_date == cur_date         # only extract the latest EBVs to calc INDEX
+    ) |>
   add_index("maternal", index_date = cur_date)
 
 pop |> get_table("ind_index")
 ```
 
+Of course in crossbreeding, each line may have their own index, just name it and pass only those
+line animals to the `add_index()` function and boom, you have your custom indexes per line. 
+
 ### 14. Select Parents
 
 Pull candidate IDs and then select from any table:
+
+`pull()` may be new to you, it pulls a vector back into the R object to use within `filter()` downstream
 
 ```r
 # Step 1: identify candidates
 male_candidates <- pop |>
   get_table("ind_meta") |>
-  filter(sex == "M", status %in% c("after-test-boar", "breeding-boar")) |>
+    filter(
+      sex == "M", 
+      status %in% c("after-test-boar", "breeding-boar")
+    ) |>
   pull(id_ind)
 
 # Step 2: select top animals by index
 selected_males <- pop |>
   get_table("ind_index") |>
-  filter(id_ind %in% male_candidates, index_date == latest_index_date) |>
+    filter(
+      id_ind %in% male_candidates, 
+      index_date == latest_index_date
+    ) |>
   slice_max(index_value, n = 10) |>
   pull(id_ind)
 
@@ -618,12 +711,15 @@ pop |>
 
 Build a mating plan as a `tibble` (one row per offspring), then call `add_offspring()`:
 
+(again I hate helper functions as I cannot imagine the infinite ways all these combinations could arise, 
+for now just use the full tibble and learn how to use `rep` and `samle` yourself)
+
 ```r
 data.matings <- tibble(
   id_parent_1   = rep(sampled_sires, times = nw_per_dam),  # sire IDs
   id_parent_2   = rep(selected_dams, times = nw_per_dam),  # dam IDs
   line_name     = "A",
-  sex           = "F",                  # force sex with sexed semen
+  sex           = sample(c("M", "F"), size = n_offspring, replace = TRUE),
   conc_date     = cur_date,
   birth_date    = cur_date + 116L,
   on_test_date  = cur_date + 116L + 70L,
@@ -633,7 +729,13 @@ data.matings <- tibble(
 pop |> add_offspring(data.matings)
 ```
 
+116L refers to the average gestation length of sows these days, and 70/160 refers to 
+roughly the on-test and off-test ages of animals tested (weights, feed intake, ultrasounds, etc). 
+
 ### 16. Utility: mutate_group helpers
+
+I made a few exceptions to my "I hate helper functions" mentality, you can
+use some `mutate_group_*()` functions to create groups. 
 
 Add sequence numbers, named labels, or concatenated strings within groups:
 
@@ -641,7 +743,7 @@ Add sequence numbers, named labels, or concatenated strings within groups:
 # Sequential number within each litter (group by dam ID)
 pop |>
   get_table("ind_meta") |>
-  filter(birth_date == cur_date) |>
+    filter(birth_date == cur_date) |>
   mutate_group_seq(
     group_col  = "id_parent_2",   # group by dam
     new_col    = "piglet_number"
@@ -664,6 +766,8 @@ Save a replicate's DuckDB to an archive database for multi-replicate analysis:
 ```r
 archive_replicate(pop, rep = 1L)
 ```
+
+**NOTE:** `option(tidybreed.replicate)` will increase by 1 automatically!!!!
 
 Restore a population from an existing DuckDB file (e.g. to resume a run):
 
@@ -734,7 +838,7 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | Function | Purpose |
 |----------|---------|
 | `define_chip()` | Mark filtered loci as members of a named SNP chip |
-| `add_genotypes()` | Write 0/1/2 genotypes to `genome_genotype` for a chip |
+| `add_genotypes()` | adds a TRUE within `has_<chip_name>` field of 'ind_meta' |
 | `extract_genotypes()` | Pull genotypes into R for a chip or set of QTL effects |
 
 ### Traits & Model Configuration
