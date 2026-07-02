@@ -51,19 +51,87 @@ Browse all releases on the [GitHub Releases page](https://github.com/austin-putz
 
 ## Global Options
 
-Set package-wide options at the top of your script. These control where files are written, the scenario name, and which external tools are available.
+Set package-wide options at the top of your script:
 
 ```r
 options(
   tidybreed.pop_name   = "swine",
-  tidybreed.base_dir   = "~/projects/swine/",    # default: getwd()
-  tidybreed.output     = "tidybreed_output",      # output subfolder name
-  tidybreed.scenario   = "baseline",              # scenario label used in file paths
-  tidybreed.tools      = c("blupf90", "plink"),   # external tools available
-  tidybreed.db_name    = "sim.duckdb",            # DuckDB file name
-  tidybreed.replicate  = 1L                       # replicate number (integer)
+  tidybreed.base_dir   = "~/projects/swine/",
+  tidybreed.output     = "tidybreed_output",
+  tidybreed.scenario   = "baseline",
+  tidybreed.tools      = c("blupf90", "plink"),
+  tidybreed.db_name    = "sim.duckdb",
+  tidybreed.replicate  = 1L
 )
 ```
+
+- **`tidybreed.pop_name`** — Population label used in output paths
+- **`tidybreed.base_dir`** — Root directory for all output; default: `getwd()`
+- **`tidybreed.output`** — Output subfolder name; default: `"tidybreed_output"`
+- **`tidybreed.scenario`** — Scenario label embedded in file paths
+- **`tidybreed.tools`** — External tools available on PATH (e.g. `"blupf90"`, `"plink"`)
+- **`tidybreed.db_name`** — DuckDB file name; default: `"sim.duckdb"`
+- **`tidybreed.replicate`** — Replicate number (integer); default: `1L`
+
+---
+
+## Directory Layout
+
+The recommended project structure separates scenario configs, per-scenario simulation databases, and the merged archive:
+
+```
+~/projects/swine/                        ← tidybreed.base_dir
+│
+├── scenarios/                           ← one YAML per scenario
+│   ├── baseline.yaml
+│   └── scenario_b.yaml                  ← next scenario to run
+│
+├── results/                             ← merged multi-replicate archive
+│   └── all_reps.duckdb                  ← written by archive_replicate()
+│
+└── tidybreed_output/                    ← tidybreed.output
+    ├── baseline/                        ← tidybreed.scenario = "baseline"
+    │   ├── sim.duckdb                   ← tidybreed.db_name
+    │   ├── blupf90/                     ← subfolder per tool in tidybreed.tools
+    │   └── plink/
+    │
+    └── scenario_b/                      ← tidybreed.scenario = "scenario_b"
+        ├── sim.duckdb
+        ├── blupf90/
+        └── plink/
+```
+
+### Scenario YAML format
+
+Save scenario parameters in `scenarios/baseline.yaml` and read them at the top of your script with `yaml::read_yaml()`:
+
+```yaml
+# scenarios/baseline.yaml
+pop_name:  swine
+base_dir:  ~/projects/swine/
+output:    tidybreed_output
+scenario:  baseline
+db_name:   sim.duckdb
+tools:
+  - blupf90
+  - plink
+```
+
+```r
+cfg <- yaml::read_yaml("scenarios/baseline.yaml")
+
+options(
+  tidybreed.pop_name  = cfg$pop_name,
+  tidybreed.base_dir  = cfg$base_dir,
+  tidybreed.output    = cfg$output,
+  tidybreed.scenario  = cfg$scenario,
+  tidybreed.db_name   = cfg$db_name,
+  tidybreed.tools     = cfg$tools,
+  tidybreed.replicate = as.integer(Sys.getenv("REP", 1))  # set per run
+)
+```
+
+Swap scenarios by pointing to a different YAML file; the rest of the script stays identical.
 
 ---
 
