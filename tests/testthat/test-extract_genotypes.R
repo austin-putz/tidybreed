@@ -343,19 +343,33 @@ test_that("extract_genotypes() errors when loci_tbl is wrong table", {
 
 
 # ---------------------------------------------------------------------------
-# Diploid-only guard
+# Ploidy-2 guard
 # ---------------------------------------------------------------------------
 
-test_that("extract_genotypes() errors before querying when chr_meta has a non-diploid row", {
+test_that("extract_genotypes() errors before querying when an individual has ploidy != 2", {
   pop <- make_extract_pop("test_eg_nondiploid")
   pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
 
-  DBI::dbExecute(pop$db_conn, "UPDATE chr_meta SET copies_M = 1 WHERE chr_name = '1'")
+  ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta LIMIT 1")$id_ind
+  DBI::dbExecute(pop$db_conn, paste0(
+    "UPDATE ind_meta SET ploidy = 4 WHERE id_ind = '", ids, "'"))
 
   expect_error(
     pop |> get_table("ind_meta") |> extract_genotypes("50k"),
-    "Stage 4"
+    "ploidy"
   )
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() does not error when chr_meta has a sex-linked copy_mode row", {
+  pop <- make_extract_pop("test_eg_sexlinked")
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+
+  DBI::dbExecute(pop$db_conn,
+    "UPDATE chr_meta SET copy_mode_M = 'half', hemi_parent = 'parent_2' WHERE chr_name = '1'")
+
+  expect_no_error(pop |> get_table("ind_meta") |> extract_genotypes("50k"))
 
   close_pop(pop)
 })

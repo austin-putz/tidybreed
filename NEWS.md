@@ -1,3 +1,59 @@
+# tidybreed 0.49.0 (2026-07-03)
+
+## New features — sex chromosomes and organelles (Stage 4)
+
+`chr_meta`/`define_chr()` now support non-diploid inheritance rules: sex
+chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids). Real
+polyploidy (ploidy > 2, uneven-ploidy crosses) remains out of scope — an
+`ind_meta.ploidy` column is added for forward schema compatibility, but every
+individual must be `ploidy = 2` in this version.
+
+* **Schema**: `chr_meta.copies_M`/`copies_F` (absolute integers) renamed to
+  `copy_mode_M`/`copy_mode_F` (`"full"`/`"half"`/`"none"`, relative to an
+  individual's own ploidy) — resolves the terminology clash flagged during
+  Stage 4 planning. New `ind_meta.ploidy` column (`UTINYINT`, default `2`,
+  reserved).
+* **New `define_chr()`** (`R/define_chr.R`) — upserts a chromosome's
+  inheritance rule (`copy_mode_M`, `copy_mode_F`, `hemi_parent`,
+  `recombines`) into `chr_meta`, with validation for the enum values and the
+  `hemi_parent`/copy_mode consistency requirement.
+* **`add_founders()`** gains a `ploidy` argument (must be `2`) and now writes
+  `ind_haplotype` rows per chromosome according to `chr_meta`: both
+  `parent_origin` slots for `"full"`, only the `hemi_parent`-designated slot
+  for `"half"`, none for `"none"`. The founder haplotype-pool sampling draw
+  itself is unchanged (still one flat `sample()` call), preserving byte-exact
+  parity for existing diploid-autosome simulations.
+* **`add_offspring()`** now branches per chromosome: plain autosomes go
+  through the original, unchanged recombination path; sex-linked/organelle
+  chromosomes route through a new branch that resolves each contributing
+  parent's own copy count, recombines when the parent carries 2 copies (via
+  the same `make_gamete()`, scoped to that one chromosome), and otherwise
+  passes the parent's single stored copy straight through via a new
+  `pass_through_gamete()` helper (`R/recombination_helpers.R`) that consumes
+  **zero** RNG draws when only one copy exists — so strictly hemizygous,
+  non-recombining inheritance (patrilineal Y, matrilineal MT) never perturbs
+  the random stream.
+* **`add_dosage()`/`extract_genotypes()`**: the Stage 3 `assert_diploid_only()`
+  guard (blocked *any* non-default `chr_meta` row) is replaced with
+  `assert_ploidy_2()` (`R/ploidy_helpers.R`), scoped to `ind_meta.ploidy`
+  instead — their underlying `SUM(allele)` SQL was already correct for any
+  row count per locus, so sex-linked/organelle chromosomes now work with no
+  SQL changes, only the guard needed relaxing.
+* **`add_tbv()`** required no changes — its centered SQL already sums over
+  however many haplotype rows exist per individual per locus.
+* **`define_additive_effects(scale_to_target = TRUE)`** now errors clearly if
+  any selected QTL locus is on a non-`"full"`-copy_mode chromosome, since the
+  Falconer variance formula (`2*p*(1-p)*a^2`) assumes diploid/autosomal loci
+  and would otherwise silently miscalibrate trait variance for sex-linked
+  QTL.
+* Parity preserved: `tests/testthat/test-parity.R`'s golden files are
+  unchanged (no re-baseline) — confirms the diploid-autosome case is
+  byte-identical before and after this stage's restructuring.
+* New tests: `test-define_chr.R`, `test-sex_chromosomes.R` (X/Y, Z/W, MT, X0,
+  mixed autosome+sex-chromosome dosage/export), extended
+  `test-ploidy_helpers.R`, `test-add_tbv.R`, and
+  `test-define_additive_effects.R`.
+
 # tidybreed 0.48.1 (2026-07-02)
 
 ## Hardening — dosage cache & export (Stage 3)

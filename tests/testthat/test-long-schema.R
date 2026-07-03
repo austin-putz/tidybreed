@@ -36,8 +36,8 @@ test_that("chr_meta is seeded with default diploid-autosome rows", {
 
   cm <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM chr_meta ORDER BY chr_name")
   expect_equal(nrow(cm), 3)
-  expect_true(all(cm$copies_M == 2L))
-  expect_true(all(cm$copies_F == 2L))
+  expect_true(all(cm$copy_mode_M == "full"))
+  expect_true(all(cm$copy_mode_F == "full"))
   expect_true(all(cm$recombines))
   expect_true(all(is.na(cm$hemi_parent)))
 })

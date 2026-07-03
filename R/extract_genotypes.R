@@ -92,7 +92,6 @@ extract_genotypes <- function(tbl,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
-  assert_diploid_only(pop)
 
   if (is.null(chip_name) && is.null(effects_tbl) && is.null(loci_tbl)) {
     stop("At least one of 'chip_name', 'effects_tbl', or 'loci_tbl' must be provided.",
@@ -184,6 +183,8 @@ extract_genotypes <- function(tbl,
       stop("No individuals found in the filtered set.", call. = FALSE)
     }
   }
+
+  assert_ploidy_2(pop, has_ids)
 
   # --- Resolve locus IDs (union of chip and/or QTL paths) ---
   locus_ids <- integer(0)

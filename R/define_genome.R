@@ -138,18 +138,21 @@ define_genome <- function(pop,
     "PRIMARY KEY (id_ind, locus_id))"
   ))
 
-  # Create chr_meta with default diploid-autosome rows. define_chr() and non-
-  # default inheritance rules are Stage 4; the table exists now so the column
-  # shape is stable.
+  # Create chr_meta with default diploid-autosome rows. copy_mode_M/copy_mode_F
+  # are relative to each individual's own ploidy ("full"/"half"/"none"), not an
+  # absolute copy count — see define_chr() for non-default inheritance rules
+  # (sex chromosomes, organelles).
   DBI::dbExecute(db_conn, paste0(
     "CREATE TABLE chr_meta (",
-    "chr_name VARCHAR PRIMARY KEY, copies_M UTINYINT, copies_F UTINYINT, ",
-    "hemi_parent VARCHAR, recombines BOOLEAN)"
+    "chr_name VARCHAR PRIMARY KEY, ",
+    "copy_mode_M VARCHAR NOT NULL DEFAULT 'full', ",
+    "copy_mode_F VARCHAR NOT NULL DEFAULT 'full', ",
+    "hemi_parent VARCHAR, recombines BOOLEAN NOT NULL DEFAULT TRUE)"
   ))
   chr_meta_df <- tibble::tibble(
     chr_name    = chr_names,
-    copies_M    = 2L,
-    copies_F    = 2L,
+    copy_mode_M = "full",
+    copy_mode_F = "full",
     hemi_parent = NA_character_,
     recombines  = TRUE
   )

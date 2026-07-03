@@ -355,3 +355,62 @@ test_that("add_tbv() correctly computes a backcross (F1 x parental line) TBV", {
 
   close_pop(pop)
 })
+
+
+test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no code changes needed", {
+  set.seed(7001)
+  pop <- open_pop(pop_name = "tbv_x", db_name = ":memory:") |>
+    define_genome(n_loci = 10, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
+    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_founder_haplotypes(n_haplotypes = 20, method = "fixed", allele_freq = 0.5)
+
+  pop <- pop |> get_table("founder_haplotypes") |>
+    add_founders(n_males = 4, n_females = 4, line_name = "A")
+
+  pop <- define_trait(pop, "ADG")
+  # Effects on every locus (both chromosomes) so independent_tbv() below has a
+  # matching genome_effects row for every ind_haplotype row it reads.
+  all_loci <- pop |> get_table("genome_meta") |>
+    dplyr::collect() |> dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
+  pop <- pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = seq_len(length(all_loci)))
+
+  all_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
+  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+
+  # Males have 1 allele row at each X locus, females have 2 — independent_tbv()
+  # sums over however many rows actually exist per individual, so this is a
+  # genuine hemizygous-vs-diploid comparison, not a special-cased helper.
+  expected <- independent_tbv(pop, "ADG", all_ids)
+  actual <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG'")
+  actual_named <- stats::setNames(actual$tbv_value, actual$id_ind)
+  expect_equal(actual_named[all_ids], expected[all_ids], tolerance = 1e-8)
+
+  close_pop(pop)
+})
+
+
+test_that("compute_base_allele_freq() is correct (row-count-agnostic) for a mixed autosome+X genome", {
+  pop <- open_pop(pop_name = "basefreq_x", db_name = ":memory:") |>
+    define_genome(n_loci = 8, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
+    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_founder_haplotypes(n_haplotypes = 20, method = "fixed", allele_freq = 0.5)
+
+  pop <- pop |> get_table("founder_haplotypes") |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A")
+
+  pop <- define_trait(pop, "ADG")
+  pop <- pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1, 8), base = "current_pop")
+
+  p_from_effects <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_name, base_allele_freq FROM genome_effects WHERE trait_name = 'ADG'")
+  p_hand <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_name, AVG(CAST(allele AS DOUBLE)) AS p FROM ind_haplotype GROUP BY locus_name")
+
+  merged <- merge(p_from_effects, p_hand, by = "locus_name")
+  expect_equal(merged$base_allele_freq, merged$p, tolerance = 1e-8)
+
+  close_pop(pop)
+})

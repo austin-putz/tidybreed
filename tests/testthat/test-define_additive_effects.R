@@ -253,3 +253,55 @@ test_that("define_additive_effects() errors when filter returns zero rows", {
   )
   close_pop(pop)
 })
+
+
+# ---------------------------------------------------------------------------
+# scale_to_target guard for sex-linked/organelle QTL (Stage 4)
+# ---------------------------------------------------------------------------
+
+make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20) {
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 100) |>
+    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
+  pop |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = n_ind / 2, n_females = n_ind / 2, line_name = "A")
+}
+
+test_that("scale_to_target = TRUE errors when QTL set includes a sex-linked locus", {
+  pop <- make_effects_pop_with_x()
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  expect_error(
+    pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
+      define_additive_effects("ADG", scale_to_target = TRUE),
+    "Falconer variance scaling"
+  )
+})
+
+test_that("scale_to_target = FALSE with manual effects works fine for sex-linked QTL", {
+  pop <- make_effects_pop_with_x()
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  n_x <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_meta WHERE chr_name = 'X'")$n
+
+  expect_no_error(
+    pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
+      define_additive_effects("ADG", effects = rep(1, n_x))
+  )
+})
+
+test_that("scale_to_target = TRUE still works for purely autosomal QTL on a genome that also has a sex chromosome", {
+  pop <- make_effects_pop_with_x()
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  expect_no_error(
+    pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1") |>
+      define_additive_effects("ADG", scale_to_target = TRUE)
+  )
+})

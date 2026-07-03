@@ -118,13 +118,25 @@ test_that("overwrite_dosage clears prior rows for the candidate set", {
     "SELECT COUNT(*) AS n FROM ind_genotype")$n, 8L * 2L)
 })
 
-test_that("add_dosage errors before writing anything when chr_meta has a non-diploid row", {
+test_that("add_dosage errors before writing anything when an individual has ploidy != 2", {
   pop <- make_dosage_pop(n_loci = 10)
   on.exit(close_pop(pop), add = TRUE)
 
-  DBI::dbExecute(pop$db_conn, "UPDATE chr_meta SET copies_M = 1 WHERE chr_name = '1'")
+  ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta LIMIT 1")$id_ind
+  DBI::dbExecute(pop$db_conn, paste0(
+    "UPDATE ind_meta SET ploidy = 4 WHERE id_ind = '", ids, "'"))
 
-  expect_error(pop |> get_table("ind_meta") |> add_dosage(), "Stage 4")
+  expect_error(pop |> get_table("ind_meta") |> add_dosage(), "ploidy")
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0L)
+})
+
+test_that("add_dosage does not error when chr_meta has a sex-linked copy_mode row", {
+  pop <- make_dosage_pop(n_loci = 10)
+  on.exit(close_pop(pop), add = TRUE)
+
+  DBI::dbExecute(pop$db_conn,
+    "UPDATE chr_meta SET copy_mode_M = 'half', hemi_parent = 'parent_2' WHERE chr_name = '1'")
+
+  expect_no_error(pop |> get_table("ind_meta") |> add_dosage())
 })

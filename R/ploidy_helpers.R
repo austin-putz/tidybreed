@@ -1,32 +1,38 @@
-#' Assert that `chr_meta` has no non-diploid chromosomes
+#' Assert that a set of individuals all have ploidy = 2
 #'
-#' Ploidy-aware dosage and genotype extraction is Stage 4 (`define_chr()`)
-#' scope. Until that ships, any `chr_meta` row with `copies_M`/`copies_F` other
-#' than 2 would silently produce wrong dosage sums rather than erroring, since
-#' the current dosage/export SQL assumes exactly two haplotype rows per
-#' individual per locus. `define_chr()` does not exist yet, so this guard is
-#' forward defense — it protects the day `chr_meta` gains non-default rows,
-#' not a fix for a currently reachable bug.
+#' Ploidy-aware dosage and genotype extraction for real polyploidy (ploidy > 2)
+#' is not yet supported. Sex-linked and organelle `chr_meta` rules
+#' (`copy_mode_M`/`copy_mode_F`) are fine here — `SUM(allele)` over however
+#' many `ind_haplotype` rows exist per locus already produces correct dosage
+#' regardless of row count, so this guard targets actual organism ploidy, not
+#' `chr_meta` shape.
 #'
 #' @param pop A `tidybreed_pop`.
+#' @param ids Optional character vector of `id_ind` to check; `NULL` (default)
+#'   checks every individual in `ind_meta`.
 #' @return Invisible `NULL` on success; errors otherwise.
 #' @keywords internal
-assert_diploid_only <- function(pop) {
-  if (!"chr_meta" %in% pop$tables) {
-    return(invisible(NULL))
+assert_ploidy_2 <- function(pop, ids = NULL) {
+  if (is.null(ids)) {
+    where_sql <- "WHERE ploidy != 2"
+  } else {
+    where_sql <- paste0(
+      "WHERE id_ind IN (", sql_in_list(ids, what = "individual ID"), ") ",
+      "AND ploidy != 2"
+    )
   }
 
-  n_non_diploid <- DBI::dbGetQuery(
+  n_bad <- DBI::dbGetQuery(
     pop$db_conn,
-    "SELECT COUNT(*) AS n FROM chr_meta WHERE copies_M != 2 OR copies_F != 2"
+    paste0("SELECT COUNT(*) AS n FROM ind_meta ", where_sql)
   )$n
 
-  if (n_non_diploid > 0) {
+  if (n_bad > 0) {
     stop(
-      "chr_meta contains ", n_non_diploid, " chromosome(s) with non-diploid ",
-      "copy number (copies_M != 2 or copies_F != 2). Ploidy-aware dosage and ",
-      "genotype extraction are not supported until Stage 4 (define_chr()) ",
-      "ships; this function assumes diploid autosomes only.",
+      n_bad, " individual(s) have ploidy != 2. Ploidy-aware dosage and ",
+      "genotype extraction for real polyploidy are not supported. ",
+      "Sex-linked/organelle chr_meta rules (copy_mode_M/copy_mode_F) are ",
+      "fine here and do not trigger this error.",
       call. = FALSE
     )
   }

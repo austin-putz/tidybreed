@@ -17,6 +17,8 @@
 #' @param n_females Integer. Number of female founders to create
 #' @param line_name Character. Line identifier used for individual IDs.
 #'   IDs are formatted as `"{line_name}_{number}"` (e.g., "A_1", "A_2")
+#' @param ploidy Integer scalar. Genome ploidy for these founders. Must be `2`
+#'   in this version of tidybreed (real polyploidy is not yet supported).
 #' @param ... Optional named arguments for custom `ind_meta` columns, e.g.
 #'   `gen = 0L`, `farm = "Iowa"`. Scalar values are broadcast to all new
 #'   founders; vectors must have length `n_males + n_females`. Column types
@@ -82,11 +84,21 @@
 #' # View founders
 #' get_table(pop, "ind_meta") |> dplyr::collect()
 #' }
-add_founders <- function(tbl, n_males, n_females, line_name, ...) {
+add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...) {
 
   # ============================================================================
   # 1. Validate inputs
   # ============================================================================
+
+  stopifnot(is.numeric(ploidy), length(ploidy) == 1L)
+  if (as.integer(ploidy) != 2L) {
+    stop(
+      "ploidy must be 2 in this version of tidybreed (sex chromosomes and ",
+      "organelles are supported; real polyploidy is not yet supported). ",
+      "Got ploidy = ", ploidy, ".",
+      call. = FALSE
+    )
+  }
 
   if (!inherits(tbl, "tidybreed_table")) {
     stop(
@@ -141,7 +153,7 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   # locus_id (from genome_meta) drives column order; haplotypes are keyed by
   # (line_name, haplotype_id) since haplotype_id is only unique within a line.
   gm <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
+    "SELECT locus_id, locus_name, chr, chr_name FROM genome_meta ORDER BY locus_id")
   n_loci     <- nrow(gm)
   locus_cols <- paste0("locus_", seq_len(n_loci))
 
@@ -200,7 +212,8 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
     id_parent_1 = NA_character_,  # NULL for founders
     id_parent_2 = NA_character_,  # NULL for founders
     line_name = line_name,
-    sex = sex_vector
+    sex = sex_vector,
+    ploidy = as.integer(ploidy)
   )
 
   # Attach any user-supplied custom columns from ...
@@ -215,7 +228,11 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   #    the long ind_haplotype). It is never written to a wide DB table.
   # ============================================================================
 
-  # Interleave paternal/maternal row indices: [pat1, mat1, pat2, mat2, ...]
+  # Interleave paternal/maternal row indices: [pat1, mat1, pat2, mat2, ...].
+  # This is the ONLY use of hap_indices (drawn once, flat, in step 4) — no
+  # additional sampling happens below. copy_mode below only decides which of
+  # these already-drawn rows get WRITTEN per chromosome, never how many values
+  # sample() draws, so the RNG sequence from step 4 is unaffected by chr_meta.
   row_idx <- c(rbind(hap_indices[, 1], hap_indices[, 2]))
   hap_matrix <- hap_data_matrix[row_idx, , drop = FALSE]
   storage.mode(hap_matrix) <- "integer"
@@ -224,11 +241,12 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
     data.frame(
       id_ind        = rep(ind_ids, each = 2),
       parent_origin = rep(c(1L, 2L), times = n_founders),
+      sex           = rep(sex_vector, each = 2),
       stringsAsFactors = FALSE
     ),
     as.data.frame(hap_matrix)
   )
-  colnames(hap_wide)[3:(2 + n_loci)] <- locus_cols
+  colnames(hap_wide)[4:(3 + n_loci)] <- locus_cols
 
   # ============================================================================
   # 7. Write data to database
@@ -237,21 +255,49 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   # Write ind_meta table (always append; table was created by initialize_genome())
   DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
 
-  # Write the long ind_haplotype by unpivoting the wide allele frame in DuckDB
-  # (so R never materializes the long frame). strand = 1 (diploid); line_origin
-  # = the founder's own line for every allele. register + INSERT is RNG-neutral.
-  # ind_genotype stays on-demand (add_dosage()); nothing is written to it here.
-  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", hap_wide)
-  DBI::dbExecute(pop$db_conn, paste0(
-    "INSERT INTO ind_haplotype ",
-    "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
-    "SELECT u.id_ind, u.parent_origin, 1, '", line_name, "', ",
-    "gm.locus_id, gm.locus_name, u.allele ",
-    "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
-    "INTO NAME locus_col VALUE allele) u ",
-    "JOIN genome_meta gm ON u.locus_col = 'locus_' || gm.locus_id"
-  ))
-  duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
+  # Write the long ind_haplotype, one UNPIVOT+INSERT per chromosome, using
+  # chr_meta's copy_mode_M/copy_mode_F to decide which (sex, parent_origin)
+  # rows are written for that chromosome's loci — "full" writes both
+  # parent_origin slots (today's diploid-autosome behavior, unchanged), "half"
+  # writes only the hemi_parent-designated slot, "none" writes nothing. R never
+  # materializes the long frame; strand = 1 (ploidy is 2 in this version);
+  # line_origin = the founder's own line for every allele. register + INSERT
+  # is RNG-neutral. ind_genotype stays on-demand (add_dosage()); nothing is
+  # written to it here.
+  chr_meta_map <- get_chr_meta_map(pop$db_conn)
+  chr_ids      <- sort(unique(gm$chr))
+  chr_order    <- vapply(chr_ids, function(x) gm$chr_name[gm$chr == x][1], character(1))
+
+  for (cn in chr_order) {
+    chr_row  <- chr_meta_map[[cn]]
+    chr_cols <- locus_cols[gm$chr_name == cn]
+
+    keep_rows <- rep(FALSE, nrow(hap_wide))
+    for (s in c("M", "F")) {
+      cm <- if (s == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
+      if (cm == "none") next
+      keep_po <- if (cm == "full") {
+        c(1L, 2L)
+      } else if (chr_row$hemi_parent == "parent_1") 1L else 2L
+      keep_rows <- keep_rows |
+        (hap_wide$sex == s & hap_wide$parent_origin %in% keep_po)
+    }
+    if (!any(keep_rows)) next
+
+    chr_wide <- hap_wide[keep_rows, c("id_ind", "parent_origin", chr_cols), drop = FALSE]
+
+    duckdb::duckdb_register(pop$db_conn, "__tmp_hap", chr_wide)
+    DBI::dbExecute(pop$db_conn, paste0(
+      "INSERT INTO ind_haplotype ",
+      "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
+      "SELECT u.id_ind, u.parent_origin, 1, '", line_name, "', ",
+      "gm.locus_id, gm.locus_name, u.allele ",
+      "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
+      "INTO NAME locus_col VALUE allele) u ",
+      "JOIN genome_meta gm ON u.locus_col = 'locus_' || gm.locus_id"
+    ))
+    duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
+  }
 
   # ============================================================================
   # 9. Update and return

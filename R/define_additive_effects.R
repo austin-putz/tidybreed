@@ -212,6 +212,7 @@ define_additive_effects <- function(tbl,
             call. = FALSE
           )
         }
+        assert_qtl_autosomal(pop$db_conn, selected_locus_names)
         qtl_effects <- rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
       }
     }
@@ -399,6 +400,7 @@ define_additive_effects <- function(tbl,
       qtl_tf_k <- qtl_tf_mat[, t]
       a_qtl    <- effects_mat[qtl_tf_k, t]
       if (any(!is.na(a_qtl))) {
+        assert_qtl_autosomal(pop$db_conn, genome_order$locus_name[qtl_tf_k])
         effects_mat[qtl_tf_k, t] <- rescale_effects_to_target(
           qtl_tf_k, a_qtl, target_var[[t]], p_base
         )

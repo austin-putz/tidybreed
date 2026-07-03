@@ -136,22 +136,48 @@ Exit criteria:
 - Repeated cache materialization is idempotent.
 - Partial cache contents cannot silently change TBV or phenotype results.
 
-### Stage 4: Non-diploid inheritance
+### Stage 4: Non-diploid inheritance (COMPLETE — see [refactor_haplotype_stage_4.md](refactor_haplotype_stage_4.md))
 
 Goal: add `chr_meta` rules beyond the default, `define_chr()`, sex chromosomes, organelles, and
 later polyploid rules.
 
+**Terminology clash resolved (2026-07-03)** — see "Ploidy vs. sex-linkage: resolving the
+`copies_M`/`copies_F` clash" under "Sex Chromosomes and Uniparental Inheritance" below for the
+full design. Summary: `copies_M`/`copies_F` as absolute integers (0/1/2 for sex chromosomes,
+4/6/8 for polyploidy, reusing the same field) conflated two independent axes — "is this
+chromosome sex-reduced" and "what is this organism's baseline ploidy." Resolved by splitting
+into (a) `ploidy` as a per-individual declared/computed value (not a `chr_meta` constant — plant
+lines vary, and hybrid crosses of differing ploidy produce offspring whose ploidy is neither
+parent's, e.g. 2N × 4N → 3N), and (b) a relative `copy_mode_M`/`copy_mode_F` enum
+(`"full"`/`"half"`/`"none"`) on `chr_meta` that means the same thing regardless of the
+individual's underlying ploidy.
+
 Scope:
-- Resolve the `copies_M`/`copies_F` terminology clash (0/1/2 vs. 4/6/8) before writing any code.
-- Start with sex chromosome and organellar cases.
-- Defer autopolyploid/allopolyploid pairing until a clear meiosis model exists (see Open
-  Questions).
+- Implement `ploidy` as a reserved column set at `add_founders()` time (per line/founder) and
+  computed at `add_offspring()` time as the sum of each parent's gamete contribution
+  (`parent's own ploidy / 2` by default — standard meiotic reduction). This is what makes uneven
+  crosses (2N × 4N → 3N) fall out automatically with no special-casing. Unreduced-gamete
+  breeding (deliberately skipping the halving to jump ploidy levels) is a documented future
+  override, not required for Stage 4.
+- Replace `chr_meta.copies_M`/`copies_F` (absolute integers) with `copy_mode_M`/`copy_mode_F`
+  (`"full"`/`"half"`/`"none"`), resolved against each individual's own realized ploidy at
+  haplotype-generation time, not a fixed constant.
+- Start with sex chromosome and organellar cases (X/Y, Z/W, X0/Z0 — see "Other sex-determination
+  systems to plan for" below).
+- **Explicit non-goal, not deferred-but-planned**: haplodiploidy (bees, ants, wasps —
+  arrhenotoky) does not fit this design at all — see "Haplodiploidy is architecturally
+  different" below. Do not attempt to express it as a `chr_meta` row.
+- Defer autopolyploid/allopolyploid meiosis *pairing* (which homologs are allowed to pair) until
+  a clear meiosis model exists (see Open Questions) — ploidy *counting* (this stage) and pairing
+  *rules* (later, `define_ploidy_model()`) are separate problems.
 - Make TBV centering and dosage export ploidy-aware.
 
 Exit criteria:
 - X/Y or Z/W hand tests pass.
 - Absent chromosomes produce no haplotype rows and no accidental dosage.
 - Export either handles sex-linked loci correctly or warns/errors when used for standard GBLUP.
+- A 2N × 4N founder cross produces a 3N offspring with the correct copy count per locus, verified
+  against hand-computed expectations.
 
 ### Stage 5: Mutation sparsity
 
@@ -498,16 +524,21 @@ This is the one place in the package where wide input is the expected norm and t
 ## Sex Chromosomes and Uniparental Inheritance
 
 > **Status: Stage 4, out of v1 scope.** v1 implements diploid autosomes only, with `chr_meta`
-> created and populated with default autosome rows (`copies_M = 2, copies_F = 2, hemi_parent =
-> NULL, recombines = TRUE`) so the table exists and the column shape is stable, but
+> created and populated with default autosome rows (`copy_mode_M = "full", copy_mode_F = "full",
+> hemi_parent = NULL, recombines = TRUE` — see below; this replaces the earlier
+> `copies_M = 2, copies_F = 2` draft) so the table exists and the column shape is stable, but
 > `define_chr()` and any non-default inheritance rule is not implemented or tested in v1. This
 > section is kept as a design draft for Stage 4 — several details below are known-incomplete
-> (see callouts) and should not be treated as ready to implement as written. In particular:
-> `copies_M`/`copies_F` are described as "0, 1, or 2" here but reused as "4, 6, 8" for polyploids
-> later in this doc — that's an unresolved terminology clash, not a typo, and needs to be settled
-> before `chr_meta` is finalized. Pseudoautosomal regions and per-segment (rather than
-> per-chromosome) inheritance rules are also not representable by this schema and are not
-> addressed here.
+> (see callouts) and should not be treated as ready to implement as written. **Update
+> (2026-07-03): the `copies_M`/`copies_F` terminology clash flagged here previously (described
+> as "0, 1, or 2" for sex chromosomes but reused as "4, 6, 8" for polyploids) is now resolved** —
+> see "Ploidy vs. sex-linkage: resolving the `copies_M`/`copies_F` clash" below: ploidy moved to a
+> per-individual declared/computed value, and `chr_meta` now stores a relative `copy_mode`
+> (`"full"`/`"half"`/`"none"`) instead of an absolute count. Also newly flagged as explicit
+> non-goals for Stage 4 (see callouts below): haplodiploid (bees/ants/wasps) sex determination,
+> and biparental plastid inheritance. Pseudoautosomal regions and per-segment (rather than
+> per-chromosome) inheritance rules remain not representable by this schema and are not addressed
+> here.
 
 ### The general problem
 
@@ -528,19 +559,77 @@ What is needed is a chromosome-level rule table so that `add_founders()` and `ad
 
 ---
 
+### Ploidy vs. sex-linkage: resolving the `copies_M`/`copies_F` clash (2026-07-03)
+
+An earlier draft of this section used `copies_M`/`copies_F` as an absolute integer meaning two
+different things in two different places: "0, 1, or 2" for sex-chromosome hemizygosity, and
+"4, 6, 8" for polyploidy, reusing the same field. That is a real conflict, not a documentation
+nit — it collides in any species that is both polyploid *and* has a hemizygous sex chromosome
+(some plants and fish have this), and it cannot express hybrid crosses between individuals of
+different ploidy at all (see below), since "copies" alone never says what is normal for that
+particular individual.
+
+**Resolution — split into two independent concepts:**
+
+1. **`ploidy` is a per-individual property, not a `chr_meta` constant.** Plant lines vary in
+   baseline ploidy (diploid vs. tetraploid varieties of the same species are common), and — this
+   is the case that rules out a per-line or per-species constant entirely — **hybrid crosses
+   between differing ploidy levels produce offspring whose ploidy is neither parent's**. A 2N ×
+   4N cross (used deliberately in plant breeding, e.g. triploid seedless watermelon/banana) gives
+   3N offspring. `ploidy` is therefore:
+   - **Declared** per founder/line at `add_founders()` time (default `2L`).
+   - **Computed** at `add_offspring()` time as the sum of each parent's gamete contribution,
+     where each parent contributes `own_ploidy / 2` copies by default (standard meiotic
+     reduction) — so a `2N` sire + `4N` dam → `1 + 2 = 3N` offspring automatically, with no
+     special-casing for "uneven" crosses. (Deliberately *unreduced* gametes — skipping the
+     halving to jump ploidy levels — are a real polyploid-breeding technique; treat as a
+     documented future override, not required for Stage 4's core scope.)
+   - Consistent with this project's stated disdain for storing derivable metadata (`CLAUDE.md`
+     principle #6): because haplotypes are long-format, an individual's *realized* copy number
+     for any given chromosome is always re-derivable as `COUNT(*) FROM ind_haplotype WHERE
+     id_ind = ... AND <that chromosome's loci>`. The only thing that must be *declared* rather
+     than derived is a founder's starting ploidy — there is nothing to derive it from.
+2. **`chr_meta.copy_mode_M`/`copy_mode_F` is relative, not absolute** — see the revised
+   `chr_meta` schema below. `"half"` means "half of *this individual's own* ploidy for this
+   chromosome," so it means 1 copy for a 2N individual and 2 copies for a 4N individual without
+   the field itself changing meaning.
+
+This only fixes ploidy *counting*. Polyploid meiosis *pairing* (autopolyploid: any two of a
+parent's homologs may pair; allopolyploid: only homeologous subgenome sets pair) remains a
+separate, unresolved question — see Open Questions, `define_ploidy_model()`.
+
+> **Note for whoever implements Stage 4**: the mechanics sections below ("How `add_founders()`
+> changes," "How `add_offspring()` changes," "Recombination in `add_offspring()`") were drafted
+> before this resolution and still talk about `copies` as a plain integer. Read every "copies"
+> reference there as "this individual's resolved copy count for this chromosome" (ploidy ×
+> copy_mode fraction), not a `chr_meta` constant — the branching logic (0 / 1 / ≥2 copies) is
+> still correct once `copies` is computed that way, but the pseudocode was not rewritten
+> line-by-line to use the new field names. Do that rewrite as part of Stage 4 implementation,
+> not before.
+
 ### New table: `chr_meta`
 
 One row per chromosome. Stores the inheritance rule for that chromosome. Autosome rows are written automatically by `initialize_genome()`. Users call `define_chr()` to set non-standard rules.
 
 ```text
 chr_name      VARCHAR    PK; matches genome_meta.chr_name (e.g. "1", "X", "Y", "MT")
-copies_M      UTINYINT   Copies carried by males: 0, 1, or 2 (default 2)
-copies_F      UTINYINT   Copies carried by females: 0, 1, or 2 (default 2)
-hemi_parent   VARCHAR    When an individual has exactly 1 copy: "parent_1" (sire) or
-                         "parent_2" (dam); NULL for fully diploid chromosomes
+copy_mode_M   VARCHAR    "full" | "half" | "none" — this chromosome's copy count for males,
+                         relative to that individual's own ploidy (not an absolute number).
+                         "full" = same as this individual's realized ploidy for this chromosome;
+                         "half" = hemizygous (half of that ploidy); "none" = absent. Default "full".
+copy_mode_F   VARCHAR    Same as copy_mode_M, for females. Default "full".
+hemi_parent   VARCHAR    When copy_mode resolves to a reduced (non-"full") copy count for this
+                         individual: "parent_1" (sire) or "parent_2" (dam) — which parent
+                         supplies the reduced copy/copies; NULL when copy_mode is "full" for
+                         both sexes.
 recombines    BOOLEAN    TRUE = recombination occurs during gamete formation;
                          FALSE for Y, W, MT, most organelles (default TRUE)
 ```
+
+**Why `hemi_parent` still works unchanged**: it was already answering "which parent supplies the
+reduced copy," a question that is orthogonal to whether "reduced" means 1-out-of-2 or 2-out-of-4.
+Moving from absolute counts to relative `copy_mode` does not change `hemi_parent`'s semantics at
+all — only how the *count itself* is resolved for a given individual.
 
 **`hemi_parent` semantics**: this is the parent whose haplotype is passed to an offspring that carries exactly one copy of this chromosome. It is the same for all individuals that carry one copy:
 
@@ -553,7 +642,49 @@ recombines    BOOLEAN    TRUE = recombination occurs during gamete formation;
 **Default rows** written by `initialize_genome()` for all chromosomes:
 `copies_M = 2, copies_F = 2, hemi_parent = NULL, recombines = TRUE`
 
-**Polyploidy**: `copies_M` and `copies_F` encode total chromosome copies — set them to 4 for a tetraploid, 6 for a hexaploid, 8 for an octoploid. `add_founders()` and `add_offspring()` compute `strands_per_parent = copies / 2` and write rows for `strand = 1 .. strands_per_parent` under each `parent_origin`. A tetraploid therefore gets `parent_origin ∈ {1, 2}` × `strand ∈ {1, 2}` = 4 rows per locus; a hexaploid gets `parent_origin ∈ {1, 2}` × `strand ∈ {1, 2, 3}` = 6 rows. The `hemi_parent` and `recombines` columns remain valid for polyploid sex chromosomes (e.g. a tetraploid plant with sex chromosomes) without modification.
+**Polyploidy**: ploidy itself is now tracked per-individual (see "Ploidy vs. sex-linkage" above),
+not encoded in `chr_meta`. For a normal autosome, `copy_mode_M`/`copy_mode_F` are both `"full"` at
+any ploidy — `add_founders()`/`add_offspring()` compute `strands_per_parent =
+this_individual's_ploidy / 2` and write rows for `strand = 1 .. strands_per_parent` under each
+`parent_origin`. A tetraploid individual therefore gets `parent_origin ∈ {1, 2}` × `strand ∈ {1,
+2}` = 4 rows per locus; a hexaploid gets `parent_origin ∈ {1, 2}` × `strand ∈ {1, 2, 3}` = 6 rows.
+The `hemi_parent` and `recombines` columns remain valid for polyploid sex chromosomes (e.g. a
+tetraploid plant with sex chromosomes, `copy_mode_M = "half"`) without modification — `"half"`
+resolves to 2 copies instead of 1 automatically, because it is relative to that individual's own
+ploidy rather than a fixed number.
+
+---
+
+### Other sex-determination systems to plan for (not build in Stage 4)
+
+Beyond X/Y and Z/W, worth naming now so `chr_meta` is never assumed to require sex chromosomes to
+come in a designated pair:
+
+- **X0 / Z0 systems** — many insects (grasshoppers, crickets), *C. elegans*, and others: one sex
+  has a single unpaired sex chromosome, and there is genuinely no second sex chromosome at all
+  (not "present but silent"). Already expressible under the relative `copy_mode` design —
+  `copy_mode` for the missing partner is simply `"none"` with no corresponding chromosome row —
+  but flagged so no future code path assumes every sex-determination system has exactly two named
+  sex chromosomes.
+- **Environmental/temperature-dependent sex determination** (some reptiles, some fish) — no
+  chromosomal basis at all. Permanently out of scope for a genotype-based simulator; noted only so
+  it is a conscious non-goal, not an oversight.
+
+### Haplodiploidy is architecturally different — explicit non-goal, not a future `chr_meta` row
+
+Bees, ants, and wasps (order Hymenoptera, and the arrhenotoky reproductive mode more broadly) use
+a fundamentally different mechanism that this design does **not** cover and should not be forced
+into: sex is determined by **whole-genome ploidy**, not by one specially-treated chromosome.
+Unfertilized eggs develop into haploid males; fertilized eggs develop into diploid females. A
+haploid male's every chromosome is haploid, not just one sex-linked pair, and his "meiosis" isn't
+reductive at all — his sperm are clonal copies of his single genome, since he has nothing to
+reduce from. That breaks two assumptions this whole `chr_meta` design rests on: (1) that ploidy
+reduction happens per-gamete via `own_ploidy / 2`, which is meaningless when `own_ploidy = 1`, and
+(2) that sex-linkage is a per-chromosome exception (`copy_mode`) layered on an otherwise-uniform
+organism ploidy, when here it *is* the organism's ploidy that differs by sex, for every
+chromosome at once. If haplodiploid species are ever supported, they need their own design track
+(whole-organism ploidy determines sex; male reproduction is clonal, not meiotic) — not an entry in
+`chr_meta`. Do not attempt to model it as one.
 
 ---
 
@@ -562,30 +693,46 @@ recombines    BOOLEAN    TRUE = recombination occurs during gamete formation;
 ```r
 # Mammalian sex chromosomes
 pop <- pop |>
-  define_chr("X", copies_M = 1L, copies_F = 2L,
+  define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
              hemi_parent = "parent_2", recombines = TRUE)  |>
-  define_chr("Y", copies_M = 1L, copies_F = 0L,
+  define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
              hemi_parent = "parent_1", recombines = FALSE)
 
 # Avian sex chromosomes (ZW system — females are heterogametic)
 pop <- pop |>
-  define_chr("Z", copies_M = 2L, copies_F = 1L,
+  define_chr("Z", copy_mode_M = "full", copy_mode_F = "half",
              hemi_parent = "parent_1", recombines = TRUE)  |>
-  define_chr("W", copies_M = 0L, copies_F = 1L,
+  define_chr("W", copy_mode_M = "none", copy_mode_F = "half",
              hemi_parent = "parent_2", recombines = FALSE)
 
-# Mitochondria (maternal in mammals)
+# Mitochondria (maternal in mammals) — see "Mitochondrial DNA" callout below
 pop <- pop |>
-  define_chr("MT", copies_M = 1L, copies_F = 1L,
+  define_chr("MT", copy_mode_M = "half", copy_mode_F = "half",
              hemi_parent = "parent_2", recombines = FALSE)
 
 # Paternal plastid (some plant species)
 pop <- pop |>
-  define_chr("Chloroplast", copies_M = 1L, copies_F = 1L,
+  define_chr("Chloroplast", copy_mode_M = "half", copy_mode_F = "half",
              hemi_parent = "parent_1", recombines = FALSE)
 ```
 
 `define_chr()` upserts a row in `chr_meta`. Calling it before `add_founders()` is required — founding haplotypes are sampled according to these rules.
+
+> **Mitochondrial DNA — already correctly modeled; confirming, not changing.** MT is subtly
+> different from X: for X, *presence itself* depends on the offspring's own sex (males get 1
+> copy, females get 2). For MT, presence never depends on sex — **every** offspring, male or
+> female, gets exactly one copy (`copy_mode_M = copy_mode_F = "half"`, resolving to 1 copy on a 2N
+> baseline) — only the *source* is sex-restricted, via `hemi_parent = "parent_2"` (always the
+> dam), `recombines = FALSE`. That is exactly the "male passes X only to daughters"-style pattern
+> generalized to "everyone gets it, but only from one parent," and the existing `hemi_parent`
+> mechanism already expresses it correctly with no new concept needed. Plant chloroplasts use the
+> identical mechanism with `hemi_parent = "parent_1"` for paternally-inherited species.
+>
+> **The one real gap**: some plants have genuinely **biparental** plastid inheritance — offspring
+> receive a mix of plastids from both parents rather than a clean single-parent copy. The current
+> two-value `hemi_parent` (`"parent_1"`/`"parent_2"`) cannot express "both, unrecombined, mixed" —
+> that is a known, flagged limitation (see Open Questions), not solved by this design, and rare
+> enough to defer rather than block Stage 4 on.
 
 ---
 
@@ -1271,6 +1418,15 @@ leaves the original wide tables untouched.
 
 **Resolved during this review (recorded here for reference, not asking again):**
 
+- **`copies_M`/`copies_F` terminology clash (2026-07-03)** — the field conflated two independent
+  axes (sex-linked hemizygosity vs. polyploid baseline count) under one absolute integer. Resolved
+  by splitting into per-individual `ploidy` (declared for founders at `add_founders()` time,
+  computed for offspring as the sum of each parent's gamete contribution — `own_ploidy / 2` per
+  parent by default) and a relative `chr_meta.copy_mode_M`/`copy_mode_F` (`"full"`/`"half"`/
+  `"none"`) that means the same thing regardless of the individual's underlying ploidy. This also
+  resolves uneven-ploidy crosses (2N × 4N → 3N, a real plant-breeding technique) — offspring
+  ploidy is emergent from parental gamete contributions, never looked up as a constant. See
+  "Ploidy vs. sex-linkage" under "Sex Chromosomes and Uniparental Inheritance."
 - **Table naming** — rename to `ind_haplotype`/`ind_genotype`. Decision: they store individual information, not metadata, so they follow the same `ind_` convention as `ind_meta`/`ind_phenotype`/`ind_tbv`/`ind_ebv`/`ind_index`. `genome_*` stays reserved for non-individual data (`genome_meta`, `genome_effects`). No compatibility views; rename and break, with the migration procedure above handling existing databases.
 - **G matrix ploidy for sex-linked loci** — de-risked for v1 by the new `loci_tbl` argument on `extract_genotypes()` (see "New `loci_tbl` argument" under "Genotype Matrix Export for GBLUP" above): users can already restrict a GBLUP extraction to autosomes via a plain `get_table("genome_meta") |> filter(...)`, independent of `chr_meta`/Stage 4. Automatic ploidy-aware warnings/errors remain a Stage 4 convenience, not a blocking v1 requirement.
 - **`locus_name` vs. `locus_id` as the internal key** — store both, rather than picking one. `locus_id INTEGER` is the physical sort/PK key (cheap comparisons for the recombination hot path and compression); `locus_name VARCHAR` is denormalized alongside it purely so TBV/GWAS queries can join straight to `genome_effects` without an extra hop through `genome_meta`. Never exposed differently to users either way — `locus_name` remains what users type in `filter()`, `define_chip()`, `add_dosage(locus_names = ...)`, etc. `locus_name` is treated as immutable once haplotype rows reference it (see caveat in the `ind_haplotype` schema section).
@@ -1283,6 +1439,24 @@ leaves the original wide tables untouched.
 
 **Deferred as future design work, not blocking this refactor:**
 
+- **Haplodiploidy (bees, ants, wasps — Hymenoptera / arrhenotoky) (2026-07-03)** — sex is
+  determined by whole-genome ploidy (haploid males from unfertilized eggs, diploid females from
+  fertilized eggs), not by one specially-treated chromosome. Male reproduction is clonal (his
+  single genome copied, not reduced via meiosis), which breaks both the "gamete = own_ploidy / 2"
+  rule and the "sex-linkage is one chromosome's exception" framing this whole design rests on.
+  Does **not** fit the `chr_meta` model — explicit non-goal for Stage 4, not a row to add later
+  without a dedicated design pass. See "Haplodiploidy is architecturally different" under "Sex
+  Chromosomes and Uniparental Inheritance."
+- **Biparental plastid inheritance (2026-07-03)** — some plants receive plastids from both parents
+  (mixed, not a clean single-parent copy). The two-value `hemi_parent` (`"parent_1"`/`"parent_2"`)
+  cannot express this. Flagged as a known gap; rare enough to defer past Stage 4.
+- **X0/Z0 sex-determination systems (2026-07-03)** — many insects and nematodes have one sex with
+  a single unpaired sex chromosome and no second sex-chromosome partner at all. Already
+  expressible under the relative `copy_mode` design (`"none"` for the absent partner), but named
+  here so no future code assumes sex-determination systems always pair two named chromosomes.
+- **Environmental/temperature-dependent sex determination (2026-07-03)** — some reptiles and fish
+  determine sex with no chromosomal basis at all. Permanently out of scope for a genotype-based
+  simulator; recorded as a conscious non-goal.
 - **Nucleotide identity (A/C/G/T)** — no reason to store actual nucleotides in `ind_haplotype`. It stores *which* allele (0 = reference, 1 = derived); *what* those alleles are would go in optional `genome_meta.ref_allele`/`alt_allele` columns if VCF export or transition/transversion-biased mutation models are ever needed. Mirrors VCF's `GT` (0/1 indices) + header (REF/ALT bases) split. Keep `allele UTINYINT` as 0/1; not worth revisiting now.
 - **Multi-allelic loci** — the design assumes biallelic loci. `UTINYINT` technically allows values up to 255, but `ind_genotype.dosage_value = SUM(allele)` loses interpretability once alleles aren't binary (can't distinguish "two copies of allele 2" from "one copy each of alleles 1 and 3"). Would need a different representation (one row per allele copy, or a `genome_allele_count(id_ind, locus_name, allele_value)` table). Flagged for a future decision; out of scope here.
 - **TBV performance at scale** — folded into the Stage 1 benchmark requirement above rather than left as a standalone question.

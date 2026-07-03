@@ -78,3 +78,33 @@ make_gamete <- function(hap_matrix, chr_info) {
 
   list(allele = gamete, homolog = homolog)
 }
+
+#' Pass a chromosome copy through to a gamete without recombination
+#'
+#' Used for `chr_meta.recombines = FALSE` chromosomes (Y, W, MT, most
+#' organelles) and for any chromosome where the contributing parent's own
+#' copy count for it is 1 (nothing to recombine against regardless of the
+#' `recombines` flag). Deliberately not routed through [make_gamete()] —
+#' that function's whole contract is "simulate crossovers," and a chromosome
+#' that never recombines has no crossover model at all.
+#'
+#' @param hap_matrix `k x n_chr_loci` integer matrix, `k` in `{1, 2}` — the
+#'   contributing parent's own stored copies for this chromosome's loci only.
+#' @param lo_matrix `k x n_chr_loci` character matrix of `line_origin`,
+#'   parallel to `hap_matrix`.
+#' @return A list with `allele` and `line_origin`, each a length-`n_chr_loci`
+#'   vector. When `k == 2`, one whole row is chosen uniformly at random (a
+#'   single `sample.int(2, 1)` draw) and passed through unchanged — no
+#'   crossover, no `homolog` vector needed. When `k == 1`, the only row is
+#'   passed through with **no** random draw at all — there is nothing to
+#'   choose, so strictly hemizygous, non-recombining inheritance (e.g.
+#'   patrilineal Y, matrilineal MT) never consumes RNG state.
+#' @keywords internal
+pass_through_gamete <- function(hap_matrix, lo_matrix) {
+  k <- nrow(hap_matrix)
+  chosen <- if (k == 1L) 1L else sample.int(k, size = 1L)
+  list(
+    allele      = hap_matrix[chosen, ],
+    line_origin = lo_matrix[chosen, ]
+  )
+}

@@ -261,7 +261,8 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       id_parent_1 VARCHAR,
       id_parent_2 VARCHAR,
       line_name   VARCHAR,
-      sex         VARCHAR
+      sex         VARCHAR,
+      ploidy      UTINYINT NOT NULL DEFAULT 2
     )
   ")
 

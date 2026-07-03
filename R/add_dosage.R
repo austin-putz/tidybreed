@@ -62,7 +62,6 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
-  assert_diploid_only(pop)
 
   # --- Resolve candidate individuals (distinct id_ind) ---
   if (length(tbl$pending_filter) == 0) {
@@ -80,6 +79,8 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
       return(invisible(pop))
     }
   }
+
+  assert_ploidy_2(pop, subset_ids)
 
   # --- Resolve locus filter (locus_names takes precedence over chip_name) ---
   locus_filter_sql <- ""

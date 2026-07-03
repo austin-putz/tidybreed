@@ -142,7 +142,11 @@ flag is stored.
 ### `ind_haplotype`
 
 Phased haplotypes in **long** format. One row per (individual × haplotype ×
-locus). Populated by `add_founders()` and `add_offspring()`.
+locus). Populated by `add_founders()` and `add_offspring()`. Row count per
+individual per chromosome follows `chr_meta.copy_mode_M`/`copy_mode_F` for
+that individual's sex: 2 rows/locus for `"full"` (the default, diploid
+autosomes), 1 for `"half"` (sex chromosomes), 0 for `"none"` (e.g. Y in
+females). See `chr_meta` below and `define_chr()`.
 
 | Column        | Type     | Notes                                                       |
 |---------------|----------|-------------------------------------------------------------|
@@ -180,16 +184,23 @@ specific downstream analyses (MAS, GBLUP export, allele frequencies).
 ### `chr_meta`
 
 Per-chromosome inheritance rules. One row per chromosome. Created by
-`define_genome()` with default diploid-autosome rows. `define_chr()` and
-non-default rules (sex chromosomes, organelles, polyploidy) are Stage 4.
+`define_genome()` with default diploid-autosome rows. `define_chr()` sets
+non-default rules (sex chromosomes, organelles). Real polyploidy (ploidy > 2)
+is not yet supported — see `ind_meta.ploidy`.
 
-| Column      | Type     | Notes                                                    |
-|-------------|----------|----------------------------------------------------------|
-| chr_name    | VARCHAR  | Primary key; matches `genome_meta.chr_name`              |
-| copies_M    | UTINYINT | Copies carried by males (default 2)                      |
-| copies_F    | UTINYINT | Copies carried by females (default 2)                    |
-| hemi_parent | VARCHAR  | For single-copy chromosomes: `"parent_1"`/`"parent_2"`; NULL for diploids |
-| recombines  | BOOLEAN  | TRUE if recombination occurs (default TRUE)              |
+| Column      | Type    | Notes                                                    |
+|-------------|---------|-----------------------------------------------------------|
+| chr_name    | VARCHAR | Primary key; matches `genome_meta.chr_name`              |
+| copy_mode_M | VARCHAR | `"full"`/`"half"`/`"none"` — copy count for males, **relative to that individual's own ploidy** (not an absolute number). Default `"full"`. |
+| copy_mode_F | VARCHAR | Same as `copy_mode_M`, for females. Default `"full"`.    |
+| hemi_parent | VARCHAR | When either sex's `copy_mode` is non-`"full"`: `"parent_1"`/`"parent_2"` — which parent supplies the reduced copy; NULL when both are `"full"` |
+| recombines  | BOOLEAN | TRUE if recombination occurs (default TRUE)              |
+
+`copy_mode` is intentionally relative rather than absolute: `"half"` means 1
+copy for a diploid (2N) individual and would mean 2 copies for a tetraploid
+(4N) individual, without the field itself changing meaning. See
+`plans/refactor_haplotype.md` ("Ploidy vs. sex-linkage") for the full design
+rationale.
 
 ### `founder_haplotypes`
 
@@ -213,14 +224,15 @@ populated by `add_founders()` and `add_offspring()`.
 
 | Column      | Type    | Notes                               |
 |-------------|---------|-------------------------------------|
-| id_ind      | VARCHAR | Primary key, format `{line_name}_{n}` (e.g. `Libra_1020`) |
-| id_parent_1 | VARCHAR | NA for founders                     |
-| id_parent_2 | VARCHAR | NA for founders                     |
-| line_name   | VARCHAR | Genetic line name                   |
-| sex         | VARCHAR | "M" or "F"                          |
-| *user cols* | any     | Added via `mutate_table()` or `...` in `add_founders()` |
+| id_ind      | VARCHAR  | Primary key, format `{line_name}_{n}` (e.g. `Libra_1020`) |
+| id_parent_1 | VARCHAR  | NA for founders                     |
+| id_parent_2 | VARCHAR  | NA for founders                     |
+| line_name   | VARCHAR  | Genetic line name                   |
+| sex         | VARCHAR  | "M" or "F"                          |
+| ploidy      | UTINYINT | Genome ploidy; declared at `add_founders()` time (must be `2` in this version), computed at `add_offspring()` time as the sum of each parent's gamete contribution (`own_ploidy / 2` per parent). Default `2`. |
+| *user cols* | any      | Added via `mutate_table()` or `...` in `add_founders()` |
 
-**Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line_name`, `sex`
+**Reserved**: `id_ind`, `id_parent_1`, `id_parent_2`, `line_name`, `sex`, `ploidy`
 
 ### `trait_meta`
 
@@ -477,15 +489,19 @@ Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
 `R/add_founders.R`
 
 Samples haplotypes for each founder individual from the `founder_haplotypes`
-pool. Appends rows to `ind_meta` (core 5 cols) and `ind_haplotype`
-(long: 2 haplotypes × n_loci rows each, with `line_origin` = the founder's line
-and `strand = 1`). Does **not** write `ind_genotype` (on-demand via
-`add_dosage()`). ID format: `{line_name}_{n}` (e.g. `Libra_1`).
+pool. Appends rows to `ind_meta` (core 6 cols, including `ploidy`) and
+`ind_haplotype` (long: one row per (individual x haplotype x locus), row count
+per chromosome driven by `chr_meta.copy_mode_M`/`copy_mode_F` for the
+founder's sex — 2 rows/locus for `"full"`, 1 for `"half"`, 0 for `"none"`;
+`line_origin` = the founder's line, `strand = 1`). Does **not** write
+`ind_genotype` (on-demand via `add_dosage()`). ID format: `{line_name}_{n}`
+(e.g. `Libra_1`).
 
 Accepts `...` for custom `ind_meta` columns written atomically with the new
 rows (see **Custom field forwarding** below).
 
-Key params: `n_males`, `n_females`, `line_name`, then `...` for custom fields.
+Key params: `n_males`, `n_females`, `line_name`, `ploidy` (must be `2` in this
+version), then `...` for custom fields.
 
 ### Custom field forwarding in `add_*` functions
 
@@ -547,6 +563,33 @@ functions.
   length `n_males + n_females` (or `n_offspring`).
 - `add_phenotype()` / `add_tbv()` / `add_ebv()`: scalar only (row count per
   trait varies). Use `mutate_table()` afterwards for per-record vectors.
+
+### `define_chr()`
+
+`R/define_chr.R`
+
+Sets a non-default `chr_meta` inheritance rule for one chromosome — sex
+chromosomes (X/Y, Z/W, X0/Z0) and organelles (MT, plastids). Upserts by
+`chr_name`; call before `add_founders()` for the chromosomes it configures.
+
+```r
+pop <- pop |>
+  define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
+             hemi_parent = "parent_2", recombines = TRUE) |>
+  define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
+             hemi_parent = "parent_1", recombines = FALSE)
+```
+
+`add_founders()` and `add_offspring()` read `chr_meta` per chromosome:
+autosomes (`copy_mode_M`/`copy_mode_F` both `"full"`, `recombines = TRUE`) go
+through the original, unchanged diploid path; any other chromosome routes
+through a separate branch that writes only the applicable `(sex,
+parent_origin)` rows and — for non-recombining or single-copy inheritance
+(Y, W, MT) — passes the parent's stored copy straight through instead of
+simulating a crossover.
+
+Real polyploidy (ploidy > 2, uneven-ploidy crosses) is not yet supported;
+`ind_meta.ploidy` must be `2` for every individual.
 
 ### `mutate_table()`
 

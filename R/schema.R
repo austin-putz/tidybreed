@@ -113,15 +113,15 @@ register_schema_meta <- function(conn, entries) {
 
     # chr_meta
     .sm_tbl("chr_meta",
-            "Per-chromosome inheritance rules. One row per chromosome. Default rows are diploid autosomes (copies 2/2, recombines); non-default rules (sex chromosomes, organelles, polyploidy) are Stage 4."),
+            "Per-chromosome inheritance rules. One row per chromosome. Default rows are diploid autosomes (copy_mode 'full'/'full', recombines). Non-default rules (sex chromosomes, organelles) are set via define_chr()."),
     .sm_col("chr_meta", "chr_name",
             "Chromosome label; PK; matches genome_meta.chr_name"),
-    .sm_col("chr_meta", "copies_M",
-            "Number of copies carried by males (default 2)"),
-    .sm_col("chr_meta", "copies_F",
-            "Number of copies carried by females (default 2)"),
+    .sm_col("chr_meta", "copy_mode_M",
+            "Copy count for males, relative to that individual's own ploidy: 'full' (same as ploidy), 'half' (hemizygous), or 'none' (absent). Default 'full'."),
+    .sm_col("chr_meta", "copy_mode_F",
+            "Copy count for females, relative to that individual's own ploidy: 'full', 'half', or 'none'. Default 'full'."),
     .sm_col("chr_meta", "hemi_parent",
-            "For a single-copy chromosome, which parent donates it: 'parent_1', 'parent_2', or NULL for diploids"),
+            "When copy_mode resolves to a reduced ('half') copy count for either sex: which parent supplies it, 'parent_1' or 'parent_2'; NULL when both copy_modes are 'full'"),
     .sm_col("chr_meta", "recombines",
             "TRUE if recombination occurs during gamete formation (default TRUE)")
   )
@@ -161,6 +161,8 @@ register_schema_meta <- function(conn, entries) {
             "Genetic line name (e.g. 'A', 'Holstein')"),
     .sm_col("ind_meta", "sex",
             "Sex of the individual: 'M' for male, 'F' for female"),
+    .sm_col("ind_meta", "ploidy",
+            "Genome ploidy; declared at add_founders() time (must be 2 in this version), computed at add_offspring() time as the sum of each parent's gamete contribution (own_ploidy / 2 per parent)"),
 
     # trait_var_comp
     .sm_tbl("trait_var_comp",

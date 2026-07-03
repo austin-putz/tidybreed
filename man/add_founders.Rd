@@ -4,7 +4,7 @@
 \alias{add_founders}
 \title{Add founder individuals to population}
 \usage{
-add_founders(tbl, n_males, n_females, line_name, ...)
+add_founders(tbl, n_males, n_females, line_name, ploidy = 2L, ...)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{get_table("founder_haplotypes")}
@@ -18,6 +18,9 @@ or custom subset.}
 
 \item{line_name}{Character. Line identifier used for individual IDs.
 IDs are formatted as \code{"{line_name}_{number}"} (e.g., "A_1", "A_2")}
+
+\item{ploidy}{Integer scalar. Genome ploidy for these founders. Must be \code{2}
+in this version of tidybreed (real polyploidy is not yet supported).}
 
 \item{...}{Optional named arguments for custom \code{ind_meta} columns, e.g.
 \code{gen = 0L}, \code{farm = "Iowa"}. Scalar values are broadcast to all new

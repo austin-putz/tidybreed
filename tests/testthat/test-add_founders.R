@@ -13,14 +13,15 @@ test_that("add_founders creates ind_meta table with correct structure", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
 
   expect_equal(nrow(ind_meta), 30)
-  expect_equal(ncol(ind_meta), 5)
-  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex") %in% colnames(ind_meta)))
+  expect_equal(ncol(ind_meta), 6)
+  expect_true(all(c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex", "ploidy") %in% colnames(ind_meta)))
 
   expect_type(ind_meta$id_ind, "character")
   expect_type(ind_meta$id_parent_1, "character")
   expect_type(ind_meta$id_parent_2, "character")
   expect_type(ind_meta$line_name, "character")
   expect_type(ind_meta$sex, "character")
+  expect_true(all(ind_meta$ploidy == 2L))
 
   close_pop(pop)
 })
