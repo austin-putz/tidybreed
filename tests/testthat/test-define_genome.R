@@ -3,9 +3,10 @@ test_that("define_genome() adds genome tables to pop$tables", {
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100)
   on.exit(close_pop(pop))
 
-  expect_true("genome_meta"      %in% pop$tables)
-  expect_true("genome_haplotype" %in% pop$tables)
-  expect_true("genome_genotype"  %in% pop$tables)
+  expect_true("genome_meta"   %in% pop$tables)
+  expect_true("ind_haplotype" %in% pop$tables)
+  expect_true("ind_genotype"  %in% pop$tables)
+  expect_true("chr_meta"      %in% pop$tables)
 })
 
 test_that("define_genome() genome_meta has correct row count and columns", {
@@ -80,15 +81,15 @@ test_that("define_genome() custom chr_names are stored correctly", {
   expect_equal(sort(unique(gm$chr_name)), sort(chr_names_vec))
 })
 
-test_that("define_genome() genome_haplotype and genome_genotype are empty tables", {
+test_that("define_genome() ind_haplotype and ind_genotype are empty tables", {
   pop <- open_pop(db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100)
   on.exit(close_pop(pop))
 
   n_hap  <- DBI::dbGetQuery(pop$db_conn,
-                             "SELECT COUNT(*) AS n FROM genome_haplotype")$n
+                             "SELECT COUNT(*) AS n FROM ind_haplotype")$n
   n_geno <- DBI::dbGetQuery(pop$db_conn,
-                             "SELECT COUNT(*) AS n FROM genome_genotype")$n
+                             "SELECT COUNT(*) AS n FROM ind_genotype")$n
   expect_equal(n_hap,  0L)
   expect_equal(n_geno, 0L)
 })
@@ -102,9 +103,10 @@ test_that("define_genome() registers genome table descriptions in _schema_meta",
     pop$db_conn,
     "SELECT DISTINCT table_name FROM _schema_meta WHERE object_type = 'table'"
   )$table_name
-  expect_true("genome_meta"      %in% sm)
-  expect_true("genome_haplotype" %in% sm)
-  expect_true("genome_genotype"  %in% sm)
+  expect_true("genome_meta"   %in% sm)
+  expect_true("ind_haplotype" %in% sm)
+  expect_true("ind_genotype"  %in% sm)
+  expect_true("chr_meta"      %in% sm)
 })
 
 test_that("define_genome() is pipe-friendly and returns pop", {

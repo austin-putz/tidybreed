@@ -135,32 +135,20 @@ add_tbv <- function(tbl, trait_name = NULL,
   }
   meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
 
-  # Locus order needed to map genome_effects locus_name to genotype matrix columns
-  locus_order <- DBI::dbGetQuery(
-    pop$db_conn,
-    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id"
-  )
-  n_loci <- nrow(locus_order)
-
-  geno_mat_full <- get_genotype_matrix(pop, subset_ids = subset_ids)
-
   for (t in trait) {
     m     <- meta_rows[meta_rows$trait_name == t, ]
     ids_t <- ind_meta_subset$id_ind
     if (length(ids_t) == 0) next
 
-    # Load additive effects from genome_effects (population-wide: line_name IS NULL)
-    effects_df <- DBI::dbGetQuery(
+    effect_count <- DBI::dbGetQuery(
       pop$db_conn,
       paste0(
-        "SELECT locus_name, genome_value, base_allele_freq ",
-        "FROM genome_effects ",
+        "SELECT COUNT(*) AS n FROM genome_effects ",
         "WHERE trait_name = '", t, "' ",
-        "AND genome_effect_type = 'additive' ",
-        "AND line_name IS NULL"
+        "AND genome_effect_type = 'additive'"
       )
-    )
-    if (nrow(effects_df) == 0L) {
+    )$n
+    if (effect_count == 0L) {
       stop(
         "No additive effects found for trait '", t, "' in genome_effects. ",
         "Call define_additive_effects() first.",
@@ -168,22 +156,57 @@ add_tbv <- function(tbl, trait_name = NULL,
       )
     }
 
-    # Map locus_name → position in the genotype matrix (locus_id order)
-    a      <- rep(0, n_loci)
-    p_base <- rep(0, n_loci)
-    idx    <- match(effects_df$locus_name, locus_order$locus_name)
-    a[idx]      <- effects_df$genome_value
-    baf <- effects_df$base_allele_freq
-    p_base[idx] <- ifelse(is.na(baf), 0, baf)
-
-    if (m$expressed_parent == "both") {
-      rows_idx <- match(ids_t, rownames(geno_mat_full))
-      tbv <- as.numeric(geno_mat_full[rows_idx, , drop = FALSE] %*% a) -
-             2 * sum(p_base * a)
+    id_list <- paste0("'", ids_t, "'", collapse = ", ")
+    parent_filter <- if (m$expressed_parent == "both") {
+      ""
     } else {
       parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
-      hap_mat <- get_haplotype_matrix(pop, parent_origin, ids_t)
-      tbv <- as.numeric(hap_mat %*% a) - sum(p_base * a)
+      paste0("AND h.parent_origin = ", parent_origin, " ")
+    }
+
+    # Centered TBV, folding (allele - base_allele_freq) into the summed term:
+    # this generalizes Falconer centering to per-line base_allele_freq without
+    # a separate centering constant. Line-specific genome_effects rows
+    # (matched on line_origin) take precedence; a population-wide row
+    # (line_name IS NULL) is only used when no line-specific row exists for
+    # that locus/line (per-locus fallback, via NOT EXISTS). COALESCE(...,0)
+    # on base_allele_freq mirrors the prior R-side `ifelse(is.na(baf), 0, baf)`
+    # -- a NULL base_allele_freq must not null out the whole summed term.
+    tbv_sql <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0(
+        "SELECT h.id_ind, ",
+        "SUM((h.allele - COALESCE(e.base_allele_freq, 0)) * e.genome_value) AS tbv_value ",
+        "FROM ind_haplotype h ",
+        "JOIN genome_effects e ",
+        "  ON h.locus_name = e.locus_name ",
+        " AND e.trait_name = '", t, "' ",
+        " AND e.genome_effect_type = 'additive' ",
+        " AND ( e.line_name = h.line_origin ",
+        "       OR (e.line_name IS NULL AND NOT EXISTS ( ",
+        "             SELECT 1 FROM genome_effects e2 ",
+        "             WHERE e2.locus_name = h.locus_name ",
+        "               AND e2.trait_name = '", t, "' ",
+        "               AND e2.genome_effect_type = 'additive' ",
+        "               AND e2.line_name = h.line_origin)) ) ",
+        "WHERE h.id_ind IN (", id_list, ") ",
+        parent_filter,
+        "GROUP BY h.id_ind"
+      )
+    )
+
+    tbv <- tbv_sql$tbv_value[match(ids_t, tbv_sql$id_ind)]
+    if (anyNA(tbv)) {
+      missing_ids <- ids_t[is.na(tbv)]
+      stop(
+        "No haplotype rows matched additive effects for trait '", t,
+        "' for individual(s): ",
+        paste(utils::head(missing_ids, 5), collapse = ", "),
+        if (length(missing_ids) > 5) ", ..." else "",
+        ". This indicates missing ind_haplotype rows (v1 storage is fully ",
+        "dense, so every individual should have a row at every QTL locus).",
+        call. = FALSE
+      )
     }
 
     tbv_df <- tibble::tibble(

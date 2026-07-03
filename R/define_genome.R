@@ -1,9 +1,11 @@
 #' Define the genome structure of a breeding population
 #'
 #' @description
-#' Adds genome tables (`genome_meta`, `genome_haplotype`, `genome_genotype`) to
-#' a population opened with [open_pop()]. Pipe-friendly — accepts a
-#' `tidybreed_pop` and returns a `tidybreed_pop`.
+#' Adds genome tables (`genome_meta`, `ind_haplotype`, `ind_genotype`,
+#' `chr_meta`) to a population opened with [open_pop()]. Pipe-friendly — accepts
+#' a `tidybreed_pop` and returns a `tidybreed_pop`. Haplotypes are stored in
+#' long format; `ind_genotype` is an on-demand dosage cache populated by
+#' [add_dosage()].
 #'
 #' This is the second step in setting up a simulation:
 #' ```r
@@ -79,6 +81,17 @@ define_genome <- function(pop,
     stopifnot(length(locus_names) == n_loci)
   }
 
+  # locus_name must be unique — it is a denormalized key in the long
+  # ind_haplotype/ind_genotype tables, and a duplicate would silently corrupt
+  # joins to genome_effects. Validated in R because .write_founder_haplotypes()
+  # recreates genome_meta via overwrite, which would drop a DB-level constraint.
+  if (anyDuplicated(locus_names)) {
+    dup <- unique(locus_names[duplicated(locus_names)])
+    stop("locus_names must be unique. Duplicated: ",
+         paste(utils::head(dup, 5L), collapse = ", "),
+         if (length(dup) > 5L) ", ..." else "", call. = FALSE)
+  }
+
   # Generate chromosome names if not provided
   if (is.null(chr_names)) {
     chr_names <- as.character(seq_len(n_chr))
@@ -98,37 +111,61 @@ define_genome <- function(pop,
     pos_Mb[chr_loci] <- seq(0, chr_len_Mb[i], length.out = n_chr_loci + 2)[2:(n_chr_loci + 1)]
   }
 
-  # Write genome_meta
+  # Write genome_meta. introduced_gen marks novel mutations (Stage 5); NULL for
+  # all founding loci created here.
   genome_meta_df <- tibble::tibble(
-    locus_id   = seq_len(n_loci),
-    locus_name = locus_names,
-    chr        = chr_assignment,
-    chr_name   = chr_names[chr_assignment],
-    pos_Mb     = pos_Mb
+    locus_id       = seq_len(n_loci),
+    locus_name     = locus_names,
+    chr            = chr_assignment,
+    chr_name       = chr_names[chr_assignment],
+    pos_Mb         = pos_Mb,
+    introduced_gen = NA_integer_
   )
   DBI::dbWriteTable(db_conn, "genome_meta", genome_meta_df, overwrite = TRUE)
 
-  # Create empty genome_haplotype table (wide: one column per locus)
-  hap_cols   <- paste0("locus_", seq_len(n_loci))
-  hap_schema <- paste(
-    "id_ind VARCHAR,",
-    "parent_origin INTEGER,",
-    paste(hap_cols, "UTINYINT", collapse = ", ")
-  )
-  DBI::dbExecute(db_conn, paste0("CREATE TABLE genome_haplotype (", hap_schema, ")"))
+  # Create empty long ind_haplotype table (one row per individual x haplotype x locus)
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE ind_haplotype (",
+    "id_ind VARCHAR, parent_origin UTINYINT, strand UTINYINT, ",
+    "line_origin VARCHAR, locus_id INTEGER, locus_name VARCHAR, allele UTINYINT, ",
+    "PRIMARY KEY (id_ind, parent_origin, strand, locus_id))"
+  ))
 
-  # Create empty genome_genotype table (wide: one column per locus, 0/1/2 encoding)
-  geno_schema <- paste(
-    "id_ind VARCHAR,",
-    paste(hap_cols, "UTINYINT", collapse = ", ")
+  # Create empty long ind_genotype table (on-demand dosage cache; add_dosage())
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE ind_genotype (",
+    "id_ind VARCHAR, locus_id INTEGER, locus_name VARCHAR, dosage_value UTINYINT, ",
+    "PRIMARY KEY (id_ind, locus_id))"
+  ))
+
+  # Create chr_meta with default diploid-autosome rows. define_chr() and non-
+  # default inheritance rules are Stage 4; the table exists now so the column
+  # shape is stable.
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE chr_meta (",
+    "chr_name VARCHAR PRIMARY KEY, copies_M UTINYINT, copies_F UTINYINT, ",
+    "hemi_parent VARCHAR, recombines BOOLEAN)"
+  ))
+  chr_meta_df <- tibble::tibble(
+    chr_name    = chr_names,
+    copies_M    = 2L,
+    copies_F    = 2L,
+    hemi_parent = NA_character_,
+    recombines  = TRUE
   )
-  DBI::dbExecute(db_conn, paste0("CREATE TABLE genome_genotype (", geno_schema, ")"))
+  # Use duckdb_register + INSERT (not dbAppendTable/dbWriteTable, which advance
+  # R's RNG via an internal random temp name and would shift the simulation's
+  # seeded draw sequence).
+  duckdb::duckdb_register(db_conn, "__tmp_chr_meta", as.data.frame(chr_meta_df))
+  DBI::dbExecute(db_conn, "INSERT INTO chr_meta SELECT * FROM __tmp_chr_meta")
+  duckdb::duckdb_unregister(db_conn, "__tmp_chr_meta")
 
   # Register genome-table schema descriptions
   register_schema_meta(db_conn, .genome_table_descriptions())
 
   # Update pop$tables
-  pop$tables <- c(pop$tables, "genome_meta", "genome_haplotype", "genome_genotype")
+  pop$tables <- c(pop$tables, "genome_meta",
+                  "ind_haplotype", "ind_genotype", "chr_meta")
 
   chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
     paste0("all equal to ", chr_len_Mb[1], " Mb")
@@ -138,7 +175,7 @@ define_genome <- function(pop,
   message(
     "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
     " | chr lengths (Mb): ", chr_len_str,
-    "\n  Tables written: genome_meta, genome_haplotype, genome_genotype"
+    "\n  Tables written: genome_meta, ind_haplotype, ind_genotype, chr_meta"
   )
 
   pop

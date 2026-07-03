@@ -6,8 +6,8 @@
 #' For each table, shows row count, column count, and per-column statistics:
 #' frequency tables for low-cardinality categorical columns, 5-number
 #' summaries for numeric columns, and date ranges for date/timestamp columns.
-#' Wide genome tables (`genome_haplotype`, `genome_genotype`) only summarize
-#' their non-locus metadata columns to avoid querying 50,000-column tables.
+#' Any wide table with `locus_<n>` columns only summarizes its non-locus
+#' metadata columns to avoid querying 50,000-column tables.
 #'
 #' @param object A `tidybreed_pop` object.
 #' @param tables Character vector of table names to include. `NULL` (default)

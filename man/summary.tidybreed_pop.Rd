@@ -25,8 +25,8 @@ Produces a detailed summary of all tables in a \code{tidybreed_pop} object.
 For each table, shows row count, column count, and per-column statistics:
 frequency tables for low-cardinality categorical columns, 5-number
 summaries for numeric columns, and date ranges for date/timestamp columns.
-Wide genome tables (\code{genome_haplotype}, \code{genome_genotype}) only summarize
-their non-locus metadata columns to avoid querying 50,000-column tables.
+Any wide table with \verb{locus_<n>} columns only summarizes its non-locus
+metadata columns to avoid querying 50,000-column tables.
 }
 \examples{
 \dontrun{

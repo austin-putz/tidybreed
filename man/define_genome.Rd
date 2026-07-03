@@ -36,9 +36,11 @@ chromosome names. When \code{NULL} (default), chromosomes are numbered
 The input \code{tidybreed_pop} with genome tables added.
 }
 \description{
-Adds genome tables (\code{genome_meta}, \code{genome_haplotype}, \code{genome_genotype}) to
-a population opened with \code{\link[=open_pop]{open_pop()}}. Pipe-friendly — accepts a
-\code{tidybreed_pop} and returns a \code{tidybreed_pop}.
+Adds genome tables (\code{genome_meta}, \code{ind_haplotype}, \code{ind_genotype},
+\code{chr_meta}) to a population opened with \code{\link[=open_pop]{open_pop()}}. Pipe-friendly — accepts
+a \code{tidybreed_pop} and returns a \code{tidybreed_pop}. Haplotypes are stored in
+long format; \code{ind_genotype} is an on-demand dosage cache populated by
+\code{\link[=add_dosage]{add_dosage()}}.
 
 This is the second step in setting up a simulation:
 

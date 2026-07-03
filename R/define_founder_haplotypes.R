@@ -77,11 +77,11 @@
 #' @param line_name Optional character scalar. A label for this haplotype pool
 #'   (e.g. `"LineA"`). Must start with a letter and contain only letters,
 #'   numbers, or underscores. When supplied, `founder_haplotypes` rows are
-#'   tagged with this label and `hap_id` values are prefixed
-#'   (`"LineA_hap_1"`, …). [add_founders()] with the same `line_name` will
-#'   sample exclusively from these rows. When `NULL` (default), rows are stored
-#'   with `line_name = NA` and [add_founders()] falls back to them when no
-#'   named pool exists for the requested line.
+#'   tagged with this label (`haplotype_id` is sequential within the pool).
+#'   [add_founders()] with the same `line_name` will sample exclusively from
+#'   these rows. When `NULL` (default), rows are stored with `line_name = NA`
+#'   and [add_founders()] falls back to them when no named pool exists for the
+#'   requested line.
 #'
 #' @return The `tidybreed_pop` object (invisibly), with `founder_haplotypes`
 #'   registered in `pop$tables` and `founder_allele_freq` added to `genome_meta`.

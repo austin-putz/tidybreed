@@ -47,7 +47,7 @@ rows, restricted to the filtered loci.}
 \item{base_tbl}{Optional \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} on any table
 with an \code{id_ind} column) used when \code{base = "current_pop"} to restrict
 which individuals define the base allele frequencies. When \code{NULL}, all
-individuals in \code{genome_haplotype} are used.}
+individuals in \code{ind_haplotype} are used.}
 
 \item{line_name}{Optional character. When set, effects are tagged to this
 genetic line (for future line-specific TBV). \code{NULL} (default) means
@@ -93,7 +93,7 @@ The \code{base} argument controls which allele frequencies are used:
 \code{genome_meta} (requires \code{initialize_genome()} was called with
 \code{n_haplotypes}).
 \item \code{"current_pop"} — computes allele frequencies from the current
-\code{genome_haplotype} table. Pass a filtered \code{tidybreed_table} via
+\code{ind_haplotype} table. Pass a filtered \code{tidybreed_table} via
 \code{base_tbl} to restrict which individuals define the base population.
 }
 

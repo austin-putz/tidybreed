@@ -14,7 +14,16 @@ parent_origin 1, row 2 = haplotype from parent_origin 2.}
 locus indices, positions, and lengths per chromosome.}
 }
 \value{
-Integer vector of length n_loci representing the gamete (0 or 1)
+A list with two length-\code{n_loci} integer vectors:
+\describe{
+\item{\code{allele}}{the gamete alleles (0 or 1).}
+\item{\code{homolog}}{which of the parent's two homologs (1 or 2) donated the
+allele at each locus. Used by \code{\link[=add_offspring]{add_offspring()}} to inherit \code{line_origin}
+from the contributing parental segment.}
+}
+The random-draw sequence (\code{rpois}, \code{sample}, \code{runif}) is identical to the
+allele-only version — \code{homolog} is derived from values already computed, so
+seeded output is unchanged.
 }
 \description{
 Simulates chromosomal recombination using the Haldane map function.

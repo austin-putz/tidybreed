@@ -162,7 +162,7 @@ add_offspring <- function(pop, matings) {
   # 6. Validate required tables exist
   # ============================================================================
 
-  needed_tables <- c("ind_meta", "genome_meta", "genome_haplotype", "genome_genotype")
+  needed_tables <- c("ind_meta", "genome_meta", "ind_haplotype")
   missing_tables <- setdiff(needed_tables, pop$tables)
 
   if (length(missing_tables) > 0) {
@@ -211,31 +211,40 @@ add_offspring <- function(pop, matings) {
   # 9. Load parent haplotypes in a single batch query
   # ============================================================================
 
+  # Load parent haplotypes from the long ind_haplotype table so each allele's
+  # line_origin travels with it. Rows come back grouped by (id_ind,
+  # parent_origin, locus_id); for a diploid parent that is exactly 2 x n_loci
+  # rows, giving a 2 x n_loci allele matrix (row 1 = the parent's own
+  # parent_origin 1 homolog, row 2 = its parent_origin 2 homolog) and a parallel
+  # line_origin matrix. Reading via dbGetQuery does not advance R's RNG.
   parent_haps_raw <- DBI::dbGetQuery(
     pop$db_conn,
     paste0(
-      "SELECT * FROM genome_haplotype WHERE id_ind IN (", parent_id_list,
-      ") ORDER BY id_ind, parent_origin"
+      "SELECT id_ind, parent_origin, locus_id, allele, line_origin ",
+      "FROM ind_haplotype WHERE id_ind IN (", parent_id_list,
+      ") ORDER BY id_ind, parent_origin, locus_id"
     )
   )
 
   parent_haps <- vector("list", length(unique_parents))
+  parent_lo   <- vector("list", length(unique_parents))
   names(parent_haps) <- unique_parents
+  names(parent_lo)   <- unique_parents
 
   for (pid in unique_parents) {
     rows <- parent_haps_raw[parent_haps_raw$id_ind == pid, ]
-    rows <- rows[order(rows$parent_origin), ]
-
-    if (nrow(rows) != 2L) {
+    if (nrow(rows) != 2L * n_loci) {
       stop(
-        "Parent '", pid, "' does not have exactly 2 rows in genome_haplotype.",
+        "Parent '", pid, "' does not have exactly 2 x n_loci rows in ind_haplotype.",
         call. = FALSE
       )
     }
-
-    hap_mat <- as.matrix(rows[, locus_cols])
-    storage.mode(hap_mat) <- "integer"
+    # byrow: the first n_loci rows (parent_origin 1, locus_id order) fill row 1,
+    # the next n_loci (parent_origin 2) fill row 2.
+    hap_mat <- matrix(as.integer(rows$allele), nrow = 2L, ncol = n_loci, byrow = TRUE)
+    lo_mat  <- matrix(rows$line_origin,        nrow = 2L, ncol = n_loci, byrow = TRUE)
     parent_haps[[pid]] <- hap_mat
+    parent_lo[[pid]]   <- lo_mat
   }
 
   # ============================================================================
@@ -271,41 +280,42 @@ add_offspring <- function(pop, matings) {
   # 11. Generate gametes and build genomic matrices
   # ============================================================================
 
-  hap_sire_mat <- matrix(0L, nrow = n_offspring, ncol = n_loci)
-  hap_dam_mat  <- matrix(0L, nrow = n_offspring, ncol = n_loci)
+  hap_sire_mat    <- matrix(0L, nrow = n_offspring, ncol = n_loci)
+  hap_dam_mat     <- matrix(0L, nrow = n_offspring, ncol = n_loci)
+  hap_sire_lo_mat <- matrix(NA_character_, nrow = n_offspring, ncol = n_loci)
+  hap_dam_lo_mat  <- matrix(NA_character_, nrow = n_offspring, ncol = n_loci)
+  col_idx <- seq_len(n_loci)
 
   for (i in seq_len(n_offspring)) {
-    hap_sire_mat[i, ] <- make_gamete(parent_haps[[matings$id_parent_1[i]]], chr_info)
-    hap_dam_mat[i, ]  <- make_gamete(parent_haps[[matings$id_parent_2[i]]], chr_info)
+    sire <- matings$id_parent_1[i]
+    dam  <- matings$id_parent_2[i]
+
+    # make_gamete() returns allele + the per-locus homolog (1/2) it came from.
+    # line_origin follows whichever parental homolog donated each locus, so it
+    # is correct across F1/F2/backcross generations.
+    gs <- make_gamete(parent_haps[[sire]], chr_info)
+    hap_sire_mat[i, ]    <- gs$allele
+    hap_sire_lo_mat[i, ] <- parent_lo[[sire]][cbind(gs$homolog, col_idx)]
+
+    gd <- make_gamete(parent_haps[[dam]], chr_info)
+    hap_dam_mat[i, ]    <- gd$allele
+    hap_dam_lo_mat[i, ] <- parent_lo[[dam]][cbind(gd$homolog, col_idx)]
   }
 
   # ============================================================================
-  # 12. Build genome_haplotype data frame (2 rows per offspring)
+  # 12. Build the wide allele frame (transient; the vehicle for the UNPIVOT into
+  #     the long ind_haplotype). Never written to a wide DB table.
   # ============================================================================
 
-  sire_locus_df <- setNames(as.data.frame(hap_sire_mat), locus_cols)
-  dam_locus_df  <- setNames(as.data.frame(hap_dam_mat),  locus_cols)
-
-  genome_haplotype_df <- dplyr::bind_rows(
+  hap_wide <- dplyr::bind_rows(
     dplyr::bind_cols(
       tibble::tibble(id_ind = offspring_ids, parent_origin = 1L),
-      sire_locus_df
+      setNames(as.data.frame(hap_sire_mat), locus_cols)
     ),
     dplyr::bind_cols(
       tibble::tibble(id_ind = offspring_ids, parent_origin = 2L),
-      dam_locus_df
+      setNames(as.data.frame(hap_dam_mat), locus_cols)
     )
-  )
-
-  # ============================================================================
-  # 13. Build genome_genotype data frame (1 row per offspring)
-  # ============================================================================
-
-  geno_locus_df <- setNames(as.data.frame(hap_sire_mat + hap_dam_mat), locus_cols)
-
-  genome_genotype_df <- dplyr::bind_cols(
-    tibble::tibble(id_ind = offspring_ids),
-    geno_locus_df
   )
 
   # ============================================================================
@@ -334,9 +344,38 @@ add_offspring <- function(pop, matings) {
   # 15. Write all tables to database
   # ============================================================================
 
-  DBI::dbWriteTable(pop$db_conn, "ind_meta",         ind_meta_new,        append = TRUE)
-  DBI::dbWriteTable(pop$db_conn, "genome_haplotype",  genome_haplotype_df, append = TRUE)
-  DBI::dbWriteTable(pop$db_conn, "genome_genotype",   genome_genotype_df,  append = TRUE)
+  DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_new, append = TRUE)
+
+  # Write the long ind_haplotype. A wide allele frame and a wide line_origin
+  # frame are unpivoted and joined in DuckDB (per (id_ind, parent_origin,
+  # locus)) so R never materializes the long frame. ind_genotype stays
+  # on-demand (add_dosage()).
+  lo_df <- dplyr::bind_rows(
+    dplyr::bind_cols(
+      tibble::tibble(id_ind = offspring_ids, parent_origin = 1L),
+      setNames(as.data.frame(hap_sire_lo_mat, stringsAsFactors = FALSE), locus_cols)
+    ),
+    dplyr::bind_cols(
+      tibble::tibble(id_ind = offspring_ids, parent_origin = 2L),
+      setNames(as.data.frame(hap_dam_lo_mat, stringsAsFactors = FALSE), locus_cols)
+    )
+  )
+  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", as.data.frame(hap_wide))
+  duckdb::duckdb_register(pop$db_conn, "__tmp_lo",  lo_df)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_haplotype ",
+    "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
+    "SELECT a.id_ind, a.parent_origin, 1, l.line_origin, gm.locus_id, gm.locus_name, a.allele ",
+    "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
+    "INTO NAME locus_col VALUE allele) a ",
+    "JOIN (UNPIVOT __tmp_lo ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
+    "INTO NAME locus_col VALUE line_origin) l ",
+    "ON a.id_ind = l.id_ind AND a.parent_origin = l.parent_origin ",
+    "AND a.locus_col = l.locus_col ",
+    "JOIN genome_meta gm ON a.locus_col = 'locus_' || gm.locus_id"
+  ))
+  duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
+  duckdb::duckdb_unregister(pop$db_conn, "__tmp_lo")
 
   # ============================================================================
   # 16. Return

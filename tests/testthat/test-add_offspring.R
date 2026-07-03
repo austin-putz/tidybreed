@@ -22,14 +22,16 @@ test_that("add_offspring creates rows in all three tables", {
   pop <- add_offspring(pop, matings)
 
   ind_meta <- get_table(pop, "ind_meta") |> dplyr::collect()
-  haps     <- get_table(pop, "genome_haplotype") |> dplyr::collect()
-  genos    <- get_table(pop, "genome_genotype")  |> dplyr::collect()
+  n_ind_hap <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(DISTINCT id_ind) AS n FROM ind_haplotype")$n
 
   # 10 founders + 1 offspring
   expect_equal(nrow(ind_meta), 11)
-  # 10 founders × 2 + 1 offspring × 2
-  expect_equal(nrow(haps), 22)
-  expect_equal(nrow(genos), 11)
+  # every individual has long haplotype rows
+  expect_equal(n_ind_hap, 11)
+  # ind_genotype is on-demand only
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0)
 
   close_pop(pop)
 })
@@ -243,7 +245,7 @@ test_that("add_offspring accepts id_sire / id_dam aliases", {
 })
 
 
-test_that("add_offspring: genome_haplotype has 2 rows per offspring with correct structure", {
+test_that("add_offspring: ind_haplotype has 2 haplotypes per offspring with correct structure", {
   pop <- make_offspring_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
@@ -257,28 +259,27 @@ test_that("add_offspring: genome_haplotype has 2 rows per offspring with correct
 
   offspring_ids <- c("A_11", "A_12")
 
-  haps <- get_table(pop, "genome_haplotype") |>
+  haps <- get_table(pop, "ind_haplotype") |>
     dplyr::filter(id_ind %in% offspring_ids) |>
     dplyr::collect()
 
-  expect_equal(nrow(haps), 4)  # 2 offspring × 2 haplotypes
+  # 2 offspring x 2 haplotypes x 50 loci
+  expect_equal(nrow(haps), 2L * 2L * 50L)
   expect_true(all(haps$parent_origin %in% c(1L, 2L)))
+  expect_true(all(haps$strand == 1L))
+  expect_true(all(haps$allele %in% c(0L, 1L)))
 
   for (oid in offspring_ids) {
     ind_haps <- dplyr::filter(haps, id_ind == oid)
-    expect_equal(nrow(ind_haps), 2)
-    expect_equal(sort(ind_haps$parent_origin), c(1L, 2L))
+    expect_equal(nrow(ind_haps), 100L)  # 2 po x 50 loci
+    expect_setequal(unique(ind_haps$parent_origin), c(1L, 2L))
   }
-
-  locus_cols <- paste0("locus_", 1:50)
-  hap_vals   <- unlist(haps[, locus_cols])
-  expect_true(all(hap_vals %in% c(0L, 1L)))
 
   close_pop(pop)
 })
 
 
-test_that("add_offspring: genotype equals sum of the two offspring haplotypes", {
+test_that("add_offspring: dosage equals sum of the two offspring haplotypes", {
   pop <- make_offspring_test_pop(n_loci = 50)
 
   matings <- tibble::tibble(
@@ -290,24 +291,14 @@ test_that("add_offspring: genotype equals sum of the two offspring haplotypes", 
 
   pop <- add_offspring(pop, matings)
 
-  offspring_id <- "A_11"
-  locus_cols   <- paste0("locus_", 1:50)
-
-  haps <- get_table(pop, "genome_haplotype") |>
-    dplyr::filter(id_ind == offspring_id) |>
-    dplyr::arrange(parent_origin) |>
+  haps <- get_table(pop, "ind_haplotype") |>
+    dplyr::filter(id_ind == "A_11") |>
     dplyr::collect()
 
-  geno <- get_table(pop, "genome_genotype") |>
-    dplyr::filter(id_ind == offspring_id) |>
-    dplyr::collect()
-
-  hap1_vals  <- as.integer(haps[1, locus_cols])
-  hap2_vals  <- as.integer(haps[2, locus_cols])
-  geno_vals  <- as.integer(geno[1, locus_cols])
-  expected   <- hap1_vals + hap2_vals
-
-  expect_equal(geno_vals, expected)
+  # Dosage per locus = sum of the parent_origin 1 and 2 alleles.
+  agg <- stats::aggregate(allele ~ locus_id, data = haps, FUN = sum)
+  expect_equal(nrow(agg), 50L)
+  expect_true(all(agg$allele %in% c(0L, 1L, 2L)))
 
   close_pop(pop)
 })
@@ -332,17 +323,18 @@ test_that("add_offspring recombination produces variation across offspring", {
 
   pop <- add_offspring(pop, matings)
 
-  locus_cols <- paste0("locus_", 1:500)
-
   offspring_ids <- get_table(pop, "ind_meta") |>
     dplyr::filter(!is.na(id_parent_1)) |>
     dplyr::pull(id_ind)
 
-  haps <- get_table(pop, "genome_haplotype") |>
+  haps <- get_table(pop, "ind_haplotype") |>
     dplyr::filter(id_ind %in% offspring_ids, parent_origin == 1L) |>
     dplyr::collect()
 
-  hap_mat <- as.matrix(haps[, locus_cols])
+  # Pivot the paternal gametes to an offspring x locus matrix.
+  ids <- unique(haps$id_ind)
+  hap_mat <- matrix(0L, nrow = length(ids), ncol = max(haps$locus_id))
+  hap_mat[cbind(match(haps$id_ind, ids), haps$locus_id)] <- as.integer(haps$allele)
 
   # Not all 50 gametes should be identical
   unique_gametes <- nrow(unique(hap_mat))

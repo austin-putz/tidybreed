@@ -3,7 +3,8 @@
 #' @description
 #' Creates founder individuals by sampling haplotypes from the `founder_haplotypes`
 #' table. Each founder receives two randomly sampled haplotypes (with replacement),
-#' which are used to populate the `genome_haplotype` and `genome_genotype` tables.
+#' which are used to populate the long `ind_haplotype` table (`ind_genotype`
+#' dosage is materialized on demand via [add_dosage()]).
 #'
 #' The `ind_meta` table is created (if it doesn't exist) or appended to with
 #' the new founders. Founder individuals have `NULL` for both parent IDs.
@@ -34,8 +35,8 @@
 #' **What it does:**
 #' 1. Samples 2 haplotypes per founder from `founder_haplotypes` (with replacement)
 #' 2. Creates/updates `ind_meta` table with founder metadata
-#' 3. Populates `genome_haplotype` (2 rows per individual)
-#' 4. Populates `genome_genotype` (1 row per individual, sum of haplotypes)
+#' 3. Populates `ind_haplotype` (long: 2 haplotypes x n_loci rows per individual,
+#'    with `line_origin` set to the founder's line and `strand = 1`)
 #'
 #' **ID Format:**
 #' - Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
@@ -131,33 +132,32 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   # 2. Read founder haplotypes
   # ============================================================================
 
-  founder_haps_tbl <- dplyr::collect(tbl)
-  if (nrow(founder_haps_tbl) == 0L) {
+  founder_haps_long <- dplyr::collect(tbl)
+  if (nrow(founder_haps_long) == 0L) {
     stop("No haplotypes selected — your filter returned zero rows.", call. = FALSE)
   }
 
-  # Get number of available haplotypes
-  n_haplotypes <- nrow(founder_haps_tbl)
+  # Reconstruct a haplotype x locus allele matrix from the long founder pool.
+  # locus_id (from genome_meta) drives column order; haplotypes are keyed by
+  # (line_name, haplotype_id) since haplotype_id is only unique within a line.
+  gm <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
+  n_loci     <- nrow(gm)
+  locus_cols <- paste0("locus_", seq_len(n_loci))
 
-  if (n_haplotypes == 0) {
-    stop(
-      "No haplotypes found for line '", line_name, "' ",
-      "(and no shared pool with line_name = NULL exists). ",
-      "Call define_founder_haplotypes() with matching line_name before add_founders().",
-      call. = FALSE
-    )
-  }
+  founder_haps_long$locus_id <-
+    gm$locus_id[match(founder_haps_long$locus_name, gm$locus_name)]
 
-  # Get number of loci from founder_haplotypes columns
-  locus_cols <- grep("^locus_", colnames(founder_haps_tbl), value = TRUE)
-  n_loci <- length(locus_cols)
+  key_df <- unique(founder_haps_long[, c("line_name", "haplotype_id")])
+  key_df <- key_df[order(key_df$line_name, key_df$haplotype_id), , drop = FALSE]
+  uniq_keys <- paste(key_df$line_name, key_df$haplotype_id, sep = "\r")
+  n_haplotypes <- length(uniq_keys)
 
-  if (n_loci == 0) {
-    stop("No locus columns found in founder_haplotypes table.", call. = FALSE)
-  }
-
-  # Convert to matrix for efficient access
-  hap_data_matrix <- as.matrix(founder_haps_tbl[, locus_cols])
+  row_key <- paste(founder_haps_long$line_name, founder_haps_long$haplotype_id,
+                   sep = "\r")
+  hap_data_matrix <- matrix(0L, nrow = n_haplotypes, ncol = n_loci)
+  hap_data_matrix[cbind(match(row_key, uniq_keys), founder_haps_long$locus_id)] <-
+    as.integer(founder_haps_long$allele)
 
   # ============================================================================
   # 3. Determine ID sequence
@@ -211,7 +211,8 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   }
 
   # ============================================================================
-  # 6. Create genome_haplotype data
+  # 6. Build the wide allele frame (transient; the vehicle for the UNPIVOT into
+  #    the long ind_haplotype). It is never written to a wide DB table.
   # ============================================================================
 
   # Interleave paternal/maternal row indices: [pat1, mat1, pat2, mat2, ...]
@@ -219,7 +220,7 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
   hap_matrix <- hap_data_matrix[row_idx, , drop = FALSE]
   storage.mode(hap_matrix) <- "integer"
 
-  genome_haplotype_df <- cbind(
+  hap_wide <- cbind(
     data.frame(
       id_ind        = rep(ind_ids, each = 2),
       parent_origin = rep(c(1L, 2L), times = n_founders),
@@ -227,39 +228,30 @@ add_founders <- function(tbl, n_males, n_females, line_name, ...) {
     ),
     as.data.frame(hap_matrix)
   )
-  colnames(genome_haplotype_df)[3:(2 + n_loci)] <- locus_cols
+  colnames(hap_wide)[3:(2 + n_loci)] <- locus_cols
 
   # ============================================================================
-  # 7. Create genome_genotype data
-  # ============================================================================
-
-  # Vectorized matrix addition: sum paternal + maternal haplotype per locus
-  geno_matrix <- hap_data_matrix[hap_indices[, 1], , drop = FALSE] +
-                 hap_data_matrix[hap_indices[, 2], , drop = FALSE]
-  storage.mode(geno_matrix) <- "integer"
-
-  genome_genotype_df <- cbind(
-    data.frame(id_ind = ind_ids, stringsAsFactors = FALSE),
-    as.data.frame(geno_matrix)
-  )
-  colnames(genome_genotype_df)[2:(1 + n_loci)] <- locus_cols
-
-  # ============================================================================
-  # 8. Write data to database
+  # 7. Write data to database
   # ============================================================================
 
   # Write ind_meta table (always append; table was created by initialize_genome())
   DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
 
-  # Append to genome_haplotype via register+INSERT (faster than dbWriteTable for wide frames)
-  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", genome_haplotype_df)
-  DBI::dbExecute(pop$db_conn, "INSERT INTO genome_haplotype SELECT * FROM __tmp_hap")
+  # Write the long ind_haplotype by unpivoting the wide allele frame in DuckDB
+  # (so R never materializes the long frame). strand = 1 (diploid); line_origin
+  # = the founder's own line for every allele. register + INSERT is RNG-neutral.
+  # ind_genotype stays on-demand (add_dosage()); nothing is written to it here.
+  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", hap_wide)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_haplotype ",
+    "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
+    "SELECT u.id_ind, u.parent_origin, 1, '", line_name, "', ",
+    "gm.locus_id, gm.locus_name, u.allele ",
+    "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
+    "INTO NAME locus_col VALUE allele) u ",
+    "JOIN genome_meta gm ON u.locus_col = 'locus_' || gm.locus_id"
+  ))
   duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
-
-  # Append to genome_genotype
-  duckdb::duckdb_register(pop$db_conn, "__tmp_geno", genome_genotype_df)
-  DBI::dbExecute(pop$db_conn, "INSERT INTO genome_genotype SELECT * FROM __tmp_geno")
-  duckdb::duckdb_unregister(pop$db_conn, "__tmp_geno")
 
   # ============================================================================
   # 9. Update and return

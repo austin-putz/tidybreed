@@ -26,7 +26,7 @@
 #'   variance components, index weights).
 #' @param reset_only Character vector. Tables whose rows are deleted from the
 #'   working DB without being archived. Intended for large genomic tables
-#'   (`genome_haplotype`, `genome_genotype`) that are unnecessary for most
+#'   (`ind_haplotype`, `ind_genotype`) that are unnecessary for most
 #'   downstream analyses.
 #'
 #' @details
@@ -95,7 +95,7 @@ archive_replicate <- function(
                         "trait_meta", "trait_effects", "trait_var_comp",
                         "phenotype_meta", "phenotype_components",
                         "phenotype_var_comp", "index_meta"),
-    reset_only      = c("genome_haplotype", "genome_genotype")
+    reset_only      = c("ind_haplotype", "ind_genotype")
 ) {
 
   # ── Phase 0: Validation ───────────────────────────────────────────────────

@@ -237,7 +237,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
 #' Internal helper called by [open_pop()] (and the deprecated
 #' `initialize_genome()` wrapper). Creates the `_schema_meta` system table and
 #' all non-genome metadata tables. Genome tables (`genome_meta`,
-#' `genome_haplotype`, `genome_genotype`) are created by [define_genome()].
+#' `ind_haplotype`, `ind_genotype`, `chr_meta`) are created by [define_genome()].
 #'
 #' @param db_conn An active DuckDB connection.
 #' @keywords internal

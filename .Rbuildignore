@@ -8,3 +8,4 @@
 ^vignettes/.*/tidybreed_output$
 ^plans$
 ^results$
+^dev$

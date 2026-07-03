@@ -160,7 +160,7 @@ test_that("remove_rows(tables = 'all') removes individual from all ind_* tables"
     remove_rows(tables = "all", verbose = FALSE)
 
   for (tbl_name in c("ind_meta", "ind_phenotype", "ind_tbv",
-                      "genome_haplotype", "genome_genotype")) {
+                      "ind_haplotype")) {
     n <- DBI::dbGetQuery(
       pop$db_conn,
       paste0("SELECT COUNT(*) AS n FROM ", tbl_name,

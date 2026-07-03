@@ -66,11 +66,11 @@ gives ρ ≈ 0.37 at 1 Mb.}
 \item{line_name}{Optional character scalar. A label for this haplotype pool
 (e.g. \code{"LineA"}). Must start with a letter and contain only letters,
 numbers, or underscores. When supplied, \code{founder_haplotypes} rows are
-tagged with this label and \code{hap_id} values are prefixed
-(\code{"LineA_hap_1"}, …). \code{\link[=add_founders]{add_founders()}} with the same \code{line_name} will
-sample exclusively from these rows. When \code{NULL} (default), rows are stored
-with \code{line_name = NA} and \code{\link[=add_founders]{add_founders()}} falls back to them when no
-named pool exists for the requested line.}
+tagged with this label (\code{haplotype_id} is sequential within the pool).
+\code{\link[=add_founders]{add_founders()}} with the same \code{line_name} will sample exclusively from
+these rows. When \code{NULL} (default), rows are stored with \code{line_name = NA}
+and \code{\link[=add_founders]{add_founders()}} falls back to them when no named pool exists for the
+requested line.}
 }
 \value{
 The \code{tidybreed_pop} object (invisibly), with \code{founder_haplotypes}

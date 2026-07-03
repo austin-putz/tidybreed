@@ -33,7 +33,8 @@ The modified \code{tidybreed_pop} object (invisibly).
 \description{
 Creates founder individuals by sampling haplotypes from the \code{founder_haplotypes}
 table. Each founder receives two randomly sampled haplotypes (with replacement),
-which are used to populate the \code{genome_haplotype} and \code{genome_genotype} tables.
+which are used to populate the long \code{ind_haplotype} table (\code{ind_genotype}
+dosage is materialized on demand via \code{\link[=add_dosage]{add_dosage()}}).
 
 The \code{ind_meta} table is created (if it doesn't exist) or appended to with
 the new founders. Founder individuals have \code{NULL} for both parent IDs.
@@ -49,8 +50,8 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 \enumerate{
 \item Samples 2 haplotypes per founder from \code{founder_haplotypes} (with replacement)
 \item Creates/updates \code{ind_meta} table with founder metadata
-\item Populates \code{genome_haplotype} (2 rows per individual)
-\item Populates \code{genome_genotype} (1 row per individual, sum of haplotypes)
+\item Populates \code{ind_haplotype} (long: 2 haplotypes x n_loci rows per individual,
+with \code{line_origin} set to the founder's line and \code{strand = 1})
 }
 
 \strong{ID Format:}

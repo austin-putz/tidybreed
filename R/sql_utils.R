@@ -71,9 +71,14 @@ TABLE_RESERVED_COLS <- list(
   "_schema_meta"   = c("id_schema_meta", "object_type", "table_name",
                        "column_name", "description", "notes"),
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex", "replicate"),
-  genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb"),
+  genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb",
+                       "introduced_gen"),
   genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
                        "genome_effect_type", "genome_value", "base_allele_freq"),
+  ind_haplotype    = c("id_ind", "parent_origin", "strand", "line_origin",
+                       "locus_id", "locus_name", "allele"),
+  ind_genotype     = c("id_ind", "locus_id", "locus_name", "dosage_value"),
+  chr_meta         = c("chr_name", "copies_M", "copies_F", "hemi_parent", "recombines"),
   ind_phenotype    = c("id_phenotype", "id_ind", "trait_name", "pheno_value", "pheno_number",
                        "liability_value", "cat_name", "replicate"),
   ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value", "replicate"),
@@ -104,6 +109,7 @@ TABLE_RESERVED_COLS <- list(
 TABLE_PRIMARY_KEYS <- list(
   ind_meta         = "id_ind",
   genome_meta      = "locus_id",
+  chr_meta         = "chr_name",
   genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   ind_tbv          = "id_tbv",
@@ -134,8 +140,9 @@ TABLE_ROW_KEYS <- list(
   ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
   ind_index        = c("id_ind", "index_name", "index_number"),
   ind_true_index   = c("id_ind", "index_name", "weight_type"),
-  genome_haplotype = c("id_ind", "parent_origin"),
-  genome_genotype  = "id_ind",
+  ind_haplotype    = c("id_ind", "parent_origin", "strand", "locus_id"),
+  ind_genotype     = c("id_ind", "locus_id"),
+  chr_meta         = "chr_name",
   trait_effects    = c("trait_name", "effect_name"),
   trait_var_comp     = "id_trait_var_comp",
   phenotype_var_comp = "id_phenotype_var_comp",
@@ -167,7 +174,8 @@ next_int_id <- function(conn, table, id_col) {
 #' @keywords internal
 SYSTEM_TABLES <- c(
   "_schema_meta",
-  "genome_meta", "genome_haplotype", "genome_genotype", "genome_effects",
+  "genome_meta", "genome_effects",
+  "ind_haplotype", "ind_genotype", "chr_meta",
   "founder_haplotypes",
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
   "trait_meta", "trait_effects", "trait_var_comp", "trait_random_effects",
@@ -181,7 +189,8 @@ SYSTEM_TABLES <- c(
 #' @keywords internal
 IND_TABLE_ID_IND_COLS <- c(
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-  "ind_index", "ind_true_index", "genome_haplotype", "genome_genotype"
+  "ind_index", "ind_true_index",
+  "ind_haplotype", "ind_genotype"
 )
 
 

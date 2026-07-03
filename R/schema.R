@@ -78,20 +78,52 @@ register_schema_meta <- function(conn, entries) {
             "Physical position in megabases along the chromosome"),
     .sm_col("genome_meta", "founder_allele_freq",
             "Per-locus base allele frequency for founder haplotype sampling; present only when define_founder_haplotypes() has been called"),
+    .sm_col("genome_meta", "introduced_gen",
+            "Generation a novel mutation was introduced (Stage 5); NULL for founding loci present at define_genome()"),
 
-    # genome_haplotype
-    .sm_tbl("genome_haplotype",
-            "Phased haplotypes in wide format. Two rows per individual (parent_origin 1 = paternal, 2 = maternal). Locus alleles stored as UTINYINT columns locus_1, locus_2, etc."),
-    .sm_col("genome_haplotype", "id_ind",
+    # ind_haplotype (long)
+    .sm_tbl("ind_haplotype",
+            "Phased haplotypes in long format. One row per individual x haplotype x locus. parent_origin (1/2) and strand (1 for diploids) identify the copy; line_origin traces the allele's founding line. PRIMARY KEY (id_ind, parent_origin, strand, locus_id)."),
+    .sm_col("ind_haplotype", "id_ind",
             "Individual identifier; FK to ind_meta.id_ind"),
-    .sm_col("genome_haplotype", "parent_origin",
-            "Haplotype of origin: 1 = paternal (parent_1 side), 2 = maternal (parent_2 side)"),
+    .sm_col("ind_haplotype", "parent_origin",
+            "Which mating parent contributed this copy: 1 = parent_1 (sire), 2 = parent_2 (dam)"),
+    .sm_col("ind_haplotype", "strand",
+            "Copy index within a parent's contribution; always 1 for diploids"),
+    .sm_col("ind_haplotype", "line_origin",
+            "Founding genetic line this allele traces back to; NULL only when genuinely untracked"),
+    .sm_col("ind_haplotype", "locus_id",
+            "Locus identifier; FK to genome_meta.locus_id; physical sort/PK key"),
+    .sm_col("ind_haplotype", "locus_name",
+            "Locus name; FK to genome_meta.locus_name; denormalized for direct joins to genome_effects"),
+    .sm_col("ind_haplotype", "allele",
+            "Phased allele on this strand: 0 (reference) or 1 (alternate)"),
 
-    # genome_genotype
-    .sm_tbl("genome_genotype",
-            "Genotypes in 0/1/2 dosage encoding. One row per individual. Computed from genome_haplotype as the sum of both haplotypes at each locus."),
-    .sm_col("genome_genotype", "id_ind",
-            "Individual identifier; FK to ind_meta.id_ind")
+    # ind_genotype (long, on-demand dosage cache)
+    .sm_tbl("ind_genotype",
+            "Genotype dosage cache in long format. One row per individual x locus. NOT auto-populated; filled on demand by add_dosage() from ind_haplotype. May be empty or partial. PRIMARY KEY (id_ind, locus_id)."),
+    .sm_col("ind_genotype", "id_ind",
+            "Individual identifier; FK to ind_meta.id_ind"),
+    .sm_col("ind_genotype", "locus_id",
+            "Locus identifier; FK to genome_meta.locus_id"),
+    .sm_col("ind_genotype", "locus_name",
+            "Locus name; FK to genome_meta.locus_name"),
+    .sm_col("ind_genotype", "dosage_value",
+            "Sum of alleles across strands (0/1/2 for diploids)"),
+
+    # chr_meta
+    .sm_tbl("chr_meta",
+            "Per-chromosome inheritance rules. One row per chromosome. Default rows are diploid autosomes (copies 2/2, recombines); non-default rules (sex chromosomes, organelles, polyploidy) are Stage 4."),
+    .sm_col("chr_meta", "chr_name",
+            "Chromosome label; PK; matches genome_meta.chr_name"),
+    .sm_col("chr_meta", "copies_M",
+            "Number of copies carried by males (default 2)"),
+    .sm_col("chr_meta", "copies_F",
+            "Number of copies carried by females (default 2)"),
+    .sm_col("chr_meta", "hemi_parent",
+            "For a single-copy chromosome, which parent donates it: 'parent_1', 'parent_2', or NULL for diploids"),
+    .sm_col("chr_meta", "recombines",
+            "TRUE if recombination occurs during gamete formation (default TRUE)")
   )
 }
 
@@ -586,10 +618,9 @@ print.tidybreed_schema <- function(x, ...) {
 #'
 #' @description
 #' Returns a tibble of all columns in `table_name` with their DuckDB types
-#' and descriptions from `_schema_meta`. Wide genome tables
-#' (`genome_haplotype`, `genome_genotype`, `founder_haplotypes`) only list
-#' their non-locus metadata columns to avoid printing thousands of locus
-#' columns.
+#' and descriptions from `_schema_meta`. Any wide table with `locus_<n>`
+#' columns only lists its non-locus metadata columns to avoid printing
+#' thousands of locus columns.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param table_name Character. Name of the table to describe.

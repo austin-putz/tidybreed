@@ -36,12 +36,22 @@ build_chr_info <- function(genome_meta_df) {
 #'   parent_origin 1, row 2 = haplotype from parent_origin 2.
 #' @param chr_info List returned by `build_chr_info()`. Contains pre-computed
 #'   locus indices, positions, and lengths per chromosome.
-#' @return Integer vector of length n_loci representing the gamete (0 or 1)
+#' @return A list with two length-`n_loci` integer vectors:
+#'   \describe{
+#'     \item{`allele`}{the gamete alleles (0 or 1).}
+#'     \item{`homolog`}{which of the parent's two homologs (1 or 2) donated the
+#'       allele at each locus. Used by [add_offspring()] to inherit `line_origin`
+#'       from the contributing parental segment.}
+#'   }
+#'   The random-draw sequence (`rpois`, `sample`, `runif`) is identical to the
+#'   allele-only version — `homolog` is derived from values already computed, so
+#'   seeded output is unchanged.
 #' @keywords internal
 make_gamete <- function(hap_matrix, chr_info) {
 
-  n_loci <- ncol(hap_matrix)
+  n_loci  <- ncol(hap_matrix)
   gamete  <- integer(n_loci)
+  homolog <- integer(n_loci)
 
   for (ci in chr_info) {
     chr_locus_idx <- ci$locus_idx
@@ -52,16 +62,19 @@ make_gamete <- function(hap_matrix, chr_info) {
     current_hap <- sample(1L:2L, 1L)
 
     if (n_cross == 0L) {
-      gamete[chr_locus_idx] <- hap_matrix[current_hap, chr_locus_idx]
+      # Whole chromosome comes from one homolog; expand the scalar to a vector.
+      hap_idx_vec <- rep(current_hap, length(chr_locus_idx))
     } else {
       cross_pos   <- sort(runif(n_cross, min = 0, max = chr_len))
       # findInterval counts crossovers strictly before each locus position;
       # parity of that count determines how many times the haplotype toggled.
       n_toggles   <- findInterval(chr_pos, cross_pos)
-      hap_indices <- (current_hap - 1L + n_toggles %% 2L) %% 2L + 1L
-      gamete[chr_locus_idx] <- hap_matrix[cbind(hap_indices, chr_locus_idx)]
+      hap_idx_vec <- (current_hap - 1L + n_toggles %% 2L) %% 2L + 1L
     }
+
+    gamete[chr_locus_idx]  <- hap_matrix[cbind(hap_idx_vec, chr_locus_idx)]
+    homolog[chr_locus_idx] <- hap_idx_vec
   }
 
-  gamete
+  list(allele = gamete, homolog = homolog)
 }

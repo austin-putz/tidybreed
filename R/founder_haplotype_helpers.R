@@ -188,17 +188,24 @@
   genome_meta$founder_allele_freq <- allele_freqs
   DBI::dbWriteTable(pop$db_conn, "genome_meta", genome_meta, overwrite = TRUE)
 
-  # Build founder_haplotypes tibble: hap_id + line_name + locus_1..locus_n
-  hap_id_prefix <- if (!is.null(line_name)) paste0(line_name, "_hap_") else "hap_"
-  fh <- tibble::tibble(
-    hap_id    = paste0(hap_id_prefix, seq_len(n_haplotypes)),
-    line_name = if (!is.null(line_name)) line_name else NA_character_
+  # Locus names in locus_id order (haplotype_matrix columns are in locus_id order)
+  gm_order <- DBI::dbGetQuery(
+    pop$db_conn, "SELECT locus_name FROM genome_meta ORDER BY locus_id")$locus_name
+
+  # Build LONG founder_haplotypes: one row per (haplotype x locus). haplotype_id
+  # is sequential within this pool. as.integer() flattens column-major, matching
+  # haplotype_id = rep(seq, times) and locus = rep(seq, each).
+  fh <- data.frame(
+    line_name    = if (!is.null(line_name)) line_name else NA_character_,
+    haplotype_id = rep(seq_len(n_haplotypes), times = n_loci),
+    locus_name   = rep(gm_order, each = n_haplotypes),
+    allele       = as.integer(haplotype_matrix),
+    stringsAsFactors = FALSE
   )
-  for (j in seq_len(n_loci)) {
-    fh[[paste0("locus_", j)]] <- haplotype_matrix[, j]
-  }
 
   is_new_table <- !DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")
+  # dbWriteTable (not register+INSERT) so the incidental RNG advance matches the
+  # historical wide writer exactly, preserving seeded simulations.
   DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, append = TRUE)
 
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
@@ -206,11 +213,15 @@
   if (is_new_table) {
     register_schema_meta(pop$db_conn, rbind(
       .sm_tbl("founder_haplotypes",
-              "Pool of founder haplotypes sampled by define_founder_haplotypes(). Rows are sampled by add_founders() to assign phased alleles."),
-      .sm_col("founder_haplotypes", "hap_id",
-              "Haplotype identifier, prefixed with line_name when set (e.g. 'LineA_hap_1', 'hap_1')"),
+              "Pool of founder haplotypes in long format (one row per haplotype x locus) sampled by add_founders() to assign phased alleles."),
       .sm_col("founder_haplotypes", "line_name",
-              "Founder line label matching add_founders() line_name. NULL = shared pool for all lines.")
+              "Founder line label matching add_founders() line_name. NULL = shared pool for all lines."),
+      .sm_col("founder_haplotypes", "haplotype_id",
+              "Sequential haplotype identifier within the pool (unique per line_name)"),
+      .sm_col("founder_haplotypes", "locus_name",
+              "Locus name; FK to genome_meta.locus_name"),
+      .sm_col("founder_haplotypes", "allele",
+              "Allele on this haplotype at this locus: 0 or 1")
     ))
   }
 

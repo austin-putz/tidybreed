@@ -18,10 +18,9 @@ Printed via \code{\link[=print.tidybreed_table_desc]{print.tidybreed_table_desc(
 }
 \description{
 Returns a tibble of all columns in \code{table_name} with their DuckDB types
-and descriptions from \verb{_schema_meta}. Wide genome tables
-(\code{genome_haplotype}, \code{genome_genotype}, \code{founder_haplotypes}) only list
-their non-locus metadata columns to avoid printing thousands of locus
-columns.
+and descriptions from \verb{_schema_meta}. Any wide table with \verb{locus_<n>}
+columns only lists its non-locus metadata columns to avoid printing
+thousands of locus columns.
 }
 \examples{
 \dontrun{

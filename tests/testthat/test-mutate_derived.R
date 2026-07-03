@@ -383,7 +383,7 @@ test_that("error if destination table not in TABLE_PRIMARY_KEYS", {
     get_table(pop, "ind_meta") |>
       mutate_derived(
         compute  = \(df) 1,
-        write_to = c(genome_haplotype = "x")
+        write_to = c(ind_haplotype = "x")
       ),
     "not registered in the primary-key map"
   )

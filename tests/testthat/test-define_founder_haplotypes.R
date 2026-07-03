@@ -4,6 +4,28 @@ make_fh_pop <- function(pop_name = "fh_test", n_loci = 100, n_chr = 2) {
     define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = 50)
 }
 
+# founder_haplotypes is stored long. Reconstruct a haplotype x locus matrix
+# (rows = one per (line_name, haplotype_id), cols in locus_id order).
+fh_wide <- function(pop) {
+  long <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  gm <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
+  long$locus_id <- gm$locus_id[match(long$locus_name, gm$locus_name)]
+  key_df <- unique(long[, c("line_name", "haplotype_id")])
+  key_df <- key_df[order(key_df$line_name, key_df$haplotype_id), , drop = FALSE]
+  keys <- paste(key_df$line_name, key_df$haplotype_id, sep = "\r")
+  rk   <- paste(long$line_name, long$haplotype_id, sep = "\r")
+  m <- matrix(0L, nrow = length(keys), ncol = nrow(gm))
+  m[cbind(match(rk, keys), long$locus_id)] <- as.integer(long$allele)
+  m
+}
+
+# Number of distinct haplotypes in the pool.
+fh_n_haps <- function(pop) {
+  DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM (SELECT DISTINCT line_name, haplotype_id FROM founder_haplotypes)")$n
+}
+
 # ============================================================
 # Existing methods (updated to new API)
 # ============================================================
@@ -20,13 +42,14 @@ test_that("method = 'uniform' creates haplotypes with per-locus frequencies in r
   expect_true("founder_haplotypes" %in% pop$tables)
 
   fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 50L)
-  expect_equal(ncol(fh), 102L)   # hap_id + line_name + 100 loci
-  expect_equal(fh$hap_id, paste0("hap_", 1:50))
+  expect_equal(fh_n_haps(pop), 50L)
+  expect_setequal(unique(fh$haplotype_id), 1:50)
   expect_true("line_name" %in% colnames(fh))
   expect_true(all(is.na(fh$line_name)))
 
-  alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
+  alleles <- fh_wide(pop)
+  expect_equal(nrow(alleles), 50L)
+  expect_equal(ncol(alleles), 100L)
   expect_true(all(alleles %in% c(0, 1)))
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
@@ -52,7 +75,7 @@ test_that("method = 'fixed' creates haplotypes with uniform allele frequency", {
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   expect_true(all(gm$founder_allele_freq == 0.5))
 
-  expect_equal(nrow(dplyr::collect(get_table(pop, "founder_haplotypes"))), 30L)
+  expect_equal(fh_n_haps(pop), 30L)
 
   close_pop(pop)
 })
@@ -78,11 +101,10 @@ test_that("method = 'beta' generates valid haplotypes with correct dimensions", 
   pop <- make_fh_pop("fh_beta") |>
     define_founder_haplotypes(n_haplotypes = 40, method = "beta")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 102L)
-
-  alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
+  expect_equal(fh_n_haps(pop), 40L)
+  alleles <- fh_wide(pop)
+  expect_equal(nrow(alleles), 40L)
+  expect_equal(ncol(alleles), 100L)
   expect_true(all(alleles %in% c(0, 1)))
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
@@ -118,11 +140,10 @@ test_that("method = 'balding_nichols' generates valid haplotypes", {
     define_founder_haplotypes(n_haplotypes = 40, method = "balding_nichols",
                               fst = 0.1, mean_freq = 0.5)
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 102L)
-
-  alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
+  expect_equal(fh_n_haps(pop), 40L)
+  alleles <- fh_wide(pop)
+  expect_equal(nrow(alleles), 40L)
+  expect_equal(ncol(alleles), 100L)
   expect_true(all(alleles %in% c(0, 1)))
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
@@ -176,11 +197,10 @@ test_that("method = 'mosaic' generates valid haplotypes", {
   pop <- make_fh_pop("fh_mosaic") |>
     define_founder_haplotypes(n_haplotypes = 40, method = "mosaic")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 102L)
-
-  alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
+  expect_equal(fh_n_haps(pop), 40L)
+  alleles <- fh_wide(pop)
+  expect_equal(nrow(alleles), 40L)
+  expect_equal(ncol(alleles), 100L)
   expect_true(all(alleles %in% c(0, 1)))
 
   close_pop(pop)
@@ -192,9 +212,7 @@ test_that("method = 'mosaic' stores empirical colMeans as founder_allele_freq", 
   pop <- make_fh_pop("fh_mosaic_freq") |>
     define_founder_haplotypes(n_haplotypes = 50, method = "mosaic")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  locus_cols <- paste0("locus_", 1:100)
-  empirical  <- colMeans(as.matrix(fh[, locus_cols]))
+  empirical <- colMeans(fh_wide(pop))
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   expect_equal(gm$founder_allele_freq, unname(empirical), tolerance = 1e-9)
@@ -215,9 +233,7 @@ test_that("method = 'mosaic' with switch_rate = 0 and n_chr = 1 produces at most
       switch_rate  = 0
     )
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  locus_cols <- grep("^locus_", names(fh), value = TRUE)
-  n_unique   <- nrow(unique(as.matrix(fh[, locus_cols])))
+  n_unique <- nrow(unique(fh_wide(pop)))
 
   # With no switching on a single chromosome, each haplotype is an exact
   # copy of its starting template, so unique count <= n_templates
@@ -236,11 +252,10 @@ test_that("method = 'gaussian_copula' generates valid haplotypes", {
   pop <- make_fh_pop("fh_gc") |>
     define_founder_haplotypes(n_haplotypes = 40, method = "gaussian_copula")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 40L)
-  expect_equal(ncol(fh), 102L)
-
-  alleles <- as.matrix(fh[, paste0("locus_", 1:100)])
+  expect_equal(fh_n_haps(pop), 40L)
+  alleles <- fh_wide(pop)
+  expect_equal(nrow(alleles), 40L)
+  expect_equal(ncol(alleles), 100L)
   expect_true(all(alleles %in% c(0, 1)))
 
   close_pop(pop)
@@ -252,9 +267,7 @@ test_that("method = 'gaussian_copula' stores empirical colMeans as founder_allel
   pop <- make_fh_pop("fh_gc_freq") |>
     define_founder_haplotypes(n_haplotypes = 50, method = "gaussian_copula")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  locus_cols <- paste0("locus_", 1:100)
-  empirical  <- colMeans(as.matrix(fh[, locus_cols]))
+  empirical <- colMeans(fh_wide(pop))
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   expect_equal(gm$founder_allele_freq, unname(empirical), tolerance = 1e-9)
@@ -270,9 +283,7 @@ test_that("method = 'gaussian_copula' with very high decay_rate gives near-indep
     define_founder_haplotypes(n_haplotypes = 2000, method = "gaussian_copula",
                               decay_rate = 1000)
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  locus_cols <- grep("^locus_", names(fh), value = TRUE)
-  mat <- as.matrix(fh[, locus_cols])
+  mat <- fh_wide(pop)
 
   # With rho ≈ 0, correlations between adjacent loci should be near zero
   r_adj <- cor(mat[, 1:(ncol(mat) - 1)], mat[, 2:ncol(mat)])
@@ -392,13 +403,15 @@ test_that("define_founder_haplotypes() succeeds for two distinct line_names", {
     define_founder_haplotypes(n_haplotypes = 30, line_name = "A") |>
     define_founder_haplotypes(n_haplotypes = 40, line_name = "B")
 
-  fh <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
-  expect_equal(nrow(fh), 70L)
-  expect_equal(sort(unique(fh$line_name)), c("A", "B"))
-  expect_equal(sum(fh$line_name == "A"), 30L)
-  expect_equal(sum(fh$line_name == "B"), 40L)
-  expect_equal(fh$hap_id[1:3], c("A_hap_1", "A_hap_2", "A_hap_3"))
-  expect_equal(fh$hap_id[31:33], c("B_hap_1", "B_hap_2", "B_hap_3"))
+  expect_equal(fh_n_haps(pop), 70L)
+  haps <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT DISTINCT line_name, haplotype_id FROM founder_haplotypes")
+  expect_equal(sort(unique(haps$line_name)), c("A", "B"))
+  expect_equal(sum(haps$line_name == "A"), 30L)
+  expect_equal(sum(haps$line_name == "B"), 40L)
+  # haplotype_id restarts per line (1..n).
+  expect_setequal(haps$haplotype_id[haps$line_name == "A"], 1:30)
+  expect_setequal(haps$haplotype_id[haps$line_name == "B"], 1:40)
 
   close_pop(pop)
 })

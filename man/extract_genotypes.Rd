@@ -4,7 +4,13 @@
 \alias{extract_genotypes}
 \title{Extract genotype data for individuals, by chip and/or QTL loci}
 \usage{
-extract_genotypes(tbl, chip_name = NULL, effects_tbl = NULL, col_name = NULL)
+extract_genotypes(
+  tbl,
+  chip_name = NULL,
+  effects_tbl = NULL,
+  loci_tbl = NULL,
+  col_name = NULL
+)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
@@ -20,6 +26,12 @@ the chip path is skipped.}
 The collected table must contain a \code{locus_name} column. Use
 \code{\link[dplyr:filter]{dplyr::filter()}} to restrict by \code{trait_name}, \code{genome_effect_type},
 \code{genome_value}, \code{line_name}, etc. When \code{NULL} the QTL path is skipped.}
+
+\item{loci_tbl}{A \code{tidybreed_table} from \code{get_table(pop, "genome_meta")}
+(optionally filtered), or \code{NULL}. A general locus filter independent of
+chips and QTL sets — e.g. \code{filter(!chr_name \%in\% c("X", "Y", "MT"))} to
+restrict to autosomes. The collected table's \code{locus_name} values become the
+locus set. Unioned with \code{chip_name}/\code{effects_tbl} when combined.}
 
 \item{col_name}{Character. Name of the BOOLEAN column in \code{ind_meta} that
 records chip genotyping status. Default: \code{paste0("has_", chip_name)}.
@@ -51,7 +63,7 @@ are given the locus sets are \strong{unioned} (deduplicated, ordered by
 \strong{QTL path (\code{effects_tbl})} — the returned individual set is:
 \itemize{
 \item Animals matching any pending \code{filter()} predicates on \code{tbl}
-(or all individuals in \code{genome_genotype} when no filter is applied)
+(or all individuals in \code{ind_haplotype} when no filter is applied)
 \item Loci whose \code{locus_name} appears in the collected \code{effects_tbl}
 }
 }

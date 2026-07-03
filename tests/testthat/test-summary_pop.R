@@ -28,24 +28,25 @@ test_that("summary reports correct row and column counts for ind_meta", {
 })
 
 
-test_that("genome_haplotype is flagged as wide and locus cols not summarized", {
+test_that("long ind_haplotype is summarized as a normal (non-wide) table", {
   pop  <- make_summary_pop()
   summ <- summary(pop)
-  hap  <- summ$tables[["genome_haplotype"]]
-  expect_true(hap$is_wide_genome)
-  expect_gte(hap$n_locus_cols, 100L)
-  # Only id_ind and parent_origin should be summarized
-  expect_true(all(hap$col_summaries$col_name %in% c("id_ind", "parent_origin")))
+  hap  <- summ$tables[["ind_haplotype"]]
+  expect_false(isTRUE(hap$is_wide_genome))
+  expect_equal(hap$n_locus_cols, 0L)
+  expect_true(all(c("id_ind", "parent_origin", "strand", "line_origin",
+                    "locus_id", "locus_name", "allele") %in%
+                  hap$col_summaries$col_name))
   close_pop(pop)
 })
 
 
-test_that("genome_genotype is also flagged as wide", {
+test_that("on-demand ind_genotype summarizes as an empty long table", {
   pop  <- make_summary_pop()
   summ <- summary(pop)
-  geno <- summ$tables[["genome_genotype"]]
-  expect_true(geno$is_wide_genome)
-  expect_gte(geno$n_locus_cols, 100L)
+  geno <- summ$tables[["ind_genotype"]]
+  expect_equal(geno$n_rows, 0L)
+  expect_false(isTRUE(geno$is_wide_genome))
   close_pop(pop)
 })
 

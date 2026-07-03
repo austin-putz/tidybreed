@@ -179,7 +179,7 @@ test_that("reset_only tables are empty in working DB after success", {
     unlink(arc)
   }, add = TRUE)
 
-  n_hap <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_haplotype")$n
+  n_hap <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM ind_haplotype")$n
   expect_gt(n_hap, 0L)
 
   pop <- archive_replicate(pop,
@@ -187,9 +187,9 @@ test_that("reset_only tables are empty in working DB after success", {
                            archive_path    = arc,
                            store_and_reset = character(0L),
                            store_once      = character(0L),
-                           reset_only      = "genome_haplotype")
+                           reset_only      = "ind_haplotype")
 
-  n_after <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_haplotype")$n
+  n_after <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM ind_haplotype")$n
   expect_equal(n_after, 0L)
 })
 

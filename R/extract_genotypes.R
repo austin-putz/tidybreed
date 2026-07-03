@@ -18,7 +18,7 @@
 #'
 #' **QTL path (`effects_tbl`)** — the returned individual set is:
 #' * Animals matching any pending `filter()` predicates on `tbl`
-#'   (or all individuals in `genome_genotype` when no filter is applied)
+#'   (or all individuals in `ind_haplotype` when no filter is applied)
 #' * Loci whose `locus_name` appears in the collected `effects_tbl`
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
@@ -32,6 +32,11 @@
 #'   The collected table must contain a `locus_name` column. Use
 #'   [dplyr::filter()] to restrict by `trait_name`, `genome_effect_type`,
 #'   `genome_value`, `line_name`, etc. When `NULL` the QTL path is skipped.
+#' @param loci_tbl A `tidybreed_table` from `get_table(pop, "genome_meta")`
+#'   (optionally filtered), or `NULL`. A general locus filter independent of
+#'   chips and QTL sets — e.g. `filter(!chr_name %in% c("X", "Y", "MT"))` to
+#'   restrict to autosomes. The collected table's `locus_name` values become the
+#'   locus set. Unioned with `chip_name`/`effects_tbl` when combined.
 #' @param col_name Character. Name of the BOOLEAN column in `ind_meta` that
 #'   records chip genotyping status. Default: `paste0("has_", chip_name)`.
 #'   Ignored when `chip_name` is `NULL`.
@@ -81,14 +86,15 @@
 extract_genotypes <- function(tbl,
                               chip_name   = NULL,
                               effects_tbl = NULL,
+                              loci_tbl    = NULL,
                               col_name    = NULL) {
 
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
 
-  if (is.null(chip_name) && is.null(effects_tbl)) {
-    stop("At least one of 'chip_name' or 'effects_tbl' must be provided.",
+  if (is.null(chip_name) && is.null(effects_tbl) && is.null(loci_tbl)) {
+    stop("At least one of 'chip_name', 'effects_tbl', or 'loci_tbl' must be provided.",
          call. = FALSE)
   }
 
@@ -117,6 +123,16 @@ extract_genotypes <- function(tbl,
     if (!identical(effects_tbl$table_name, "genome_effects"))
       stop("'effects_tbl' must be from get_table('genome_effects'), got '",
            effects_tbl$table_name, "'.", call. = FALSE)
+  }
+
+  # --- loci_tbl validation ---
+  if (!is.null(loci_tbl)) {
+    if (!inherits(loci_tbl, "tidybreed_table"))
+      stop("'loci_tbl' must be a tidybreed_table from get_table('genome_meta').",
+           call. = FALSE)
+    if (!identical(loci_tbl$table_name, "genome_meta"))
+      stop("'loci_tbl' must be from get_table('genome_meta'), got '",
+           loci_tbl$table_name, "'.", call. = FALSE)
   }
 
   # --- Resolve pending individual filter from tbl ---
@@ -153,11 +169,11 @@ extract_genotypes <- function(tbl,
            "' in the filtered set. Call add_genotypes() first.", call. = FALSE)
     }
   } else {
-    # QTL-only path: use pending filter or all individuals in genome_genotype
+    # Non-chip path: use pending filter or all genotyped individuals.
     if (is.null(subset_ids)) {
       has_ids <- DBI::dbGetQuery(
         pop$db_conn,
-        "SELECT id_ind FROM genome_genotype"
+        "SELECT DISTINCT id_ind FROM ind_haplotype"
       )$id_ind
     } else {
       has_ids <- subset_ids
@@ -199,18 +215,48 @@ extract_genotypes <- function(tbl,
     locus_ids <- sort(union(locus_ids, qtl_ids))
   }
 
+  if (!is.null(loci_tbl)) {
+    loci_df <- dplyr::collect(loci_tbl)
+    if (!"locus_name" %in% names(loci_df))
+      stop("Collected 'loci_tbl' must contain a 'locus_name' column.",
+           call. = FALSE)
+    sel_names <- unique(loci_df[["locus_name"]])
+    if (length(sel_names) == 0)
+      stop("No loci found in the filtered 'loci_tbl'.", call. = FALSE)
+    name_sql <- paste0("'", sel_names, "'", collapse = ", ")
+    sel_ids <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT locus_id FROM genome_meta WHERE locus_name IN (",
+             name_sql, ") ORDER BY locus_id")
+    )$locus_id
+    locus_ids <- union(locus_ids, sel_ids)
+  }
+
   locus_ids <- sort(locus_ids)
 
-  # --- Dynamic SELECT: id_ind + locus columns, filtered to resolved individuals ---
-  locus_cols <- paste0("locus_", locus_ids)
-  cols_sql   <- paste(c("id_ind", locus_cols), collapse = ", ")
-  ids_sql    <- paste0("'", has_ids, "'", collapse = ", ")
+  # --- Build the wide n x p matrix from the long ind_haplotype (dosage =
+  # SUM(allele) per id_ind x locus). Columns are named locus_<locus_id> and
+  # ordered by locus_id; rows are the resolved individuals. ---
+  locus_cols   <- paste0("locus_", locus_ids)
+  ids_sql      <- paste0("'", has_ids, "'", collapse = ", ")
+  locus_id_sql <- paste(locus_ids, collapse = ", ")
 
-  df <- DBI::dbGetQuery(
+  agg <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT ", cols_sql,
-           " FROM genome_genotype WHERE id_ind IN (", ids_sql, ")")
+    paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
+           "FROM ind_haplotype ",
+           "WHERE id_ind IN (", ids_sql, ") AND locus_id IN (", locus_id_sql, ") ",
+           "GROUP BY id_ind, locus_id")
   )
 
-  tibble::as_tibble(df)
+  uid <- unique(has_ids)
+  m <- matrix(0L, nrow = length(uid), ncol = length(locus_ids),
+              dimnames = list(NULL, locus_cols))
+  m[cbind(match(agg$id_ind, uid), match(agg$locus_id, locus_ids))] <-
+    as.integer(agg$dosage)
+
+  tibble::as_tibble(cbind(
+    tibble::tibble(id_ind = uid),
+    tibble::as_tibble(m)
+  ))
 }

@@ -407,30 +407,3 @@ next_phenotype_ids <- function(pop, n) {
   start <- next_int_id(pop$db_conn, "ind_phenotype", "id_phenotype")
   seq.int(start, start + n - 1L)
 }
-
-
-#' Pull the haplotype for a single parent origin, as individuals x loci matrix
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param parent_origin Integer 1 (paternal) or 2 (maternal).
-#' @param id_ind Character vector of individuals to pull.
-#' @return Numeric matrix, rows in `id_ind` order.
-#' @keywords internal
-get_haplotype_matrix <- function(pop, parent_origin, id_ind) {
-  ids_sql <- paste0("'", id_ind, "'", collapse = ", ")
-  df <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT * FROM genome_haplotype WHERE parent_origin = ",
-           parent_origin, " AND id_ind IN (", ids_sql, ")")
-  )
-  if (nrow(df) == 0) {
-    stop("No haplotype rows found for parent_origin = ", parent_origin,
-         call. = FALSE)
-  }
-  locus_cols  <- setdiff(names(df), c("id_ind", "parent_origin"))
-  locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
-  mat <- as.matrix(df[match(id_ind, df$id_ind),
-                      locus_cols[locus_order], drop = FALSE])
-  rownames(mat) <- id_ind
-  mat
-}

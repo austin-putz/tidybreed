@@ -18,7 +18,7 @@ test_that("open_pop() creates all core tables before define_genome()", {
 
   # Genome tables are NOT present yet
   expect_false("genome_meta" %in% pop$tables)
-  expect_false("genome_haplotype" %in% pop$tables)
+  expect_false("ind_haplotype" %in% pop$tables)
 })
 
 test_that("open_pop() with :memory: sets run_dirs to character(0)", {

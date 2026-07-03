@@ -107,8 +107,8 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #'
 #' @param tbl A `tidybreed_table` from [get_table()], with a [filter()] applied.
 #' @param tables `NULL` (default) to delete from the current table only;
-#'   `"all"` to delete from every `ind_*` table plus `genome_haplotype` and
-#'   `genome_genotype` that exist in the population; or a character vector of
+#'   `"all"` to delete from every `ind_*` table (including `ind_haplotype` and
+#'   `ind_genotype`) that exists in the population; or a character vector of
 #'   specific table names (each must have an `id_ind` column). When not `NULL`,
 #'   the source table must also have an `id_ind` column.
 #' @param confirm_all Logical. Set to `TRUE` to allow deletion of all rows when
@@ -131,8 +131,8 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' **Cross-table mode** (`tables != NULL`): extracts unique `id_ind` values
 #' from the filtered table and issues a `DELETE ... WHERE id_ind IN (...)`
 #' for each target table via a temp-table JOIN. `tables = "all"` targets every
-#' `ind_*` table plus `genome_haplotype`, `genome_genotype`, and
-#' `ind_true_index` that currently exist in the population (including
+#' `ind_*` table (including `ind_haplotype`, `ind_genotype`, and
+#' `ind_true_index`) that currently exists in the population (including
 #' `ind_meta`).
 #'
 #' A temporary DuckDB table is used for both modes to avoid SQL injection risk
@@ -247,10 +247,10 @@ remove_rows <- function(tbl, tables = NULL, confirm_all = FALSE,
 
   if (identical(tables, "all")) {
     db_tables   <- DBI::dbListTables(conn)
+    # ind_haplotype / ind_genotype are matched by the ^ind_ pattern.
     ind_tbls    <- db_tables[grepl("^ind_", db_tables)]
-    candidates  <- c(ind_tbls, "genome_haplotype", "genome_genotype")
     target_tables <- intersect(IND_TABLE_ID_IND_COLS,
-                               intersect(candidates, db_tables))
+                               intersect(ind_tbls, db_tables))
   } else {
     if (!is.character(tables) || length(tables) == 0L) {
       stop("'tables' must be NULL, \"all\", or a non-empty character vector.",

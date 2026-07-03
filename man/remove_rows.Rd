@@ -16,8 +16,8 @@ remove_rows(
 \item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, with a \code{\link[=filter]{filter()}} applied.}
 
 \item{tables}{\code{NULL} (default) to delete from the current table only;
-\code{"all"} to delete from every \verb{ind_*} table plus \code{genome_haplotype} and
-\code{genome_genotype} that exist in the population; or a character vector of
+\code{"all"} to delete from every \verb{ind_*} table (including \code{ind_haplotype} and
+\code{ind_genotype}) that exists in the population; or a character vector of
 specific table names (each must have an \code{id_ind} column). When not \code{NULL},
 the source table must also have an \code{id_ind} column.}
 
@@ -53,8 +53,8 @@ animals.
 \strong{Cross-table mode} (\code{tables != NULL}): extracts unique \code{id_ind} values
 from the filtered table and issues a \verb{DELETE ... WHERE id_ind IN (...)}
 for each target table via a temp-table JOIN. \code{tables = "all"} targets every
-\verb{ind_*} table plus \code{genome_haplotype}, \code{genome_genotype}, and
-\code{ind_true_index} that currently exist in the population (including
+\verb{ind_*} table (including \code{ind_haplotype}, \code{ind_genotype}, and
+\code{ind_true_index}) that currently exists in the population (including
 \code{ind_meta}).
 
 A temporary DuckDB table is used for both modes to avoid SQL injection risk

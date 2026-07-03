@@ -9,6 +9,17 @@ make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
   pop
 }
 
+# Dosage matrix (individuals x loci, locus_id order) from the long ind_haplotype.
+.dosage_matrix <- function(pop) {
+  agg <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS d FROM ind_haplotype GROUP BY id_ind, locus_id")
+  n_loci <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n
+  ids <- unique(agg$id_ind)
+  m <- matrix(0L, nrow = length(ids), ncol = n_loci, dimnames = list(ids, NULL))
+  m[cbind(match(agg$id_ind, ids), agg$locus_id)] <- as.integer(agg$d)
+  m
+}
+
 
 test_that("define_additive_effects() rescales to target_add_var within tolerance", {
   set.seed(42)
@@ -31,10 +42,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   idx <- match(eff$locus_name, locus_order$locus_name)
   a[idx] <- eff$genome_value
 
-  geno <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_genotype")
-  locus_cols <- grep("^locus_", names(geno), value = TRUE)
-  locus_cols <- locus_cols[order(as.integer(sub("^locus_", "", locus_cols)))]
-  X <- as.matrix(geno[, locus_cols])
+  X <- .dosage_matrix(pop)
   realised <- var(as.numeric(X %*% a))
 
   expect_equal(realised, 0.5, tolerance = 0.15)
@@ -209,10 +217,7 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
   aA <- load_eff("ADG")
   aB <- load_eff("BW")
 
-  geno <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_genotype")
-  locus_cols <- grep("^locus_", names(geno), value = TRUE)
-  locus_cols <- locus_cols[order(as.integer(sub("^locus_", "", locus_cols)))]
-  X <- as.matrix(geno[, locus_cols])
+  X <- .dosage_matrix(pop)
 
   bv_A <- as.numeric(X %*% aA)
   bv_B <- as.numeric(X %*% aB)

@@ -215,12 +215,22 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
   n_loci    <- length(chip_loci)
   locus_cols <- paste0("locus_", chip_loci)
 
-  id_in_geno <- paste0("'", geno_ids, "'", collapse = ", ")
-  geno_data  <- DBI::dbGetQuery(
+  id_in_geno   <- paste0("'", geno_ids, "'", collapse = ", ")
+  locus_id_sql <- paste(chip_loci, collapse = ", ")
+  agg <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, ", paste(locus_cols, collapse = ", "),
-           " FROM genome_genotype WHERE id_ind IN (", id_in_geno, ")")
+    paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
+           "FROM ind_haplotype ",
+           "WHERE id_ind IN (", id_in_geno, ") AND locus_id IN (", locus_id_sql, ") ",
+           "GROUP BY id_ind, locus_id")
   )
+  uid <- unique(geno_ids)
+  m <- matrix(0L, nrow = length(uid), ncol = length(chip_loci),
+              dimnames = list(NULL, locus_cols))
+  m[cbind(match(agg$id_ind, uid), match(agg$locus_id, chip_loci))] <-
+    as.integer(agg$dosage)
+  geno_data <- data.frame(id_ind = uid, m, check.names = FALSE,
+                          stringsAsFactors = FALSE)
 
   id_width <- ceiling((max(nchar(geno_data$id_ind)) + 5) / 5) * 5
 

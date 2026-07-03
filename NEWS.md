@@ -1,3 +1,74 @@
+# tidybreed 0.48.0 (2026-07-02)
+
+## New features — line-origin TBV (Stage 2)
+
+`add_tbv()` now uses `line_origin` (populated on every allele since Stage 1) to
+compute correct crossbreeding additive TBV.
+
+* Additive effects are matched to each haplotype allele by `line_origin` first;
+  a population-wide effect (`genome_effects.line_name IS NULL`) is only used as
+  a per-locus fallback when no line-specific row exists for that locus/line.
+  This makes F1/F2/backcross TBV correct when different lines carry different
+  QTL effects and/or base allele frequencies at the same locus.
+* Centering is now folded per-allele into the summed SQL term
+  (`(allele - base_allele_freq) * genome_value`), which reproduces the prior
+  Falconer-centered result exactly when only population-wide effects exist (no
+  behavior change for existing population-wide-only simulations — verified via
+  the Stage 1 parity harness).
+* Imprinted traits (`expressed_parent = "parent_1"`/`"parent_2"`) combine
+  correctly with line-specific effects: the query still restricts to the
+  expressed parent's `parent_origin`.
+* Internal-only `get_genotype_matrix()`/`get_haplotype_matrix()` helpers,
+  superseded by the new SQL, have been removed.
+
+## Dev tooling
+
+* Added `dev/benchmarks/benchmark_haplotype_scale.R` — a standalone scale
+  benchmark for the long-format haplotype storage (insert throughput for
+  `add_founders()`/`add_offspring()`, `add_tbv()` for both population-wide and
+  line-specific effects, and `extract_genotypes()` PIVOT export). Not run as
+  part of `R CMD check`/`testthat`; see the script header for usage. This was
+  the benchmark deferred from Stage 1 (`plans/refactor_haplotype_stage_1.md`).
+
+# tidybreed 0.47.0 (2026-07-02)
+
+## Breaking changes — wide → long haplotype/genotype storage (Stage 1)
+
+Haplotypes and genotypes are now stored in **long** format. This is Stage 1 of
+the refactor in `plans/refactor_haplotype.md`; simulation behavior is otherwise
+preserved (validated by a deterministic seeded parity harness comparing
+haplotypes, dosages, TBVs, and exports before/after).
+
+* **Tables renamed and reshaped.** `genome_haplotype` → `ind_haplotype` (one row
+  per individual × haplotype × locus: `id_ind, parent_origin, strand,
+  line_origin, locus_id, locus_name, allele`; PK
+  `(id_ind, parent_origin, strand, locus_id)`). `genome_genotype` →
+  `ind_genotype` (long: `id_ind, locus_id, locus_name, dosage_value`;
+  PK `(id_ind, locus_id)`). The old wide tables are removed.
+* **`ind_genotype` is now on-demand.** It is no longer auto-populated by
+  `add_founders()`/`add_offspring()`. Materialize dosage explicitly with the new
+  `add_dosage()`.
+* **`founder_haplotypes` is now long** (`line_name, haplotype_id, locus_name,
+  allele`); the `hap_id` string column is replaced by an integer `haplotype_id`
+  scoped per line.
+* `genome_meta` gains an `introduced_gen` column (NULL for founding loci) and
+  `locus_name` is validated to be unique.
+
+## New features
+
+* `add_dosage(tbl, chip_name, locus_names, overwrite_dosage)` — materializes
+  0/1/2 genotype dosages from `ind_haplotype` into the on-demand `ind_genotype`
+  cache. Contrast with `add_genotypes()` (which only marks animals as physically
+  genotyped). Idempotent via `INSERT OR REPLACE`.
+* `extract_genotypes()` gains a `loci_tbl` argument — a general locus filter via
+  `get_table("genome_meta")` (e.g. autosomes only), unioned with
+  `chip_name`/`effects_tbl`.
+* `line_origin` is populated on every allele from the start (founders: their own
+  line; offspring: inherited per-locus from the contributing parental segment
+  during recombination). It is not yet *used* in TBV — that is Stage 2.
+* New `chr_meta` table with default diploid-autosome rows (per-chromosome
+  inheritance rules; `define_chr()` and non-default rules are Stage 4).
+
 # tidybreed 0.46.2 (2026-07-01)
 
 ## Minor changes

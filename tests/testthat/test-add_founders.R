@@ -54,7 +54,7 @@ test_that("add_founders correctly assigns IDs and sex", {
 })
 
 
-test_that("add_founders creates correct genome_haplotype table", {
+test_that("add_founders creates correct long ind_haplotype table", {
   pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
@@ -63,33 +63,30 @@ test_that("add_founders creates correct genome_haplotype table", {
     get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
-  haps <- get_table(pop, "genome_haplotype") %>% dplyr::collect()
+  haps <- get_table(pop, "ind_haplotype") %>% dplyr::collect()
 
-  expect_equal(nrow(haps), 20)  # 10 individuals × 2
-  expect_equal(ncol(haps), 52)  # id_ind + parent_origin + 50 loci
-  expect_true("id_ind" %in% colnames(haps))
-  expect_true("parent_origin" %in% colnames(haps))
-
-  locus_cols <- paste0("locus_", 1:50)
-  expect_true(all(locus_cols %in% colnames(haps)))
-
+  # 10 individuals x 2 haplotypes x 50 loci
+  expect_equal(nrow(haps), 10L * 2L * 50L)
+  expect_setequal(colnames(haps),
+    c("id_ind", "parent_origin", "strand", "line_origin",
+      "locus_id", "locus_name", "allele"))
   expect_true(all(haps$parent_origin %in% c(1L, 2L)))
+  expect_true(all(haps$strand == 1L))
+  expect_true(all(haps$line_origin == "A"))
+  expect_true(all(haps$allele %in% c(0L, 1L)))
 
+  # Exactly 2 haplotypes (parent_origin 1 and 2) x 50 loci per individual.
   for (i in 1:10) {
-    ind_id <- paste0("A_", i)
-    ind_haps <- haps %>% dplyr::filter(id_ind == !!ind_id)
-    expect_equal(nrow(ind_haps), 2)
-    expect_equal(sort(ind_haps$parent_origin), c(1L, 2L))
+    ind_haps <- haps %>% dplyr::filter(id_ind == paste0("A_", i))
+    expect_equal(nrow(ind_haps), 100L)
+    expect_setequal(unique(ind_haps$parent_origin), c(1L, 2L))
   }
-
-  hap_matrix <- as.matrix(haps[, locus_cols])
-  expect_true(all(hap_matrix %in% c(0, 1)))
 
   close_pop(pop)
 })
 
 
-test_that("add_founders creates correct genome_genotype table", {
+test_that("add_founders leaves ind_genotype empty (on-demand cache)", {
   pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
@@ -98,23 +95,19 @@ test_that("add_founders creates correct genome_genotype table", {
     get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
-  genos <- get_table(pop, "genome_genotype") %>% dplyr::collect()
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0)
 
-  expect_equal(nrow(genos), 10)
-  expect_equal(ncol(genos), 51)  # id_ind + 50 loci
-  expect_true("id_ind" %in% colnames(genos))
-
-  locus_cols <- paste0("locus_", 1:50)
-  expect_true(all(locus_cols %in% colnames(genos)))
-
-  geno_matrix <- as.matrix(genos[, locus_cols])
-  expect_true(all(geno_matrix %in% c(0, 1, 2)))
+  # Dosage derived from haplotypes is 0/1/2.
+  dose <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT SUM(allele) AS d FROM ind_haplotype GROUP BY id_ind, locus_id")
+  expect_true(all(dose$d %in% c(0, 1, 2)))
 
   close_pop(pop)
 })
 
 
-test_that("genotypes equal sum of haplotypes", {
+test_that("dosage equals sum of the two haplotype alleles", {
   pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 20)
@@ -123,21 +116,12 @@ test_that("genotypes equal sum of haplotypes", {
     get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
 
-  haps  <- get_table(pop, "genome_haplotype") %>% dplyr::collect()
-  genos <- get_table(pop, "genome_genotype")  %>% dplyr::collect()
-
-  for (i in 1:10) {
-    ind_id <- paste0("A_", i)
-    hap_rows <- haps  %>% dplyr::filter(id_ind == !!ind_id)
-    geno_row <- genos %>% dplyr::filter(id_ind == !!ind_id)
-    for (j in 1:50) {
-      locus_name <- paste0("locus_", j)
-      hap1 <- hap_rows[[locus_name]][1]
-      hap2 <- hap_rows[[locus_name]][2]
-      geno <- geno_row[[locus_name]][1]
-      expect_equal(geno, hap1 + hap2)
-    }
-  }
+  haps <- get_table(pop, "ind_haplotype") %>% dplyr::collect()
+  agg <- stats::aggregate(allele ~ id_ind + locus_id, data = haps, FUN = sum)
+  # Two haplotype rows per (id_ind, locus): dosage in 0..2.
+  expect_true(all(agg$allele %in% c(0L, 1L, 2L)))
+  # Every individual x locus is present exactly once after aggregation.
+  expect_equal(nrow(agg), 10L * 50L)
 
   close_pop(pop)
 })
@@ -383,11 +367,13 @@ test_that("add_founders handles large lines efficiently", {
   ind_meta <- get_table(pop, "ind_meta") %>% dplyr::collect()
   expect_equal(nrow(ind_meta), 1000)
 
-  haps <- get_table(pop, "genome_haplotype") %>% dplyr::collect()
-  expect_equal(nrow(haps), 2000)
-
-  genos <- get_table(pop, "genome_genotype") %>% dplyr::collect()
-  expect_equal(nrow(genos), 1000)
+  # 1000 individuals x 2 haplotypes x 1000 loci in the long table.
+  n_rows <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_haplotype")$n
+  expect_equal(n_rows, 1000 * 2 * 1000)
+  n_ind <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(DISTINCT id_ind) AS n FROM ind_haplotype")$n
+  expect_equal(n_ind, 1000)
 
   close_pop(pop)
 })
@@ -513,10 +499,14 @@ test_that("add_founders uses haplotypes from an explicitly filtered pool", {
   ind_meta <- get_table(pop, "ind_meta") |> dplyr::collect()
   expect_equal(nrow(ind_meta), 20L)
 
-  haps  <- get_table(pop, "genome_haplotype") |> dplyr::collect()
-  genos <- get_table(pop, "genome_genotype")  |> dplyr::collect()
-  expect_equal(nrow(haps),  40L)
-  expect_equal(nrow(genos), 20L)
+  # 20 individuals in ind_haplotype; line_origin split A/B by line.
+  n_ind <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(DISTINCT id_ind) AS n FROM ind_haplotype")$n
+  expect_equal(n_ind, 20L)
+  lo <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT DISTINCT id_ind, line_origin FROM ind_haplotype")
+  expect_setequal(unique(lo$line_origin), c("A", "B"))
+  expect_true(all(lo$line_origin == sub("_[0-9]+$", "", lo$id_ind)))
 
   close_pop(pop)
 })

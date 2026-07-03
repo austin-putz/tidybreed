@@ -103,13 +103,14 @@ Locus-level metadata. One row per locus.
 | Column     | Type    | Notes                          |
 |------------|---------|--------------------------------|
 | locus_id   | INTEGER | Primary key (1, 2, …, n_loci)  |
-| locus_name | VARCHAR | e.g. "Locus_1", "rs12345"      |
+| locus_name | VARCHAR | e.g. "Locus_1", "rs12345"; validated unique |
 | chr        | INTEGER | Chromosome number              |
 | chr_name   | VARCHAR | Chromosome name string         |
 | pos_Mb     | DOUBLE  | Position in megabases          |
+| introduced_gen | INTEGER | NULL = founding locus; generation a novel mutation was added (Stage 5) |
 | *user cols*| any     | Added via `mutate_table()` or `define_chip()` |
 
-**Reserved** (cannot be modified): `locus_id`, `locus_name`, `chr`, `chr_name`, `pos_Mb`
+**Reserved** (cannot be modified): `locus_id`, `locus_name`, `chr`, `chr_name`, `pos_Mb`, `introduced_gen`
 
 Example user columns: `is_50K BOOLEAN`, `is_HD BOOLEAN`
 
@@ -138,27 +139,72 @@ QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
 `genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
 flag is stored.
 
-### `genome_haplotype`
+### `ind_haplotype`
 
-Phased haplotypes. Two rows per individual (parent_origin 1 = paternal, 2 = maternal).
+Phased haplotypes in **long** format. One row per (individual × haplotype ×
+locus). Populated by `add_founders()` and `add_offspring()`.
 
-| Column        | Type    |
-|---------------|---------|
-| id_ind        | VARCHAR |
-| parent_origin | INTEGER |
-| locus_1 … locus_n | INTEGER (0 or 1) |
+| Column        | Type     | Notes                                                       |
+|---------------|----------|-------------------------------------------------------------|
+| id_ind        | VARCHAR  | FK to `ind_meta.id_ind`; part of composite PK               |
+| parent_origin | UTINYINT | 1 = from parent_1 (sire), 2 = from parent_2 (dam); PK part  |
+| strand        | UTINYINT | Copy within a parent's contribution; always 1 for diploids; PK part |
+| line_origin   | VARCHAR  | Founding line this allele traces to; used by `add_tbv()` for line-specific crossbreeding TBV |
+| locus_id      | INTEGER  | FK to `genome_meta.locus_id`; physical sort/PK key          |
+| locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized for direct `genome_effects` joins |
+| allele        | UTINYINT | 0 or 1 (phased)                                             |
 
-### `genome_genotype`
+**Primary key**: `(id_ind, parent_origin, strand, locus_id)`.
 
-Genotypes in 0/1/2 encoding. One row per individual.
+### `ind_genotype`
 
-| Column        | Type    |
-|---------------|---------|
-| id_ind        | VARCHAR |
-| locus_1 … locus_n | INTEGER (0, 1, or 2) |
+Genotype dosages in **long** format, 0/1/2 encoding. One row per (individual ×
+locus). **On-demand cache** — starts empty and is populated only by
+`add_dosage()` (never by `add_founders()`/`add_offspring()`). May be empty or
+partial.
 
-Both haplotypes and genotypes are stored (not computed on demand) because disk
-is cheap and recomputation during mating is expensive.
+| Column       | Type     | Notes                                        |
+|--------------|----------|----------------------------------------------|
+| id_ind       | VARCHAR  | FK to `ind_meta.id_ind`; part of composite PK |
+| locus_id     | INTEGER  | FK to `genome_meta.locus_id`; part of composite PK |
+| locus_name   | VARCHAR  | FK to `genome_meta.locus_name`               |
+| dosage_value | UTINYINT | Sum of alleles across strands (0/1/2 diploid) |
+
+**Primary key**: `(id_ind, locus_id)`. Populated via `INSERT OR REPLACE`
+(idempotent).
+
+Haplotypes are the source of truth; dosage is derived on demand (SUM of alleles)
+rather than auto-stored, because dosage is cheap to recompute and only needed for
+specific downstream analyses (MAS, GBLUP export, allele frequencies).
+
+### `chr_meta`
+
+Per-chromosome inheritance rules. One row per chromosome. Created by
+`define_genome()` with default diploid-autosome rows. `define_chr()` and
+non-default rules (sex chromosomes, organelles, polyploidy) are Stage 4.
+
+| Column      | Type     | Notes                                                    |
+|-------------|----------|----------------------------------------------------------|
+| chr_name    | VARCHAR  | Primary key; matches `genome_meta.chr_name`              |
+| copies_M    | UTINYINT | Copies carried by males (default 2)                      |
+| copies_F    | UTINYINT | Copies carried by females (default 2)                    |
+| hemi_parent | VARCHAR  | For single-copy chromosomes: `"parent_1"`/`"parent_2"`; NULL for diploids |
+| recombines  | BOOLEAN  | TRUE if recombination occurs (default TRUE)              |
+
+### `founder_haplotypes`
+
+Founder haplotype pool in **long** format. Created by
+`define_founder_haplotypes()`, sampled by `add_founders()`.
+
+| Column       | Type     | Notes                                                    |
+|--------------|----------|----------------------------------------------------------|
+| line_name    | VARCHAR  | NULL = shared pool; set for line-specific pools; logical key part |
+| haplotype_id | INTEGER  | Sequential within the pool (unique per `line_name`); logical key part |
+| locus_name   | VARCHAR  | FK to `genome_meta.locus_name`; logical key part         |
+| allele       | INTEGER  | 0 or 1                                                   |
+
+Logical key `(line_name, haplotype_id, locus_name)` enforced in R (nullable
+`line_name`), matching the `index_meta` convention.
 
 ### `ind_meta`
 
@@ -414,7 +460,7 @@ in R via DELETE + INSERT when `overwrite_index = TRUE`.
 Creates the DuckDB file (or in-memory DB) and populates **all** core tables
 eagerly, including genome tables and all individual/trait tables:
 
-- Genome: `genome_meta`, `genome_haplotype` (empty), `genome_genotype` (empty)
+- Genome: `genome_meta`, `ind_haplotype` (empty), `ind_genotype` (empty), `chr_meta` (default autosome rows)
 - Optionally: `founder_haplotypes` (if `n_haplotypes` provided)
 - Individual/trait (all empty): `ind_meta`, `ind_phenotype`, `ind_tbv`,
   `ind_ebv`, `trait_meta`, `trait_effects`, `trait_var_comp`,
@@ -430,9 +476,11 @@ Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
 
 `R/add_founders.R`
 
-Samples haplotypes for each founder individual using per-locus allele
-frequencies. Appends rows to `ind_meta` (core 5 cols), `genome_haplotype`
-(2 rows each), and `genome_genotype` (1 row each). ID format: `{line_name}_{n}` (e.g. `Libra_1`).
+Samples haplotypes for each founder individual from the `founder_haplotypes`
+pool. Appends rows to `ind_meta` (core 5 cols) and `ind_haplotype`
+(long: 2 haplotypes × n_loci rows each, with `line_origin` = the founder's line
+and `strand = 1`). Does **not** write `ind_genotype` (on-demand via
+`add_dosage()`). ID format: `{line_name}_{n}` (e.g. `Libra_1`).
 
 Accepts `...` for custom `ind_meta` columns written atomically with the new
 rows (see **Custom field forwarding** below).
@@ -567,7 +615,7 @@ and `mutate_table()`. `close_pop()` safely closes the DuckDB connection.
 `filter()` is called on the `tidybreed_table`, not on the pop directly.
 The unique `id_ind` values from the collected filtered table are used as the
 candidate set. Any table that has an `id_ind` column can be used (e.g.
-`ind_meta`, `ind_phenotype`, `genome_haplotype`, `genome_genotype`).
+`ind_meta`, `ind_phenotype`, `ind_haplotype`, `ind_genotype`).
 
 ```r
 # All individuals
@@ -699,10 +747,17 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
   otherwise independent). Converts liability to phenotype per `type`.
   Writes `ind_phenotype` rows and updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records. Reads additive effects from
-  `genome_effects` (where `genome_effect_type = "additive"` and
-  `line_name IS NULL`). `trait_name` also defaults to all traits in `trait_meta`
-  when omitted. Optional arguments for true index computation:
+- `add_tbv()` — TBV-only; no phenotype records. Computes centered TBV by joining
+  `ind_haplotype` to `genome_effects` (`genome_effect_type = "additive"`) on
+  `(locus_name, line_origin)`: a line-specific effect row (`genome_effects.line_name
+  = ind_haplotype.line_origin`) is preferred, falling back per-locus to the
+  population-wide row (`line_name IS NULL`) only when no line-specific row exists
+  for that locus/line. This is what makes crossbreeding TBV correct (e.g. a Duroc ×
+  Landrace F1 centered against each parent line's own QTL effects and base allele
+  frequency). Imprinted traits (`expressed_parent = "parent_1"`/`"parent_2"`)
+  restrict the join to that parent's `parent_origin` before the same line-matching
+  logic applies. `trait_name` also defaults to all traits in `trait_meta` when
+  omitted. Optional arguments for true index computation:
   - `index_names` — character vector of named indices; when supplied, multiplies
     per-trait TBVs by the index weights and writes results to `ind_true_index`.
     `NULL` (default) skips index computation.

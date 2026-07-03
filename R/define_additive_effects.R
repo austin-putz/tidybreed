@@ -30,7 +30,7 @@
 #'   `genome_meta` (requires `initialize_genome()` was called with
 #'   `n_haplotypes`).
 #' * `"current_pop"` — computes allele frequencies from the current
-#'   `genome_haplotype` table. Pass a filtered `tidybreed_table` via
+#'   `ind_haplotype` table. Pass a filtered `tidybreed_table` via
 #'   `base_tbl` to restrict which individuals define the base population.
 #'
 #' Calling this function again for the same `(trait_name, genome_effect_type,
@@ -57,7 +57,7 @@
 #' @param base_tbl Optional `tidybreed_table` (from [get_table()] on any table
 #'   with an `id_ind` column) used when `base = "current_pop"` to restrict
 #'   which individuals define the base allele frequencies. When `NULL`, all
-#'   individuals in `genome_haplotype` are used.
+#'   individuals in `ind_haplotype` are used.
 #' @param line_name Optional character. When set, effects are tagged to this
 #'   genetic line (for future line-specific TBV). `NULL` (default) means
 #'   population-wide effects.
@@ -541,72 +541,43 @@ compute_base_allele_freq <- function(pop, base, base_ids = NULL) {
         call. = FALSE
       )
     }
-    df <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM founder_haplotypes")
-    if (nrow(df) == 0) {
+    freq <- DBI::dbGetQuery(pop$db_conn, paste0(
+      "SELECT gm.locus_id, AVG(CAST(fh.allele AS DOUBLE)) AS f ",
+      "FROM founder_haplotypes fh ",
+      "JOIN genome_meta gm ON fh.locus_name = gm.locus_name ",
+      "GROUP BY gm.locus_id ORDER BY gm.locus_id"))
+    if (nrow(freq) == 0) {
       stop("founder_haplotypes table is empty.", call. = FALSE)
     }
-    locus_cols  <- grep("^locus_", names(df), value = TRUE)
-    locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
-    hap_mat     <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
-    return(colMeans(hap_mat))
+    n_loci <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT COUNT(*) AS n FROM genome_meta")$n
+    out <- numeric(n_loci)
+    out[freq$locus_id] <- freq$f
+    return(out)
   }
 
-  if (!"genome_haplotype" %in% pop$tables) {
-    stop("genome_haplotype table does not exist.", call. = FALSE)
+  if (!"ind_haplotype" %in% pop$tables) {
+    stop("ind_haplotype table does not exist.", call. = FALSE)
   }
-  if (is.null(base_ids)) {
-    df <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_haplotype")
-  } else {
+  where <- ""
+  if (!is.null(base_ids)) {
     if (length(base_ids) == 0) stop("base_ids is empty.", call. = FALSE)
     ids_sql <- paste0("'", base_ids, "'", collapse = ", ")
-    df <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT * FROM genome_haplotype WHERE id_ind IN (", ids_sql, ")")
-    )
+    where   <- paste0("WHERE id_ind IN (", ids_sql, ") ")
   }
-  if (nrow(df) == 0) {
+  # Per-locus base allele frequency = mean allele over all haplotype rows.
+  freq <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT locus_id, AVG(CAST(allele AS DOUBLE)) AS f ",
+           "FROM ind_haplotype ", where, "GROUP BY locus_id ORDER BY locus_id")
+  )
+  if (nrow(freq) == 0) {
     stop("No haplotype rows found for the base population.", call. = FALSE)
   }
-  locus_cols  <- setdiff(names(df), c("id_ind", "parent_origin"))
-  locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
-  hap_mat     <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
-  colMeans(hap_mat)
+  n_loci <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_meta")$n
+  out <- numeric(n_loci)
+  out[freq$locus_id] <- freq$f
+  out
 }
 
-
-#' Pull the genotype matrix (individuals x loci) into memory
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param subset_ids Optional character vector of `id_ind`. When supplied,
-#'   only those rows are pulled from DuckDB (push-down filter) — important
-#'   for large genomes where the full genotype matrix wouldn't fit in R.
-#' @return Numeric matrix with rows in `id_ind` order and columns in
-#'   `locus_id` order.
-#' @keywords internal
-get_genotype_matrix <- function(pop, subset_ids = NULL) {
-  if (!"genome_genotype" %in% pop$tables) {
-    stop("genome_genotype table does not exist. Cannot rescale effects.",
-         call. = FALSE)
-  }
-  if (is.null(subset_ids)) {
-    df <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_genotype")
-  } else {
-    if (length(subset_ids) == 0) {
-      stop("subset_ids is empty.", call. = FALSE)
-    }
-    ids_sql <- paste0("'", subset_ids, "'", collapse = ", ")
-    df <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT * FROM genome_genotype WHERE id_ind IN (", ids_sql, ")")
-    )
-  }
-  if (nrow(df) == 0) {
-    stop("No genotype rows available for the requested subset.",
-         call. = FALSE)
-  }
-  locus_cols <- setdiff(names(df), "id_ind")
-  locus_order <- order(as.integer(sub("^locus_", "", locus_cols)))
-  mat <- as.matrix(df[, locus_cols[locus_order], drop = FALSE])
-  rownames(mat) <- df$id_ind
-  mat
-}
