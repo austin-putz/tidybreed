@@ -117,3 +117,14 @@ test_that("overwrite_dosage clears prior rows for the candidate set", {
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM ind_genotype")$n, 8L * 2L)
 })
+
+test_that("add_dosage errors before writing anything when chr_meta has a non-diploid row", {
+  pop <- make_dosage_pop(n_loci = 10)
+  on.exit(close_pop(pop), add = TRUE)
+
+  DBI::dbExecute(pop$db_conn, "UPDATE chr_meta SET copies_M = 1 WHERE chr_name = '1'")
+
+  expect_error(pop |> get_table("ind_meta") |> add_dosage(), "Stage 4")
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0L)
+})

@@ -92,6 +92,7 @@ extract_genotypes <- function(tbl,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
+  assert_diploid_only(pop)
 
   if (is.null(chip_name) && is.null(effects_tbl) && is.null(loci_tbl)) {
     stop("At least one of 'chip_name', 'effects_tbl', or 'loci_tbl' must be provided.",
@@ -105,6 +106,7 @@ extract_genotypes <- function(tbl,
     validate_sql_identifier(col_name, what = "col_name")
 
     chip_col <- paste0("is_", chip_name)
+    validate_sql_identifier(chip_col, what = "chip name")
     if (!chip_col %in% DBI::dbListFields(pop$db_conn, "genome_meta")) {
       stop("Chip '", chip_name, "' not found in genome_meta. ",
            "Call define_chip() first.", call. = FALSE)
@@ -157,7 +159,7 @@ extract_genotypes <- function(tbl,
         paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE")
       )$id_ind
     } else {
-      ids_sql <- paste0("'", subset_ids, "'", collapse = ", ")
+      ids_sql <- sql_in_list(subset_ids, what = "individual ID")
       has_ids <- DBI::dbGetQuery(
         pop$db_conn,
         paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE ",
@@ -206,7 +208,7 @@ extract_genotypes <- function(tbl,
     if (length(qtl_names) == 0)
       stop("No QTL loci found in the filtered 'effects_tbl'. ",
            "Call define_additive_effects() first.", call. = FALSE)
-    qtl_name_sql <- paste0("'", qtl_names, "'", collapse = ", ")
+    qtl_name_sql <- sql_in_list(qtl_names, what = "locus name")
     qtl_ids <- DBI::dbGetQuery(
       pop$db_conn,
       paste0("SELECT locus_id FROM genome_meta WHERE locus_name IN (",
@@ -223,7 +225,7 @@ extract_genotypes <- function(tbl,
     sel_names <- unique(loci_df[["locus_name"]])
     if (length(sel_names) == 0)
       stop("No loci found in the filtered 'loci_tbl'.", call. = FALSE)
-    name_sql <- paste0("'", sel_names, "'", collapse = ", ")
+    name_sql <- sql_in_list(sel_names, what = "locus name")
     sel_ids <- DBI::dbGetQuery(
       pop$db_conn,
       paste0("SELECT locus_id FROM genome_meta WHERE locus_name IN (",
@@ -238,7 +240,7 @@ extract_genotypes <- function(tbl,
   # SUM(allele) per id_ind x locus). Columns are named locus_<locus_id> and
   # ordered by locus_id; rows are the resolved individuals. ---
   locus_cols   <- paste0("locus_", locus_ids)
-  ids_sql      <- paste0("'", has_ids, "'", collapse = ", ")
+  ids_sql      <- sql_in_list(has_ids, what = "individual ID")
   locus_id_sql <- paste(locus_ids, collapse = ", ")
 
   agg <- DBI::dbGetQuery(

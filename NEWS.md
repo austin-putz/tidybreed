@@ -1,3 +1,29 @@
+# tidybreed 0.48.1 (2026-07-02)
+
+## Hardening — dosage cache & export (Stage 3)
+
+`add_dosage()` and `extract_genotypes()` already shipped ahead of schedule in
+Stage 1; this release closes the two gaps found when reviewing them against
+the Stage 3 exit criteria in `plans/refactor_haplotype_stage_3.md`.
+
+* Both functions now reject a `chip_name` whose constructed `is_<chip_name>`/
+  `has_<chip_name>` column identifier is unsafe (quotes, semicolons, spaces),
+  closing a SQL-injection gap. Digit-leading, industry-standard chip names
+  (e.g. `"50k"`, `"770k"`) continue to work unchanged, since the constructed
+  identifier is always prefixed with a letter.
+* All `IN (...)` list construction (`locus_names`, QTL/loci-filter names,
+  individual IDs) now goes through a new internal `sql_in_list()` helper
+  (`R/sql_utils.R`) that escapes embedded single quotes instead of
+  interpolating raw values.
+* New internal `assert_diploid_only()` guard (`R/ploidy_helpers.R`) makes both
+  functions error clearly if `chr_meta` ever contains a non-diploid
+  chromosome, rather than silently computing wrong dosage — forward defense
+  ahead of Stage 4 (`define_chr()`).
+* Added test coverage for: cache-vs-direct extraction parity, partial
+  `ind_genotype` cache population never affecting `add_tbv()`/
+  `add_phenotype()` results, `extract_genotypes(loci_tbl = ...)`, the above
+  hardening, and the new diploid guard.
+
 # tidybreed 0.48.0 (2026-07-02)
 
 ## New features — line-origin TBV (Stage 2)

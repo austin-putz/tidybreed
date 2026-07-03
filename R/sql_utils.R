@@ -319,3 +319,30 @@ format_sql_value <- function(value, db_type) {
   }
   stop("Unknown db_type: ", db_type, call. = FALSE)
 }
+
+
+#' Quote and escape a character vector for a SQL `IN (...)` list
+#'
+#' Escapes embedded single quotes (quote-doubling, matching
+#' `format_sql_value()`'s VARCHAR branch) and returns the comma-joined,
+#' quoted fragment only — callers still write `paste0("... IN (", x, ")")`
+#' around the result.
+#'
+#' @param values Character vector to escape and format for a SQL `IN (...)`
+#'   list. Must be non-empty and free of `NA` (a bare `NA` would otherwise
+#'   silently become the literal string `'NA'` in SQL).
+#' @param what Human-readable role label used in error messages
+#'   (e.g. `"locus name"`, `"individual ID"`).
+#' @return A single character string: comma-separated, single-quoted,
+#'   escaped values.
+#' @keywords internal
+sql_in_list <- function(values, what = "value") {
+  if (!is.character(values) || length(values) == 0L) {
+    stop("No ", what, "s provided.", call. = FALSE)
+  }
+  if (anyNA(values)) {
+    stop("NA not allowed in ", what, " list.", call. = FALSE)
+  }
+  escaped <- gsub("'", "''", values)
+  paste0("'", escaped, "'", collapse = ", ")
+}

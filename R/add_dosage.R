@@ -62,6 +62,7 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
+  assert_diploid_only(pop)
 
   # --- Resolve candidate individuals (distinct id_ind) ---
   if (length(tbl$pending_filter) == 0) {
@@ -84,11 +85,12 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
   locus_filter_sql <- ""
   if (!is.null(locus_names)) {
     stopifnot(is.character(locus_names), length(locus_names) >= 1L)
-    name_sql <- paste0("'", locus_names, "'", collapse = ", ")
+    name_sql <- sql_in_list(locus_names, what = "locus name")
     locus_filter_sql <- paste0(" AND h.locus_name IN (", name_sql, ")")
   } else if (!is.null(chip_name)) {
     stopifnot(is.character(chip_name), length(chip_name) == 1L, nzchar(chip_name))
     chip_col <- paste0("is_", chip_name)
+    validate_sql_identifier(chip_col, what = "chip name")
     if (!chip_col %in% DBI::dbListFields(pop$db_conn, "genome_meta")) {
       stop("Chip '", chip_name, "' not found in genome_meta. ",
            "Call define_chip() first.", call. = FALSE)
@@ -100,7 +102,7 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
 
   id_filter_sql <- ""
   if (!is.null(subset_ids)) {
-    ids_sql <- paste0("'", subset_ids, "'", collapse = ", ")
+    ids_sql <- sql_in_list(subset_ids, what = "individual ID")
     id_filter_sql <- paste0(" AND h.id_ind IN (", ids_sql, ")")
   }
 
@@ -109,7 +111,7 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
     if (is.null(subset_ids)) {
       DBI::dbExecute(pop$db_conn, "DELETE FROM ind_genotype")
     } else {
-      ids_sql <- paste0("'", subset_ids, "'", collapse = ", ")
+      ids_sql <- sql_in_list(subset_ids, what = "individual ID")
       DBI::dbExecute(pop$db_conn,
         paste0("DELETE FROM ind_genotype WHERE id_ind IN (", ids_sql, ")"))
     }

@@ -262,3 +262,100 @@ test_that("extract_genotypes() errors when both chip_name and effects_tbl are NU
 
   close_pop(pop)
 })
+
+
+# ---------------------------------------------------------------------------
+# New loci_tbl tests
+# ---------------------------------------------------------------------------
+
+test_that("extract_genotypes() with loci_tbl alone restricts to filtered loci", {
+  pop <- make_qtl_pop("test_eg_loci_tbl_alone")
+
+  # chr == 1L is 50 of the 100 loci; no chip/QTL definition required.
+  geno <- pop |>
+    get_table("ind_meta") |>
+    extract_genotypes(
+      loci_tbl = get_table(pop, "genome_meta") |> dplyr::filter(chr == 1L)
+    )
+
+  expect_s3_class(geno, "tbl_df")
+  expect_equal(nrow(geno), 10)
+  locus_cols <- grep("^locus_", names(geno), value = TRUE)
+  expect_equal(length(locus_cols), 50L)
+
+  geno_vals <- unlist(geno[, locus_cols])
+  expect_true(all(geno_vals %in% c(0L, 1L, 2L)))
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() unions chip_name and loci_tbl loci", {
+  pop <- make_qtl_pop("test_eg_loci_tbl_union")
+
+  # chip on chr 1 (50 loci); loci_tbl restricted to chr 2 (disjoint 50 loci)
+  # => union should be 100.
+  pop <- pop |>
+    get_table("genome_meta") |>
+    dplyr::filter(chr == 1L) |>
+    define_chip("50k")
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+
+  geno <- pop |>
+    get_table("ind_meta") |>
+    extract_genotypes(
+      chip_name = "50k",
+      loci_tbl  = get_table(pop, "genome_meta") |> dplyr::filter(chr == 2L)
+    )
+
+  locus_cols <- grep("^locus_", names(geno), value = TRUE)
+  expect_equal(length(locus_cols), 100L)
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() errors when loci_tbl filter yields no loci", {
+  pop <- make_qtl_pop("test_eg_loci_tbl_empty")
+
+  expect_error(
+    pop |>
+      get_table("ind_meta") |>
+      extract_genotypes(
+        loci_tbl = get_table(pop, "genome_meta") |> dplyr::filter(chr == 999L)
+      ),
+    "No loci found in the filtered 'loci_tbl'"
+  )
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() errors when loci_tbl is wrong table", {
+  pop <- make_qtl_pop("test_eg_loci_tbl_wrongtbl")
+
+  expect_error(
+    pop |>
+      get_table("ind_meta") |>
+      extract_genotypes(loci_tbl = get_table(pop, "ind_meta")),
+    "genome_meta"
+  )
+
+  close_pop(pop)
+})
+
+
+# ---------------------------------------------------------------------------
+# Diploid-only guard
+# ---------------------------------------------------------------------------
+
+test_that("extract_genotypes() errors before querying when chr_meta has a non-diploid row", {
+  pop <- make_extract_pop("test_eg_nondiploid")
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+
+  DBI::dbExecute(pop$db_conn, "UPDATE chr_meta SET copies_M = 1 WHERE chr_name = '1'")
+
+  expect_error(
+    pop |> get_table("ind_meta") |> extract_genotypes("50k"),
+    "Stage 4"
+  )
+
+  close_pop(pop)
+})
