@@ -18,9 +18,10 @@
 #' ```
 #'
 #' Types are inferred by [infer_duckdb_type()]. Use R's typed NA values
-#' (`NA_integer_`, `NA_real_`, `NA_character_`, `FALSE`, `as.Date(NA)`, etc.)
-#' to get the intended DuckDB column type. Bare `NA` defaults to `VARCHAR` with
-#' a warning.
+#' (`NA_integer_`, `NA_real_`, `NA_character_`, `as.Date(NA)`, etc.) to get the
+#' intended DuckDB column type. There is no typed logical NA in R, so for a
+#' `BOOLEAN` column pass a concrete placeholder (`FALSE` or `TRUE`) instead.
+#' Bare `NA` defaults to `VARCHAR` with a warning.
 #'
 #' After creation, add rows via `DBI::dbAppendTable(pop$db_conn, table_name,
 #' my_tibble)` and query via `get_table(pop, table_name) |> dplyr::collect()`.
@@ -45,8 +46,8 @@
 #'
 #' @examples
 #' \dontrun{
-#' pop <- initialize_genome("demo", n_loci = 200, n_chr = 2,
-#'                          chr_len_Mb = 100, db_path = ":memory:")
+#' pop <- open_pop(pop_name = "demo", db_name = ":memory:") |>
+#'   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100)
 #'
 #' # Create a custom table for tracking simulation run metadata
 #' pop <- pop |> define_table(

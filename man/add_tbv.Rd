@@ -15,7 +15,7 @@ add_tbv(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column.}
+through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column.}
 
 \item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
 all traits currently in \code{trait_meta} are used (in \code{id_trait} order).}
@@ -45,21 +45,36 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Computes the true breeding value (TBV) for each individual in the current
-subset and each requested trait, and writes them to \code{ind_tbv}. Uses the
-same math as the TBV step inside \code{\link[=add_phenotype]{add_phenotype()}}:
+subset and each requested trait, and writes them to \code{ind_tbv}. This is the
+exact function \code{\link[=add_phenotype]{add_phenotype()}} calls internally (once for every source
+trait it needs) before assembling phenotype records — there is no separate
+"TBV math" duplicated elsewhere.
+
+TBV is the Falconer-centered sum, across every \code{ind_haplotype} row (one per
+allele copy, not genotype dosage) for the individual, of:
 
 \preformatted{
-  TBV_i = sum over QTL of add_{trait} * dose_i
+  TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
 }
 
-where \code{dose_i} is the 0/1/2 genotype for non-imprinted traits, or the 0/1
-haplotype dose from the relevant parent for imprinted traits.
+\code{genome_value} and \code{base_allele_freq} are read from \code{genome_effects}
+(\code{genome_effect_type = "additive"}). For each haplotype row, a
+\strong{line-specific} effect (\code{genome_effects.line_name} matching that row's
+\code{line_origin}) is preferred; the \strong{population-wide} effect
+(\verb{genome_effects.line_name IS NULL}) is used only when no line-specific row
+exists for that locus/line. This per-locus fallback is what makes
+crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
+each parent line's own QTL effects and base allele frequency (see the
+"Crossbreeding TBV" example below). For \strong{imprinted} traits
+(\code{trait_meta.expressed_parent} = \code{"parent_1"} or \code{"parent_2"}), only
+haplotype rows from that parent's \code{parent_origin} are summed before the
+same line-matching logic applies.
 
 Optionally computes true selection index values by multiplying per-trait TBVs
 by weights from named indices defined with \code{\link[=define_index]{define_index()}}, and writes them
 to \code{ind_true_index}.
 
-Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[=filter]{filter()}}) as
+Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as
 the first argument to select individuals. The \code{expressed_sex} rule from
 \code{trait_meta} is applied on top.
 
@@ -68,14 +83,29 @@ phenotypes.
 }
 \examples{
 \dontrun{
-# TBVs only
-pop |>
+# Crossbreeding TBV: line-specific additive effects for two pure lines, then
+# a Duroc x Landrace F1 centered against each parent line's own effects and
+# base allele frequency (see the Description above for the matching rule)
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_additive_effects("ADG", effects = duroc_effects, line_name = "Duroc")
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_additive_effects("ADG", effects = landrace_effects, line_name = "Landrace")
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(line_name == "F1") |>
+  add_tbv("ADG")
+
+# TBVs only, for a generation subset
+pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(gen == 2L) |>
   add_tbv(c("ADG", "BW"))
 
-# TBVs + true index values (index weights)
-pop |>
+# TBVs + true index values (both index and economic weights) written to
+# ind_true_index, distinguished by weight_type
+pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(gen == 2L) |>
   add_tbv(c("ADG", "BW"), index_names = "terminal", type = "both")

@@ -14,6 +14,31 @@
   phenotype_name
 )
 }
+\arguments{
+\item{pop}{A tidybreed_pop object.}
+
+\item{trait_safe}{Character. Trait name, already SQL-escaped (single quotes
+doubled).}
+
+\item{focal_ids}{Character vector of focal individual IDs.}
+
+\item{grp_col}{Character. Column in \code{grp_table} holding group membership
+(e.g. pen or litter ID).}
+
+\item{grp_table}{Character. Table containing \code{grp_col} and \code{id_ind}
+(default \code{"ind_meta"} at the call site).}
+
+\item{agg_fn}{Function. \code{sum} or \code{mean}, applied to group-mates' TBVs
+(excluding the focal individual itself).}
+
+\item{phenotype_name}{Character. Name of the phenotype being computed;
+used only in error messages.}
+}
+\value{
+Numeric vector, same length as \code{focal_ids}: the aggregated
+group-mate TBV (0 for singletons with no group-mates), or \code{NA} for
+individuals with no group assignment.
+}
 \description{
 Validates that grp_table and grp_col exist (errors with clear message).
 Singleton pens (no group-mates) receive 0. Individuals with NA group get NA.

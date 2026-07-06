@@ -27,7 +27,7 @@ in this version of tidybreed (real polyploidy is not yet supported).}
 founders; vectors must have length \code{n_males + n_females}. Column types
 are inferred from the R type: use \code{0L} for INTEGER, \code{0} for DOUBLE,
 \code{"text"} for VARCHAR, \code{TRUE}/\code{FALSE} for BOOLEAN. Reserved column names
-(\code{id_ind}, \code{sex}, \code{line}, etc.) are blocked.}
+(\code{id_ind}, \code{sex}, \code{line_name}, \code{ploidy}, etc.) are blocked.}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).
@@ -46,15 +46,18 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 \strong{Requirements:}
 \itemize{
 \item The \code{founder_haplotypes} table must exist. Create it by calling
-\code{initialize_genome()} with the \code{n_haplotypes} parameter.
+\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} (after \code{\link[=open_pop]{open_pop()}} and \code{\link[=define_genome]{define_genome()}}).
 }
 
 \strong{What it does:}
 \enumerate{
 \item Samples 2 haplotypes per founder from \code{founder_haplotypes} (with replacement)
 \item Creates/updates \code{ind_meta} table with founder metadata
-\item Populates \code{ind_haplotype} (long: 2 haplotypes x n_loci rows per individual,
-with \code{line_origin} set to the founder's line and \code{strand = 1})
+\item Populates \code{ind_haplotype} (long format; \code{line_origin} set to the founder's
+line and \code{strand = 1}. Row count per chromosome follows
+\code{chr_meta}'s \code{copy_mode_M}/\code{copy_mode_F} for the founder's sex — 2
+rows/locus for \code{"full"} (the default, diploid autosomes), 1 for
+\code{"half"} (e.g. sex chromosomes), 0 for \code{"none"}; see \code{\link[=define_chr]{define_chr()}})
 }
 
 \strong{ID Format:}
@@ -81,7 +84,10 @@ pop <- pop |>
   get_table("founder_haplotypes") |>
   add_founders(n_males = 10, n_females = 100, line_name = "A")
 
-# Filtered by line
+# Filtered by line (line-specific pools need their own
+# define_founder_haplotypes() call before they can be filtered to)
+pop <- pop |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "Yorkshire")
 pop <- pop |>
   get_table("founder_haplotypes") |>
   dplyr::filter(line_name == "Yorkshire") |>
@@ -95,6 +101,8 @@ pop <- pop |>
                gen = 0L, farm = "FarmA")
 
 # Add a second line
+pop <- pop |>
+  define_founder_haplotypes(n_haplotypes = 50, line_name = "B")
 pop <- pop |>
   get_table("founder_haplotypes") |>
   dplyr::filter(line_name == "B") |>

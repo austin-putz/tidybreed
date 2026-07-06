@@ -20,7 +20,7 @@ define_additive_effects(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}\code{("genome_meta")} (with an
-optional \code{\link[=filter]{filter()}}). The filtered rows determine which loci are QTL.}
+optional \code{\link[dplyr:filter]{dplyr::filter()}}). The filtered rows determine which loci are QTL.}
 
 \item{trait_name}{Character scalar \strong{or} vector. Name(s) of existing traits
 in \code{trait_meta}. When length >= 2, effects are drawn jointly from
@@ -103,7 +103,7 @@ Calling this function again for the same \verb{(trait_name, genome_effect_type, 
 \dontrun{
 # Single trait — all loci on chr 1-5 become QTL; scale to target variance
 pop <- pop |>
-  define_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
+  define_trait("ADG", target_add_var = 0.25) |>
   get_table("genome_meta") |>
   dplyr::filter(chr \%in\% 1:5) |>
   define_additive_effects("ADG", distribution = "normal")

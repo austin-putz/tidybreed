@@ -7,14 +7,15 @@
 describe_table(pop, table_name)
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
+\item{pop}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} from
+\code{\link[=get_table]{get_table()}} (its \code{pop} reference is used).}
 
 \item{table_name}{Character. Name of the table to describe.}
 }
 \value{
-A tibble of class \code{tidybreed_table_desc} (returned invisibly) with
-columns \code{column_name}, \code{column_type}, \code{description}, and \code{notes}.
-Printed via \code{\link[=print.tidybreed_table_desc]{print.tidybreed_table_desc()}}.
+A tibble of class \code{tidybreed_table_desc} with columns
+\code{column_name}, \code{column_type}, \code{description}, and \code{notes}. Printed via
+\code{\link[=print.tidybreed_table_desc]{print.tidybreed_table_desc()}}.
 }
 \description{
 Returns a tibble of all columns in \code{table_name} with their DuckDB types
@@ -24,9 +25,13 @@ thousands of locus columns.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome("MySim", n_loci = 500, n_chr = 5, chr_len_Mb = 100)
+pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
+  define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 describe_table(pop, "ind_meta")
 describe_table(pop, "genome_effects")
+
+# Also accepts a tidybreed_table, so it chains directly after get_table()
+pop |> get_table("ind_meta") |> describe_table("ind_meta")
 }
 }
 \seealso{

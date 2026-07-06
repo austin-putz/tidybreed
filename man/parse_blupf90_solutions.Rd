@@ -16,6 +16,8 @@ parse_blupf90_solutions(
 \arguments{
 \item{eval_dir}{path to evaluation folder}
 
+\item{trait_name}{character vector of trait names (in model order)}
+
 \item{animal_effect_num}{integer effect number for the animal random effect}
 
 \item{all_ped_ids}{character vector of all pedigree animal IDs (used to
@@ -24,11 +26,9 @@ distinguish animal solutions from other random effect solutions)}
 \item{model}{character model label}
 
 \item{eval_nums}{named integer vector of eval_number per trait name}
-
-\item{trait}{character vector of trait names (in model order)}
 }
 \value{
-tibble: id_ind, trait_name, model, ebv, acc, se, eval_number
+tibble: id_ind, trait_name, model, ebv_value, acc, se, eval_number
 }
 \description{
 With OPTION origID the solutions file has 5 columns:

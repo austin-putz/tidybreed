@@ -6,6 +6,14 @@
 \usage{
 run_renumf90(eval_dir, renumf90_path)
 }
+\arguments{
+\item{eval_dir}{path to evaluation folder containing renum.par}
+
+\item{renumf90_path}{path to the renumf90 binary (from \code{\link[=find_blupf90_binary]{find_blupf90_binary()}})}
+}
+\value{
+\code{NULL} invisibly; errors if renumf90 exits non-zero
+}
 \description{
 Run renumf90 in the eval directory
 }

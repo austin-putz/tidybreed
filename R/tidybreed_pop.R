@@ -80,6 +80,7 @@ validate_tidybreed_pop <- function(x) {
 #'
 #' @param x A tidybreed_pop object
 #' @param ... Additional arguments (not used)
+#' @return `x`, invisibly.
 #' @export
 print.tidybreed_pop <- function(x, ...) {
   cat("<tidybreed population>\n")
@@ -129,7 +130,7 @@ print.tidybreed_pop <- function(x, ...) {
 #' Get a table reference from a tidybreed population
 #'
 #' @description
-#' Returns a `tidybreed_table` object that can be piped into [filter()] and
+#' Returns a `tidybreed_table` object that can be piped into [dplyr::filter()] and
 #' [mutate_table()], or collected with [dplyr::collect()].  All existing
 #' `get_table(pop, x) |> dplyr::filter(...) |> dplyr::collect()` patterns
 #' continue to work unchanged.
@@ -179,6 +180,7 @@ get_table <- function(pop, table_name) {
 #'   file is moved there after the connection is closed. The directory is created
 #'   if it does not yet exist. Errors if the destination file already exists.
 #'   Ignored silently for in-memory databases.
+#' @return `NULL`, invisibly.
 #' @export
 close_pop <- function(pop, results_dir = NULL) {
 

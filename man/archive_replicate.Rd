@@ -66,10 +66,14 @@ options are set
 skip all archive writes; only the reset phases run
 }
 
-\strong{Individual-ID invariant}: in sequential loops, sequence counters keep
-accumulating so \code{id_ind} stays globally unique across replicates. In HPC
-parallel jobs each job reuses \code{id_ind} values — use \verb{(replicate, id_ind)} as
-the composite key in all archive queries.
+\strong{Individual-ID invariant}: \code{id_ind} is \strong{not} globally unique across
+replicates, even in a single-process sequential loop. \code{archive_replicate()}
+deletes \code{ind_meta} (a \code{store_and_reset} table) after archiving, so
+\code{\link[=add_founders]{add_founders()}} and \code{\link[=add_offspring]{add_offspring()}} see an empty table on the next
+replicate and restart numbering from \verb{\{line_name\}_1}. Every replicate (and
+every HPC parallel job, which independently restarts numbering too) reuses
+the same \code{id_ind} values — always use \verb{(replicate, id_ind)} as the
+composite key in archive queries.
 
 \strong{HPC note}: concurrent writes from multiple jobs to one shared archive file
 are \strong{not supported}. Use per-job archive files
@@ -95,8 +99,13 @@ for (i in seq_len(100)) \{
     archive_replicate()
 \}
 
-# post-hoc analysis
-archive <- restore_pop("scenario_1_all_reps.duckdb")
+# post-hoc analysis. When only 'tidybreed.db_name_archive' is set (as
+# above), the archive file is written next to the working DB, which may
+# itself be nested under open_pop()'s layer-2/3 folders (see ?open_pop) —
+# so resolve the path from the pop object rather than assuming a bare
+# filename in the current working directory.
+archive_path <- file.path(dirname(pop$db_path), "scenario_1_all_reps.duckdb")
+archive <- restore_pop(archive_path)
 get_table(archive, "ind_phenotype") |>
   dplyr::filter(replicate == 5L) |>
   dplyr::collect()

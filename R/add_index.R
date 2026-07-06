@@ -7,8 +7,11 @@
 #' `index_number` so that successive runs are preserved.
 #'
 #' The first argument must be a `tidybreed_table` obtained from `get_table()`
-#' (optionally filtered). The table must contain `id_ind`, `trait_name`, and a
-#' numeric value column (`value_col`). Works with `ind_ebv` (EBVs),
+#' (optionally filtered). The table must contain `id_ind`, a trait/phenotype
+#' name column, and a numeric value column (`value_col`). For `ind_phenotype`
+#' the name column is `phenotype_name`; for every other table (`ind_ebv`,
+#' `ind_tbv`, or a user-defined table) it is `trait_name` — this is detected
+#' automatically from the table's columns. Works with `ind_ebv` (EBVs),
 #' `ind_phenotype` (phenotypes), `ind_tbv` (TBVs), or any user-defined table
 #' with the same structure.
 #'
@@ -23,9 +26,10 @@
 #' before any rows are written.
 #'
 #' @param tbl A `tidybreed_table` from `get_table()` (optionally filtered).
-#'   Must contain `id_ind`, `trait_name`, and the column specified by
-#'   `value_col`. Any table with this structure is accepted: `ind_ebv`,
-#'   `ind_phenotype`, `ind_tbv`, or a custom table.
+#'   Must contain `id_ind`, a name column (`trait_name`, or `phenotype_name`
+#'   for `ind_phenotype`), and the column specified by `value_col`. Any table
+#'   with this structure is accepted: `ind_ebv`, `ind_phenotype`, `ind_tbv`,
+#'   or a custom table.
 #' @param index_name Character scalar. Name of the index to compute; must
 #'   already exist in `index_meta` (created via [define_index()]).
 #' @param value_col Character scalar or `NULL`. The column in `tbl` that holds

@@ -6,7 +6,18 @@
 \usage{
 update_covars_from_blupf90(pop, eval_dir, trait_name)
 }
+\arguments{
+\item{pop}{tidybreed_pop}
+
+\item{eval_dir}{path to evaluation folder containing blupf90.out}
+
+\item{trait_name}{character vector of trait names}
+}
+\value{
+\code{NULL} invisibly
+}
 \description{
-Stub for VCE writeback — parse blupf90.out and update trait_var_comp
+Not yet implemented; called by \code{\link[=add_ebv]{add_ebv()}} when \code{estimate_var = TRUE} and
+\code{update_covars = TRUE}.
 }
 \keyword{internal}

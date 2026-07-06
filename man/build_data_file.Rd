@@ -11,9 +11,13 @@ build_data_file(pop, subset_ids, trait_name, eval_dir, pheno_ids = NULL)
 
 \item{subset_ids}{character vector of animal IDs whose phenotypes to include}
 
+\item{trait_name}{character vector of trait names}
+
 \item{eval_dir}{path to evaluation folder; writes data.txt there}
 
-\item{trait}{character vector of trait names}
+\item{pheno_ids}{optional integer vector of \code{ind_phenotype.id_phenotype}
+values to restrict which phenotype records are included (e.g. to exclude
+future records). \code{NULL} (default) includes all matching records.}
 }
 \value{
 list with data, col_map, distinct_effects, effects_df,

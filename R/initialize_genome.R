@@ -16,7 +16,10 @@
 #' @param n_chr Integer scalar. Number of chromosomes.
 #' @param chr_len_Mb Numeric scalar or vector. Chromosome length(s) in Mb.
 #' @param db_path Character scalar. Path to the DuckDB file, or `":memory:"`.
-#'   Default creates `{pop_name}_tidybreed.duckdb` in the working directory.
+#'   Passed through to [open_pop()]'s `db_name` argument, so a relative,
+#'   non-`":memory:"` value is placed inside [open_pop()]'s auto-created
+#'   layer-2/3 folder structure (see `?open_pop`), not directly in the working
+#'   directory. Default (when `NULL`) is `{pop_name}_tidybreed.duckdb`.
 #' @param locus_names Character vector of length `n_loci` or `NULL`.
 #' @param chr_names Character vector of length `n_chr` or `NULL`.
 #' @param overwrite Logical. If `TRUE`, delete and recreate an existing database.

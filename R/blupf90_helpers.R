@@ -6,6 +6,9 @@ NULL
 
 
 #' Find a BLUPF90 binary on PATH
+#' @param name character scalar; binary name to look up (e.g. "renumf90",
+#'   "blupf90+")
+#' @return character scalar; full path to the binary
 #' @keywords internal
 find_blupf90_binary <- function(name) {
   path <- Sys.which(name)
@@ -58,8 +61,11 @@ trace_pedigree <- function(pop, subset_ids, n_gen) {
 #'
 #' @param pop tidybreed_pop
 #' @param subset_ids character vector of animal IDs whose phenotypes to include
-#' @param trait character vector of trait names
+#' @param trait_name character vector of trait names
 #' @param eval_dir path to evaluation folder; writes data.txt there
+#' @param pheno_ids optional integer vector of `ind_phenotype.id_phenotype`
+#'   values to restrict which phenotype records are included (e.g. to exclude
+#'   future records). `NULL` (default) includes all matching records.
 #' @return list with data, col_map, distinct_effects, effects_df,
 #'   n_fixed_effects, trait_cols
 #' @keywords internal
@@ -249,6 +255,22 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 
 #' Write the renumf90 parameter file (renum.par)
 #'
+#' @param eval_dir path to evaluation folder; writes renum.par there
+#' @param col_map named integer vector mapping mu/id_ind/effect_name/trait_name
+#'   to their data.txt column numbers (as returned by [build_data_file()])
+#' @param distinct_effects data.frame of fixed effects (one row per
+#'   effect_name), as returned by [build_data_file()]
+#' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
+#'   rows from `trait_effects`, as returned by [build_data_file()]
+#' @param trait character vector of trait names (in model order)
+#' @param pop tidybreed_pop; used to look up residual and additive genetic
+#'   (co)variance matrices via [load_phenotype_cov()] and [load_trait_cov()]
+#' @param chip_name character or NULL; when non-NULL, adds a `SNP_FILE` line
+#'   for single-step GBLUP
+#' @param estimate_var logical; if TRUE, sets `OPTION method VCE` instead of
+#'   BLUP-only
+#' @param alpha_size numeric; minimum size hint for `OPTION alpha_size`
+#'   (rounded up to a multiple of 5, floor 20)
 #' @return integer animal_effect_num (effect number to extract EBVs from solutions)
 #' @keywords internal
 write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
@@ -257,8 +279,8 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
   n_fixed_effs <- nrow(distinct_effects)
 
   # Load variance components
-  R_mat <- load_effect_cov(pop, "residual", trait)
-  G_mat <- load_effect_cov(pop, "gen_add",  trait)
+  R_mat <- load_phenotype_cov(pop, "residual", trait)
+  G_mat <- load_trait_cov(pop, "gen_add",  trait)
 
   if (is.null(R_mat))
     stop("Residual covariance matrix not found for traits: ",
@@ -349,6 +371,24 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 
 
 #' Write the human-readable meta.txt for the evaluation folder
+#'
+#' @param eval_dir path to evaluation folder; writes meta.txt there
+#' @param eval_id character scalar; evaluation label used in the file header
+#' @param col_map named integer vector mapping mu/id_ind/effect_name/trait_name
+#'   to their data.txt column numbers (as returned by [build_data_file()])
+#' @param distinct_effects data.frame of fixed effects (one row per
+#'   effect_name), as returned by [build_data_file()]
+#' @param trait character vector of trait names (in model order)
+#' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
+#'   rows from `trait_effects`, as returned by [build_data_file()]
+#' @param chip_name character or NULL; chip name to report in the genotype
+#'   file section (omitted entirely when NULL)
+#' @param n_loci integer; number of loci written to the genotype file
+#' @param id_width integer; fixed field width used for animal IDs in the
+#'   genotype file
+#' @param animal_effect_num integer; effect number for the animal random
+#'   effect, as returned by [write_renum_par()]
+#' @return `NULL` invisibly; writes meta.txt as a side effect
 #' @keywords internal
 write_meta_file <- function(eval_dir, eval_id, col_map, distinct_effects,
                              trait, effects_df, chip_name, n_loci, id_width,
@@ -408,6 +448,9 @@ write_meta_file <- function(eval_dir, eval_id, col_map, distinct_effects,
 
 
 #' Run renumf90 in the eval directory
+#' @param eval_dir path to evaluation folder containing renum.par
+#' @param renumf90_path path to the renumf90 binary (from [find_blupf90_binary()])
+#' @return `NULL` invisibly; errors if renumf90 exits non-zero
 #' @keywords internal
 run_renumf90 <- function(eval_dir, renumf90_path) {
   old_wd <- getwd()
@@ -425,6 +468,9 @@ run_renumf90 <- function(eval_dir, renumf90_path) {
 
 
 #' Run blupf90+ in the eval directory (reads renf90.par written by renumf90)
+#' @param eval_dir path to evaluation folder containing renf90.par
+#' @param blupf90_path path to the blupf90+ binary (from [find_blupf90_binary()])
+#' @return `NULL` invisibly; errors if blupf90+ exits non-zero
 #' @keywords internal
 run_blupf90_plus <- function(eval_dir, blupf90_path) {
   old_wd <- getwd()
@@ -447,13 +493,13 @@ run_blupf90_plus <- function(eval_dir, blupf90_path) {
 #'   trait_num  effect_num  level  original_id  solution
 #'
 #' @param eval_dir path to evaluation folder
-#' @param trait character vector of trait names (in model order)
+#' @param trait_name character vector of trait names (in model order)
 #' @param animal_effect_num integer effect number for the animal random effect
 #' @param all_ped_ids character vector of all pedigree animal IDs (used to
 #'   distinguish animal solutions from other random effect solutions)
 #' @param model character model label
 #' @param eval_nums named integer vector of eval_number per trait name
-#' @return tibble: id_ind, trait_name, model, ebv, acc, se, eval_number
+#' @return tibble: id_ind, trait_name, model, ebv_value, acc, se, eval_number
 #' @keywords internal
 parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
                                      all_ped_ids, model, eval_nums) {
@@ -518,6 +564,14 @@ parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
 
 
 #' Stub for VCE writeback — parse blupf90.out and update trait_var_comp
+#'
+#' Not yet implemented; called by [add_ebv()] when `estimate_var = TRUE` and
+#' `update_covars = TRUE`.
+#'
+#' @param pop tidybreed_pop
+#' @param eval_dir path to evaluation folder containing blupf90.out
+#' @param trait_name character vector of trait names
+#' @return `NULL` invisibly
 #' @keywords internal
 update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
   message("VCE writeback: automated parsing not yet implemented. ",

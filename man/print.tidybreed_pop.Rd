@@ -11,6 +11,9 @@
 
 \item{...}{Additional arguments (not used)}
 }
+\value{
+\code{x}, invisibly.
+}
 \description{
 Print method for tidybreed_pop
 }

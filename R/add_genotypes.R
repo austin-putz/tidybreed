@@ -3,7 +3,7 @@
 #' @description
 #' Records which individuals have been genotyped on a named SNP chip by
 #' writing or updating a BOOLEAN column `has_<chip_name>` in `ind_meta`.
-#' Pipe a `tidybreed_table` (from [get_table()] and optionally [filter()]) as
+#' Pipe a `tidybreed_table` (from [get_table()] and optionally [dplyr::filter()]) as
 #' the first argument to restrict which animals are marked.
 #'
 #' The operation is **additive**: animals already marked `TRUE` remain `TRUE`.
@@ -11,7 +11,7 @@
 #' genotyped it stays genotyped.
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [filter()]). The table must contain an `id_ind` column when a
+#'   through [dplyr::filter()]). The table must contain an `id_ind` column when a
 #'   filter is applied.
 #' @param chip_name Character. Name of an existing SNP chip (must have an
 #'   `is_<chip_name>` column in `genome_meta`, created by [define_chip()]).

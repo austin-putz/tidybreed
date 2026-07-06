@@ -37,7 +37,7 @@
 #' line_name)` replaces the existing rows in `genome_effects`.
 #'
 #' @param tbl A `tidybreed_table` from [get_table()]`("genome_meta")` (with an
-#'   optional [filter()]). The filtered rows determine which loci are QTL.
+#'   optional [dplyr::filter()]). The filtered rows determine which loci are QTL.
 #' @param trait_name Character scalar **or** vector. Name(s) of existing traits
 #'   in `trait_meta`. When length >= 2, effects are drawn jointly from
 #'   `MVN(0, G)` and `G` / `method` become active.
@@ -73,7 +73,7 @@
 #' \dontrun{
 #' # Single trait — all loci on chr 1-5 become QTL; scale to target variance
 #' pop <- pop |>
-#'   define_trait("ADG", target_add_var = 0.25, residual_var = 0.75) |>
+#'   define_trait("ADG", target_add_var = 0.25) |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr %in% 1:5) |>
 #'   define_additive_effects("ADG", distribution = "normal")

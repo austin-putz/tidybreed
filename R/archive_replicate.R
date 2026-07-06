@@ -40,10 +40,14 @@
 #' 4. `tidybreed.db_name_archive = NULL` → `archive_path` resolves to `NULL` →
 #'    skip all archive writes; only the reset phases run
 #'
-#' **Individual-ID invariant**: in sequential loops, sequence counters keep
-#' accumulating so `id_ind` stays globally unique across replicates. In HPC
-#' parallel jobs each job reuses `id_ind` values — use `(replicate, id_ind)` as
-#' the composite key in all archive queries.
+#' **Individual-ID invariant**: `id_ind` is **not** globally unique across
+#' replicates, even in a single-process sequential loop. `archive_replicate()`
+#' deletes `ind_meta` (a `store_and_reset` table) after archiving, so
+#' [add_founders()] and [add_offspring()] see an empty table on the next
+#' replicate and restart numbering from `{line_name}_1`. Every replicate (and
+#' every HPC parallel job, which independently restarts numbering too) reuses
+#' the same `id_ind` values — always use `(replicate, id_ind)` as the
+#' composite key in archive queries.
 #'
 #' **HPC note**: concurrent writes from multiple jobs to one shared archive file
 #' are **not supported**. Use per-job archive files
@@ -68,8 +72,13 @@
 #'     archive_replicate()
 #' }
 #'
-#' # post-hoc analysis
-#' archive <- restore_pop("scenario_1_all_reps.duckdb")
+#' # post-hoc analysis. When only 'tidybreed.db_name_archive' is set (as
+#' # above), the archive file is written next to the working DB, which may
+#' # itself be nested under open_pop()'s layer-2/3 folders (see ?open_pop) —
+#' # so resolve the path from the pop object rather than assuming a bare
+#' # filename in the current working directory.
+#' archive_path <- file.path(dirname(pop$db_path), "scenario_1_all_reps.duckdb")
+#' archive <- restore_pop(archive_path)
 #' get_table(archive, "ind_phenotype") |>
 #'   dplyr::filter(replicate == 5L) |>
 #'   dplyr::collect()
@@ -267,7 +276,7 @@ archive_replicate <- function(
 }
 
 
-#' Filter a table list to those present in the working DB; warn about the rest
+#' Filter a table list to those present in the working DB; message about the rest
 #'
 #' @keywords internal
 .filter_archive_tables <- function(tbls, db_tables, category) {

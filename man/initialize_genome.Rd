@@ -25,7 +25,10 @@ initialize_genome(
 \item{chr_len_Mb}{Numeric scalar or vector. Chromosome length(s) in Mb.}
 
 \item{db_path}{Character scalar. Path to the DuckDB file, or \code{":memory:"}.
-Default creates \verb{\{pop_name\}_tidybreed.duckdb} in the working directory.}
+Passed through to \code{\link[=open_pop]{open_pop()}}'s \code{db_name} argument, so a relative,
+non-\code{":memory:"} value is placed inside \code{\link[=open_pop]{open_pop()}}'s auto-created
+layer-2/3 folder structure (see \code{?open_pop}), not directly in the working
+directory. Default (when \code{NULL}) is \verb{\{pop_name\}_tidybreed.duckdb}.}
 
 \item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}.}
 

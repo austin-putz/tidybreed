@@ -31,11 +31,16 @@ Default: \code{getOption("tidybreed.scenario", NULL)}.}
 
 \item{tools}{Character vector or \code{NULL}. Tool subdirectory names to create
 at layer 4 (e.g. \code{c("blupf90", "plink")}). These become the keys of
-\code{pop$run_dirs}. Default: \code{getOption("tidybreed.tools", NULL)}.}
+\code{pop$run_dirs}. Default: \code{getOption("tidybreed.tools", NULL)}. Ignored
+(no tool dirs are created; \code{pop$run_dirs} is \code{character(0)}) whenever
+\code{db_name} is \code{":memory:"} or an absolute/UNC path — see \code{db_name} below.}
 
 \item{db_name}{Character scalar. DuckDB filename placed inside the layer-3
-folder. Use \code{":memory:"} for an in-memory database (skips all folder
-creation). Default: \code{getOption("tidybreed.db_name", "sim.duckdb")}.}
+folder. Use \code{":memory:"} for an in-memory database, or supply an
+absolute/UNC path to use that exact file location directly — both skip
+all layer-2/3/4 folder creation entirely (including any \code{tools} dirs;
+\code{pop$run_dirs} will be \code{character(0)} even if \code{tools} is non-\code{NULL}).
+Default: \code{getOption("tidybreed.db_name", "sim.duckdb")}.}
 
 \item{clean}{Logical. If \code{TRUE} (default), deletes the existing database
 file and all timestamped layer-5 run subdirectories inside each tool dir
@@ -64,8 +69,9 @@ body.
       plink/                      # layer 4 (if "plink" in tools)
 }\if{html}{\out{</div>}}
 
-When \code{db_name = ":memory:"}, folder creation is skipped entirely and
-\code{pop$run_dirs} is \code{character(0)}.
+When \code{db_name = ":memory:"} or an absolute/UNC path, folder creation is
+skipped entirely (including layer-4 \code{tools} dirs) and \code{pop$run_dirs} is
+\code{character(0)}.
 }
 }
 \examples{

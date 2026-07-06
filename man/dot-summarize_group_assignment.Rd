@@ -6,6 +6,21 @@
 \usage{
 .summarize_group_assignment(values, n_total, table_name, col_name, quiet)
 }
+\arguments{
+\item{values}{Vector of assigned group values (\code{NA} for unassigned rows),
+in the order they were written.}
+
+\item{n_total}{Total number of filtered rows considered for assignment.}
+
+\item{table_name}{Target table name, used only in the message text.}
+
+\item{col_name}{Target column name, used only in the message text.}
+
+\item{quiet}{Logical. If \code{TRUE}, suppress all messages (no-op).}
+}
+\value{
+\code{NULL}, invisibly.
+}
 \description{
 No-op when \code{quiet = TRUE}.
 }

@@ -55,15 +55,37 @@ ignored when \code{\link[=add_index]{add_index()}} computes the index value.
 }
 \examples{
 \dontrun{
+# Index weights alone
 pop <- define_index(pop, "terminal",
                     trait_names = c("ADG", "FCR"),
                     index_wts   = c(1.2, -0.8))
 
-# With an extra metadata column
+# Also record the underlying economic weights (per-unit $ value), stored
+# alongside index_weight in index_meta$economic_weight — e.g. for later use
+# with add_tbv(index_names = ..., type = "economic")
 pop <- define_index(pop, "maternal",
-                    trait_names = c("LS", "MW"),
-                    index_wts   = c(0.5, -0.3),
+                    trait_names  = c("ADG", "FCR"),
+                    index_wts    = c(0.5, -0.3),
+                    economic_wts = c(2.5, -1.0))
+
+# With an extra metadata column
+pop <- define_index(pop, "growth_only",
+                    trait_names = c("ADG"),
+                    index_wts   = c(1.0),
                     source = "genetic_team_v2")
+
+# Re-defining an index: overwrite = FALSE (default) is a no-op if the
+# (index_name, trait_name) pair already exists — the call below does NOT
+# change "terminal"'s weights since overwrite defaults to FALSE
+pop <- define_index(pop, "terminal",
+                    trait_names = c("ADG", "FCR"),
+                    index_wts   = c(1.5, -0.5))
+
+# overwrite = TRUE updates the weights in place
+pop <- define_index(pop, "terminal",
+                    trait_names = c("ADG", "FCR"),
+                    index_wts   = c(1.5, -0.5),
+                    overwrite   = TRUE)
 }
 }
 \seealso{

@@ -143,7 +143,7 @@
 #' placeholder name (e.g. ".tbv_self_WWD_1", ".tbv_dam_WWM_2") so that the
 #' same trait can appear multiple times with distinct pre-fetched vectors.
 #'
-#' @param expr Parsed R expression (from parse()[[1]]).
+#' @param expr Parsed R expression (from `parse()[[1]]`).
 #' @return A list:
 #'   $trait_refs: list of lists, each with:
 #'     - trait:       character trait name
@@ -295,6 +295,16 @@
 
 #' Fetch TBV values for a set of contributor IDs, aligned to focal_ids.
 #' Returns NA where contributor is absent or has no TBV record.
+#'
+#' @param pop A tidybreed_pop object.
+#' @param trait_safe Character. Trait name, already SQL-escaped (single quotes
+#'   doubled).
+#' @param contr_ids Character vector of contributor IDs (e.g. `id_parent_1` or
+#'   `id_parent_2`), same length and order as `focal_ids`. `NA`/`"NA"`/empty
+#'   values are treated as missing.
+#' @param focal_ids Character vector of focal individual IDs.
+#' @return Numeric vector, same length as `focal_ids`, with the contributor's
+#'   `tbv_value` or `NA` where the contributor is missing or has no TBV.
 #' @keywords internal
 .fetch_contributor_tbvs <- function(pop, trait_safe, contr_ids, focal_ids) {
   n       <- length(focal_ids)
@@ -326,6 +336,21 @@
 #' Validates that grp_table and grp_col exist (errors with clear message).
 #' Singleton pens (no group-mates) receive 0. Individuals with NA group get NA.
 #'
+#' @param pop A tidybreed_pop object.
+#' @param trait_safe Character. Trait name, already SQL-escaped (single quotes
+#'   doubled).
+#' @param focal_ids Character vector of focal individual IDs.
+#' @param grp_col Character. Column in `grp_table` holding group membership
+#'   (e.g. pen or litter ID).
+#' @param grp_table Character. Table containing `grp_col` and `id_ind`
+#'   (default `"ind_meta"` at the call site).
+#' @param agg_fn Function. `sum` or `mean`, applied to group-mates' TBVs
+#'   (excluding the focal individual itself).
+#' @param phenotype_name Character. Name of the phenotype being computed;
+#'   used only in error messages.
+#' @return Numeric vector, same length as `focal_ids`: the aggregated
+#'   group-mate TBV (0 for singletons with no group-mates), or `NA` for
+#'   individuals with no group assignment.
 #' @keywords internal
 .fetch_group_tbvs <- function(pop, trait_safe, focal_ids, grp_col, grp_table,
                                agg_fn, phenotype_name) {
@@ -499,8 +524,11 @@
 
 #' Pivot ind_phenotype rows wide for formula evaluation.
 #'
-#' Uses pheno_number = 1 by default; falls back to min pheno_number if no
-#' pheno_number = 1 rows exist.
+#' Uses pheno_number = 1 by default. If, across the entire `rows` input, not
+#' a single row has `pheno_number == 1` (e.g. first records were deleted),
+#' falls back to the minimum `pheno_number` per (id_ind, phenotype_name) pair
+#' instead. This fallback is all-or-nothing over the whole input, not decided
+#' per phenotype or per individual.
 #'
 #' @param rows Data frame from ind_phenotype query (id_ind, phenotype_name,
 #'   pheno_value, pheno_number).

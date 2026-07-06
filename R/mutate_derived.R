@@ -11,7 +11,7 @@
 #' fields (e.g. `puberty_date = birth_date + AP_value`) to a single pipe step.
 #'
 #' @param tbl_obj A `tidybreed_table` returned by [get_table()] with an
-#'   optional [filter()] applied.
+#'   optional [dplyr::filter()] applied.
 #' @param compute A function `function(df) -> vector`. `df` is the joined
 #'   tibble (primary table left-joined to `join_table`). The returned vector
 #'   must be a scalar (broadcast to all rows) or have the same length as
@@ -34,8 +34,8 @@
 #' ## Writing back to the primary table
 #'
 #' Uses the table's own primary key for exact-row matching. A filtered
-#' `ind_phenotype` (e.g. `filter(trait_name == "AP")`) only updates those
-#' specific rows — other trait records for the same individual are untouched.
+#' `ind_phenotype` (e.g. `filter(phenotype_name == "AP")`) only updates those
+#' specific rows — other phenotype records for the same individual are untouched.
 #'
 #' ## Writing to a secondary table
 #'
@@ -69,9 +69,9 @@
 #' # Age-at-puberty: puberty_date = birth_date (ind_meta) + AP value (days)
 #' pop <- pop |>
 #'   get_table("ind_phenotype") |>
-#'   dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
+#'   dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
 #'   mutate_derived(
-#'     compute    = \(df) df$birth_date + as.integer(df$value),
+#'     compute    = \(df) df$birth_date + as.integer(df$pheno_value),
 #'     join_table = "ind_meta",
 #'     join_by    = "id_ind",
 #'     write_to   = c(ind_meta = "puberty_date", ind_phenotype = "pheno_date")
@@ -80,10 +80,10 @@
 #' # Compute entirely from the primary table (no join needed)
 #' pop <- pop |>
 #'   get_table("ind_phenotype") |>
-#'   dplyr::filter(trait_name == "BW") |>
+#'   dplyr::filter(phenotype_name == "BW") |>
 #'   mutate_derived(
-#'     compute  = \(df) df$value * 2.205,   # kg -> lb
-#'     write_to = c(ind_phenotype = "value_lb")
+#'     compute  = \(df) df$pheno_value * 2.205,   # kg -> lb
+#'     write_to = c(ind_phenotype = "pheno_value_lb")
 #'   )
 #' }
 #'

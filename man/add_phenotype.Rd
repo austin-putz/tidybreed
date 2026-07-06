@@ -15,18 +15,33 @@ add_phenotype(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column.}
+through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column.}
 
 \item{phenotype_name}{Character vector of phenotype name(s). When \code{NULL}
 (default), all phenotypes in \code{phenotype_meta} are used in
 \code{id_phenotype_meta} order.}
 
-\item{user_residual}{Optional override for residual draws. Numeric vector
-of length \code{n_subset} for single phenotype, or a named list keyed by
-phenotype name for multi-phenotype.}
+\item{user_residual}{Optional override for residual draws (skips the
+\code{MVN}/independent residual sampling step described above; the mean,
+covariate, and TBV contributions are still computed and added). For a single
+\code{phenotype_name}, a plain numeric vector matched \strong{by position} to the
+final per-phenotype individual list — i.e. after sex-expression
+filtering (\code{expressed_sex}), repeatable-record exclusion, and any
+missing-component exclusion, so its length must equal the resulting
+subset size, which may be smaller than the original filtered \code{tbl}. For
+multiple phenotypes, a named list keyed by \code{phenotype_name}, each element
+following the same positional rule for that phenotype's own subset.
+Unlike \code{user_values} below, named (per-\code{id_ind}) vectors are \strong{not}
+supported here.}
 
-\item{user_values}{Optional override for the full phenotype value. If
-supplied, the model is not evaluated (TBVs are still computed and stored).}
+\item{user_values}{Optional override for the full phenotype value —
+skips the model entirely (mean, covariates, and residual are not
+evaluated), though TBVs are still computed and stored in \code{ind_tbv}. For a
+single \code{phenotype_name}: a plain numeric vector matching the filtered
+subset by position (\code{id_ind} order), or a named numeric vector (e.g.
+\code{c(id_1 = 555, id_2 = 560)}) to match by \code{id_ind} regardless of order.
+For multiple phenotypes: a named list keyed by \code{phenotype_name}, each
+element following the same (positional-or-named) rule.}
 
 \item{seed}{Optional integer for reproducibility.}
 
@@ -50,16 +65,32 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 \item \code{mean} comes from \code{phenotype_meta.mean}.
 \item Fixed and random shifts come from \code{trait_effects} rows.
 \item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{TBV_i} is the
-standard additive TBV from \code{genome_effects}.
-\item For \strong{composite} phenotypes (rows in \code{phenotype_components}), \code{TBV_i} is
-the weighted sum of contributor TBVs (self, dam, sire, or group).
+standard additive TBV from \code{genome_effects} (computed via \code{\link[=add_tbv]{add_tbv()}},
+which this function calls internally for every source trait it needs).
+\item For \strong{composite} phenotypes (rows in \code{phenotype_components}, written by
+\code{define_phenotype(..., components = ...)}), \code{TBV_i} is the weighted sum
+of contributor TBVs (self, dam, sire, or group) — see
+\code{.assemble_composite_tbv()}.
+\item For \strong{\code{formula_tbv}} composite phenotypes (\code{phenotype_meta.formula_tbv}
+set, written by \code{define_phenotype(..., formula_tbv = ...)}), \code{TBV_i} is
+evaluated from a small DSL expression referencing self/dam/sire/group
+TBVs instead of a \code{phenotype_components} data frame.
 \item \code{e_i} is residual: drawn from \code{MVN(0, R)} across phenotypes when a
 covariance matrix is stored in \code{phenotype_var_comp} and multiple
 phenotypes share the same subset; otherwise drawn independently.
 }
 
+\strong{\code{derived_formula} phenotypes are the one exception to the model above.}
+When \code{phenotype_meta.type == "derived_formula"} (\code{phenotype_meta.formula}
+set), the phenotype value is computed directly as an arithmetic expression
+over other individuals' already-written \code{ind_phenotype} records — there is
+no TBV, no mean/fixed/random contribution, and no residual draw for that
+phenotype. When a call mixes \code{derived_formula} phenotypes with others that
+feed them, the phenotypes are topologically sorted first so dependencies
+are written before the formulas that consume them.
+
 \strong{Subset selection}: pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and
-optionally \code{\link[=filter]{filter()}}) as the first argument.
+optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as the first argument.
 
 \strong{Escape hatches}:
 \itemize{
@@ -79,6 +110,27 @@ pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
   add_phenotype("ADG")
+
+# Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
+# registered once via define_phenotype(components = ...)
+pop <- pop |>
+  define_phenotype("WW", type = "continuous", mean = 230, residual_var = 180,
+    components = tibble::tribble(
+      ~source_trait_name, ~contributor_type,
+      "WWD",              "self",
+      "WWM",              "dam"
+    ))
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen == 1L) |>
+  add_phenotype("WW")
+
+# Escape hatch: supply phenotype values directly (skips the model, but
+# still computes and stores TBVs); named vector matches by id_ind
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen == 0L, sex == "M") |>
+  add_phenotype("ADG", user_values = c(A_1 = 555, A_2 = 560))
 }
 }
 \seealso{

@@ -16,6 +16,32 @@ write_renum_par(
   alpha_size
 )
 }
+\arguments{
+\item{eval_dir}{path to evaluation folder; writes renum.par there}
+
+\item{col_map}{named integer vector mapping mu/id_ind/effect_name/trait_name
+to their data.txt column numbers (as returned by \code{\link[=build_data_file]{build_data_file()}})}
+
+\item{distinct_effects}{data.frame of fixed effects (one row per
+effect_name), as returned by \code{\link[=build_data_file]{build_data_file()}}}
+
+\item{effects_df}{data.frame of (trait_name x effect_name) fixed-effect
+rows from \code{trait_effects}, as returned by \code{\link[=build_data_file]{build_data_file()}}}
+
+\item{trait}{character vector of trait names (in model order)}
+
+\item{pop}{tidybreed_pop; used to look up residual and additive genetic
+(co)variance matrices via \code{\link[=load_phenotype_cov]{load_phenotype_cov()}} and \code{\link[=load_trait_cov]{load_trait_cov()}}}
+
+\item{chip_name}{character or NULL; when non-NULL, adds a \code{SNP_FILE} line
+for single-step GBLUP}
+
+\item{estimate_var}{logical; if TRUE, sets \verb{OPTION method VCE} instead of
+BLUP-only}
+
+\item{alpha_size}{numeric; minimum size hint for \verb{OPTION alpha_size}
+(rounded up to a multiple of 5, floor 20)}
+}
 \value{
 integer animal_effect_num (effect number to extract EBVs from solutions)
 }

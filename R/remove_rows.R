@@ -98,14 +98,14 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' Remove rows from one or more population tables
 #'
 #' Removes rows from the database based on a filtered `tidybreed_table`.
-#' Chain after [get_table()] and [filter()] to target specific rows. Returns
+#' Chain after [get_table()] and [dplyr::filter()] to target specific rows. Returns
 #' the population invisibly — consistent with all other action functions.
 #'
 #' A filter is **required** by default. Calling `remove_rows()` without a
-#' prior [filter()] will stop with an error explaining how to opt in to
+#' prior [dplyr::filter()] will stop with an error explaining how to opt in to
 #' full-table deletion via `confirm_all = TRUE`.
 #'
-#' @param tbl A `tidybreed_table` from [get_table()], with a [filter()] applied.
+#' @param tbl A `tidybreed_table` from [get_table()], with a [dplyr::filter()] applied.
 #' @param tables `NULL` (default) to delete from the current table only;
 #'   `"all"` to delete from every `ind_*` table (including `ind_haplotype` and
 #'   `ind_genotype`) that exists in the population; or a character vector of
@@ -143,7 +143,7 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' # Delete specific phenotype records for culled animals
 #' pop |>
 #'   get_table("ind_phenotype") |>
-#'   dplyr::filter(id_ind %in% culled_ids, trait_name == "litter_size") |>
+#'   dplyr::filter(id_ind %in% culled_ids, phenotype_name == "litter_size") |>
 #'   remove_rows()
 #'
 #' # Remove all data for culled animals across every individual table

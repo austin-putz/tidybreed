@@ -8,7 +8,7 @@ add_genotypes(tbl, chip_name, col_name = paste0("has_", chip_name))
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column when a
+through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column when a
 filter is applied.}
 
 \item{chip_name}{Character. Name of an existing SNP chip (must have an
@@ -23,7 +23,7 @@ The modified \code{tidybreed_pop} (invisibly).
 \description{
 Records which individuals have been genotyped on a named SNP chip by
 writing or updating a BOOLEAN column \verb{has_<chip_name>} in \code{ind_meta}.
-Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[=filter]{filter()}}) as
+Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as
 the first argument to restrict which animals are marked.
 
 The operation is \strong{additive}: animals already marked \code{TRUE} remain \code{TRUE}.

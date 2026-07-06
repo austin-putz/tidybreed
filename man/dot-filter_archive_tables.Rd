@@ -2,11 +2,11 @@
 % Please edit documentation in R/archive_replicate.R
 \name{.filter_archive_tables}
 \alias{.filter_archive_tables}
-\title{Filter a table list to those present in the working DB; warn about the rest}
+\title{Filter a table list to those present in the working DB; message about the rest}
 \usage{
 .filter_archive_tables(tbls, db_tables, category)
 }
 \description{
-Filter a table list to those present in the working DB; warn about the rest
+Filter a table list to those present in the working DB; message about the rest
 }
 \keyword{internal}

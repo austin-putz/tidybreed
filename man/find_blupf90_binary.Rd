@@ -6,6 +6,13 @@
 \usage{
 find_blupf90_binary(name)
 }
+\arguments{
+\item{name}{character scalar; binary name to look up (e.g. "renumf90",
+"blupf90+")}
+}
+\value{
+character scalar; full path to the binary
+}
 \description{
 Find a BLUPF90 binary on PATH
 }

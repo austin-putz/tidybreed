@@ -61,7 +61,7 @@ define_chip <- function(tbl, chip_name, col_name = paste0("is_", chip_name)) {
   validate_sql_identifier(col_name, what = "col_name")
 
   if (!"genome_meta" %in% pop$tables) {
-    stop("genome_meta table does not exist. Call initialize_genome() first.",
+    stop("genome_meta table does not exist. Call define_genome() first.",
          call. = FALSE)
   }
 

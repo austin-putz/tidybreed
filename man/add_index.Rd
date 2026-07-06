@@ -15,9 +15,10 @@ add_index(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{get_table()} (optionally filtered).
-Must contain \code{id_ind}, \code{trait_name}, and the column specified by
-\code{value_col}. Any table with this structure is accepted: \code{ind_ebv},
-\code{ind_phenotype}, \code{ind_tbv}, or a custom table.}
+Must contain \code{id_ind}, a name column (\code{trait_name}, or \code{phenotype_name}
+for \code{ind_phenotype}), and the column specified by \code{value_col}. Any table
+with this structure is accepted: \code{ind_ebv}, \code{ind_phenotype}, \code{ind_tbv},
+or a custom table.}
 
 \item{index_name}{Character scalar. Name of the index to compute; must
 already exist in \code{index_meta} (created via \code{\link[=define_index]{define_index()}}).}
@@ -50,8 +51,11 @@ Results are appended to the \code{ind_index} table with an auto-incrementing
 \code{index_number} so that successive runs are preserved.
 
 The first argument must be a \code{tidybreed_table} obtained from \code{get_table()}
-(optionally filtered). The table must contain \code{id_ind}, \code{trait_name}, and a
-numeric value column (\code{value_col}). Works with \code{ind_ebv} (EBVs),
+(optionally filtered). The table must contain \code{id_ind}, a trait/phenotype
+name column, and a numeric value column (\code{value_col}). For \code{ind_phenotype}
+the name column is \code{phenotype_name}; for every other table (\code{ind_ebv},
+\code{ind_tbv}, or a user-defined table) it is \code{trait_name} — this is detected
+automatically from the table's columns. Works with \code{ind_ebv} (EBVs),
 \code{ind_phenotype} (phenotypes), \code{ind_tbv} (TBVs), or any user-defined table
 with the same structure.
 \subsection{Uniqueness requirement}{

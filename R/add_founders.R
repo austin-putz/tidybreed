@@ -24,7 +24,7 @@
 #'   founders; vectors must have length `n_males + n_females`. Column types
 #'   are inferred from the R type: use `0L` for INTEGER, `0` for DOUBLE,
 #'   `"text"` for VARCHAR, `TRUE`/`FALSE` for BOOLEAN. Reserved column names
-#'   (`id_ind`, `sex`, `line`, etc.) are blocked.
+#'   (`id_ind`, `sex`, `line_name`, `ploidy`, etc.) are blocked.
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'   **Important:** Assign the result back to update your object: `pop <- add_founders(pop, ...)`
@@ -32,13 +32,16 @@
 #' @details
 #' **Requirements:**
 #' - The `founder_haplotypes` table must exist. Create it by calling
-#'   `initialize_genome()` with the `n_haplotypes` parameter.
+#'   [define_founder_haplotypes()] (after [open_pop()] and [define_genome()]).
 #'
 #' **What it does:**
 #' 1. Samples 2 haplotypes per founder from `founder_haplotypes` (with replacement)
 #' 2. Creates/updates `ind_meta` table with founder metadata
-#' 3. Populates `ind_haplotype` (long: 2 haplotypes x n_loci rows per individual,
-#'    with `line_origin` set to the founder's line and `strand = 1`)
+#' 3. Populates `ind_haplotype` (long format; `line_origin` set to the founder's
+#'    line and `strand = 1`. Row count per chromosome follows
+#'    `chr_meta`'s `copy_mode_M`/`copy_mode_F` for the founder's sex — 2
+#'    rows/locus for `"full"` (the default, diploid autosomes), 1 for
+#'    `"half"` (e.g. sex chromosomes), 0 for `"none"`; see [define_chr()])
 #'
 #' **ID Format:**
 #' - Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
@@ -62,7 +65,10 @@
 #'   get_table("founder_haplotypes") |>
 #'   add_founders(n_males = 10, n_females = 100, line_name = "A")
 #'
-#' # Filtered by line
+#' # Filtered by line (line-specific pools need their own
+#' # define_founder_haplotypes() call before they can be filtered to)
+#' pop <- pop |>
+#'   define_founder_haplotypes(n_haplotypes = 100, line_name = "Yorkshire")
 #' pop <- pop |>
 #'   get_table("founder_haplotypes") |>
 #'   dplyr::filter(line_name == "Yorkshire") |>
@@ -76,6 +82,8 @@
 #'                gen = 0L, farm = "FarmA")
 #'
 #' # Add a second line
+#' pop <- pop |>
+#'   define_founder_haplotypes(n_haplotypes = 50, line_name = "B")
 #' pop <- pop |>
 #'   get_table("founder_haplotypes") |>
 #'   dplyr::filter(line_name == "B") |>

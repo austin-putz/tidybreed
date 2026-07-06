@@ -30,9 +30,12 @@ metadata columns to avoid querying 50,000-column tables.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome("MySim", n_loci = 1000, n_chr = 5, chr_len_Mb = 100,
-                         n_haplotypes = 50)
-pop <- add_founders(pop, n_males = 50, n_females = 50, line_name = "A", gen = 0L)
+pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 5, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 50)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 50, n_females = 50, line_name = "A", gen = 0L)
 summary(pop)
 summary(pop, tables = c("ind_meta", "genome_meta"))
 summary(pop, max_values = 5L)

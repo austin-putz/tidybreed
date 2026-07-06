@@ -20,8 +20,9 @@
 #'       plink/                      # layer 4 (if "plink" in tools)
 #' ```
 #'
-#' When `db_name = ":memory:"`, folder creation is skipped entirely and
-#' `pop$run_dirs` is `character(0)`.
+#' When `db_name = ":memory:"` or an absolute/UNC path, folder creation is
+#' skipped entirely (including layer-4 `tools` dirs) and `pop$run_dirs` is
+#' `character(0)`.
 #'
 #' @param pop_name Character scalar. Optional label stored on the pop object.
 #'   Default: `getOption("tidybreed.pop_name", "sim")`.
@@ -35,10 +36,15 @@
 #'   Default: `getOption("tidybreed.scenario", NULL)`.
 #' @param tools Character vector or `NULL`. Tool subdirectory names to create
 #'   at layer 4 (e.g. `c("blupf90", "plink")`). These become the keys of
-#'   `pop$run_dirs`. Default: `getOption("tidybreed.tools", NULL)`.
+#'   `pop$run_dirs`. Default: `getOption("tidybreed.tools", NULL)`. Ignored
+#'   (no tool dirs are created; `pop$run_dirs` is `character(0)`) whenever
+#'   `db_name` is `":memory:"` or an absolute/UNC path — see `db_name` below.
 #' @param db_name Character scalar. DuckDB filename placed inside the layer-3
-#'   folder. Use `":memory:"` for an in-memory database (skips all folder
-#'   creation). Default: `getOption("tidybreed.db_name", "sim.duckdb")`.
+#'   folder. Use `":memory:"` for an in-memory database, or supply an
+#'   absolute/UNC path to use that exact file location directly — both skip
+#'   all layer-2/3/4 folder creation entirely (including any `tools` dirs;
+#'   `pop$run_dirs` will be `character(0)` even if `tools` is non-`NULL`).
+#'   Default: `getOption("tidybreed.db_name", "sim.duckdb")`.
 #' @param clean Logical. If `TRUE` (default), deletes the existing database
 #'   file and all timestamped layer-5 run subdirectories inside each tool dir
 #'   before recreating. Does **not** delete the tool dirs or the scenario dir.

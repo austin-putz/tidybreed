@@ -11,8 +11,10 @@ get_residual_cov(pop, phenotype_names, subset_df = NULL)
 
 \item{phenotype_names}{Character vector of phenotype names.}
 
-\item{subset_df}{Data frame with id_ind column (used to look up condition
-group values when heterogeneous residuals are defined).}
+\item{subset_df}{Currently unused inside this function (accepted for a
+future per-subset lookup); callers such as \code{\link[=add_phenotype]{add_phenotype()}} separately
+look up each individual's \code{condition_column} value and match it against
+\code{R_by_level}'s names to pick the right (co)variance matrix.}
 }
 \value{
 A list:

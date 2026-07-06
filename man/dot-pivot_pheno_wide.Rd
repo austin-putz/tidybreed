@@ -18,7 +18,10 @@ pheno_value, pheno_number).}
 Data frame with one row per id in ids, columns = pheno_names.
 }
 \description{
-Uses pheno_number = 1 by default; falls back to min pheno_number if no
-pheno_number = 1 rows exist.
+Uses pheno_number = 1 by default. If, across the entire \code{rows} input, not
+a single row has \code{pheno_number == 1} (e.g. first records were deleted),
+falls back to the minimum \code{pheno_number} per (id_ind, phenotype_name) pair
+instead. This fallback is all-or-nothing over the whole input, not decided
+per phenotype or per individual.
 }
 \keyword{internal}

@@ -14,7 +14,7 @@ mutate_derived(
 }
 \arguments{
 \item{tbl_obj}{A \code{tidybreed_table} returned by \code{\link[=get_table]{get_table()}} with an
-optional \code{\link[=filter]{filter()}} applied.}
+optional \code{\link[dplyr:filter]{dplyr::filter()}} applied.}
 
 \item{compute}{A function \verb{function(df) -> vector}. \code{df} is the joined
 tibble (primary table left-joined to \code{join_table}). The returned vector
@@ -54,8 +54,8 @@ fields (e.g. \code{puberty_date = birth_date + AP_value}) to a single pipe step.
 \subsection{Writing back to the primary table}{
 
 Uses the table's own primary key for exact-row matching. A filtered
-\code{ind_phenotype} (e.g. \code{filter(trait_name == "AP")}) only updates those
-specific rows — other trait records for the same individual are untouched.
+\code{ind_phenotype} (e.g. \code{filter(phenotype_name == "AP")}) only updates those
+specific rows — other phenotype records for the same individual are untouched.
 }
 
 \subsection{Writing to a secondary table}{
@@ -94,9 +94,9 @@ column. Use typed \code{NA} vectors (e.g. \code{NA_real_}) if \code{result_vec} 
 # Age-at-puberty: puberty_date = birth_date (ind_meta) + AP value (days)
 pop <- pop |>
   get_table("ind_phenotype") |>
-  dplyr::filter(trait_name == "AP", pheno_number == 1L) |>
+  dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
   mutate_derived(
-    compute    = \(df) df$birth_date + as.integer(df$value),
+    compute    = \(df) df$birth_date + as.integer(df$pheno_value),
     join_table = "ind_meta",
     join_by    = "id_ind",
     write_to   = c(ind_meta = "puberty_date", ind_phenotype = "pheno_date")
@@ -105,10 +105,10 @@ pop <- pop |>
 # Compute entirely from the primary table (no join needed)
 pop <- pop |>
   get_table("ind_phenotype") |>
-  dplyr::filter(trait_name == "BW") |>
+  dplyr::filter(phenotype_name == "BW") |>
   mutate_derived(
-    compute  = \(df) df$value * 2.205,   # kg -> lb
-    write_to = c(ind_phenotype = "value_lb")
+    compute  = \(df) df$pheno_value * 2.205,   # kg -> lb
+    write_to = c(ind_phenotype = "pheno_value_lb")
   )
 }
 

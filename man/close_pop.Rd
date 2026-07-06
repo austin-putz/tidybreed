@@ -14,6 +14,9 @@ file is moved there after the connection is closed. The directory is created
 if it does not yet exist. Errors if the destination file already exists.
 Ignored silently for in-memory databases.}
 }
+\value{
+\code{NULL}, invisibly.
+}
 \description{
 Close tidybreed population database connection
 }

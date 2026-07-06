@@ -1,3 +1,29 @@
+# tidybreed 0.49.1 (2026-07-03)
+
+## Documentation audit
+
+Full pass over every `man/` page's roxygen source: verified `@param`/`@return`
+against actual function signatures, executed every runnable `@examples` block
+against a live in-memory pop, and added examples for previously-undemonstrated
+key arguments (e.g. crossbreeding TBV and `index_names`/`type = "both"` in
+`add_tbv()`, `economic_wts` in `define_index()`, sex-chromosome/organelle
+usage in `define_chr()`, composite/SGE phenotype scenarios in
+`define_phenotype()`). Fixed pervasive stale references to the deprecated
+`initialize_genome()` (superseded by `open_pop() |> define_genome()`),
+resolved all `Rd` cross-reference warnings, and cleaned up numerous
+docs that had drifted from the current schema/column names.
+
+Two real (non-doc) bugs surfaced and fixed along the way:
+
+* `TABLE_RESERVED_COLS[["ind_phenotype"]]` protected a nonexistent
+  `trait_name` column instead of the actual `phenotype_name` column, so
+  `mutate_table()`/`add_phenotype()` custom-column writes did not correctly
+  block overwriting `phenotype_name`.
+* `write_renum_par()` (BLUPF90 export path) called a function,
+  `load_effect_cov()`, that does not exist anywhere in the package — it now
+  correctly calls `load_phenotype_cov()` for the residual matrix and
+  `load_trait_cov()` for the additive genetic matrix.
+
 # tidybreed 0.49.0 (2026-07-03)
 
 ## New features — sex chromosomes and organelles (Stage 4)

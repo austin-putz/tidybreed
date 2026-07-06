@@ -28,19 +28,10 @@ The parent \code{tidybreed_pop} object (invisibly).
 \description{
 Generic replacement for the table-specific \code{mutate_ind_meta()} /
 \code{mutate_genome_meta()} family. Chain after \code{\link[=get_table]{get_table()}} (and optionally
-\code{\link[=filter]{filter()}}) to add new columns or update existing ones.
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Assign gen = 1 to all individuals
-pop <- pop \%>\%
-  get_table("ind_meta") \%>\%
-  mutate_table(gen = 1L)
-
-# Assign gen = 2 only to males
-pop <- pop \%>\%
-  get_table("ind_meta") \%>\%
-  filter(sex == "M") \%>\%
-  mutate_table(gen = 2L)
-}\if{html}{\out{</div>}}
+\code{\link[dplyr:filter]{dplyr::filter()}}) to add new columns or update existing ones. \code{value} can
+be a scalar broadcast to all (or filtered) rows, or a tibble keyed on the
+table's primary key for per-row values — see \verb{@examples} below for both,
+plus the schema-pre-declaration pattern for empty tables.
 }
 \details{
 \strong{Type inference} (\code{logical} → BOOLEAN, \code{integer} → INTEGER,
@@ -56,11 +47,11 @@ after the field being updated:
                                    gen = c(1L, 2L)))
 }\if{html}{\out{</div>}}
 
-The tibble is entirely self-contained; any upstream \code{\link[=filter]{filter()}} is ignored
+The tibble is entirely self-contained; any upstream \code{\link[dplyr:filter]{dplyr::filter()}} is ignored
 for that field (but continues to apply to scalar fields in the same call).
 All IDs in the tibble must exist in the table; an error is raised for unknown IDs.
 
-\strong{Filtering}: when a \code{\link[=filter]{filter()}} is applied upstream, scalar values broadcast
+\strong{Filtering}: when a \code{\link[dplyr:filter]{dplyr::filter()}} is applied upstream, scalar values broadcast
 to all matching rows. New columns created in this context will be \code{NULL} for
 all non-matching rows.
 
@@ -72,8 +63,9 @@ provided in \code{...}.
 
 For populated tables, existing rows are still updated via the standard UPDATE
 mechanism; the DEFAULT only affects subsequent INSERT operations. For empty
-tables (e.g., right after \code{\link[=initialize_genome]{initialize_genome()}}), the DEFAULT is set at the
-schema level with no data operations.
+tables (e.g., right after \code{\link[=open_pop]{open_pop()}} / \code{\link[=define_genome]{define_genome()}}, before any
+founders are added), the DEFAULT is set at the schema level with no data
+operations.
 
 Note: DEFAULT constraints can only be added when creating new columns. If a
 column already exists, \code{.set_default} is ignored (but the UPDATE proceeds
@@ -81,33 +73,66 @@ normally).
 }
 \examples{
 \dontrun{
-# Pre-declare schema with defaults before adding data
-pop <- initialize_genome(
-  pop_name = "sim",
-  n_loci = 100,
-  n_chr = 5,
-  chr_len_Mb = 50,
-  n_haplotypes = 100
-)
-
-# Set defaults for generation tracking and active status
+pop <- open_pop(pop_name = "sim", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 50) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
 pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 100, line_name = "A")
+
+# Broadcast: assign gen = 1 to every individual
+pop <- pop |>
+  get_table("ind_meta") |>
+  mutate_table(gen = 1L)
+
+# Filtered subset: bump gen only for males
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(sex == "M") |>
+  mutate_table(gen = 2L)
+
+# Per-row values via a tibble keyed on the primary key column
+pop <- pop |>
+  get_table("ind_meta") |>
+  mutate_table(
+    gen = tibble::tibble(
+      id_ind = c("A_1", "A_2"),
+      gen    = c(5L, 6L)
+    )
+  )
+
+# Pre-declare a typed column schema before any data exists
+pop2 <- open_pop(pop_name = "sim2", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 50)
+pop2 <- pop2 |>
+  get_table("ind_meta") |>
+  mutate_table(farm = NA_character_)
+
+# Pre-declare WITH a SQL DEFAULT so future add_founders() rows auto-fill
+pop3 <- open_pop(pop_name = "sim3", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 50) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
+pop3 <- pop3 |>
   get_table("ind_meta") |>
   mutate_table(gen = 0L, active = TRUE, .set_default = TRUE)
 
 # Future founders automatically get gen = 0L and active = TRUE
-pop <- pop |>
+pop3 <- pop3 |>
+  get_table("founder_haplotypes") |>
   add_founders(n_males = 10, n_females = 100, line_name = "A")
+pop3 |> get_table("ind_meta") |> dplyr::collect()  # all have defaults
 
-# Check: all have defaults
-pop |> get_table("ind_meta") |> collect()
-
-# Override defaults by providing explicit values
-pop <- pop |>
+# Override the default by supplying an explicit value
+pop3 <- pop3 |>
+  get_table("founder_haplotypes") |>
+  dplyr::filter(line_name == "A") |>
   add_founders(n_males = 5, n_females = 50, line_name = "B", gen = 1L)
 
 # Line B: gen = 1L (explicit), active = TRUE (default)
-pop |> get_table("ind_meta") |> dplyr::filter(line == "B") |> collect()
+pop3 |>
+  get_table("ind_meta") |>
+  dplyr::filter(line_name == "B") |>
+  dplyr::collect()
 }
 
 }

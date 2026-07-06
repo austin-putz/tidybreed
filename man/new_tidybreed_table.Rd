@@ -6,9 +6,17 @@
 \usage{
 new_tidybreed_table(pop, table_name)
 }
+\arguments{
+\item{pop}{A \code{tidybreed_pop} object.}
+
+\item{table_name}{Character scalar. Name of the table to reference.}
+}
+\value{
+A \code{tidybreed_table} S3 object.
+}
 \description{
 Returned by \code{\link[=get_table]{get_table()}}. Carries the parent population object, the
 table name, a lazy dplyr tibble for reading, and a pending filter list.
-Supports \code{\link[=filter]{filter()}}, \code{\link[dplyr:collect]{collect()}}, and \code{\link[=mutate_table]{mutate_table()}}.
+Supports \code{\link[dplyr:filter]{dplyr::filter()}}, \code{\link[dplyr:collect]{collect()}}, and \code{\link[=mutate_table]{mutate_table()}}.
 }
 \keyword{internal}

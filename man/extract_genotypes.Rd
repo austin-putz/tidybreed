@@ -14,7 +14,7 @@ extract_genotypes(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[=filter]{filter()}}). The table must contain an \code{id_ind} column when a
+through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column when a
 filter is applied.}
 
 \item{chip_name}{Character or \code{NULL}. Name of a chip previously defined via
@@ -46,7 +46,7 @@ encoding and are ordered by \code{locus_id}.
 Returns a tibble of genotypes (0/1/2 encoding) for a set of individuals,
 restricted to loci selected by a chip definition, a filtered
 \code{genome_effects} table, or both. Pipe a \code{tidybreed_table} (from
-\code{\link[=get_table]{get_table()}} and optionally \code{\link[=filter]{filter()}}) as the first argument to restrict
+\code{\link[=get_table]{get_table()}} and optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as the first argument to restrict
 which individuals are included.
 
 At least one of \code{chip_name} or \code{effects_tbl} must be provided. When both
@@ -92,7 +92,7 @@ geno <- pop |>
   dplyr::filter(sex == "F") |>
   extract_genotypes(
     effects_tbl = get_table(pop, "genome_effects") |>
-      dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.5)
+      dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.15)
   )
 
 # Chip loci + QTL loci unioned

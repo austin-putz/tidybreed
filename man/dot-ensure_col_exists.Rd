@@ -6,6 +6,19 @@
 \usage{
 .ensure_col_exists(conn, table_name, col_name, output_type)
 }
+\arguments{
+\item{conn}{DuckDB connection.}
+
+\item{table_name}{Target table name.}
+
+\item{col_name}{Column to create if absent.}
+
+\item{output_type}{DuckDB type string (e.g. \code{"INTEGER"}, \code{"VARCHAR"}) used
+for the \verb{ADD COLUMN} statement when the column does not yet exist.}
+}
+\value{
+\code{NULL}, invisibly.
+}
 \description{
 Create a column in a table if it does not already exist.
 }

@@ -78,7 +78,7 @@ liability_to_categorical <- function(liability, thresholds) {
 }
 
 
-#' Clip a count vector to [min_value, max_value]
+#' Clip a count vector to `[min_value, max_value]`
 #'
 #' @param x Numeric vector.
 #' @param min_value,max_value Numeric scalars or `NA`.
@@ -265,8 +265,10 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_names Character vector of phenotype names.
-#' @param subset_df Data frame with id_ind column (used to look up condition
-#'   group values when heterogeneous residuals are defined).
+#' @param subset_df Currently unused inside this function (accepted for a
+#'   future per-subset lookup); callers such as [add_phenotype()] separately
+#'   look up each individual's `condition_column` value and match it against
+#'   `R_by_level`'s names to pick the right (co)variance matrix.
 #' @return A list:
 #'   - `R_unconditional`: numeric matrix (the unconditional residual R) or NULL.
 #'   - `condition_column`: character scalar or NULL.

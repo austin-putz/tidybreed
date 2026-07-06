@@ -2,21 +2,36 @@
 #'
 #' @description
 #' Computes the true breeding value (TBV) for each individual in the current
-#' subset and each requested trait, and writes them to `ind_tbv`. Uses the
-#' same math as the TBV step inside [add_phenotype()]:
+#' subset and each requested trait, and writes them to `ind_tbv`. This is the
+#' exact function [add_phenotype()] calls internally (once for every source
+#' trait it needs) before assembling phenotype records — there is no separate
+#' "TBV math" duplicated elsewhere.
+#'
+#' TBV is the Falconer-centered sum, across every `ind_haplotype` row (one per
+#' allele copy, not genotype dosage) for the individual, of:
 #'
 #' \preformatted{
-#'   TBV_i = sum over QTL of add_{trait} * dose_i
+#'   TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
 #' }
 #'
-#' where `dose_i` is the 0/1/2 genotype for non-imprinted traits, or the 0/1
-#' haplotype dose from the relevant parent for imprinted traits.
+#' `genome_value` and `base_allele_freq` are read from `genome_effects`
+#' (`genome_effect_type = "additive"`). For each haplotype row, a
+#' **line-specific** effect (`genome_effects.line_name` matching that row's
+#' `line_origin`) is preferred; the **population-wide** effect
+#' (`genome_effects.line_name IS NULL`) is used only when no line-specific row
+#' exists for that locus/line. This per-locus fallback is what makes
+#' crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
+#' each parent line's own QTL effects and base allele frequency (see the
+#' "Crossbreeding TBV" example below). For **imprinted** traits
+#' (`trait_meta.expressed_parent` = `"parent_1"` or `"parent_2"`), only
+#' haplotype rows from that parent's `parent_origin` are summed before the
+#' same line-matching logic applies.
 #'
 #' Optionally computes true selection index values by multiplying per-trait TBVs
 #' by weights from named indices defined with [define_index()], and writes them
 #' to `ind_true_index`.
 #'
-#' Pipe a `tidybreed_table` (from [get_table()] and optionally [filter()]) as
+#' Pipe a `tidybreed_table` (from [get_table()] and optionally [dplyr::filter()]) as
 #' the first argument to select individuals. The `expressed_sex` rule from
 #' `trait_meta` is applied on top.
 #'
@@ -24,7 +39,7 @@
 #' phenotypes.
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [filter()]). The table must contain an `id_ind` column.
+#'   through [dplyr::filter()]). The table must contain an `id_ind` column.
 #' @param trait_name Character vector of trait name(s). When `NULL` (default),
 #'   all traits currently in `trait_meta` are used (in `id_trait` order).
 #' @param index_names Character vector of named index(es) from `index_meta` for
@@ -50,14 +65,29 @@
 #'
 #' @examples
 #' \dontrun{
-#' # TBVs only
-#' pop |>
+#' # Crossbreeding TBV: line-specific additive effects for two pure lines, then
+#' # a Duroc x Landrace F1 centered against each parent line's own effects and
+#' # base allele frequency (see the Description above for the matching rule)
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   define_additive_effects("ADG", effects = duroc_effects, line_name = "Duroc")
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   define_additive_effects("ADG", effects = landrace_effects, line_name = "Landrace")
+#' pop <- pop |>
+#'   get_table("ind_meta") |>
+#'   dplyr::filter(line_name == "F1") |>
+#'   add_tbv("ADG")
+#'
+#' # TBVs only, for a generation subset
+#' pop <- pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 2L) |>
 #'   add_tbv(c("ADG", "BW"))
 #'
-#' # TBVs + true index values (index weights)
-#' pop |>
+#' # TBVs + true index values (both index and economic weights) written to
+#' # ind_true_index, distinguished by weight_type
+#' pop <- pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 2L) |>
 #'   add_tbv(c("ADG", "BW"), index_names = "terminal", type = "both")

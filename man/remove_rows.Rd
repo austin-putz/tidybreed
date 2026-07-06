@@ -13,7 +13,7 @@ remove_rows(
 )
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, with a \code{\link[=filter]{filter()}} applied.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, with a \code{\link[dplyr:filter]{dplyr::filter()}} applied.}
 
 \item{tables}{\code{NULL} (default) to delete from the current table only;
 \code{"all"} to delete from every \verb{ind_*} table (including \code{ind_haplotype} and
@@ -36,12 +36,12 @@ The \code{tidybreed_pop} object (invisibly).
 }
 \description{
 Removes rows from the database based on a filtered \code{tidybreed_table}.
-Chain after \code{\link[=get_table]{get_table()}} and \code{\link[=filter]{filter()}} to target specific rows. Returns
+Chain after \code{\link[=get_table]{get_table()}} and \code{\link[dplyr:filter]{dplyr::filter()}} to target specific rows. Returns
 the population invisibly — consistent with all other action functions.
 }
 \details{
 A filter is \strong{required} by default. Calling \code{remove_rows()} without a
-prior \code{\link[=filter]{filter()}} will stop with an error explaining how to opt in to
+prior \code{\link[dplyr:filter]{dplyr::filter()}} will stop with an error explaining how to opt in to
 full-table deletion via \code{confirm_all = TRUE}.
 
 \strong{Single-table mode} (\code{tables = NULL}): uses the composite row key from
@@ -65,7 +65,7 @@ and to handle large ID sets efficiently.
 # Delete specific phenotype records for culled animals
 pop |>
   get_table("ind_phenotype") |>
-  dplyr::filter(id_ind \%in\% culled_ids, trait_name == "litter_size") |>
+  dplyr::filter(id_ind \%in\% culled_ids, phenotype_name == "litter_size") |>
   remove_rows()
 
 # Remove all data for culled animals across every individual table

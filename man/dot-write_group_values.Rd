@@ -6,6 +6,22 @@
 \usage{
 .write_group_values(conn, table_name, col_name, pk_col, pks, values)
 }
+\arguments{
+\item{conn}{DuckDB connection.}
+
+\item{table_name}{Target table name.}
+
+\item{col_name}{Column to write.}
+
+\item{pk_col}{Primary key column name.}
+
+\item{pks}{Primary key values, in the same order as \code{values}.}
+
+\item{values}{Vector of new values, same length and order as \code{pks}.}
+}
+\value{
+\code{NULL}, invisibly.
+}
 \description{
 Thin wrapper around \code{mutate_table_vector()} (defined in mutate_table.R).
 }

@@ -17,7 +17,10 @@
 non-NULL values in \code{col_name}.}
 }
 \value{
-Named list or NULL.
+A named list with elements \code{pop}, \code{conn}, \code{table_name}, \code{pk_col},
+\code{pks} (sorted primary key values of the filtered rows), \code{n_total}, and
+\code{col_exists}; or \code{NULL} when the filter matched zero rows (callers must
+propagate the early return by returning \code{invisible(tbl_obj$pop)}).
 }
 \description{
 Returns a named list with all needed state, or NULL when the filter matched

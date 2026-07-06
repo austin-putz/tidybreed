@@ -7,7 +7,7 @@
 .walk_formula_tbv_ast(expr)
 }
 \arguments{
-\item{expr}{Parsed R expression (from parse()[\link{1}]).}
+\item{expr}{Parsed R expression (from \code{parse()[[1]]}).}
 }
 \value{
 A list:

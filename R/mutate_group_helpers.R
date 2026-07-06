@@ -15,7 +15,10 @@ NULL
 #' @param output_type `"INTEGER"` or `"VARCHAR"`.
 #' @param overwrite Logical. If `FALSE`, error when filtered rows already have
 #'   non-NULL values in `col_name`.
-#' @return Named list or NULL.
+#' @return A named list with elements `pop`, `conn`, `table_name`, `pk_col`,
+#'   `pks` (sorted primary key values of the filtered rows), `n_total`, and
+#'   `col_exists`; or `NULL` when the filter matched zero rows (callers must
+#'   propagate the early return by returning `invisible(tbl_obj$pop)`).
 #' @keywords internal
 .resolve_group_target <- function(tbl_obj, col_name, output_type, overwrite) {
 
@@ -106,6 +109,12 @@ NULL
 
 #' Create a column in a table if it does not already exist.
 #'
+#' @param conn DuckDB connection.
+#' @param table_name Target table name.
+#' @param col_name Column to create if absent.
+#' @param output_type DuckDB type string (e.g. `"INTEGER"`, `"VARCHAR"`) used
+#'   for the `ADD COLUMN` statement when the column does not yet exist.
+#' @return `NULL`, invisibly.
 #' @keywords internal
 .ensure_col_exists <- function(conn, table_name, col_name, output_type) {
   if (!col_name %in% DBI::dbListFields(conn, table_name)) {
@@ -121,6 +130,13 @@ NULL
 #'
 #' Thin wrapper around `mutate_table_vector()` (defined in mutate_table.R).
 #'
+#' @param conn DuckDB connection.
+#' @param table_name Target table name.
+#' @param col_name Column to write.
+#' @param pk_col Primary key column name.
+#' @param pks Primary key values, in the same order as `values`.
+#' @param values Vector of new values, same length and order as `pks`.
+#' @return `NULL`, invisibly.
 #' @keywords internal
 .write_group_values <- function(conn, table_name, col_name, pk_col, pks, values) {
   mutate_table_vector(conn, table_name, col_name, pks, values, pk_col)
@@ -132,6 +148,13 @@ NULL
 #'
 #' No-op when `quiet = TRUE`.
 #'
+#' @param values Vector of assigned group values (`NA` for unassigned rows),
+#'   in the order they were written.
+#' @param n_total Total number of filtered rows considered for assignment.
+#' @param table_name Target table name, used only in the message text.
+#' @param col_name Target column name, used only in the message text.
+#' @param quiet Logical. If `TRUE`, suppress all messages (no-op).
+#' @return `NULL`, invisibly.
 #' @keywords internal
 .summarize_group_assignment <- function(values, n_total, table_name, col_name, quiet) {
   if (quiet) return(invisible(NULL))

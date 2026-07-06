@@ -9,9 +9,9 @@
 #' needed for the composite name itself.
 #'
 #' Writes one row to `phenotype_meta`. If `residual_var` is supplied, also
-#' writes an unconditional diagonal entry to `phenotype_residual_cov`. If
-#' `components` is supplied, writes one row per component to
-#' `phenotype_components`.
+#' writes an unconditional diagonal entry to `phenotype_var_comp`
+#' (`effect_name = "residual"`). If `components` is supplied, writes one row
+#' per component to `phenotype_components`.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_name Character. Name of the observed phenotype; equals
@@ -43,10 +43,10 @@
 #'   is written to the reserved `liability_value` column in `ind_phenotype`.
 #'   Only meaningful for categorical traits.
 #' @param residual_var Numeric. Scalar residual variance. When supplied, writes
-#'   one unconditional row to `phenotype_residual_cov`
-#'   (`condition_column = NULL`). For heterogeneous residuals or
-#'   multi-phenotype correlated residuals, use [define_residual_cov()]
-#'   afterwards.
+#'   one unconditional row to `phenotype_var_comp`
+#'   (`effect_name = "residual"`, `condition_column = NULL`). For heterogeneous
+#'   residuals or multi-phenotype correlated residuals, use
+#'   [define_residual_cov()] afterwards.
 #' @param components A data frame or `tibble` with one row per genetic
 #'   component. Columns:
 #'   - `source_trait_name` (required): component trait name in `trait_meta`.
@@ -66,27 +66,47 @@
 #'     `group_column`.
 #'   - `aggregation` (optional, default `"sum"`): `"sum"` or `"mean"` for
 #'     group contributors.
+#'   - `missing_action` (optional, default `"skip"`): currently unused
+#'     per-component override — behaviour is governed uniformly by
+#'     `missing_component_action` below.
+#'   - `contributor_filter` (optional): reserved for future spatial/
+#'     neighborhood contributor lookup; not yet implemented.
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
 #'   written. Mutually exclusive with `formula_tbv`.
 #' @param formula_tbv Character. DSL shorthand for assembling a composite TBV
-#'   from component traits already in `trait_meta`. Supports the operators
-#'   `+`, `-`, `*` (scalar multiply), `group_sum(trait, col)`, and
-#'   `group_mean(trait, col)`. Contributor roles are encoded by suffix:
-#'   `_self`, `_dam`, `_sire` (e.g. `"WWD_self + WWM_dam"`). Mutually
-#'   exclusive with `components`. Not valid with `type = "derived_formula"`.
+#'   from component traits already in `trait_meta`. A bare trait symbol
+#'   (e.g. `"WWD"`) means the individual's own (`"self"`) TBV; contributor
+#'   roles can also be given explicitly as function calls: `self(trait)`,
+#'   `dam(trait)`, `sire(trait)`, `group_sum(trait, col)`, and
+#'   `group_mean(trait, col)` (`col` = grouping column in `ind_meta`, e.g.
+#'   pen or litter). These are combined with the arithmetic operators `+`,
+#'   `-`, `*`, `/`, and parentheses (e.g. `"WWD + dam(WWM)"`,
+#'   `"ADG_direct + group_sum(ADG_social, pen_id)"`). Mutually exclusive with
+#'   `components`. Not valid with `type = "derived_formula"`.
 #' @param formula Character. Arithmetic expression evaluated over already-
-#'   recorded phenotype values to produce a derived phenotype. Phenotype names
-#'   reference `ind_phenotype` records produced earlier in the same
-#'   [add_phenotype()] call. Operators `+`, `-`, `*`, `/` and parentheses are
-#'   supported. Required when `type = "derived_formula"`. Not valid otherwise.
+#'   recorded phenotype values to produce a derived phenotype (e.g.
+#'   `"ADFI / ADG"` for feed conversion ratio). Phenotype names reference
+#'   `ind_phenotype` records (`pheno_number = 1`) produced earlier in the same
+#'   [add_phenotype()] call — component phenotypes must already be recorded,
+#'   and `add_phenotype()` topologically sorts multiple `derived_formula`
+#'   phenotypes so dependencies are computed first. Operators `+`, `-`, `*`,
+#'   `/`, `^` and parentheses are supported, plus the math functions `sqrt`,
+#'   `log`, `log2`, `log10`, `exp`, `abs`, `round`, `ceiling`, `floor`, `sign`,
+#'   `trunc`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`. Non-finite results
+#'   (`Inf`/`NaN`) are converted to `NA` with a warning. Required when
+#'   `type = "derived_formula"`. Not valid otherwise.
 #' @param missing_component_action Character. What to do when an individual is
-#'   missing one or more required components (e.g. no group assignment, missing
-#'   dam TBV, missing random effect draw). `"skip"` (default) excludes the
-#'   individual from `ind_phenotype` and emits a warning with a count.
-#'   `"error"` stops with an informative message listing affected individuals.
-#'   Stored in `phenotype_meta` so the behaviour is consistent across all
-#'   [add_phenotype()] calls for this phenotype.
+#'   missing one or more required composite-TBV components (e.g. no group
+#'   assignment for a `"group"` contributor, or a missing dam/sire TBV).
+#'   `"skip"` (default) excludes the individual from `ind_phenotype` and emits
+#'   a warning with a count. `"error"` stops with an informative message
+#'   listing affected individuals. Stored in `phenotype_meta` so the behaviour
+#'   is consistent across all [add_phenotype()] calls for this phenotype. Note:
+#'   this is unrelated to `null_class_action` (set via
+#'   [define_effect_fixed_class()]), which handles `NULL` levels for
+#'   fixed-class covariate effects, and does not affect random-effect draws
+#'   (new levels always get a fresh draw).
 #' @param overwrite Logical. If `TRUE` and a phenotype with the same name
 #'   already exists, replace its rows in `phenotype_meta` and
 #'   `phenotype_components`. Default `FALSE` errors on duplicate.
@@ -144,19 +164,19 @@
 #'
 #' # ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
 #' pop <- pop |>
-#'   define_phenotype("WW",
+#'   define_phenotype("WW2",
 #'     type         = "continuous",
 #'     mean         = 230,
 #'     residual_var = 180,
-#'     formula_tbv  = "WWD_self + WWM_dam")
+#'     formula_tbv  = "WWD + dam(WWM)")
 #'
-#' # ── SGE (social genetic effects): ADG = direct_self + social group sum ──
+#' # ── SGE (social genetic effects): ADG = direct (self) + social group sum ──
 #' pop <- pop |>
 #'   define_phenotype("ADG_sge",
 #'     type         = "continuous",
 #'     mean         = 850,
 #'     residual_var = 100,
-#'     formula_tbv  = "ADG_direct_self + group_sum(ADG_social, pen_id)")
+#'     formula_tbv  = "ADG_direct + group_sum(ADG_social, pen_id)")
 #'
 #' # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
 #' # (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)

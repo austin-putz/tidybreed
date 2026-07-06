@@ -8,7 +8,7 @@
 #' you need dosage values for marker-assisted selection, allele-frequency
 #' queries, or other downstream analysis.
 #'
-#' Pipe a `tidybreed_table` (from [get_table()] and optionally [filter()]) as the
+#' Pipe a `tidybreed_table` (from [get_table()] and optionally [dplyr::filter()]) as the
 #' first argument to select individuals. As with [add_tbv()], the **distinct**
 #' `id_ind` values in the collected table form the candidate set, so a table with
 #' multiple rows per individual (e.g. `ind_phenotype`) does not multiply work.

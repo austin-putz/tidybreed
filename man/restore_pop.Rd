@@ -40,14 +40,20 @@ to get the same tool dirs back automatically.
 }
 \examples{
 \dontrun{
-# One-time setup
+# One-time setup. db_name is placed inside open_pop()'s layer-2/3 folder
+# structure (see ?open_pop), so capture pop$db_path rather than assuming
+# the file lives at "cattle_sim.duckdb" in the working directory.
 pop <- open_pop(pop_name = "cattle", db_name = "cattle_sim.duckdb") |>
-  define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100)
-pop <- define_trait(pop, trait_name = "milk", ...)
+  define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
+pop <- define_trait(pop, trait_name = "milk", target_add_var = 10)
+db_path <- pop$db_path
 close_pop(pop)
 
 # Each replicate
-pop <- restore_pop("cattle_sim.duckdb")
-pop <- add_founders(pop, n_males = 50, n_females = 200, line_name = "A")
+pop <- restore_pop(db_path)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 50, n_females = 200, line_name = "A")
 }
 }

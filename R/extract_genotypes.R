@@ -4,7 +4,7 @@
 #' Returns a tibble of genotypes (0/1/2 encoding) for a set of individuals,
 #' restricted to loci selected by a chip definition, a filtered
 #' `genome_effects` table, or both. Pipe a `tidybreed_table` (from
-#' [get_table()] and optionally [filter()]) as the first argument to restrict
+#' [get_table()] and optionally [dplyr::filter()]) as the first argument to restrict
 #' which individuals are included.
 #'
 #' At least one of `chip_name` or `effects_tbl` must be provided. When both
@@ -22,7 +22,7 @@
 #' * Loci whose `locus_name` appears in the collected `effects_tbl`
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [filter()]). The table must contain an `id_ind` column when a
+#'   through [dplyr::filter()]). The table must contain an `id_ind` column when a
 #'   filter is applied.
 #' @param chip_name Character or `NULL`. Name of a chip previously defined via
 #'   [define_chip()] and applied to animals via [add_genotypes()]. When `NULL`
@@ -70,7 +70,7 @@
 #'   dplyr::filter(sex == "F") |>
 #'   extract_genotypes(
 #'     effects_tbl = get_table(pop, "genome_effects") |>
-#'       dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.5)
+#'       dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.15)
 #'   )
 #'
 #' # Chip loci + QTL loci unioned

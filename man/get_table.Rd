@@ -15,7 +15,7 @@ get_table(pop, table_name)
 A \code{tidybreed_table} object.
 }
 \description{
-Returns a \code{tidybreed_table} object that can be piped into \code{\link[=filter]{filter()}} and
+Returns a \code{tidybreed_table} object that can be piped into \code{\link[dplyr:filter]{dplyr::filter()}} and
 \code{\link[=mutate_table]{mutate_table()}}, or collected with \code{\link[dplyr:collect]{dplyr::collect()}}.  All existing
 \code{get_table(pop, x) |> dplyr::filter(...) |> dplyr::collect()} patterns
 continue to work unchanged.

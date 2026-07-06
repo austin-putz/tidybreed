@@ -69,10 +69,10 @@ is written to the reserved \code{liability_value} column in \code{ind_phenotype}
 Only meaningful for categorical traits.}
 
 \item{residual_var}{Numeric. Scalar residual variance. When supplied, writes
-one unconditional row to \code{phenotype_residual_cov}
-(\code{condition_column = NULL}). For heterogeneous residuals or
-multi-phenotype correlated residuals, use \code{\link[=define_residual_cov]{define_residual_cov()}}
-afterwards.}
+one unconditional row to \code{phenotype_var_comp}
+(\code{effect_name = "residual"}, \code{condition_column = NULL}). For heterogeneous
+residuals or multi-phenotype correlated residuals, use
+\code{\link[=define_residual_cov]{define_residual_cov()}} afterwards.}
 
 \item{components}{A data frame or \code{tibble} with one row per genetic
 component. Columns:
@@ -94,31 +94,51 @@ component. Columns:
 \code{group_column}.
 \item \code{aggregation} (optional, default \code{"sum"}): \code{"sum"} or \code{"mean"} for
 group contributors.
+\item \code{missing_action} (optional, default \code{"skip"}): currently unused
+per-component override — behaviour is governed uniformly by
+\code{missing_component_action} below.
+\item \code{contributor_filter} (optional): reserved for future spatial/
+neighborhood contributor lookup; not yet implemented.
 }
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
 written. Mutually exclusive with \code{formula_tbv}.}
 
 \item{formula_tbv}{Character. DSL shorthand for assembling a composite TBV
-from component traits already in \code{trait_meta}. Supports the operators
-\code{+}, \code{-}, \code{*} (scalar multiply), \code{group_sum(trait, col)}, and
-\code{group_mean(trait, col)}. Contributor roles are encoded by suffix:
-\verb{_self}, \verb{_dam}, \verb{_sire} (e.g. \code{"WWD_self + WWM_dam"}). Mutually
-exclusive with \code{components}. Not valid with \code{type = "derived_formula"}.}
+from component traits already in \code{trait_meta}. A bare trait symbol
+(e.g. \code{"WWD"}) means the individual's own (\code{"self"}) TBV; contributor
+roles can also be given explicitly as function calls: \code{self(trait)},
+\code{dam(trait)}, \code{sire(trait)}, \code{group_sum(trait, col)}, and
+\code{group_mean(trait, col)} (\code{col} = grouping column in \code{ind_meta}, e.g.
+pen or litter). These are combined with the arithmetic operators \code{+},
+\code{-}, \code{*}, \code{/}, and parentheses (e.g. \code{"WWD + dam(WWM)"},
+\code{"ADG_direct + group_sum(ADG_social, pen_id)"}). Mutually exclusive with
+\code{components}. Not valid with \code{type = "derived_formula"}.}
 
 \item{formula}{Character. Arithmetic expression evaluated over already-
-recorded phenotype values to produce a derived phenotype. Phenotype names
-reference \code{ind_phenotype} records produced earlier in the same
-\code{\link[=add_phenotype]{add_phenotype()}} call. Operators \code{+}, \code{-}, \code{*}, \code{/} and parentheses are
-supported. Required when \code{type = "derived_formula"}. Not valid otherwise.}
+recorded phenotype values to produce a derived phenotype (e.g.
+\code{"ADFI / ADG"} for feed conversion ratio). Phenotype names reference
+\code{ind_phenotype} records (\code{pheno_number = 1}) produced earlier in the same
+\code{\link[=add_phenotype]{add_phenotype()}} call — component phenotypes must already be recorded,
+and \code{add_phenotype()} topologically sorts multiple \code{derived_formula}
+phenotypes so dependencies are computed first. Operators \code{+}, \code{-}, \code{*},
+\code{/}, \code{^} and parentheses are supported, plus the math functions \code{sqrt},
+\code{log}, \code{log2}, \code{log10}, \code{exp}, \code{abs}, \code{round}, \code{ceiling}, \code{floor}, \code{sign},
+\code{trunc}, \code{sin}, \code{cos}, \code{tan}, \code{asin}, \code{acos}, \code{atan}. Non-finite results
+(\code{Inf}/\code{NaN}) are converted to \code{NA} with a warning. Required when
+\code{type = "derived_formula"}. Not valid otherwise.}
 
 \item{missing_component_action}{Character. What to do when an individual is
-missing one or more required components (e.g. no group assignment, missing
-dam TBV, missing random effect draw). \code{"skip"} (default) excludes the
-individual from \code{ind_phenotype} and emits a warning with a count.
-\code{"error"} stops with an informative message listing affected individuals.
-Stored in \code{phenotype_meta} so the behaviour is consistent across all
-\code{\link[=add_phenotype]{add_phenotype()}} calls for this phenotype.}
+missing one or more required composite-TBV components (e.g. no group
+assignment for a \code{"group"} contributor, or a missing dam/sire TBV).
+\code{"skip"} (default) excludes the individual from \code{ind_phenotype} and emits
+a warning with a count. \code{"error"} stops with an informative message
+listing affected individuals. Stored in \code{phenotype_meta} so the behaviour
+is consistent across all \code{\link[=add_phenotype]{add_phenotype()}} calls for this phenotype. Note:
+this is unrelated to \code{null_class_action} (set via
+\code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}), which handles \code{NULL} levels for
+fixed-class covariate effects, and does not affect random-effect draws
+(new levels always get a fresh draw).}
 
 \item{overwrite}{Logical. If \code{TRUE} and a phenotype with the same name
 already exists, replace its rows in \code{phenotype_meta} and
@@ -136,9 +156,9 @@ assembled from direct and maternal components), no \code{\link[=define_trait]{de
 needed for the composite name itself.
 
 Writes one row to \code{phenotype_meta}. If \code{residual_var} is supplied, also
-writes an unconditional diagonal entry to \code{phenotype_residual_cov}. If
-\code{components} is supplied, writes one row per component to
-\code{phenotype_components}.
+writes an unconditional diagonal entry to \code{phenotype_var_comp}
+(\code{effect_name = "residual"}). If \code{components} is supplied, writes one row
+per component to \code{phenotype_components}.
 }
 \examples{
 \dontrun{
@@ -188,19 +208,19 @@ pop <- pop |>
 
 # ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
 pop <- pop |>
-  define_phenotype("WW",
+  define_phenotype("WW2",
     type         = "continuous",
     mean         = 230,
     residual_var = 180,
-    formula_tbv  = "WWD_self + WWM_dam")
+    formula_tbv  = "WWD + dam(WWM)")
 
-# ── SGE (social genetic effects): ADG = direct_self + social group sum ──
+# ── SGE (social genetic effects): ADG = direct (self) + social group sum ──
 pop <- pop |>
   define_phenotype("ADG_sge",
     type         = "continuous",
     mean         = 850,
     residual_var = 100,
-    formula_tbv  = "ADG_direct_self + group_sum(ADG_social, pen_id)")
+    formula_tbv  = "ADG_direct + group_sum(ADG_social, pen_id)")
 
 # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
 # (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)

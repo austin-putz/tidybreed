@@ -7,6 +7,22 @@ Returns NA where contributor is absent or has no TBV record.}
 \usage{
 .fetch_contributor_tbvs(pop, trait_safe, contr_ids, focal_ids)
 }
+\arguments{
+\item{pop}{A tidybreed_pop object.}
+
+\item{trait_safe}{Character. Trait name, already SQL-escaped (single quotes
+doubled).}
+
+\item{contr_ids}{Character vector of contributor IDs (e.g. \code{id_parent_1} or
+\code{id_parent_2}), same length and order as \code{focal_ids}. \code{NA}/\code{"NA"}/empty
+values are treated as missing.}
+
+\item{focal_ids}{Character vector of focal individual IDs.}
+}
+\value{
+Numeric vector, same length as \code{focal_ids}, with the contributor's
+\code{tbv_value} or \code{NA} where the contributor is missing or has no TBV.
+}
 \description{
 Fetch TBV values for a set of contributor IDs, aligned to focal_ids.
 Returns NA where contributor is absent or has no TBV record.

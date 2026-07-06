@@ -20,6 +20,10 @@
 \item{comp_rows}{Data frame. Rows from \code{phenotype_components} for this phenotype.}
 
 \item{subset_df}{Data frame. Sex-filtered (and skip-masked) \code{ind_meta} rows.}
+
+\item{missing_component_action}{Character. \code{"skip"} (default) to warn and
+exclude individuals with any missing component (dam/sire/group TBV
+unavailable, no group assignment, etc.); \code{"error"} to stop immediately.}
 }
 \value{
 A list with \code{composite_tbv}: named numeric vector (NA = excluded).

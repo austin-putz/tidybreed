@@ -17,6 +17,36 @@ write_meta_file(
   animal_effect_num
 )
 }
+\arguments{
+\item{eval_dir}{path to evaluation folder; writes meta.txt there}
+
+\item{eval_id}{character scalar; evaluation label used in the file header}
+
+\item{col_map}{named integer vector mapping mu/id_ind/effect_name/trait_name
+to their data.txt column numbers (as returned by \code{\link[=build_data_file]{build_data_file()}})}
+
+\item{distinct_effects}{data.frame of fixed effects (one row per
+effect_name), as returned by \code{\link[=build_data_file]{build_data_file()}}}
+
+\item{trait}{character vector of trait names (in model order)}
+
+\item{effects_df}{data.frame of (trait_name x effect_name) fixed-effect
+rows from \code{trait_effects}, as returned by \code{\link[=build_data_file]{build_data_file()}}}
+
+\item{chip_name}{character or NULL; chip name to report in the genotype
+file section (omitted entirely when NULL)}
+
+\item{n_loci}{integer; number of loci written to the genotype file}
+
+\item{id_width}{integer; fixed field width used for animal IDs in the
+genotype file}
+
+\item{animal_effect_num}{integer; effect number for the animal random
+effect, as returned by \code{\link[=write_renum_par]{write_renum_par()}}}
+}
+\value{
+\code{NULL} invisibly; writes meta.txt as a side effect
+}
 \description{
 Write the human-readable meta.txt for the evaluation folder
 }

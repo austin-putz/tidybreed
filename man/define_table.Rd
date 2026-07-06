@@ -45,16 +45,17 @@ typed-NA convention as \code{\link[=mutate_table]{mutate_table()}} schema pre-de
 }\if{html}{\out{</div>}}
 
 Types are inferred by \code{\link[=infer_duckdb_type]{infer_duckdb_type()}}. Use R's typed NA values
-(\code{NA_integer_}, \code{NA_real_}, \code{NA_character_}, \code{FALSE}, \code{as.Date(NA)}, etc.)
-to get the intended DuckDB column type. Bare \code{NA} defaults to \code{VARCHAR} with
-a warning.
+(\code{NA_integer_}, \code{NA_real_}, \code{NA_character_}, \code{as.Date(NA)}, etc.) to get the
+intended DuckDB column type. There is no typed logical NA in R, so for a
+\code{BOOLEAN} column pass a concrete placeholder (\code{FALSE} or \code{TRUE}) instead.
+Bare \code{NA} defaults to \code{VARCHAR} with a warning.
 
 After creation, add rows via \code{DBI::dbAppendTable(pop$db_conn, table_name, my_tibble)} and query via \code{get_table(pop, table_name) |> dplyr::collect()}.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome("demo", n_loci = 200, n_chr = 2,
-                         chr_len_Mb = 100, db_path = ":memory:")
+pop <- open_pop(pop_name = "demo", db_name = ":memory:") |>
+  define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100)
 
 # Create a custom table for tracking simulation run metadata
 pop <- pop |> define_table(
