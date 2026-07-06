@@ -65,7 +65,7 @@ register_schema_meta <- function(conn, entries) {
   rbind(
     # genome_meta
     .sm_tbl("genome_meta",
-            "Locus-level metadata. One row per locus. Stores chromosome assignment, physical position, and chip membership flags added by define_chip()."),
+            "Locus-level metadata. One row per locus. Stores chromosome assignment, physical position (pos_bp), and chip membership flags added by define_chip(). Genetic-map positions live in the separate genome_map table."),
     .sm_col("genome_meta", "locus_id",
             "Sequential integer primary key; 1 to n_loci in creation order"),
     .sm_col("genome_meta", "locus_name",
@@ -74,12 +74,28 @@ register_schema_meta <- function(conn, entries) {
             "Chromosome number (integer index 1 to n_chr)"),
     .sm_col("genome_meta", "chr_name",
             "Chromosome label string; defaults to chr cast to character"),
-    .sm_col("genome_meta", "pos_Mb",
-            "Physical position in megabases along the chromosome"),
+    .sm_col("genome_meta", "pos_bp",
+            "Physical position in base pairs along the chromosome (BIGINT, 1-based; VCF/PLINK convention)"),
     .sm_col("genome_meta", "founder_allele_freq",
             "Per-locus base allele frequency for founder haplotype sampling; present only when define_founder_haplotypes() has been called"),
-    .sm_col("genome_meta", "introduced_gen",
-            "Generation a novel mutation was introduced (Stage 5); NULL for founding loci present at define_genome()"),
+
+    # genome_map (genetic map, long)
+    .sm_tbl("genome_map",
+            "Genetic map in long format. One row per (locus x sex x line x map) with a defined genetic position (pos_cM). sex NULL = both sexes; line_name NULL = all lines. define_genome() writes a single default map (map_name 'default'); sex/line/version-specific maps are added as rows. Logical key (locus_id, sex, line_name, map_name)."),
+    .sm_col("genome_map", "id_genome_map",
+            "Surrogate integer primary key (assigned via next_int_id)"),
+    .sm_col("genome_map", "locus_id",
+            "Locus identifier; FK to genome_meta.locus_id; internal join/order key"),
+    .sm_col("genome_map", "locus_name",
+            "Locus name; FK to genome_meta.locus_name; denormalized"),
+    .sm_col("genome_map", "sex",
+            "Sex this map applies to: NULL = both sexes, 'M' or 'F' = sex-specific map"),
+    .sm_col("genome_map", "line_name",
+            "Line/breed this map applies to: NULL = all lines, otherwise line-specific"),
+    .sm_col("genome_map", "map_name",
+            "Map version/identity; default 'default'"),
+    .sm_col("genome_map", "pos_cM",
+            "Genetic-map position in centiMorgans along the chromosome"),
 
     # ind_haplotype (long)
     .sm_tbl("ind_haplotype",
@@ -113,7 +129,7 @@ register_schema_meta <- function(conn, entries) {
 
     # chr_meta
     .sm_tbl("chr_meta",
-            "Per-chromosome inheritance rules. One row per chromosome. Default rows are diploid autosomes (copy_mode 'full'/'full', recombines). Non-default rules (sex chromosomes, organelles) are set via define_chr()."),
+            "Per-chromosome inheritance rules. One row per chromosome. Default rows are diploid autosomes (copy_mode 'full'/'full', recombines in both sexes). Non-default rules (sex chromosomes, organelles) are set via define_chr()."),
     .sm_col("chr_meta", "chr_name",
             "Chromosome label; PK; matches genome_meta.chr_name"),
     .sm_col("chr_meta", "copy_mode_M",
@@ -122,8 +138,10 @@ register_schema_meta <- function(conn, entries) {
             "Copy count for females, relative to that individual's own ploidy: 'full', 'half', or 'none'. Default 'full'."),
     .sm_col("chr_meta", "hemi_parent",
             "When copy_mode resolves to a reduced ('half') copy count for either sex: which parent supplies it, 'parent_1' or 'parent_2'; NULL when both copy_modes are 'full'"),
-    .sm_col("chr_meta", "recombines",
-            "TRUE if recombination occurs during gamete formation (default TRUE)")
+    .sm_col("chr_meta", "recombines_M",
+            "TRUE if recombination occurs in male meiosis (default TRUE); FALSE = whole-chromosome achiasmy in males"),
+    .sm_col("chr_meta", "recombines_F",
+            "TRUE if recombination occurs in female meiosis (default TRUE); FALSE = whole-chromosome achiasmy in females")
   )
 }
 
@@ -495,7 +513,8 @@ register_schema_meta <- function(conn, entries) {
 #' and descriptions from `_schema_meta`. Print the result for an aligned
 #' overview; use `describe_table(pop, "name")` to drill into a specific table.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param pop A `tidybreed_pop` object, or a `tidybreed_table` from
+#'   [get_table()] (its `pop` reference is used).
 #'
 #' @return A tibble of class `tidybreed_schema` with columns
 #'   `table_name`, `n_rows`, `n_cols`, and `description`.
@@ -505,7 +524,8 @@ register_schema_meta <- function(conn, entries) {
 #'
 #' @examples
 #' \dontrun{
-#' pop <- initialize_genome("MySim", n_loci = 500, n_chr = 5, chr_len_Mb = 100)
+#' pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
+#'   define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 #' schema(pop)
 #' }
 #' @export
@@ -624,20 +644,25 @@ print.tidybreed_schema <- function(x, ...) {
 #' columns only lists its non-locus metadata columns to avoid printing
 #' thousands of locus columns.
 #'
-#' @param pop A `tidybreed_pop` object.
+#' @param pop A `tidybreed_pop` object, or a `tidybreed_table` from
+#'   [get_table()] (its `pop` reference is used).
 #' @param table_name Character. Name of the table to describe.
 #'
-#' @return A tibble of class `tidybreed_table_desc` (returned invisibly) with
-#'   columns `column_name`, `column_type`, `description`, and `notes`.
-#'   Printed via [print.tidybreed_table_desc()].
+#' @return A tibble of class `tidybreed_table_desc` with columns
+#'   `column_name`, `column_type`, `description`, and `notes`. Printed via
+#'   [print.tidybreed_table_desc()].
 #'
 #' @seealso [schema()], [define_schema_description()]
 #'
 #' @examples
 #' \dontrun{
-#' pop <- initialize_genome("MySim", n_loci = 500, n_chr = 5, chr_len_Mb = 100)
+#' pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
+#'   define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 #' describe_table(pop, "ind_meta")
 #' describe_table(pop, "genome_effects")
+#'
+#' # Also accepts a tidybreed_table, so it chains directly after get_table()
+#' pop |> get_table("ind_meta") |> describe_table("ind_meta")
 #' }
 #' @export
 describe_table <- function(pop, table_name) {

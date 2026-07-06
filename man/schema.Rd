@@ -7,7 +7,8 @@
 schema(pop)
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
+\item{pop}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} from
+\code{\link[=get_table]{get_table()}} (its \code{pop} reference is used).}
 }
 \value{
 A tibble of class \code{tidybreed_schema} with columns
@@ -25,7 +26,8 @@ overview; use \code{describe_table(pop, "name")} to drill into a specific table.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome("MySim", n_loci = 500, n_chr = 5, chr_len_Mb = 100)
+pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
+  define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 schema(pop)
 }
 }

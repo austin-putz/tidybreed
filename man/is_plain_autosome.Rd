@@ -2,7 +2,7 @@
 % Please edit documentation in R/chr_meta_helpers.R
 \name{is_plain_autosome}
 \alias{is_plain_autosome}
-\title{Is a chromosome "plain" (both sexes full copy, recombines)?}
+\title{Is a chromosome "plain" (both sexes full copy, recombines in both sexes)?}
 \usage{
 is_plain_autosome(chr_row)
 }
@@ -15,7 +15,8 @@ Logical scalar.
 \description{
 A chromosome is handled by the fast, unchanged autosome path in
 \code{\link[=add_founders]{add_founders()}}/\code{\link[=add_offspring]{add_offspring()}} iff both sexes get a full complement and
-recombination occurs — i.e. \code{chr_meta} has its default row for it. Any
-other combination routes through the special-chromosome path.
+recombination occurs in both sexes — i.e. \code{chr_meta} has its default row for
+it. Any other combination (sex-linked copy mode, or achiasmy in either sex)
+routes through the special-chromosome path.
 }
 \keyword{internal}

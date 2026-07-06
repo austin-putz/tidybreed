@@ -450,7 +450,7 @@ test_that("FCR derived_formula: correct record count and FCR not in ind_tbv", {
   expect_true("ADFI" %in% tbv_traits)
 })
 
-test_that("FCR mean is approximately ADFI_mean / ADG_mean", {
+test_that("FCR central tendency is approximately ADFI_mean / ADG_mean", {
   pop <- setup_fcr_pop("fD2")
   on.exit(close_pop(pop))
   pop <- define_phenotype(pop, "FCR", type = "derived_formula",
@@ -459,7 +459,12 @@ test_that("FCR mean is approximately ADFI_mean / ADG_mean", {
 
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   fcr <- ph[ph$phenotype_name == "FCR", ]
-  expect_equal(mean(fcr$pheno_value, na.rm = TRUE), 2.2 / 0.9, tolerance = 0.4)
+  # Use the MEDIAN, not the mean: FCR = ADFI / ADG is a ratio whose denominator
+  # (ADG, mean 0.9) can approach or cross zero for individual animals, making the
+  # mean explode from a single outlier. The median is the stable central-tendency
+  # statistic for this ratio and tracks ADFI_mean / ADG_mean.
+  expect_equal(stats::median(fcr$pheno_value, na.rm = TRUE), 2.2 / 0.9,
+               tolerance = 0.4)
 })
 
 test_that("topological ordering: FCR_pct evaluated after FCR when add_phenotype called with no name", {

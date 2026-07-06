@@ -3,10 +3,10 @@
 #' @description
 #' Sets a non-default inheritance rule for one chromosome in `chr_meta` — sex
 #' chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids).
-#' `initialize_genome()`/`define_genome()` seeds every chromosome with the
-#' default autosome rule (`copy_mode_M = copy_mode_F = "full"`,
-#' `recombines = TRUE`); call `define_chr()` before [add_founders()] to
-#' override that default for a specific chromosome.
+#' [define_genome()] seeds every chromosome with the default autosome rule
+#' (`copy_mode_M = copy_mode_F = "full"`, `recombines_M = recombines_F = TRUE`);
+#' call `define_chr()` before [add_founders()] to override that default for a
+#' specific chromosome.
 #'
 #' `copy_mode_M`/`copy_mode_F` are **relative to an individual's own ploidy**,
 #' not an absolute copy count: `"full"` means the same as that individual's
@@ -26,9 +26,15 @@
 #'   supplies the reduced copy when either sex's copy_mode is not `"full"`.
 #'   Must be `NULL` when both copy_modes are `"full"`; must be
 #'   `"parent_1"`/`"parent_2"` otherwise.
-#' @param recombines Logical. `TRUE` (default) if recombination occurs during
-#'   gamete formation; `FALSE` for non-recombining chromosomes (Y, W, MT, most
-#'   organelles).
+#' @param recombines Logical. Primary shorthand that sets **both**
+#'   `recombines_M` and `recombines_F`. `TRUE` (default) if recombination occurs
+#'   during gamete formation; `FALSE` for non-recombining chromosomes (Y, W, MT,
+#'   most organelles).
+#' @param recombines_M,recombines_F Logical or `NULL`. Per-sex recombination
+#'   switches (matching the `copy_mode_M`/`copy_mode_F` pattern). `NULL`
+#'   (default) means "use `recombines`"; pass one explicitly to set achiasmy in a
+#'   single sex (e.g. *Drosophila* males: `recombines_M = FALSE`,
+#'   `recombines_F = TRUE`).
 #' @param overwrite Logical. If `TRUE` (default), re-calling `define_chr()`
 #'   for the same `chr_name` updates the existing row in place — this is a
 #'   normal edit workflow (e.g. fixing a typo'd `hemi_parent`), not append-only
@@ -40,6 +46,11 @@
 #'
 #' @examples
 #' \dontrun{
+#' # chr_names must exist in genome_meta before define_chr() can target them
+#' pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+#'   define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+#'                 chr_names = c("1", "X", "Y"))
+#'
 #' # Mammalian sex chromosomes
 #' pop <- pop |>
 #'   define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
@@ -47,8 +58,11 @@
 #'   define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
 #'              hemi_parent = "parent_1", recombines = FALSE)
 #'
-#' # Mitochondria (maternal, non-recombining)
-#' pop <- pop |>
+#' # Mitochondria (maternal, non-recombining) — needs its own chr_name
+#' pop2 <- open_pop(pop_name = "test2", db_name = ":memory:") |>
+#'   define_genome(n_loci = 1000, n_chr = 2, chr_len_Mb = 100,
+#'                 chr_names = c("1", "MT"))
+#' pop2 <- pop2 |>
 #'   define_chr("MT", copy_mode_M = "half", copy_mode_F = "half",
 #'              hemi_parent = "parent_2", recombines = FALSE)
 #' }
@@ -56,6 +70,7 @@
 define_chr <- function(pop, chr_name,
                        copy_mode_M = "full", copy_mode_F = "full",
                        hemi_parent = NULL, recombines = TRUE,
+                       recombines_M = NULL, recombines_F = NULL,
                        overwrite = TRUE) {
 
   validate_tidybreed_pop(pop)
@@ -86,6 +101,11 @@ define_chr <- function(pop, chr_name,
   }
 
   stopifnot(is.logical(recombines), length(recombines) == 1L, !is.na(recombines))
+  # recombines is the shorthand; recombines_M/_F default to it unless given.
+  if (is.null(recombines_M)) recombines_M <- recombines
+  if (is.null(recombines_F)) recombines_F <- recombines
+  stopifnot(is.logical(recombines_M), length(recombines_M) == 1L, !is.na(recombines_M))
+  stopifnot(is.logical(recombines_F), length(recombines_F) == 1L, !is.na(recombines_F))
   stopifnot(is.logical(overwrite), length(overwrite) == 1L, !is.na(overwrite))
 
   known_chrs <- DBI::dbGetQuery(pop$db_conn,
@@ -97,11 +117,12 @@ define_chr <- function(pop, chr_name,
   }
 
   df <- data.frame(
-    chr_name    = chr_name,
-    copy_mode_M = copy_mode_M,
-    copy_mode_F = copy_mode_F,
-    hemi_parent = if (is.null(hemi_parent)) NA_character_ else hemi_parent,
-    recombines  = recombines,
+    chr_name     = chr_name,
+    copy_mode_M  = copy_mode_M,
+    copy_mode_F  = copy_mode_F,
+    hemi_parent  = if (is.null(hemi_parent)) NA_character_ else hemi_parent,
+    recombines_M = recombines_M,
+    recombines_F = recombines_F,
     stringsAsFactors = FALSE
   )
 
@@ -117,7 +138,8 @@ define_chr <- function(pop, chr_name,
       "DO UPDATE SET copy_mode_M = EXCLUDED.copy_mode_M, ",
       "copy_mode_F = EXCLUDED.copy_mode_F, ",
       "hemi_parent = EXCLUDED.hemi_parent, ",
-      "recombines = EXCLUDED.recombines"
+      "recombines_M = EXCLUDED.recombines_M, ",
+      "recombines_F = EXCLUDED.recombines_F"
     )
   } else {
     "DO NOTHING"
@@ -131,7 +153,7 @@ define_chr <- function(pop, chr_name,
   message("Defined chr_meta rule for '", chr_name, "': M=", copy_mode_M,
           ", F=", copy_mode_F, ", hemi_parent=",
           if (is.null(hemi_parent)) "NULL" else hemi_parent,
-          ", recombines=", recombines)
+          ", recombines_M=", recombines_M, ", recombines_F=", recombines_F)
 
   invisible(pop)
 }

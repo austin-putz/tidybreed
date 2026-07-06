@@ -72,8 +72,8 @@ cat("Inserting new locus: locus_id =", next_id, " col =", new_locus_col, "\n")
 
 # 2a. Add row to genome_meta (chromosome 1, mid-position)
 DBI::dbExecute(conn, sprintf(
-  "INSERT INTO genome_meta (locus_id, locus_name, chr, chr_name, pos_Mb)
-   VALUES (%d, 'MSTN_KO', 1, '1', 50.0)",
+  "INSERT INTO genome_meta (locus_id, locus_name, chr, chr_name, pos_bp)
+   VALUES (%d, 'MSTN_KO', 1, '1', 50000000)",
   next_id
 ))
 

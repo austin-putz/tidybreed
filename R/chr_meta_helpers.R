@@ -30,7 +30,7 @@ resolve_chr_copy_count <- function(copy_mode, ploidy = 2L) {
 #'
 #' @param conn A DBI connection.
 #' @return Named list (by `chr_name`), each element a 1-row data.frame with
-#'   `copy_mode_M`, `copy_mode_F`, `hemi_parent`, `recombines`.
+#'   `copy_mode_M`, `copy_mode_F`, `hemi_parent`, `recombines_M`, `recombines_F`.
 #' @keywords internal
 get_chr_meta_map <- function(conn) {
   df <- DBI::dbGetQuery(conn, "SELECT * FROM chr_meta")
@@ -86,12 +86,13 @@ assert_qtl_autosomal <- function(conn, locus_names) {
 }
 
 
-#' Is a chromosome "plain" (both sexes full copy, recombines)?
+#' Is a chromosome "plain" (both sexes full copy, recombines in both sexes)?
 #'
 #' A chromosome is handled by the fast, unchanged autosome path in
 #' [add_founders()]/[add_offspring()] iff both sexes get a full complement and
-#' recombination occurs — i.e. `chr_meta` has its default row for it. Any
-#' other combination routes through the special-chromosome path.
+#' recombination occurs in both sexes — i.e. `chr_meta` has its default row for
+#' it. Any other combination (sex-linked copy mode, or achiasmy in either sex)
+#' routes through the special-chromosome path.
 #'
 #' @param chr_row One row of `chr_meta` (as returned by [get_chr_meta_map()]).
 #' @return Logical scalar.
@@ -99,5 +100,6 @@ assert_qtl_autosomal <- function(conn, locus_names) {
 is_plain_autosome <- function(chr_row) {
   identical(chr_row$copy_mode_M, "full") &&
     identical(chr_row$copy_mode_F, "full") &&
-    isTRUE(chr_row$recombines)
+    isTRUE(chr_row$recombines_M) &&
+    isTRUE(chr_row$recombines_F)
 }

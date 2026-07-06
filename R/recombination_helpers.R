@@ -4,21 +4,24 @@
 #' every `make_gamete()` call, avoiding O(n_loci × n_chr) masking work inside
 #' the per-offspring loop.
 #'
-#' @param genome_meta_df Data frame with columns `chr` and `pos_Mb`.
+#' @param locus_map Data frame with columns `chr` and `pos_cM` — the resolved
+#'   genetic map (from `resolve_genome_map()`), one row per locus, ordered by
+#'   `locus_id`.
 #' @return Named list, one element per chromosome. Each element is a list with
-#'   `locus_idx` (integer indices into the locus dimension), `pos_Mb`
-#'   (positions), and `chr_len` (derived as `MAX(pos_Mb)` for the chromosome;
-#'   crossovers beyond the last locus are invisible to inheritance).
+#'   `locus_idx` (integer indices into the locus dimension), `pos_cM`
+#'   (genetic positions in centiMorgans), and `chr_len` (derived as
+#'   `MAX(pos_cM)` for the chromosome; crossovers beyond the last locus are
+#'   invisible to inheritance).
 #' @keywords internal
-build_chr_info <- function(genome_meta_df) {
-  chrs <- sort(unique(genome_meta_df$chr))
+build_chr_info <- function(locus_map) {
+  chrs <- sort(unique(locus_map$chr))
   stats::setNames(
     lapply(chrs, function(chr_id) {
-      mask <- genome_meta_df$chr == chr_id
+      mask <- locus_map$chr == chr_id
       list(
         locus_idx = which(mask),
-        pos_Mb    = genome_meta_df$pos_Mb[mask],
-        chr_len   = max(genome_meta_df$pos_Mb[mask])
+        pos_cM    = locus_map$pos_cM[mask],
+        chr_len   = max(locus_map$pos_cM[mask])
       )
     }),
     as.character(chrs)
@@ -28,9 +31,9 @@ build_chr_info <- function(genome_meta_df) {
 #' Produce a gamete from a parent's two haplotypes via chromosomal crossovers
 #'
 #' Simulates chromosomal recombination using the Haldane map function.
-#' Crossover count per chromosome ~ Poisson(chr_len_Mb / 100), assuming
-#' approximately 1 Morgan per 100 Mb. Crossover positions are uniform within
-#' each chromosome.
+#' Crossover count per chromosome ~ Poisson(chr_len_cM / 100), i.e.
+#' Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Crossover
+#' positions are uniform in genetic (cM) distance within each chromosome.
 #'
 #' @param hap_matrix 2 x n_loci integer matrix. Row 1 = haplotype from
 #'   parent_origin 1, row 2 = haplotype from parent_origin 2.
@@ -55,7 +58,7 @@ make_gamete <- function(hap_matrix, chr_info) {
 
   for (ci in chr_info) {
     chr_locus_idx <- ci$locus_idx
-    chr_pos       <- ci$pos_Mb
+    chr_pos       <- ci$pos_cM
     chr_len       <- ci$chr_len
 
     n_cross     <- rpois(1L, lambda = chr_len / 100)
@@ -81,10 +84,11 @@ make_gamete <- function(hap_matrix, chr_info) {
 
 #' Pass a chromosome copy through to a gamete without recombination
 #'
-#' Used for `chr_meta.recombines = FALSE` chromosomes (Y, W, MT, most
-#' organelles) and for any chromosome where the contributing parent's own
-#' copy count for it is 1 (nothing to recombine against regardless of the
-#' `recombines` flag). Deliberately not routed through [make_gamete()] —
+#' Used for non-recombining chromosomes (the contributing parent's own-sex
+#' `chr_meta.recombines_M`/`recombines_F` is `FALSE` — Y, W, MT, most organelles)
+#' and for any chromosome where the contributing parent's own copy count for it is
+#' 1 (nothing to recombine against regardless of the `recombines_*` flags).
+#' Deliberately not routed through [make_gamete()] —
 #' that function's whole contract is "simulate crossovers," and a chromosome
 #' that never recombines has no crossover model at all.
 #'

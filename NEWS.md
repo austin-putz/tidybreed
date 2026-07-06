@@ -1,3 +1,37 @@
+# tidybreed 0.50.0 (2026-07-06)
+
+## Genome position coordinates & genetic map (breaking schema change)
+
+Physical and genetic map positions are now stored separately, matching the
+`genome_effects` precedent (sex/line/version dimensions become **rows**, never a
+schema change). Pre-1.0.0: breaking changes ship as a MINOR bump.
+
+- **`genome_meta`: `pos_Mb DOUBLE` → `pos_bp BIGINT`** (physical position, base
+  pairs, 1-based; VCF/PLINK convention, lossless export). `pos_bp` is created via
+  an explicit typed `CREATE TABLE`, so user row-adds of an integer `pos_bp` widen
+  to `BIGINT` automatically — no R-side conversion, and the type survives
+  `mutate_table()`/`define_chip()`/`restore_pop()`.
+- **New `genome_map` table** holds the genetic map (`pos_cM DOUBLE`), keyed
+  `(locus_id, sex, line_name, map_name)`; `sex`/`line_name` `NULL` = applies to
+  both sexes / all lines; `map_name` defaults to `"default"`. `define_genome()`
+  writes a single default map; sex/line/version-specific maps are added as rows.
+- **`define_genome(cM_per_Mb = 1.0)`** — new argument (scalar or length-`n_chr`,
+  strictly positive) deriving `pos_cM = pos_bp/1e6 * cM_per_Mb`. Recombination and
+  founder-LD are now driven by genetic distance (cM), not physical Mb.
+- **`chr_meta.recombines` → `recombines_M` + `recombines_F`** (per-sex, matching
+  `copy_mode_M`/`copy_mode_F`). `define_chr(recombines = ...)` remains the primary
+  shorthand that sets both; pass `recombines_M`/`recombines_F` for single-sex
+  achiasmy (e.g. *Drosophila* males).
+- **Removed `genome_meta.introduced_gen`** (unused Stage-5 scaffolding).
+- New internal helpers `resolve_genome_map()` (per-gamete sex/line map resolution
+  with monotonicity + completeness validation) and `validate_genome_map()`.
+- Founder-LD helpers and the recombination readers now key on the resolved map;
+  the `founder_allele_freq` write no longer rewrites `genome_meta` (preserves the
+  `BIGINT` type via `ALTER TABLE` + `UPDATE`).
+
+Reproducibility is forward-only (same seed reproduces on the current code); old
+seeded output is not preserved.
+
 # tidybreed 0.49.1 (2026-07-03)
 
 ## Documentation audit

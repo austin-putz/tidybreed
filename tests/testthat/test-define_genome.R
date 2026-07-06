@@ -4,6 +4,7 @@ test_that("define_genome() adds genome tables to pop$tables", {
   on.exit(close_pop(pop))
 
   expect_true("genome_meta"   %in% pop$tables)
+  expect_true("genome_map"    %in% pop$tables)
   expect_true("ind_haplotype" %in% pop$tables)
   expect_true("ind_genotype"  %in% pop$tables)
   expect_true("chr_meta"      %in% pop$tables)
@@ -17,8 +18,19 @@ test_that("define_genome() genome_meta has correct row count and columns", {
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   expect_equal(nrow(gm), n)
-  expect_true(all(c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb") %in%
+  # Physical coordinate is pos_bp (BIGINT); genetic pos_cM lives in genome_map.
+  expect_true(all(c("locus_id", "locus_name", "chr", "chr_name", "pos_bp") %in%
                     names(gm)))
+  # Old columns are gone.
+  expect_false("pos_Mb"         %in% names(gm))
+  expect_false("pos_cM"         %in% names(gm))
+  expect_false("introduced_gen" %in% names(gm))
+
+  # pos_bp is a genuine BIGINT column (not DOUBLE/INTEGER).
+  pt <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT data_type FROM information_schema.columns
+     WHERE table_name = 'genome_meta' AND column_name = 'pos_bp'")$data_type
+  expect_equal(pt, "BIGINT")
 })
 
 test_that("define_genome() distributes loci evenly across chromosomes", {
@@ -40,9 +52,10 @@ test_that("define_genome() scalar chr_len_Mb applies to all chromosomes", {
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   for (c in 1:3) {
-    chr_pos <- gm$pos_Mb[gm$chr == c]
-    expect_true(max(chr_pos) <= 150)
-    expect_true(min(chr_pos) >= 0)
+    chr_pos <- gm$pos_bp[gm$chr == c]        # base pairs now
+    expect_true(max(chr_pos) <= 150 * 1e6)
+    expect_true(min(chr_pos) > 0)            # 1-based, strictly positive
+    expect_false(anyDuplicated(chr_pos) > 0) # strictly increasing, no dup
   }
 })
 
@@ -54,8 +67,8 @@ test_that("define_genome() vector chr_len_Mb respected per chromosome", {
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   for (i in seq_along(lengths)) {
-    chr_pos <- gm$pos_Mb[gm$chr == i]
-    expect_true(max(chr_pos) <= lengths[i])
+    chr_pos <- gm$pos_bp[gm$chr == i]        # base pairs
+    expect_true(max(chr_pos) <= lengths[i] * 1e6)
   }
 })
 

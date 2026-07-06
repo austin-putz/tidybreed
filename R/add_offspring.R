@@ -14,7 +14,7 @@
 #'   - `id_parent_2` — dam / parent 2 ID; must exist in `ind_meta`.
 #'     Alias: `id_dam`
 #'   - `sex` — `"M"` or `"F"`
-#'   - `line` — line name for offspring IDs (same format as `add_founders()`)
+#'   - `line_name` — line name for offspring IDs (same format as `add_founders()`)
 #'
 #'   **Optional extra columns** (e.g. `gen = 2L`, `farm = "Iowa"`) are
 #'   validated and written directly to `ind_meta`. If a column does not yet
@@ -31,7 +31,7 @@
 #'   as a separate row with the same `id_parent_2`
 #' - Multiple dams per sire: include each dam as a separate row with the
 #'   same `id_parent_1`
-#' - Cross-line matings: use any `line` value in the `line` column
+#' - Cross-line matings: use any `line_name` value in the `line_name` column
 #'
 #' **Column aliases:**
 #' `id_sire` is accepted as an alias for `id_parent_1`, and `id_dam` for
@@ -39,23 +39,33 @@
 #'
 #' **Recombination model:**
 #' Gametes are simulated using the Haldane map function. For chromosome i,
-#' the number of crossovers ~ Poisson(chr_len_Mb\[i\] / 100), assuming
-#' approximately 1 Morgan per 100 Mb. Crossover positions are uniform within
-#' each chromosome, and the starting haplotype is chosen at random.
+#' the number of crossovers ~ Poisson(chr_len_cM\[i\] / 100), i.e.
+#' Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Genetic positions
+#' come from the resolved genetic map (`genome_map`, per the gamete-producing
+#' parent's sex/line); crossover positions are uniform in cM within each
+#' chromosome, and the starting haplotype is chosen at random. This
+#' applies to plain autosomes (`chr_meta`'s default `copy_mode_M`/`copy_mode_F
+#' = "full"`, `recombines_M`/`recombines_F = TRUE`). Sex chromosomes and
+#' organelles configured via [define_chr()] follow their own inheritance rule
+#' instead: the contributing parent's copy recombines via the same Haldane model
+#' only when that parent carries two copies of the chromosome AND the
+#' contributor's own-sex `chr_meta.recombines_M`/`recombines_F` is `TRUE`;
+#' otherwise the parent's single stored copy is passed straight through unchanged
+#' (no recombination, no additional RNG draws).
 #'
 #' **Offspring IDs:**
-#' IDs follow the same `{line}_{n}` format as `add_founders()`. Numbering
+#' IDs follow the same `"{line_name}_{n}"` format as `add_founders()`. Numbering
 #' continues from the current maximum for each line.
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' pop <- initialize_genome(
-#'   pop_name = "test", n_loci = 1000, n_chr = 5,
-#'   chr_len_Mb = 100, n_haplotypes = 200
-#' )
+#' pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+#'   define_genome(n_loci = 1000, n_chr = 5, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 200, line_name = "A")
 #' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
 #'   add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 #'
 #' # One offspring per mating, extra metadata column (gen)
@@ -63,18 +73,18 @@
 #'   id_parent_1 = rep("A_1", 5),
 #'   id_parent_2 = paste0("A_", 6:10),
 #'   sex         = c("M", "F", "M", "F", "M"),
-#'   line        = "A",
+#'   line_name   = "A",
 #'   gen         = 2L
 #' )
 #' pop <- pop |> add_offspring(matings)
 #'
 #' # Animal-breeder-style aliases
 #' matings2 <- tibble::tibble(
-#'   id_sire = rep("A_1", 3),
-#'   id_dam  = paste0("A_", 6:8),
-#'   sex     = c("M", "F", "M"),
-#'   line    = "A",
-#'   gen     = 2L
+#'   id_sire   = rep("A_1", 3),
+#'   id_dam    = paste0("A_", 6:8),
+#'   sex       = c("M", "F", "M"),
+#'   line_name = "A",
+#'   gen       = 2L
 #' )
 #' pop <- pop |> add_offspring(matings2)
 #' }
@@ -182,7 +192,7 @@ add_offspring <- function(pop, matings) {
 
   parent_meta <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, sex, ploidy FROM ind_meta WHERE id_ind IN (", parent_id_list, ")")
+    paste0("SELECT id_ind, sex, ploidy, line_name FROM ind_meta WHERE id_ind IN (", parent_id_list, ")")
   )
 
   missing_parents <- setdiff(unique_parents, parent_meta$id_ind)
@@ -196,24 +206,32 @@ add_offspring <- function(pop, matings) {
 
   parent_sex    <- stats::setNames(parent_meta$sex, parent_meta$id_ind)
   parent_ploidy <- stats::setNames(as.integer(parent_meta$ploidy), parent_meta$id_ind)
+  # Parent line — carried for the sex/line map-resolution seam (R9). v1 has only
+  # the default map, so every gamete resolves to it regardless of parent line.
+  parent_line   <- stats::setNames(parent_meta$line_name, parent_meta$id_ind)
 
   # ============================================================================
   # 8. Load genome metadata (once); classify chromosomes as "plain autosome"
-  #    (both sexes full copy, recombines — chr_meta's default row) vs.
+  #    (both sexes full copy, recombines in both sexes — chr_meta's default row) vs.
   #    "special" (any sex-linked/organelle rule). Autosomes are handled by the
   #    unchanged fast path below; special chromosomes get their own branch,
   #    executed strictly AFTER the autosome path for each offspring so autosome
   #    RNG draws are never perturbed by chr_meta configuration.
   # ============================================================================
 
-  genome_meta_df <- dplyr::tbl(pop$db_conn, "genome_meta") |>
-    dplyr::select(locus_id, chr, chr_name, pos_Mb) |>
-    dplyr::arrange(locus_id) |>
-    dplyr::collect()
+  # Recombination is driven by pos_cM (genetic distance), resolved PER GAMETE for
+  # the gamete-producing parent's (sex, line) via resolve_genome_map()'s decision-#6
+  # precedence. The chromosome CLASSIFICATION (which chromosomes are plain autosomes
+  # vs special, and the compact autosome-index remap) is position-independent, so it
+  # is computed once from a base resolution below; only the per-locus pos_cM/chr_len
+  # differ per (sex, line). In v1 only the default map exists, so every (sex, line)
+  # resolves to the same map and output is unchanged; adding sex/line-specific
+  # genome_map rows changes recombination for the matching gametes with no further
+  # code change.
+  genome_meta_df <- resolve_genome_map(pop$db_conn)   # base/default map
 
   n_loci     <- nrow(genome_meta_df)
   locus_cols <- paste0("locus_", seq_len(n_loci))
-  chr_info   <- build_chr_info(genome_meta_df)
 
   chr_meta_map   <- get_chr_meta_map(pop$db_conn)
   chr_ids_all    <- sort(unique(genome_meta_df$chr))
@@ -226,36 +244,54 @@ add_offspring <- function(pop, matings) {
 
   autosome_locus_idx <- which(genome_meta_df$chr %in% chr_ids_all[is_autosome_id])
   special_chr_names  <- unname(chr_name_by_id[chr_id_keys[!is_autosome_id]])
-
-  # chr_info's locus_idx values reference positions in the FULL genome_meta_df
-  # ordering. Parent haplotype matrices for the autosome path are built COMPACT
-  # (n_autosome_loci wide, excluding special-chromosome loci entirely — see
-  # step 9), so autosome_chr_info must be re-expressed with LOCAL indices into
-  # that compact width. For the all-default case (no special chromosomes),
-  # autosome_locus_idx is the identity 1:n_loci, so this remap is a no-op and
-  # autosome_chr_info is byte-identical to the original chr_info — preserving
-  # today's exact RNG sequence.
-  full_to_local <- integer(nrow(genome_meta_df))
+  # chr_info locus_idx values reference the FULL genome_meta_df ordering; the
+  # autosome fast path uses COMPACT parent matrices (special loci excluded), so
+  # autosome descriptors are re-expressed with LOCAL indices via full_to_local.
+  full_to_local <- integer(n_loci)
   full_to_local[autosome_locus_idx] <- seq_along(autosome_locus_idx)
-  autosome_chr_info <- lapply(chr_info[chr_id_keys[is_autosome_id]], function(ci) {
-    list(locus_idx = full_to_local[ci$locus_idx], pos_Mb = ci$pos_Mb, chr_len = ci$chr_len)
-  })
-
   special_locus_ids <- stats::setNames(
     lapply(special_chr_names, function(cn) genome_meta_df$locus_id[genome_meta_df$chr_name == cn]),
     special_chr_names
   )
-  # chr_info's locus_idx values reference positions in the FULL genome_meta_df
-  # ordering; re-express each special chromosome's descriptor with LOCAL
-  # (1..n_chr_loci) indices so it can be used against a compact per-chromosome
-  # matrix (see parent_chr_haps below) without touching make_gamete() itself.
-  special_chr_local_info <- stats::setNames(
-    lapply(special_chr_names, function(cn) {
-      orig <- chr_info[[chr_id_keys[chr_name_by_id == cn]]]
-      list(list(locus_idx = seq_along(orig$locus_idx), pos_Mb = orig$pos_Mb, chr_len = orig$chr_len))
-    }),
-    special_chr_names
+
+  # Turn a resolved map into the gamete descriptors: autosome fast-path info +
+  # per-special-chromosome LOCAL info. Locus structure is shared across maps;
+  # positions (pos_cM/chr_len) come from the resolved map.
+  build_gamete_info <- function(resolved_map) {
+    ci <- build_chr_info(resolved_map)
+    autosome <- lapply(ci[chr_id_keys[is_autosome_id]], function(x) {
+      list(locus_idx = full_to_local[x$locus_idx], pos_cM = x$pos_cM, chr_len = x$chr_len)
+    })
+    special <- stats::setNames(
+      lapply(special_chr_names, function(cn) {
+        orig <- ci[[chr_id_keys[chr_name_by_id == cn]]]
+        list(list(locus_idx = seq_along(orig$locus_idx), pos_cM = orig$pos_cM,
+                  chr_len = orig$chr_len))
+      }),
+      special_chr_names
+    )
+    list(autosome = autosome, special = special)
+  }
+
+  # Resolve + cache one descriptor set per unique (parent sex, parent line) among the
+  # parents, so a gamete picks its producer's map in O(1) inside the loop.
+  gamete_info_key <- stats::setNames(
+    vapply(unique_parents, function(pid) {
+      paste0(parent_sex[[pid]], "\r",
+             if (is.na(parent_line[[pid]])) "" else parent_line[[pid]])
+    }, character(1)),
+    unique_parents
   )
+  gamete_info_cache <- list()
+  for (pid in unique_parents) {
+    key <- gamete_info_key[[pid]]
+    if (is.null(gamete_info_cache[[key]])) {
+      ln <- parent_line[[pid]]
+      rm_ <- resolve_genome_map(pop$db_conn, sex = parent_sex[[pid]],
+                                line_name = if (is.na(ln)) NULL else ln)
+      gamete_info_cache[[key]] <- build_gamete_info(rm_)
+    }
+  }
 
   # ============================================================================
   # 9. Load parent haplotypes in a single batch query
@@ -373,11 +409,10 @@ add_offspring <- function(pop, matings) {
   # 11. Generate gametes and build genomic matrices
   # ============================================================================
 
-  # Autosome path: BYTE-IDENTICAL to the pre-Stage-4 code — same single
-  # make_gamete() call per parent, same chr_info-derived descriptor list. When
-  # every chromosome is a plain autosome (chr_meta all-default),
-  # autosome_chr_info == chr_info and special_chr_names is empty, so this is
-  # the ONLY code executed per offspring, exactly as before.
+  # Autosome path: one make_gamete() call per parent against that parent's resolved
+  # autosome descriptor. When every chromosome is a plain autosome (chr_meta
+  # all-default), special_chr_names is empty, so this is the ONLY code executed per
+  # offspring.
   hap_sire_mat    <- matrix(0L, nrow = n_offspring, ncol = n_autosome_loci)
   hap_dam_mat     <- matrix(0L, nrow = n_offspring, ncol = n_autosome_loci)
   hap_sire_lo_mat <- matrix(NA_character_, nrow = n_offspring, ncol = n_autosome_loci)
@@ -394,14 +429,18 @@ add_offspring <- function(pop, matings) {
     dam     <- matings$id_parent_2[i]
     off_sex <- matings$sex[i]
 
+    # Each gamete uses its producing parent's resolved map (v1: all the default map).
+    sire_info <- gamete_info_cache[[gamete_info_key[[sire]]]]
+    dam_info  <- gamete_info_cache[[gamete_info_key[[dam]]]]
+
     # make_gamete() returns allele + the per-locus homolog (1/2) it came from.
     # line_origin follows whichever parental homolog donated each locus, so it
     # is correct across F1/F2/backcross generations.
-    gs <- make_gamete(parent_haps[[sire]], autosome_chr_info)
+    gs <- make_gamete(parent_haps[[sire]], sire_info$autosome)
     hap_sire_mat[i, ]    <- gs$allele
     hap_sire_lo_mat[i, ] <- parent_lo[[sire]][cbind(gs$homolog, col_idx)]
 
-    gd <- make_gamete(parent_haps[[dam]], autosome_chr_info)
+    gd <- make_gamete(parent_haps[[dam]], dam_info$autosome)
     hap_dam_mat[i, ]    <- gd$allele
     hap_dam_lo_mat[i, ] <- parent_lo[[dam]][cbind(gd$homolog, col_idx)]
 
@@ -432,8 +471,17 @@ add_offspring <- function(pop, matings) {
             "' to pass on as its designated contribution.", call. = FALSE
           )
         }
-        if (k_p == 2L && isTRUE(chr_row$recombines)) {
-          g <- make_gamete(mats$hap, special_chr_local_info[[cn]])
+        # Recombination in this contributor's meiosis is governed by its OWN sex
+        # (recombines_M for a male contributor, recombines_F for a female).
+        contrib_recombines <- if (parent_sex[[contrib$pid]] == "M") {
+          chr_row$recombines_M
+        } else {
+          chr_row$recombines_F
+        }
+        if (k_p == 2L && isTRUE(contrib_recombines)) {
+          # Use the contributor's own resolved map for this special chromosome.
+          contrib_special <- gamete_info_cache[[gamete_info_key[[contrib$pid]]]]$special[[cn]]
+          g <- make_gamete(mats$hap, contrib_special)
           allele <- g$allele
           lo     <- mats$lo[cbind(g$homolog, seq_along(g$homolog))]
         } else {

@@ -43,40 +43,41 @@
   haplotype_matrix
 }
 
-.gen_haplotypes_mosaic <- function(n_haplotypes, n_loci, genome_meta,
+.gen_haplotypes_mosaic <- function(n_haplotypes, n_loci, locus_map,
                                     n_templates, switch_rate) {
-  chrs <- sort(unique(genome_meta$chr))
+  chrs <- sort(unique(locus_map$chr))
 
-  # Build traversal order (loci in chr/pos order) and d_Mb (distance from
-  # previous locus within the same chromosome; 0 at each chromosome's start)
+  # Build traversal order (loci in chr/pos order) and d_cM (genetic distance from
+  # previous locus within the same chromosome; 0 at each chromosome's start).
+  # switch_rate is per cM; locus_map is the resolved default genetic map.
   traversal_order <- integer(n_loci)
-  d_Mb            <- numeric(n_loci)
+  d_cM            <- numeric(n_loci)
   k <- 0L
   for (chr_id in chrs) {
-    chr_mask        <- genome_meta$chr == chr_id
+    chr_mask        <- locus_map$chr == chr_id
     chr_loci        <- which(chr_mask)
-    chr_pos         <- genome_meta$pos_Mb[chr_mask]
+    chr_pos         <- locus_map$pos_cM[chr_mask]
     ord             <- order(chr_pos)
     chr_loci_sorted <- chr_loci[ord]
     chr_pos_sorted  <- chr_pos[ord]
     n_chr_loci      <- length(chr_loci_sorted)
     idx             <- seq(k + 1L, k + n_chr_loci)
     traversal_order[idx]              <- chr_loci_sorted
-    d_Mb[chr_loci_sorted[1L]]         <- 0
+    d_cM[chr_loci_sorted[1L]]         <- 0
     if (n_chr_loci > 1L) {
-      d_Mb[chr_loci_sorted[-1L]] <- diff(chr_pos_sorted)
+      d_cM[chr_loci_sorted[-1L]] <- diff(chr_pos_sorted)
     }
     k <- k + n_chr_loci
   }
 
-  # Per-locus switch probability (Haldane-like)
-  p_switch <- 1 - exp(-switch_rate * d_Mb)
+  # Per-locus switch probability (Haldane-like), per cM
+  p_switch <- 1 - exp(-switch_rate * d_cM)
 
   # Identify the first locus of each chromosome (template resets here)
   chr_first_loci <- vapply(chrs, function(chr_id) {
-    chr_mask <- genome_meta$chr == chr_id
+    chr_mask <- locus_map$chr == chr_id
     chr_loci <- which(chr_mask)
-    chr_pos  <- genome_meta$pos_Mb[chr_mask]
+    chr_pos  <- locus_map$pos_cM[chr_mask]
     chr_loci[which.min(chr_pos)]
   }, integer(1L))
   is_chr_first <- logical(n_loci)
@@ -112,43 +113,44 @@
   haplotype_matrix
 }
 
-.gen_haplotypes_gaussian_copula <- function(n_haplotypes, n_loci, genome_meta,
+.gen_haplotypes_gaussian_copula <- function(n_haplotypes, n_loci, locus_map,
                                              decay_rate) {
-  chrs <- sort(unique(genome_meta$chr))
+  chrs <- sort(unique(locus_map$chr))
 
   # Sample per-locus allele frequencies and convert to latent thresholds
   allele_freqs <- stats::runif(n_loci, 0.01, 0.99)
   thresholds   <- stats::qnorm(allele_freqs)
 
-  # Build traversal order, d_Mb, and rho per locus
+  # Build traversal order, d_cM (genetic distance), and rho per locus.
+  # decay_rate is per cM; locus_map is the resolved default genetic map.
   traversal_order <- integer(n_loci)
-  d_Mb            <- numeric(n_loci)
+  d_cM            <- numeric(n_loci)
   k <- 0L
   for (chr_id in chrs) {
-    chr_mask        <- genome_meta$chr == chr_id
+    chr_mask        <- locus_map$chr == chr_id
     chr_loci        <- which(chr_mask)
-    chr_pos         <- genome_meta$pos_Mb[chr_mask]
+    chr_pos         <- locus_map$pos_cM[chr_mask]
     ord             <- order(chr_pos)
     chr_loci_sorted <- chr_loci[ord]
     chr_pos_sorted  <- chr_pos[ord]
     n_chr_loci      <- length(chr_loci_sorted)
     idx             <- seq(k + 1L, k + n_chr_loci)
     traversal_order[idx]              <- chr_loci_sorted
-    d_Mb[chr_loci_sorted[1L]]         <- 0
+    d_cM[chr_loci_sorted[1L]]         <- 0
     if (n_chr_loci > 1L) {
-      d_Mb[chr_loci_sorted[-1L]] <- diff(chr_pos_sorted)
+      d_cM[chr_loci_sorted[-1L]] <- diff(chr_pos_sorted)
     }
     k <- k + n_chr_loci
   }
 
-  rho <- exp(-decay_rate * d_Mb)
+  rho <- exp(-decay_rate * d_cM)
 
   # Force rho = 0 at each chromosome's first locus so the AR(1) restarts
   # independently (z_curr = eps ~ N(0,1) when rho = 0)
   chr_first_loci <- vapply(chrs, function(chr_id) {
-    chr_mask <- genome_meta$chr == chr_id
+    chr_mask <- locus_map$chr == chr_id
     chr_loci <- which(chr_mask)
-    chr_pos  <- genome_meta$pos_Mb[chr_mask]
+    chr_pos  <- locus_map$pos_cM[chr_mask]
     chr_loci[which.min(chr_pos)]
   }, integer(1L))
   rho[chr_first_loci] <- 0
@@ -183,10 +185,24 @@
   n_haplotypes <- nrow(haplotype_matrix)
   n_loci       <- ncol(haplotype_matrix)
 
-  # Write founder_allele_freq back to genome_meta (last call wins for multi-line)
-  genome_meta <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_meta")
-  genome_meta$founder_allele_freq <- allele_freqs
-  DBI::dbWriteTable(pop$db_conn, "genome_meta", genome_meta, overwrite = TRUE)
+  # Write founder_allele_freq into genome_meta via ALTER + UPDATE (last call wins
+  # for multi-line). NEVER rewrite the table with dbWriteTable(overwrite): that
+  # re-infers column types from R and would demote pos_bp from BIGINT. The UPDATE
+  # is keyed on locus_id via a registered temp relation (RNG-safe; no dbWriteTable).
+  if (!"founder_allele_freq" %in% DBI::dbListFields(pop$db_conn, "genome_meta")) {
+    DBI::dbExecute(pop$db_conn,
+      "ALTER TABLE genome_meta ADD COLUMN founder_allele_freq DOUBLE")
+  }
+  # allele_freqs is in locus_id order (matching haplotype_matrix columns); align it
+  # positionally to the sorted locus_id list.
+  lid <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_id FROM genome_meta ORDER BY locus_id")$locus_id
+  freq_df <- data.frame(locus_id = lid, founder_allele_freq = allele_freqs)
+  duckdb::duckdb_register(pop$db_conn, "__tmp_founder_freq", freq_df)
+  DBI::dbExecute(pop$db_conn,
+    "UPDATE genome_meta AS g SET founder_allele_freq = t.founder_allele_freq
+       FROM __tmp_founder_freq AS t WHERE g.locus_id = t.locus_id")
+  duckdb::duckdb_unregister(pop$db_conn, "__tmp_founder_freq")
 
   # Locus names in locus_id order (haplotype_matrix columns are in locus_id order)
   gm_order <- DBI::dbGetQuery(

@@ -11,6 +11,8 @@ define_chr(
   copy_mode_F = "full",
   hemi_parent = NULL,
   recombines = TRUE,
+  recombines_M = NULL,
+  recombines_F = NULL,
   overwrite = TRUE
 )
 }
@@ -32,9 +34,16 @@ supplies the reduced copy when either sex's copy_mode is not \code{"full"}.
 Must be \code{NULL} when both copy_modes are \code{"full"}; must be
 \code{"parent_1"}/\code{"parent_2"} otherwise.}
 
-\item{recombines}{Logical. \code{TRUE} (default) if recombination occurs during
-gamete formation; \code{FALSE} for non-recombining chromosomes (Y, W, MT, most
-organelles).}
+\item{recombines}{Logical. Primary shorthand that sets \strong{both}
+\code{recombines_M} and \code{recombines_F}. \code{TRUE} (default) if recombination occurs
+during gamete formation; \code{FALSE} for non-recombining chromosomes (Y, W, MT,
+most organelles).}
+
+\item{recombines_M, recombines_F}{Logical or \code{NULL}. Per-sex recombination
+switches (matching the \code{copy_mode_M}/\code{copy_mode_F} pattern). \code{NULL}
+(default) means "use \code{recombines}"; pass one explicitly to set achiasmy in a
+single sex (e.g. \emph{Drosophila} males: \code{recombines_M = FALSE},
+\code{recombines_F = TRUE}).}
 
 \item{overwrite}{Logical. If \code{TRUE} (default), re-calling \code{define_chr()}
 for the same \code{chr_name} updates the existing row in place — this is a
@@ -47,10 +56,10 @@ The \code{tidybreed_pop} (invisibly). Assign the result back.
 \description{
 Sets a non-default inheritance rule for one chromosome in \code{chr_meta} — sex
 chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids).
-\code{initialize_genome()}/\code{define_genome()} seeds every chromosome with the
-default autosome rule (\code{copy_mode_M = copy_mode_F = "full"},
-\code{recombines = TRUE}); call \code{define_chr()} before \code{\link[=add_founders]{add_founders()}} to
-override that default for a specific chromosome.
+\code{\link[=define_genome]{define_genome()}} seeds every chromosome with the default autosome rule
+(\code{copy_mode_M = copy_mode_F = "full"}, \code{recombines_M = recombines_F = TRUE});
+call \code{define_chr()} before \code{\link[=add_founders]{add_founders()}} to override that default for a
+specific chromosome.
 
 \code{copy_mode_M}/\code{copy_mode_F} are \strong{relative to an individual's own ploidy},
 not an absolute copy count: \code{"full"} means the same as that individual's
@@ -60,6 +69,11 @@ individual's ploidy is \code{2}, so \code{"full"} = 2 copies and \code{"half"} =
 }
 \examples{
 \dontrun{
+# chr_names must exist in genome_meta before define_chr() can target them
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+                chr_names = c("1", "X", "Y"))
+
 # Mammalian sex chromosomes
 pop <- pop |>
   define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
@@ -67,8 +81,11 @@ pop <- pop |>
   define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
              hemi_parent = "parent_1", recombines = FALSE)
 
-# Mitochondria (maternal, non-recombining)
-pop <- pop |>
+# Mitochondria (maternal, non-recombining) — needs its own chr_name
+pop2 <- open_pop(pop_name = "test2", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 2, chr_len_Mb = 100,
+                chr_names = c("1", "MT"))
+pop2 <- pop2 |>
   define_chr("MT", copy_mode_M = "half", copy_mode_F = "half",
              hemi_parent = "parent_2", recombines = FALSE)
 }

@@ -8,6 +8,54 @@ file-based DuckDB database (not in R memory). Users build a `tidybreed_pop`
 object step by step, query tables with `dplyr`, and eventually run selection
 and mating cycles.
 
+## Development Status: Pre-1.0.0 — Break Freely
+
+**The package has no users yet. Until `1.0.0`, there is NO backward-compatibility
+obligation of any kind.** Make whatever breaking changes produce the best design:
+rename or remove columns, functions, and arguments; change schemas; alter default
+behavior. **Do not** write compatibility shims, deprecation aliases, or "legacy"
+code paths, and **do not** preserve old behavior for its own sake. If a redesign is
+cleaner, take it — a breaking change is not a cost to weigh, it is the expected mode
+of work in this phase.
+
+No one should be treated as a downstream user before `1.0.0`; the few people who
+have seen the package have been told not to build against it. Before `1.0.0`,
+breaking changes are preferred whenever they improve the long-term schema, API,
+correctness, or implementation.
+
+When a function, argument, table, or column is renamed before `1.0.0`, remove the
+old name completely from the codebase. Do not keep deprecated wrappers, aliases,
+manual-page examples, roxygen examples, tests, comments, or generated docs that
+teach the old name unless the explicit task is to document a migration that still
+exists in current code.
+
+Leftover compatibility files are technical debt, not harmless history. If an old
+entry point has been replaced, delete the old R file, remove it from `NAMESPACE`,
+remove its manual page, update examples/tests/vignettes, and make the new path
+the only documented path. Do not leave "deprecated for later" functions around
+before `1.0.0`; there is no downstream compatibility contract to protect.
+
+**The only reproducibility contract is forward-looking, not cross-version:**
+
+1. **Same seed reproduces within the current code.** A given `set.seed()` (or base
+   seed) must produce identical output on repeated runs of the *current*
+   implementation. We do **not** care whether it matches any previous version's
+   output — never write a test that compares against pre-change/"golden-from-old"
+   output, and never contort a formula to stay "byte-identical to today."
+2. **R ↔ Rcpp parity.** Where the same algorithm exists in both R and C++, a given
+   seed must produce identical output in both (this is a *within-current-code*
+   guarantee, and the reason RNG choices like `dqrng` matter).
+
+Before `1.0.0`, algorithms may change and seeded output may change across
+versions. Within a single implementation, seeded runs should be reproducible.
+After `1.0.0`, users must be able to reproduce simulations exactly for the same
+package version, seed, inputs, and supported platform. Any algorithm implemented
+in both R and Rcpp/C++ must have explicit parity tests showing identical results
+for the same seed.
+
+When `1.0.0` ships, this section is replaced by a normal semantic-versioning
+compatibility policy. Until then: design first, break as needed.
+
 ## Design Principles
 
 1. **Database-first** — all data lives in DuckDB, not R objects
@@ -34,6 +82,21 @@ If metadata is required, it needs to be considered carefully and likely
 should be stored in a table and never in the R object itself, for restarts
 and for `restore_pop()` to be complete without having to recreate it or
 given as options again. 
+
+## Schema Design Bias
+
+Schema choices should optimize for future breeding-program designs, especially
+crossbreeding. Before adding or reshaping a table, ask whether the schema can
+later support multiple lines, line-specific and population-wide effects,
+reciprocal crosses, sex-specific recombination maps, non-additive effects, and
+contributor-specific phenotype components without another fundamental rewrite.
+
+Do not implement future biology before it is needed. It is enough to reserve
+clean dimensions now when the schema would be painful to alter later. Prefer
+long tables with explicit dimensions such as `line_name`, `sex`, `map_name`,
+`genome_effect_type`, and `effect_name`. Use `NULL` deliberately for
+shared/default behavior, such as population-wide genome effects or maps applying
+to all lines.
 
 ## Naming Consistency Rules
 
@@ -79,10 +142,14 @@ The model is split into two distinct layers with a strict boundary between them:
 
 | Prefix        | Meaning                                        |
 |---------------|------------------------------------------------|
-| `initialize_` | Creates the DuckDB database and core tables    |
+| `open_`       | Opens or creates a population database/session |
+| `restore_`    | Restores an existing population database       |
 | `add_`        | Inserts simulation output rows                 |
 | `define_`     | Writes model configuration / metadata          |
 | `mutate_`     | Adds or updates columns in an existing table   |
+| `extract_`    | Returns analysis/export data without changing simulation state |
+| `remove_`     | Deletes selected rows                          |
+| `archive_`    | Moves/stamps completed replicate data          |
 
 **`add_*` vs `define_*` rule**: if the function writes rows that represent
 simulation *output* (data produced by running the model), use `add_`. If the
@@ -98,7 +165,9 @@ Examples: `add_founders()`, `add_phenotype()`, `add_tbv()`, `add_ebv()`,
 
 ### `genome_meta`
 
-Locus-level metadata. One row per locus.
+Locus-level metadata. One row per locus. Holds the **physical** coordinate only
+(`pos_bp`); the **genetic** map (`pos_cM`) lives in the separate `genome_map` table
+(see below), mirroring how QTL effects live in `genome_effects`.
 
 | Column     | Type    | Notes                          |
 |------------|---------|--------------------------------|
@@ -106,17 +175,49 @@ Locus-level metadata. One row per locus.
 | locus_name | VARCHAR | e.g. "Locus_1", "rs12345"; validated unique |
 | chr        | INTEGER | Chromosome number              |
 | chr_name   | VARCHAR | Chromosome name string         |
-| pos_Mb     | DOUBLE  | Position in megabases          |
-| introduced_gen | INTEGER | NULL = founding locus; generation a novel mutation was added (Stage 5) |
+| pos_bp     | BIGINT  | Physical position, base pairs, **1-based** (VCF/PLINK convention). Created via explicit typed `CREATE TABLE` so the type is enforced; user row-adds of an integer widen to `BIGINT` automatically |
+| founder_allele_freq | DOUBLE | Base allele frequency; added by `define_founder_haplotypes()` (via `ALTER TABLE`, never a table rewrite — preserves `pos_bp` `BIGINT`) |
 | *user cols*| any     | Added via `mutate_table()` or `define_chip()` |
 
-**Reserved** (cannot be modified): `locus_id`, `locus_name`, `chr`, `chr_name`, `pos_Mb`, `introduced_gen`
+**Reserved** (cannot be modified): `locus_id`, `locus_name`, `chr`, `chr_name`, `pos_bp`
 
 Example user columns: `is_50K BOOLEAN`, `is_HD BOOLEAN`
 
 **Note**: QTL effects are **not** stored as columns in `genome_meta`. They live in
 the `genome_effects` table (see below). There are no `add_{trait}`, `is_QTL_{trait}`,
-or `base_allele_freq_{trait}` columns.
+or `base_allele_freq_{trait}` columns. **Genetic-map positions (`pos_cM`) are not in
+`genome_meta`** either — use `genome_map`, joined via `locus_id`. (`pos_Mb` and
+`introduced_gen` were removed in v0.50.0.)
+
+### `genome_map`
+
+The genetic map, in **long** format. One row per (locus × sex × line × map) with a
+defined genetic position. Populated by `define_genome()` (a single default map) and,
+later, by a `define_genetic_map()`-style writer for sex/line/version-specific maps.
+Adding a map dimension is **rows, never a schema change** — the same precedent as
+`genome_effects`.
+
+| Column        | Type    | Notes                                                        |
+|---------------|---------|--------------------------------------------------------------|
+| id_genome_map | INTEGER | Surrogate PK (assigned via `next_int_id()`, not DB auto-increment) |
+| locus_id      | INTEGER | FK to `genome_meta.locus_id`; internal join/order key        |
+| locus_name    | VARCHAR | FK to `genome_meta.locus_name`; denormalized                 |
+| sex           | VARCHAR | `NULL` = both sexes; `'M'`/`'F'` = sex-specific map           |
+| line_name     | VARCHAR | `NULL` = all lines; set for line-specific maps               |
+| map_name      | VARCHAR | Map version/identity; default `"default"`                    |
+| pos_cM        | DOUBLE  | Genetic-map position, centiMorgans                           |
+
+**Logical key** `(locus_id, sex, line_name, map_name)` (nullable `sex`/`line_name`
+enforced in R by `validate_genome_map()`). **Reserved**: all columns.
+
+Two internal helpers are the single source of genetic positions for all
+distance-driven code (founder LD, recombination):
+- `resolve_genome_map(conn, sex, line_name, map_name)` — returns exactly one row per
+  locus, `locus_id`-ordered, applying per-locus precedence `(sex=S,line=L)` →
+  `(sex=S,NULL)` → `(NULL,line=L)` → `(NULL,NULL)`; errors on a missing locus or a
+  `pos_cM` that is non-monotonic within a chromosome after fallback.
+- `validate_genome_map(conn)` — logical-key uniqueness (NULL-normalized),
+  agreement with `genome_meta`, valid `sex`/`map_name`. Run after every map write.
 
 ### `genome_effects`
 
@@ -125,7 +226,7 @@ QTL effect data. One row per (locus × trait × effect type × line). Populated 
 
 | Column             | Type    | Notes                                                      |
 |--------------------|---------|------------------------------------------------------------|
-| id_genome_effect   | INTEGER | Primary key (auto-incrementing)                            |
+| id_genome_effect   | INTEGER | Primary key assigned by tidybreed via `next_int_id()`       |
 | locus_name         | VARCHAR | FK to `genome_meta.locus_name`                             |
 | line_name          | VARCHAR | NULL = population-wide; set for line-specific effects      |
 | trait_name         | VARCHAR | FK to `trait_meta.trait_name`                              |
@@ -138,6 +239,12 @@ QTL effect data. One row per (locus × trait × effect type × line). Populated 
 QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
 `genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
 flag is stored.
+
+For crossbreeding, `line_name = NULL` means a population-wide/common effect shared
+across lines; non-NULL `line_name` rows are line-specific effects. Current code
+implements additive effects only, but the long `genome_effect_type` dimension is
+reserved so dominance, epistasis, and other non-additive effects can be added later
+without a table rewrite.
 
 ### `ind_haplotype`
 
@@ -194,7 +301,15 @@ is not yet supported — see `ind_meta.ploidy`.
 | copy_mode_M | VARCHAR | `"full"`/`"half"`/`"none"` — copy count for males, **relative to that individual's own ploidy** (not an absolute number). Default `"full"`. |
 | copy_mode_F | VARCHAR | Same as `copy_mode_M`, for females. Default `"full"`.    |
 | hemi_parent | VARCHAR | When either sex's `copy_mode` is non-`"full"`: `"parent_1"`/`"parent_2"` — which parent supplies the reduced copy; NULL when both are `"full"` |
-| recombines  | BOOLEAN | TRUE if recombination occurs (default TRUE)              |
+| recombines_M | BOOLEAN | TRUE if recombination occurs in **male** meiosis (default TRUE); FALSE = whole-chromosome achiasmy in males |
+| recombines_F | BOOLEAN | TRUE if recombination occurs in **female** meiosis (default TRUE); FALSE = achiasmy in females |
+
+`recombines_M`/`recombines_F` are per-sex (matching `copy_mode_M`/`copy_mode_F`).
+`define_chr(recombines = ...)` is the primary shorthand that sets both; pass
+`recombines_M`/`recombines_F` explicitly for single-sex achiasmy (e.g. *Drosophila*
+males: `recombines_M = FALSE`, `recombines_F = TRUE`). A chromosome takes the fast
+autosome path only when both sexes are `copy_mode "full"` **and** both
+`recombines_*` are TRUE.
 
 `copy_mode` is intentionally relative rather than absolute: `"half"` means 1
 copy for a diploid (2N) individual and would mean 2 copies for a tetraploid
@@ -219,7 +334,7 @@ Logical key `(line_name, haplotype_id, locus_name)` enforced in R (nullable
 
 ### `ind_meta`
 
-Individual-level metadata. Created empty by `initialize_genome()`; rows
+Individual-level metadata. Created empty by `open_pop()`; rows
 populated by `add_founders()` and `add_offspring()`.
 
 | Column      | Type    | Notes                               |
@@ -242,7 +357,7 @@ Observation-layer metadata lives in `phenotype_meta`.
 
 | Column          | Type    | Notes                                                              |
 |-----------------|---------|--------------------------------------------------------------------|
-| id_trait        | INTEGER | Primary key (auto-incrementing)                                    |
+| id_trait        | INTEGER | Primary key assigned by tidybreed via `next_int_id()`               |
 | trait_name      | VARCHAR | Unique identifier; equals `phenotype_name` for simple traits       |
 | description     | VARCHAR | Free text                                                          |
 | units           | VARCHAR | e.g. `"kg"`, `"g/day"`                                             |
@@ -284,7 +399,7 @@ go to `phenotype_var_comp`, not here.
 
 | Column           | Type    | Notes                                              |
 |------------------|---------|----------------------------------------------------|
-| id_trait_var_comp| INTEGER | Primary key (auto-incrementing)                    |
+| id_trait_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
 | effect_name      | VARCHAR | `"gen_add"`; future: `"dominance"`, `"epistasis"`  |
 | trait_name_1     | VARCHAR |                                                    |
 | trait_name_2     | VARCHAR |                                                    |
@@ -299,7 +414,7 @@ SGE ADG) appear only here.
 
 | Column                   | Type    | Notes                                                         |
 |--------------------------|---------|---------------------------------------------------------------|
-| id_phenotype_meta        | INTEGER | Primary key (auto-incrementing)                               |
+| id_phenotype_meta        | INTEGER | Primary key assigned by tidybreed via `next_int_id()`          |
 | phenotype_name           | VARCHAR | Unique. Equals `trait_name` for simple traits.                |
 | type                     | VARCHAR | `"continuous"`, `"count"`, `"categorical"`, `"derived_formula"` |
 | mean                     | DOUBLE  | Phenotypic population mean / liability intercept              |
@@ -323,7 +438,7 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 
 | Column             | Type    | Notes                                                              |
 |--------------------|---------|--------------------------------------------------------------------|
-| id_phenotype_comp  | INTEGER | Primary key (auto-incrementing)                                    |
+| id_phenotype_comp  | INTEGER | Primary key assigned by tidybreed via `next_int_id()`               |
 | phenotype_name     | VARCHAR | FK to `phenotype_meta.phenotype_name`                              |
 | source_trait_name  | VARCHAR | FK to `trait_meta.trait_name` — the genetic component trait        |
 | contributor_type   | VARCHAR | `"self"`, `"dam"`, `"sire"`, or `"group"`                          |
@@ -359,7 +474,7 @@ to model heterogeneous residual variance by sex, group, etc.
 
 | Column               | Type    | Notes                                                              |
 |----------------------|---------|--------------------------------------------------------------------|
-| id_phenotype_var_comp| INTEGER | Primary key (auto-incrementing)                                    |
+| id_phenotype_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()`              |
 | effect_name          | VARCHAR | `'residual'` or any named random effect (e.g. `'hys'`, `'litter'`)|
 | phenotype_name_1     | VARCHAR |                                                                    |
 | phenotype_name_2     | VARCHAR |                                                                    |
@@ -376,7 +491,7 @@ Phenotype records in long format. Populated by `add_phenotype()`.
 
 | Column         | Type    | Notes                                             |
 |----------------|---------|---------------------------------------------------|
-| id_phenotype   | INTEGER | Primary key (global auto-incrementing integer)    |
+| id_phenotype   | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
 | id_ind         | VARCHAR |                                                   |
 | phenotype_name | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
 | pheno_value    | DOUBLE  | Phenotype value                                   |
@@ -390,7 +505,7 @@ True breeding values (simulation ground truth). Populated by
 
 | Column     | Type    | Notes                                  |
 |------------|---------|----------------------------------------|
-| id_tbv     | INTEGER | Primary key (auto-incrementing)        |
+| id_tbv     | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
 | id_ind     | VARCHAR |                                        |
 | trait_name | VARCHAR |                                        |
 | tbv_value  | DOUBLE  |                                        |
@@ -402,7 +517,7 @@ Estimated breeding values from external BLUP / GBLUP runs. Logical key
 
 | Column      | Type    | Notes                                                   |
 |-------------|---------|--------------------------------------------------------------|
-| id_ebv      | INTEGER | Primary key (auto-incrementing)                              |
+| id_ebv      | INTEGER | Primary key assigned by tidybreed via `next_int_id()`         |
 | id_ind      | VARCHAR |                                                              |
 | trait_name  | VARCHAR |                                                              |
 | model       | VARCHAR | User label, e.g. "ssGBLUP_v1"                               |
@@ -419,7 +534,7 @@ Selection index definitions. One row per (index × trait). Populated by
 
 | Column          | Type    | Notes                                                         |
 |-----------------|---------|---------------------------------------------------------------|
-| id_index_name   | INTEGER | Primary key (auto-incrementing)                               |
+| id_index_name   | INTEGER | Primary key assigned by tidybreed via `next_int_id()`          |
 | index_name      | VARCHAR | NULL = global/default entry written by `define_trait()`; named index written by `define_index()` |
 | trait_name      | VARCHAR | FK to `trait_meta.trait_name`                                 |
 | index_weight    | DOUBLE  | Selection index weight (NULL for global rows)                 |
@@ -437,7 +552,7 @@ Populated by `add_index()`.
 
 | Column       | Type    | Notes                                          |
 |--------------|---------|------------------------------------------------|
-| id_index     | INTEGER | Primary key (auto-incrementing)                |
+| id_index     | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
 | id_ind       | VARCHAR |                                                |
 | index_name   | VARCHAR | FK to `index_meta.index_name`                  |
 | index_number | INTEGER | Auto-incrementing run counter per individual   |
@@ -451,7 +566,7 @@ Populated by `add_tbv()` when `index_names` is supplied.
 
 | Column           | Type    | Notes                                                        |
 |------------------|---------|--------------------------------------------------------------|
-| id_true_index    | INTEGER | Primary key (auto-incrementing)                              |
+| id_true_index    | INTEGER | Primary key assigned by tidybreed via `next_int_id()`         |
 | id_ind           | VARCHAR |                                                              |
 | index_name       | VARCHAR | FK to `index_meta.index_name`                                |
 | weight_type      | VARCHAR | `"index"` (uses `index_weight`) or `"economic"` (uses `economic_weight`) |
@@ -465,24 +580,21 @@ in R via DELETE + INSERT when `overwrite_index = TRUE`.
 
 ## Implemented Functions (Phase 1 Complete)
 
-### `initialize_genome()`
+### `open_pop()` + `define_genome()` (genome setup)
 
-`R/initialize_genome.R`
+`R/open_pop.R`, `R/define_genome.R`
 
-Creates the DuckDB file (or in-memory DB) and populates **all** core tables
-eagerly, including genome tables and all individual/trait tables:
+The current surface for creating a population and its genome is
+`open_pop() |> define_genome(...)`. `define_genome()` populates the genome tables:
 
-- Genome: `genome_meta`, `ind_haplotype` (empty), `ind_genotype` (empty), `chr_meta` (default autosome rows)
-- Optionally: `founder_haplotypes` (if `n_haplotypes` provided)
-- Individual/trait (all empty): `ind_meta`, `ind_phenotype`, `ind_tbv`,
-  `ind_ebv`, `trait_meta`, `trait_effects`, `trait_var_comp`,
-  `trait_random_effects`
+- Genome: `genome_meta` (physical `pos_bp`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `chr_meta` (default autosome rows)
 
-All tables are registered in `pop$tables` immediately. Users can call
-`get_table()` and `mutate_table()` on any table right after init, before any
-data is inserted.
-
-Key params: `pop_name`, `n_loci`, `n_chr`, `chr_len_Mb`, `db_path`
+`define_genome()` key params: `pop`, `n_loci`, `n_chr`, `chr_len_Mb` (finite,
+strictly positive), `cM_per_Mb` (genetic-map rate, cM per Mb; scalar or
+length-`n_chr`, finite, strictly positive, default `1.0` →
+`pos_cM = pos_bp/1e6 * cM_per_Mb`), `locus_names`, `chr_names`. Calling
+`define_genome()` on a population that already has a non-empty `genome_meta` is a
+hard error (no partial re-definition).
 
 ### `add_founders()`
 
@@ -524,7 +636,7 @@ pop <- pop |>
 **Argument disambiguation**: R's standard matching routes explicit formal params
 (`n_males`, `n_females`, `line_name`, etc.) to their positions; anything else
 falls into `...` and is treated as a custom column. Reserved column names
-(`id_ind`, `sex`, `line`, etc.) are blocked with an error.
+(`id_ind`, `sex`, `line_name`, etc.) are blocked with an error.
 
 **Type safety** — column types are inferred from the R value via
 `infer_duckdb_type()`. Use R's type suffixes to get the right DuckDB type:
@@ -543,7 +655,7 @@ Common pitfall: `gen = 0` gives DOUBLE, not INTEGER. Use `gen = 0L`.
 **Pre-declaring a column schema** before data exists (typed-NA workflow):
 
 ```r
-# 1. After initialize_genome(), declare column types on the empty table
+# 1. After open_pop() |> define_genome(), declare column types on the empty table
 pop <- pop |>
   get_table("ind_meta") |>
   mutate_table(gen = NA_integer_, farm = NA_character_)
@@ -581,8 +693,9 @@ pop <- pop |>
 ```
 
 `add_founders()` and `add_offspring()` read `chr_meta` per chromosome:
-autosomes (`copy_mode_M`/`copy_mode_F` both `"full"`, `recombines = TRUE`) go
-through the original, unchanged diploid path; any other chromosome routes
+autosomes (`copy_mode_M`/`copy_mode_F` both `"full"`, `recombines_M`/`recombines_F`
+both `TRUE`) go through the original, unchanged diploid path; any other chromosome
+routes
 through a separate branch that writes only the applicable `(sex,
 parent_origin)` rows and — for non-recombining or single-copy inheritance
 (Y, W, MT) — passes the parent's stored copy straight through instead of
@@ -673,7 +786,7 @@ pop |>
 # Pre-select top performers from a prior phenotype
 pop |>
   get_table("ind_phenotype") |>
-  dplyr::filter(value > 500) |>
+  dplyr::filter(pheno_value > 500) |>
   add_phenotype("ADG2")
 ```
 
@@ -719,9 +832,9 @@ pop |>
     define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
   ```
 
-### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_int()`
+### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_intercept()`
 
-`R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_int.R`
+`R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_intercept.R`
 
 - `define_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
   point for all variance/covariance data**. Routes by `effect_name`:
@@ -732,7 +845,7 @@ pop |>
 - `define_effect_random()` — `variance` optional if already in `phenotype_var_comp`.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
-- `define_effect_int()` — sets intercept (`target_add_mean`) for a trait.
+- `define_effect_intercept()` — sets intercept (`target_add_mean`) for a trait.
 
 ### `define_phenotype()` / `define_residual_cov()`
 
@@ -765,13 +878,6 @@ pop |>
   matrix for multi-phenotype correlated residuals, or call once per sex/group
   level with `condition_column = "sex"` and `condition_level = "M"` / `"F"` for
   heterogeneous residuals.
-
-### `add_trait_covariate()` *(deprecated)*
-
-`R/add_trait_covariate.R`
-
-- Deprecated since v0.6.0. Use `define_effect_fixed_class()`, `define_effect_fixed_cov()`,
-  or `define_effect_random()` instead.
 
 ### `add_phenotype()` / `add_tbv()`
 
@@ -853,6 +959,18 @@ define_additive_effects()`.
 - Visualization helpers
 - Dominance and epistasis effects (currently only additive)
 
+## Future Compiled Code Policy
+
+When adding C++ code, prefer standard Rcpp/Rcpp Attributes and CRAN-compatible
+dependencies that install cleanly on Linux, Windows, and macOS. Avoid required
+system libraries, non-portable compiler flags, and architecture-specific code in
+the main path.
+
+Architecture-specific acceleration such as CUDA, Metal, or platform-specific
+SIMD should be isolated behind optional backends with feature detection and an
+R/Rcpp fallback. Do not make CUDA, Metal, or another accelerator required for
+installation unless the package design deliberately splits those backends later.
+
 ## License
 
 `tidybreed` is licensed under the **MIT License**. Use `License: MIT + file LICENSE`
@@ -864,7 +982,14 @@ the year and copyright holder.
 Use **three-part semantic versioning**: `MAJOR.MINOR.PATCH` (e.g. `0.0.1`).
 Do **not** use the four-part devtools convention (`0.0.0.9000`).
 
-| Part  | Bump when…                                           |
+**Pre-1.0.0 (current phase): version bumps are bookkeeping, not compatibility
+promises.** Per "Development Status: Pre-1.0.0 — Break Freely" above, breaking
+schema/API changes are normal development work. Document meaningful changes in
+`NEWS.md`, but do not add compatibility layers. Reserve the `0 → 1` MAJOR bump
+for the deliberate `1.0.0` stabilization. The table below is the policy that
+takes effect **at and after 1.0.0**:
+
+| Part  | Bump when… (≥ 1.0.0)                                 |
 |-------|------------------------------------------------------|
 | PATCH | Bug fixes, doc updates, minor internal changes       |
 | MINOR | New exported functions or non-breaking feature additions |
@@ -895,6 +1020,16 @@ datasets larger than RAM, excellent R integration.
 recombination and phased exports. Genotypes are required for GWAS and genomic
 prediction. Computing genotypes on the fly during every query would be wasteful.
 
+## Development Workflow
+
+For focused changes, prefer `pkgload::load_all(".", quiet = TRUE)` plus targeted
+`testthat::test_file()` calls over running the full suite first. Run broader
+tests before declaring shared schema, RNG, or cross-module changes done.
+
+Performance work must start from a small reproducible benchmark or profiling
+script under `dev/benchmarks/`. Keep benchmarks deterministic, small enough to
+run during development, and scalable enough to expose the intended bottleneck.
+
 ## Development Environment
 
 ### Running R Commands
@@ -914,7 +1049,3 @@ Example test command:
 ```bash
 "/c/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "print('Hello from R')"
 ```
-
-
-
-

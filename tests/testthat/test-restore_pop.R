@@ -67,7 +67,7 @@ test_that("restore_pop() handles heterogeneous chromosome lengths", {
   pop2 <- restore_pop(tmp)
 
   chr_lengths <- DBI::dbGetQuery(pop2$db_conn,
-    "SELECT chr, MAX(pos_Mb) AS max_pos FROM genome_meta GROUP BY chr ORDER BY chr")
+    "SELECT chr, MAX(pos_bp) AS max_pos FROM genome_meta GROUP BY chr ORDER BY chr")
 
   expect_equal(nrow(chr_lengths), 3L)
   # Loci distributed proportional to chromosome length, so ordering is preserved

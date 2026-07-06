@@ -285,7 +285,7 @@ test_that("reserved columns are blocked in ind_meta", {
 test_that("reserved columns are blocked in genome_meta", {
   pop <- open_pop(pop_name = "t", db_name = ":memory:") |>
     define_genome(n_loci = 5, n_chr = 1, chr_len_Mb = 10)
-  for (col in c("locus_id", "locus_name", "chr", "chr_name", "pos_Mb")) {
+  for (col in c("locus_id", "locus_name", "chr", "chr_name", "pos_bp")) {
     args <- setNames(list(1L), col)
     expect_error(
       do.call(mutate_table, c(list(tbl_obj = get_table(pop, "genome_meta")), args)),

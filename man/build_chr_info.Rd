@@ -4,16 +4,19 @@
 \alias{build_chr_info}
 \title{Pre-compute per-chromosome locus metadata for gamete simulation}
 \usage{
-build_chr_info(genome_meta_df)
+build_chr_info(locus_map)
 }
 \arguments{
-\item{genome_meta_df}{Data frame with columns \code{chr} and \code{pos_Mb}.}
+\item{locus_map}{Data frame with columns \code{chr} and \code{pos_cM} — the resolved
+genetic map (from \code{resolve_genome_map()}), one row per locus, ordered by
+\code{locus_id}.}
 }
 \value{
 Named list, one element per chromosome. Each element is a list with
-\code{locus_idx} (integer indices into the locus dimension), \code{pos_Mb}
-(positions), and \code{chr_len} (derived as \code{MAX(pos_Mb)} for the chromosome;
-crossovers beyond the last locus are invisible to inheritance).
+\code{locus_idx} (integer indices into the locus dimension), \code{pos_cM}
+(genetic positions in centiMorgans), and \code{chr_len} (derived as
+\code{MAX(pos_cM)} for the chromosome; crossovers beyond the last locus are
+invisible to inheritance).
 }
 \description{
 Called once per \code{add_offspring()} invocation. The returned list is passed to

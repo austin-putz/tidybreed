@@ -9,6 +9,7 @@ define_genome(
   n_loci,
   n_chr,
   chr_len_Mb,
+  cM_per_Mb = 1,
   locus_names = NULL,
   chr_names = NULL
 )
@@ -22,7 +23,12 @@ define_genome(
 
 \item{chr_len_Mb}{Numeric scalar or numeric vector of length \code{n_chr}.
 Chromosome length(s) in megabases. A single scalar applies the same
-length to all chromosomes; a vector specifies each chromosome separately.}
+length to all chromosomes; a vector specifies each chromosome separately.
+Determines the physical coordinate \code{genome_meta.pos_bp}.}
+
+\item{cM_per_Mb}{Numeric scalar or numeric vector of length \code{n_chr}. Genetic
+map rate in centiMorgans per megabase, used to derive the genetic map
+position \code{genome_map.pos_cM} from \code{pos_bp} (\code{pos_cM = pos_bp/1e6 * cM_per_Mb}). Default \code{1.0}. Must be finite and strictly positive.}
 
 \item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}. Custom
 locus names. When \code{NULL} (default), names are auto-generated as
@@ -36,11 +42,13 @@ chromosome names. When \code{NULL} (default), chromosomes are numbered
 The input \code{tidybreed_pop} with genome tables added.
 }
 \description{
-Adds genome tables (\code{genome_meta}, \code{ind_haplotype}, \code{ind_genotype},
-\code{chr_meta}) to a population opened with \code{\link[=open_pop]{open_pop()}}. Pipe-friendly — accepts
-a \code{tidybreed_pop} and returns a \code{tidybreed_pop}. Haplotypes are stored in
-long format; \code{ind_genotype} is an on-demand dosage cache populated by
-\code{\link[=add_dosage]{add_dosage()}}.
+Adds genome tables (\code{genome_meta}, \code{genome_map}, \code{ind_haplotype},
+\code{ind_genotype}, \code{chr_meta}) to a population opened with \code{\link[=open_pop]{open_pop()}}.
+Pipe-friendly — accepts a \code{tidybreed_pop} and returns a \code{tidybreed_pop}.
+Physical position (\code{pos_bp}, base pairs) lives in \code{genome_meta}; the genetic
+map (\code{pos_cM}, centiMorgans) lives in the long \code{genome_map} table. Haplotypes
+are stored in long format; \code{ind_genotype} is an on-demand dosage cache
+populated by \code{\link[=add_dosage]{add_dosage()}}.
 
 This is the second step in setting up a simulation:
 

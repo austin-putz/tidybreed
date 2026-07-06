@@ -18,7 +18,7 @@ Alias: \code{id_sire}
 \item \code{id_parent_2} — dam / parent 2 ID; must exist in \code{ind_meta}.
 Alias: \code{id_dam}
 \item \code{sex} — \code{"M"} or \code{"F"}
-\item \code{line} — line name for offspring IDs (same format as \code{add_founders()})
+\item \code{line_name} — line name for offspring IDs (same format as \code{add_founders()})
 }
 
 \strong{Optional extra columns} (e.g. \code{gen = 2L}, \code{farm = "Iowa"}) are
@@ -43,7 +43,7 @@ control over the mating design.
 as a separate row with the same \code{id_parent_2}
 \item Multiple dams per sire: include each dam as a separate row with the
 same \code{id_parent_1}
-\item Cross-line matings: use any \code{line} value in the \code{line} column
+\item Cross-line matings: use any \code{line_name} value in the \code{line_name} column
 }
 
 \strong{Column aliases:}
@@ -52,21 +52,30 @@ same \code{id_parent_1}
 
 \strong{Recombination model:}
 Gametes are simulated using the Haldane map function. For chromosome i,
-the number of crossovers ~ Poisson(chr_len_Mb[i] / 100), assuming
-approximately 1 Morgan per 100 Mb. Crossover positions are uniform within
-each chromosome, and the starting haplotype is chosen at random.
+the number of crossovers ~ Poisson(chr_len_cM[i] / 100), i.e.
+Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Genetic positions
+come from the resolved genetic map (\code{genome_map}, per the gamete-producing
+parent's sex/line); crossover positions are uniform in cM within each
+chromosome, and the starting haplotype is chosen at random. This
+applies to plain autosomes (\code{chr_meta}'s default \code{copy_mode_M}/\code{copy_mode_F = "full"}, \code{recombines_M}/\code{recombines_F = TRUE}). Sex chromosomes and
+organelles configured via \code{\link[=define_chr]{define_chr()}} follow their own inheritance rule
+instead: the contributing parent's copy recombines via the same Haldane model
+only when that parent carries two copies of the chromosome AND the
+contributor's own-sex \code{chr_meta.recombines_M}/\code{recombines_F} is \code{TRUE};
+otherwise the parent's single stored copy is passed straight through unchanged
+(no recombination, no additional RNG draws).
 
 \strong{Offspring IDs:}
-IDs follow the same \verb{\{line\}_\{n\}} format as \code{add_founders()}. Numbering
+IDs follow the same \code{"{line_name}_{n}"} format as \code{add_founders()}. Numbering
 continues from the current maximum for each line.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome(
-  pop_name = "test", n_loci = 1000, n_chr = 5,
-  chr_len_Mb = 100, n_haplotypes = 200
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 5, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 200, line_name = "A")
 pop <- pop |>
+  get_table("founder_haplotypes") |>
   add_founders(n_males = 5, n_females = 5, line_name = "A", gen = 1L)
 
 # One offspring per mating, extra metadata column (gen)
@@ -74,18 +83,18 @@ matings <- tibble::tibble(
   id_parent_1 = rep("A_1", 5),
   id_parent_2 = paste0("A_", 6:10),
   sex         = c("M", "F", "M", "F", "M"),
-  line        = "A",
+  line_name   = "A",
   gen         = 2L
 )
 pop <- pop |> add_offspring(matings)
 
 # Animal-breeder-style aliases
 matings2 <- tibble::tibble(
-  id_sire = rep("A_1", 3),
-  id_dam  = paste0("A_", 6:8),
-  sex     = c("M", "F", "M"),
-  line    = "A",
-  gen     = 2L
+  id_sire   = rep("A_1", 3),
+  id_dam    = paste0("A_", 6:8),
+  sex       = c("M", "F", "M"),
+  line_name = "A",
+  gen       = 2L
 )
 pop <- pop |> add_offspring(matings2)
 }

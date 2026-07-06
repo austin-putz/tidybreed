@@ -27,8 +27,8 @@ seeded output is unchanged.
 }
 \description{
 Simulates chromosomal recombination using the Haldane map function.
-Crossover count per chromosome ~ Poisson(chr_len_Mb / 100), assuming
-approximately 1 Morgan per 100 Mb. Crossover positions are uniform within
-each chromosome.
+Crossover count per chromosome ~ Poisson(chr_len_cM / 100), i.e.
+Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Crossover
+positions are uniform in genetic (cM) distance within each chromosome.
 }
 \keyword{internal}

@@ -104,7 +104,7 @@ cat("✓ Can query chip genotypes successfully\n")
 cat("\n8. Final genome_meta structure:\n")
 result <- get_table(pop, "genome_meta") %>%
   filter(is_50k == TRUE) %>%
-  select(locus_id, locus_name, chr, pos_Mb, is_50k, is_HD, is_10k, effect_50k, is_QTL_growth) %>%
+  select(locus_id, locus_name, chr, pos_bp, is_50k, is_HD, is_10k, effect_50k, is_QTL_growth) %>%
   head(10) %>%
   collect()
 

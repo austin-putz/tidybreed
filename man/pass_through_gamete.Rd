@@ -23,10 +23,11 @@ choose, so strictly hemizygous, non-recombining inheritance (e.g.
 patrilineal Y, matrilineal MT) never consumes RNG state.
 }
 \description{
-Used for \code{chr_meta.recombines = FALSE} chromosomes (Y, W, MT, most
-organelles) and for any chromosome where the contributing parent's own
-copy count for it is 1 (nothing to recombine against regardless of the
-\code{recombines} flag). Deliberately not routed through \code{\link[=make_gamete]{make_gamete()}} —
+Used for non-recombining chromosomes (the contributing parent's own-sex
+\code{chr_meta.recombines_M}/\code{recombines_F} is \code{FALSE} — Y, W, MT, most organelles)
+and for any chromosome where the contributing parent's own copy count for it is
+1 (nothing to recombine against regardless of the \verb{recombines_*} flags).
+Deliberately not routed through \code{\link[=make_gamete]{make_gamete()}} —
 that function's whole contract is "simulate crossovers," and a chromosome
 that never recombines has no crossover model at all.
 }

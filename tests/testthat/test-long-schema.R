@@ -38,17 +38,20 @@ test_that("chr_meta is seeded with default diploid-autosome rows", {
   expect_equal(nrow(cm), 3)
   expect_true(all(cm$copy_mode_M == "full"))
   expect_true(all(cm$copy_mode_F == "full"))
-  expect_true(all(cm$recombines))
+  expect_true(all(cm$recombines_M))
+  expect_true(all(cm$recombines_F))
   expect_true(all(is.na(cm$hemi_parent)))
 })
 
-test_that("genome_meta has introduced_gen (NULL for founding loci)", {
+test_that("genome_meta stores pos_bp (BIGINT) and has no legacy columns", {
   pop <- make_pop_base(n_loci = 8, n_chr = 2, chr_len_Mb = 100)
   on.exit(close_pop(pop), add = TRUE)
 
   gm <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_meta")
-  expect_true("introduced_gen" %in% names(gm))
-  expect_true(all(is.na(gm$introduced_gen)))
+  expect_true("pos_bp" %in% names(gm))
+  expect_false("pos_Mb"         %in% names(gm))
+  expect_false("pos_cM"         %in% names(gm))  # genetic map is in genome_map
+  expect_false("introduced_gen" %in% names(gm))
 })
 
 test_that("duplicate custom locus_names are rejected", {

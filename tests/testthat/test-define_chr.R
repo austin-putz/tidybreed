@@ -13,7 +13,9 @@ test_that("define_chr() writes copy_mode/hemi_parent/recombines correctly", {
   expect_equal(row$copy_mode_M, "half")
   expect_equal(row$copy_mode_F, "full")
   expect_equal(row$hemi_parent, "parent_2")
-  expect_true(row$recombines)
+  # recombines is the shorthand that sets both per-sex columns
+  expect_true(row$recombines_M)
+  expect_true(row$recombines_F)
 
   # Untouched chromosome keeps the default row
   row2 <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM chr_meta WHERE chr_name = '2'")
@@ -89,7 +91,19 @@ test_that("define_chr(overwrite = TRUE) updates an existing row in place", {
   expect_equal(row$copy_mode_M, "none")
   expect_equal(row$copy_mode_F, "half")
   expect_equal(row$hemi_parent, "parent_1")
-  expect_false(row$recombines)
+  expect_false(row$recombines_M)
+  expect_false(row$recombines_F)
+})
+
+test_that("define_chr() supports per-sex achiasmy via recombines_M/recombines_F", {
+  pop <- make_pop_base(n_loci = 10, n_chr = 2, chr_len_Mb = 100)
+  on.exit(close_pop(pop), add = TRUE)
+
+  # Drosophila-style: no recombination in males, normal in females
+  pop <- pop |> define_chr("1", recombines_M = FALSE, recombines_F = TRUE)
+  row <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM chr_meta WHERE chr_name = '1'")
+  expect_false(row$recombines_M)
+  expect_true(row$recombines_F)
 })
 
 test_that("define_chr() does not perturb the RNG stream", {

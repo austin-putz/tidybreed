@@ -11,7 +11,7 @@ get_chr_meta_map(conn)
 }
 \value{
 Named list (by \code{chr_name}), each element a 1-row data.frame with
-\code{copy_mode_M}, \code{copy_mode_F}, \code{hemi_parent}, \code{recombines}.
+\code{copy_mode_M}, \code{copy_mode_F}, \code{hemi_parent}, \code{recombines_M}, \code{recombines_F}.
 }
 \description{
 Convenience reader used by \code{\link[=add_founders]{add_founders()}} and \code{\link[=add_offspring]{add_offspring()}} to avoid
