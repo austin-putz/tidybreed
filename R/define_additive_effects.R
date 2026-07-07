@@ -27,8 +27,8 @@
 #' The `base` argument controls which allele frequencies are used:
 #'
 #' * `"founder_haplotypes"` (default) — uses `founder_allele_freq` from
-#'   `genome_meta` (requires `initialize_genome()` was called with
-#'   `n_haplotypes`).
+#'   `genome_meta` (requires `define_founder_haplotypes()` was called to
+#'   populate it).
 #' * `"current_pop"` — computes allele frequencies from the current
 #'   `ind_haplotype` table. Pass a filtered `tidybreed_table` via
 #'   `base_tbl` to restrict which individuals define the base population.
@@ -445,64 +445,6 @@ define_additive_effects <- function(tbl,
   message("Set correlated additive effects for traits: ",
           paste(trait_name, collapse = ", "), " (method: ", method, ")")
   invisible(pop)
-}
-
-
-#' Sample correlated additive QTL effects across multiple traits
-#'
-#' @description
-#' `r lifecycle::badge("deprecated")`
-#'
-#' This function is deprecated. Use [define_additive_effects()] with a character
-#' vector for `trait_name` instead:
-#'
-#' ```r
-#' # old
-#' tbl |> set_qtl_effects_multi(trait_names = c("ADG", "BW"), G = G)
-#'
-#' # new
-#' tbl |> define_additive_effects(trait_name = c("ADG", "BW"), G = G)
-#' ```
-#'
-#' @param tbl Passed to [define_additive_effects()].
-#' @param trait_names Passed to [define_additive_effects()] as `trait_name`.
-#' @param G Passed to [define_additive_effects()].
-#' @param method Passed to [define_additive_effects()].
-#' @param base Passed to [define_additive_effects()].
-#' @param base_tbl Passed to [define_additive_effects()].
-#' @param line_name Passed to [define_additive_effects()].
-#' @param scale_to_target Passed to [define_additive_effects()].
-#' @param seed Passed to [define_additive_effects()].
-#'
-#' @return The modified `tidybreed_pop` (invisibly).
-#' @keywords internal
-set_qtl_effects_multi <- function(tbl,
-                                  trait_names,
-                                  G               = NULL,
-                                  method          = c("shared", "union"),
-                                  base            = c("founder_haplotypes", "current_pop"),
-                                  base_tbl        = NULL,
-                                  line_name       = NULL,
-                                  scale_to_target = TRUE,
-                                  seed            = NULL) {
-  .Deprecated(
-    "define_additive_effects",
-    msg = paste0(
-      "'set_qtl_effects_multi()' is deprecated. ",
-      "Use: tbl |> define_additive_effects(trait_name = c(...), G = G)"
-    )
-  )
-  define_additive_effects(
-    tbl             = tbl,
-    trait_name      = trait_names,
-    G               = G,
-    method          = method,
-    base            = base,
-    base_tbl        = base_tbl,
-    line_name       = line_name,
-    scale_to_target = scale_to_target,
-    seed            = seed
-  )
 }
 
 

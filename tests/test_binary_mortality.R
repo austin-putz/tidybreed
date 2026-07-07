@@ -12,7 +12,6 @@
 ###
 ### Expected result: observed mortality rate near 10% (sampling variation expected).
 
-devtools::load_all(rprojroot::find_root(rprojroot::has_file("DESCRIPTION")), quiet = TRUE)
 library(dplyr)
 
 cat("=== Categorical Trait (Mortality) Simulation Test ===\n\n")
@@ -44,19 +43,15 @@ cat(sprintf("  (qnorm(%.2f) * sqrt(%.1f) = %.4f * %.4f)\n\n",
 # ---- Build population -------------------------------------------------
 set.seed(SEED)
 
-pop <- initialize_genome(
-  pop_name     = "mort_test",
-  n_loci       = N_LOCI,
-  n_chr        = 5,
-  chr_len_Mb   = 100,
-  n_haplotypes = 400,
-  db_path      = ":memory:"
-)
+pop <- open_pop(pop_name = "mort_test", db_name = ":memory:") |>
+  define_genome(n_loci = N_LOCI, n_chr = 5, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 400)
 
-pop <- add_founders(pop,
-                    n_males   = N_MALES,
-                    n_females = N_FEMALES,
-                    line_name = "Duroc")
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males   = N_MALES,
+               n_females = N_FEMALES,
+               line_name = "Duroc")
 
 cat(sprintf("Founders: %d total (%d M + %d F)\n\n", N_MALES + N_FEMALES, N_MALES, N_FEMALES))
 
@@ -64,25 +59,32 @@ cat(sprintf("Founders: %d total (%d M + %d F)\n\n", N_MALES + N_FEMALES, N_MALES
 # VA and VR are set in trait_effect_cov via target_add_var / residual_var.
 # prevalence controls the threshold: threshold = qnorm(1 - prevalence) * sqrt(VA + VR)
 # (when target_add_mean = 0, which is the default).
+# Genetic layer: additive variance on the liability scale.
 pop <- pop |>
   define_trait(
     "mortality",
-    trait_type      = "categorical",
-    prevalence      = PREV,
-    cat_values      = c(0, 1),
-    cat_names       = c("Survived", "Died"),
-    store_liability = TRUE,
-    description     = "Neonatal mortality (0 = survived, 1 = died)",
-    target_add_var  = VA,
-    residual_var    = VR
+    description    = "Neonatal mortality (0 = survived, 1 = died)",
+    target_add_var = VA
   )
 sel_mort <- get_table(pop, "genome_meta") |> collect() |>
   slice_sample(n = N_QTL) |> pull(locus_name)
 pop <- pop |>
   get_table("genome_meta") |>
   filter(locus_name %in% sel_mort) |>
-  define_qtl("mortality") |>
   define_additive_effects("mortality")
+
+# Observation layer: 2-category categorical trait via prevalence; residual (VR)
+# and the liability threshold (from prevalence) live here.
+pop <- pop |>
+  define_phenotype(
+    "mortality",
+    type            = "categorical",
+    prevalence      = PREV,
+    cat_values      = c(0, 1),
+    cat_names       = c("Survived", "Died"),
+    store_liability = TRUE,
+    residual_var    = VR
+  )
 
 # ---- Simulate phenotypes ----------------------------------------------
 pop <- pop |>

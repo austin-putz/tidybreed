@@ -136,8 +136,8 @@ restore_pop <- function(db_path,
 
   if (!"_schema_meta" %in% existing_tables) {
     warning(
-      "This database predates schema metadata (pre-v0.36.0). ",
-      "Run `migrate_schema_meta(pop)` to add descriptions.",
+      "This database predates schema metadata (pre-v0.36.0); ",
+      "table/column descriptions are unavailable.",
       call. = FALSE
     )
   }

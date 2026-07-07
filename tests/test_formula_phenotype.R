@@ -9,7 +9,6 @@
 # Run with: source("tests/test_formula_phenotype.R")
 # ============================================================================
 
-library(tidybreed)
 library(dplyr)
 library(tibble)
 
@@ -19,12 +18,22 @@ FAIL <- function(msg) cat(sprintf("  ✗ FAIL: %s\n", msg))
 check <- function(cond, msg) if (cond) PASS(msg) else FAIL(msg)
 
 make_base <- function(name, n_males = 20, n_females = 20) {
-  initialize_genome(
-    pop_name = name, n_loci = 300, n_chr = 3, chr_len_Mb = 100,
-    db_path = ":memory:"
-  ) |>
-    define_founder_haplotypes(n_haplotypes = 100, method = "fixed") |>
+  pop <- open_pop(pop_name = name, db_name = ":memory:") |>
+    define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100) |>
+    define_founder_haplotypes(n_haplotypes = 100, method = "fixed")
+  get_table(pop, "founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
+}
+
+# Randomly sample n loci and register additive effects for the given trait(s)
+sample_effects <- function(pop, traits, n, ...) {
+  sel <- get_table(pop, "genome_meta") |>
+    collect() |>
+    slice_sample(n = n) |>
+    pull(locus_name)
+  get_table(pop, "genome_meta") |>
+    filter(locus_name %in% sel) |>
+    define_additive_effects(traits, ...)
 }
 
 add_offspring_gen <- function(pop, n_off = 40) {
@@ -52,9 +61,7 @@ pop1 <- define_trait(pop1, "WWD", target_add_var = 200)
 pop1 <- define_trait(pop1, "WWM", target_add_var = 80)
 G_ww <- matrix(c(200, 40, 40, 80), 2, 2,
                dimnames = list(c("WWD", "WWM"), c("WWD", "WWM")))
-pop1 <- get_table(pop1, "genome_meta") |>
-  slice_sample(n = 100) |>
-  define_additive_effects(c("WWD", "WWM"), G = G_ww)
+pop1 <- sample_effects(pop1, c("WWD", "WWM"), n = 100, G = G_ww)
 
 pop1 <- define_phenotype(pop1, "WW",
   type         = "continuous",
@@ -94,17 +101,18 @@ set.seed(701)
 pop2 <- make_base("sge", n_males = 20, n_females = 20)
 
 ids     <- collect(get_table(pop2, "ind_meta"))$id_ind
-pen_ids <- rep(paste0("pen", 1:4), each = 10)
-pop2 <- get_table(pop2, "ind_meta") |> mutate_table(pen_id = pen_ids)
+pen_map <- tibble::tibble(
+  id_ind = ids,
+  pen_id = rep(paste0("pen", 1:4), each = 10)
+)
+pop2 <- get_table(pop2, "ind_meta") |> mutate_table(pen_id = pen_map)
 
 pop2 <- define_trait(pop2, "ADG_direct", target_add_var = 0.4)
 pop2 <- define_trait(pop2, "ADG_SGE",    target_add_var = 0.15)
 G_sge <- matrix(c(0.4, -0.1, -0.1, 0.15), 2, 2,
                 dimnames = list(c("ADG_direct", "ADG_SGE"),
                                 c("ADG_direct", "ADG_SGE")))
-pop2 <- get_table(pop2, "genome_meta") |>
-  slice_sample(n = 100) |>
-  define_additive_effects(c("ADG_direct", "ADG_SGE"), G = G_sge)
+pop2 <- sample_effects(pop2, c("ADG_direct", "ADG_SGE"), n = 100, G = G_sge)
 
 pop2 <- define_phenotype(pop2, "ADG_obs",
   type         = "continuous",
@@ -144,9 +152,7 @@ pop3 <- define_trait(pop3, "ADFI", target_add_var = 0.1)
 pop3 <- define_trait(pop3, "ADG",  target_add_var = 0.1)
 G_fcr <- matrix(c(0.1, 0.06, 0.06, 0.1), 2, 2,
                 dimnames = list(c("ADFI", "ADG"), c("ADFI", "ADG")))
-pop3 <- get_table(pop3, "genome_meta") |>
-  slice_sample(n = 100) |>
-  define_additive_effects(c("ADFI", "ADG"), G = G_fcr)
+pop3 <- sample_effects(pop3, c("ADFI", "ADG"), n = 100, G = G_fcr)
 
 pop3 <- define_phenotype(pop3, "ADFI", type = "continuous",
                          mean = 2.2, residual_var = 0.1)
@@ -212,18 +218,14 @@ pop4 <- define_trait(pop4, "WWD", target_add_var = 200)
 pop4 <- define_trait(pop4, "WWM", target_add_var = 80)
 G_ww2 <- matrix(c(200, 40, 40, 80), 2, 2,
                 dimnames = list(c("WWD","WWM"),c("WWD","WWM")))
-pop4 <- get_table(pop4, "genome_meta") |>
-  slice_sample(n = 80) |>
-  define_additive_effects(c("WWD","WWM"), G = G_ww2)
+pop4 <- sample_effects(pop4, c("WWD", "WWM"), n = 80, G = G_ww2)
 
 # FCR component traits
 pop4 <- define_trait(pop4, "ADFI", target_add_var = 0.1)
 pop4 <- define_trait(pop4, "ADG",  target_add_var = 0.1)
 G_fcr2 <- matrix(c(0.1, 0.06, 0.06, 0.1), 2, 2,
                  dimnames = list(c("ADFI","ADG"),c("ADFI","ADG")))
-pop4 <- get_table(pop4, "genome_meta") |>
-  slice_sample(n = 80) |>
-  define_additive_effects(c("ADFI","ADG"), G = G_fcr2)
+pop4 <- sample_effects(pop4, c("ADFI", "ADG"), n = 80, G = G_fcr2)
 
 # Define phenotypes
 pop4 <- define_phenotype(pop4, "ADFI", type = "continuous", mean = 2.2,

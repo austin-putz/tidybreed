@@ -1,6 +1,11 @@
 # Optimize `add_offspring()` (and `add_founders()` write path)
 
-**Status**: Draft for review — revised after critique round 2 (2026-07-06)
+**Status**: Draft for review — revised after critique round 2, then revised again
+(2026-07-06) to make **`add_founders()` and `define_founder_haplotypes()`
+first-class** in this optimization (they, not just `add_offspring()`, are the
+slow founder path) and to **refresh all stale `R/*.R` line references** against
+the current working tree (`add_offspring.R` is now 612 lines post-coordinate
+migration; the old refs were off by ~120 lines).
 **Depends on**: `plans/position_coordinates.md` (the `pos_Mb` → `pos_bp` +
 `genome_map` schema migration). **That prerequisite is now IMPLEMENTED and green
 in the working tree** (`feat/position-coordinates-genome-map`): `genome_meta.pos_bp`
@@ -36,7 +41,7 @@ Point-by-point, with where each is now addressed:
 | 10 | Long writes should be transaction-scoped | **One transaction per `add_offspring()` call** | Stage 1 (1d) |
 | 11 | Poisson sampler numerical/param bounds | **Log-accumulation** (not raw product); documented max-`lambda` + guard; stress test | Poisson sampler note; test 5 |
 | 12 | Crossover-consistency test needs controlled parents | Fixture with homologs distinct at **every** marker (or homolog trace) | Testing strategy (test 6c) |
-| 13 | Stale status / line references | Prereq marked **implemented**; impl-order table + line refs refreshed | throughout; impl-order table |
+| 13 | Stale status / line references | Prereq marked **implemented**; **line refs genuinely refreshed in the round-3 revision** (round-2 claimed this but the refs were still ~120 lines stale after the coordinate migration grew `add_offspring.R` to 612 lines — now corrected against the working tree) | throughout; hot-spots; Phase 0 tables; Stage 0/1 |
 | 14 | Benchmark deps / deliverables | `profvis`/`bench` dev-only, `requireNamespace()`-guarded + skip; new per-step instrumentation | Phase 0 Tools |
 | 15 | Compiler-fallback wording optimistic | Source install **requires a compiler** post-Stage-3; R path is runtime/debug fallback + oracle, **not** a no-compiler install | Stage 3 (compiler requirement) |
 | 16 | Output ordering should be canonical | Canonical order **pinned**; execution/parent-grouping must not change it or `o` | "Canonical output order" |
@@ -132,14 +137,119 @@ implementation:
 
 ---
 
-## Relationship to `add_founders()`
+## The founder path — `define_founder_haplotypes()` + `add_founders()` (first-class here)
 
-`add_founders()` has **no meiosis** — founders are sampled, not recombined
-(`R/add_founders.R:200-205` is a single `sample()` call). It therefore needs
-**none** of the gamete-generation work below. It **does** share the wide-frame +
-`UNPIVOT` write pattern (`R/add_founders.R:266-308`), so it benefits from the
-same **long-format direct write** (Stage 1) via a shared internal helper. Treat
-founders as a consumer of the shared write path only.
+The **founder path is the other half of the slow write problem** and is in scope
+for this plan, not an afterthought. It has three functions and a clear data flow;
+**all three share the same wide-matrix → long-write hot spot** that
+`add_offspring()` has, and none of the founder path involves meiosis.
+
+### Data flow (grounded in code)
+
+```text
+define_founder_haplotypes()                add_founders()                      add_offspring()
+  ── generates wide haplotype_matrix         ── reads founder_haplotypes (long)   ── reads parent ind_haplotype (long)
+     (n_hap × n_loci) in R                      back into R                          ── recombines (gamete kernel)
+  ── .write_founder_haplotypes()             ── reconstructs wide hap_data_matrix  ── writes ind_haplotype (long)
+     materializes the FULL long frame           (n_hap × n_loci)
+     (n_hap × n_loci rows) in R, then         ── sample() 2 haps/founder, w/ repl
+     dbWriteTable → founder_haplotypes        ── builds wide hap_matrix + hap_wide
+        (long pool: line_name,                ── per-chr UNPIVOT → ind_haplotype
+         haplotype_id, locus_name, allele)       (long)
+```
+
+- **`define_founder_haplotypes()`** writes the **`founder_haplotypes` pool** (long:
+  `line_name, haplotype_id, locus_name, allele`). It generates a dense wide
+  `haplotype_matrix` (`R/define_founder_haplotypes.R:271-329`) and hands it to
+  **`.write_founder_haplotypes()`** (`R/founder_haplotype_helpers.R:183-227`),
+  which builds the **entire** long frame in R via `rep()` (one row per
+  haplotype × locus) and `dbWriteTable`s it in one shot — **no batching, full
+  materialization**. At 5k haplotypes × 50k loci that is a 250M-row R data.frame
+  on top of the 1 GB wide matrix. This is a real hot spot and is **in scope**.
+- **`add_founders()`** consumes that pool: it reads it back (`R/add_founders.R:155`),
+  **reconstructs a second dense wide matrix** `hap_data_matrix`
+  (`R/add_founders.R:178-180`), draws all haplotype indices in **one** `sample()`
+  (`R/add_founders.R:200-205`, with-replacement — this is the population pool draw),
+  builds a **third dense wide matrix** `hap_matrix` + `hap_wide`
+  (`R/add_founders.R:244-257`), and writes `ind_haplotype` via the same per-chr
+  `UNPIVOT` (`R/add_founders.R:279-308`) that `add_offspring()` uses.
+
+**So the founder path round-trips a dense `n × n_loci` matrix through R three
+times** (generate → write-long → read-long → reconstruct → select-wide → UNPIVOT),
+and `add_founders()` holds **two** such matrices (`hap_data_matrix` +
+`hap_matrix`) simultaneously. That is why founders are slow — same root cause as
+`add_offspring()`'s wide intermediate (hot spot #3), doubled.
+
+### No recombination for founders (confirmed) — founders are a *pool draw*
+
+`add_founders()` has **no meiosis**: a founder's two haplotypes are **whole
+haplotypes sampled with replacement** from the pool — the pool *is* the population
+to draw from, and a founder simply gets two draws from it. There is **no
+crossover, no genetic map, no per-gamete Poisson/dqrng stream** in founder
+creation. So the gamete-generation machinery below (Stages 2–3: dqrng kernel,
+Morgans map, inversion Poisson) **does not apply to founders** and must not be
+forced onto them. A founder "gamete" is just a copied haplotype row.
+
+### Shared core vs. alias — DECISION: share the write/assembly core, do **not** alias
+
+**Do not alias `add_founders()` to `add_offspring()`.** They are distinct
+user-facing functions with distinct signatures (`add_founders(get_table(
+"founder_haplotypes"), n_males, n_females, line_name)` vs `add_offspring(pop,
+matings)`) and distinct semantics (**sample-with-replacement pool draw** vs
+**meiosis**). Aliasing would conflate two genuinely different operations and
+confuse users; it also couples their argument surfaces forever. Rejected.
+
+**Do share an internal core.** Both ultimately emit the *identical* long shape —
+`(id_ind, parent_origin, strand = 1, line_origin, locus_id, locus_name, allele)`
+— and both currently pay the wide→`UNPIVOT` tax to get there. Factor the common
+part into **one seam** used by both:
+
+> **The swappable seam is the "allele source"; everything downstream is shared.**
+> - **`.write_long_haplotypes()`** (Stage 1): the batched, transaction-scoped
+>   long insert into `ind_haplotype`. **Shared verbatim** by both functions.
+> - The **"selected allele/`line_origin` block → long output vectors"**
+>   materialization. **Shared** — it is the same packing for both.
+> - The **allele source** differs and is the *only* difference:
+>   - **founder source** — for each founder, copy sampled whole-haplotype rows
+>     into the two `parent_origin` slots (`line_origin` = the founder's own line
+>     for every locus). Zero crossovers, no map, no dqrng.
+>   - **gamete source** — for each offspring, run the recombination kernel on the
+>     two parents' haplotypes (Stages 2–3).
+
+Concretely: express the founder source as the **degenerate zero-recombination
+case** of the same long-materialization + write path. It feeds
+`.write_long_haplotypes()` exactly as the gamete kernel does. This gives founders
+`add_offspring()`-grade write efficiency (no dense wide matrix, batched, one
+transaction) **without** dragging meiosis into founder creation. If Phase 0 shows
+the founder gather/pack itself (not just the write) dominates at scale, the same
+C++ long-materialization helper the kernel uses (the allele-gather + pack step,
+**minus** the crossover draw) can serve the founder source too — a "no-crossover
+gather" entry into the shared packer, decided by measurement, not up front.
+
+**Scope caveat — the shared core is the autosome long write, not special
+chromosomes.** The two functions handle non-autosomes **differently** and this must
+**not** be unified blindly: `add_founders()` applies per-chromosome `copy_mode`
+(`"full"`/`"half"`/`"none"`) **inline** in its write loop (`R/add_founders.R:279-308`),
+writing only the applicable `(sex, parent_origin)` slots for a sampled haplotype;
+`add_offspring()` routes special chromosomes through its **separate** `special_rows`
+path (`R/add_offspring.R:447-503`, `:594-603`) with pass-through/recombining logic.
+So the shared `.write_long_haplotypes()` covers the **autosome** long frame + the
+generic "long frame → `ind_haplotype` INSERT" mechanism; each caller keeps (and
+batches) its **own** special-chromosome emission and appends those long rows to the
+same insert. Keep these seams distinct.
+
+### What each function gets from this plan (efficiency parity)
+
+| Function | Stage 1 (long write + batching + txn) | dqrng kernel (Stage 2) | C++ kernel (Stage 3) | Parallel (Stage 4) |
+|---|---|---|---|---|
+| `add_offspring()` | ✅ shared `.write_long_haplotypes()` | ✅ recombination | ✅ recombination | ✅ across offspring |
+| `add_founders()` | ✅ **same** helper + batching + pre-draw RNG discipline (critique #8) | ✗ no meiosis | ▵ optional "no-crossover gather" only if Phase 0 flags the pack step | ▵ trivially parallel pool draw if ever needed |
+| `define_founder_haplotypes()` | ✅ stream the pool write in batches (stop full-frame `fh` materialization in `.write_founder_haplotypes()`) | ✗ | ✗ | — |
+
+The end state: **all three** founder/offspring write paths are dense-matrix-free,
+batched, and transaction-scoped after Stage 1 — the founder path stops being the
+simulation's slowest step. `add_offspring()` alone additionally gains the
+Morgans-native recombination kernel (Stages 2–4).
 
 ---
 
@@ -149,30 +259,43 @@ Ranked by expected ROI at the large-scale target. To be **confirmed by Phase 0
 profiling** before committing effort.
 
 1. **Per-offspring R gamete loop** — `add_offspring()` calls `make_gamete()`
-   twice per offspring in a plain `for` loop (`R/add_offspring.R:399-461`); each
-   call loops over chromosomes doing `rpois` / `sample` / `runif` /
-   `findInterval` / `matrix[cbind(...)]` (`R/recombination_helpers.R:50-80`).
-   For 10k offspring × ~30 chr × 2 parents that is ~600k R-level chromosome
-   iterations of tight numeric work — the classic wrong-tool-for-R cost.
+   twice per offspring in a plain `for` loop (`R/add_offspring.R:427-503`, autosome
+   calls at `:439`/`:443`); each call loops over chromosomes doing `rpois` /
+   `sample` / `runif` / `findInterval` / `matrix[cbind(...)]`
+   (`R/recombination_helpers.R:50-80`). For 10k offspring × ~30 chr × 2 parents
+   that is ~600k R-level chromosome iterations of tight numeric work — the classic
+   wrong-tool-for-R cost.
 
 2. **Parent-matrix construction is O(parents × rows)** — the loop at
-   `R/add_offspring.R:291` does `parent_haps_raw[parent_haps_raw$id_ind == pid,]`,
-   a full `data.frame` scan **per parent**. Replace with one `split()` pass.
+   `R/add_offspring.R:320-345` does `parent_haps_raw[parent_haps_raw$id_ind == pid, ]`
+   (`:321`), a full `data.frame` scan **per parent**. Replace with one `split()` pass.
 
 3. **Wide intermediate + `UNPIVOT`** — `hap_sire_mat`/`hap_dam_mat` +
-   `line_origin` matrices (`R/add_offspring.R:388-391`) are dense
+   `line_origin` matrices (`R/add_offspring.R:416-419`) are dense
    `n_offspring × n_loci` integer/character matrices held in R (~1 GB each at
-   target scale), then unpivoted (`R/add_offspring.R:536-547`). Removed entirely
-   by decision #1.
+   target scale), assembled into wide frames (`:513-522`, `:565-574`) then
+   unpivoted (`:577-588`). Removed entirely by decision #1.
 
 4. **`special_rows` accumulation** — a fresh `data.frame(...)` per (offspring ×
-   special chromosome) then `do.call(rbind, ...)` (`R/add_offspring.R:451`).
-   Only matters when sex chromosomes/organelles are configured; preallocate.
+   special chromosome) (`R/add_offspring.R:492`) then `do.call(rbind, ...)`
+   (`:595`). Only matters when sex chromosomes/organelles are configured;
+   preallocate.
 
 5. **Bulk `INSERT` throughput** — once the generator is fast and wide is gone,
-   the long insert of `n_offspring × n_loci × 2` rows becomes the floor. Check
-   `ind_haplotype` PK/constraint enforcement cost (`R/schema.R`) and consider
-   DuckDB's Appender API vs `register` + `INSERT SELECT`.
+   the long insert of `n_offspring × n_loci × 2` rows (`R/add_offspring.R:577-588`)
+   becomes the floor. Check `ind_haplotype` PK/constraint enforcement cost
+   (`R/schema.R`) and consider DuckDB's Appender API vs `register` + `INSERT SELECT`.
+
+6. **Founder path: three dense `n × n_loci` matrices + a full long
+   materialization** (see "The founder path" above) — `define_founder_haplotypes()`
+   builds the pool wide matrix (`R/define_founder_haplotypes.R:271-329`) then
+   materializes the **whole** long frame in R (`R/founder_haplotype_helpers.R:206-225`);
+   `add_founders()` reconstructs the pool matrix (`R/add_founders.R:178-180`) and
+   builds the selected wide matrix (`:244-257`) before the per-chr `UNPIVOT`
+   (`:279-308`). Same wide-intermediate root cause as #3, across the founder path.
+   **Confirm in Phase 0 whether the founder path or the offspring path is the
+   larger share of total simulation wall time** — the user reports founder
+   creation as a top cost.
 
 ---
 
@@ -209,20 +332,38 @@ timing wrapper / instrumentation mode** that measures the named steps below sepa
 Add the new per-step timing wrapper (above) to time these steps **separately** (wrap
 each in its own timer, report as a table):
 
+**`add_offspring()`:**
+
 | Step | Code today | Why measure |
 |---|---|---|
-| Validation + ID assignment | `R/add_offspring.R:88-377` | Usually cheap; confirm it is |
-| Parent haplotype load (SQL) | `R/add_offspring.R:273-280` | I/O; scales with #parents × #loci |
-| Parent matrix build (R loop) | `R/add_offspring.R:291-348` | O(P×N) scan — suspected hot spot #2 |
-| **Gamete generation** | `R/add_offspring.R:399-461` | Suspected hot spot #1 |
-| `line_origin` gather | `R/add_offspring.R:409,413` | Matrix `cbind` indexing per offspring |
-| Long-row assembly | (new — replaces wide build) | New critical path under decision #1 |
-| DuckDB write / INSERT | `R/add_offspring.R:518-562` | Suspected floor after kernel is fast |
+| Validation + ID assignment | `R/add_offspring.R:91-258` | Usually cheap; confirm it is |
+| Gamete-map resolution + cache | `R/add_offspring.R:260-300` | Per-`(sex,line)` `resolve_genome_map()`; cheap if cached |
+| Parent haplotype load (SQL) | `R/add_offspring.R:302-309` | I/O; scales with #parents × #loci |
+| Parent matrix build (R loop) | `R/add_offspring.R:320-405` | O(P×N) scan (`:321`) — suspected hot spot #2 |
+| **Gamete generation** | `R/add_offspring.R:427-503` | Suspected hot spot #1 |
+| `line_origin` gather | `R/add_offspring.R:441,445` | Matrix `cbind` indexing per offspring |
+| Long-row assembly | (new — replaces wide build `:513-522`) | New critical path under decision #1 |
+| DuckDB write / INSERT | `R/add_offspring.R:559-603` | Suspected floor after kernel is fast |
 
-### Mating designs to profile (must stress the real shape)
+**Founder path (profile these too — hot spot #6):**
+
+| Step | Code today | Why measure |
+|---|---|---|
+| Pool generation (wide matrix) | `R/define_founder_haplotypes.R:271-329` | LD methods are O(n_hap × n_loci) |
+| Pool long materialization + write | `R/founder_haplotype_helpers.R:206-225` | Full long frame in R — suspected founder hot spot |
+| Pool read-back + matrix rebuild | `R/add_founders.R:155-180` | Second dense matrix from long |
+| Founder sample() | `R/add_founders.R:200-205` | Single call; expected cheap |
+| Selected wide build + `UNPIVOT` write | `R/add_founders.R:244-308` | Third dense matrix + per-chr UNPIVOT |
+
+### Scenarios to profile (must stress the real shape)
 
 Simple 1:1 pairings hide the per-offspring-loop cost. Profile at least:
 
+- **Founder creation** (the founder path, hot spot #6): `define_founder_haplotypes()`
+  then `add_founders()` at a large pool (e.g. 5k haplotypes → 10k founders × 50k loci).
+  Measure both functions' per-step tables (above) so we know whether the founder
+  path or the offspring path is the bigger share of total wall time — the user
+  reports founders as a top cost, so this is not optional.
 - **Litter/hatch shape**: few parents, many offspring each (e.g. 20 sires × 100
   dams, 1 offspring each → 2000; and 1 sire × 2000 offspring for the extreme).
 - **Target scale**: 10k offspring, 50k loci, ~30 chr (env-gated `large`).
@@ -232,9 +373,10 @@ Simple 1:1 pairings hide the per-offspring-loop cost. Profile at least:
 ### Deliverable
 
 A committed baseline table (per-step time + peak memory, at `small` and `large`,
-for each mating design) as a fixture/comment in the benchmark script, plus a
-short written conclusion: **which steps dominate**, so Stages 1–3 are ordered by
-measured ROI rather than assumption.
+for the founder path **and** each mating design) as a fixture/comment in the
+benchmark script, plus a short written conclusion: **which steps dominate across
+both the founder and offspring paths**, so Stages 1–3 are ordered by measured ROI
+rather than assumption.
 
 ---
 
@@ -271,6 +413,85 @@ Everything below the generator (DB write) is shared with `add_founders()`.
 parent_2 — matches `ind_haplotype.parent_origin`), `locus_idx` (kernel-local),
 and `line_origin_code`. DB column names are unchanged from the schema in
 `CLAUDE.md`.
+
+---
+
+## Data path & memory model — where the bytes actually live (R ↔ C++ ↔ DuckDB)
+
+This pins the single most important implementation question: **the C++ kernel does
+NOT read or write DuckDB tables directly. It never opens a connection, never sees a
+table. It is a pure numeric function over in-memory arrays.** R owns all DB I/O; C++
+owns all computation. Crucially, "going through R" here is **not** a
+serialization/copy tax — it is zero-copy pointer passing. The whole data path per
+batch:
+
+```text
+  DuckDB ind_haplotype/founder_haplotypes
+     │   (1) ONE SQL read per call: DBI::dbGetQuery(...)  ── parents << offspring, cheap
+     ▼
+  R integer vectors / packed parent matrix           ── R-allocated memory
+     │   (2) passed to make_gametes_batch() — Rcpp hands C++ the RAW POINTER
+     │       (INTEGER(x) / IntegerVector::begin()) to R's memory. NO COPY.
+     ▼
+  C++ kernel: loops over loci/chromosomes on int*    ── the only heavy compute
+     │   (3) writes results into PREALLOCATED R output vectors via raw pointer. NO COPY.
+     ▼
+  R long output vectors (parent_origin, locus_idx, allele, line_origin_code)
+     │   (4) duckdb_register(conn, "__tmp", frame) — DuckDB's scan reads these R
+     │       column vectors IN PLACE; INSERT ... SELECT appends to ind_haplotype.
+     ▼
+  DuckDB ind_haplotype   ── ONE write into table storage (unavoidable for any insert)
+```
+
+**The only two data movements are the unavoidable ones:** read parents out of DuckDB
+once (step 1), write new rows into DuckDB once (step 4). Everything between is pointer
+passing. Three distinctions that resolve the common confusion:
+
+1. **R the interpreter is not in the hot path.** R makes a handful of orchestration
+   calls per *batch*; the per-locus loops are 100% C++. R's interpreter overhead is
+   paid ~once per batch, never per locus.
+2. **R the allocator is not a copy layer.** Inputs and outputs live in R-allocated
+   memory; Rcpp gives C++ a raw `int*` into it, so C++ reads inputs and fills outputs
+   **in place**. No marshalling, no SEXP-per-value conversion for the numeric columns.
+3. **The R→DuckDB handoff is zero-copy on read.** `duckdb_register()` exposes the R
+   output vectors as a virtual table; DuckDB's dataframe scan reads the R integer/double
+   columns **directly** during `INSERT ... SELECT` (no serialization, no temp file, no
+   second buffer). The INSERT then writes into the table's column store — that write is
+   intrinsic to *any* insert and is not overhead we introduced. This is why
+   `line_origin` crosses the C++ boundary as an **integer code** (Stage 1 encoding): so
+   the heavy columns are all integer and stay on the fast, conversion-free scan path;
+   the string decode happens once, in SQL, at insert.
+
+### Why C++ does not write to DuckDB directly (and why that's optimal, not a compromise)
+
+DuckDB has a C++ `Appender`, and because the `duckdb` R package *is* libduckdb in the
+same process, one *could* reach into its connection external-pointer and append from
+our Rcpp code. **Rejected**, deliberately:
+
+- It requires `LinkingTo: duckdb` and an **exact ABI match** with the user's installed
+  `duckdb` package — version-fragile, breaks on `duckdb` updates, CRAN-hostile.
+- The win is **marginal**: it would save allocating the per-batch R output vectors and
+  nothing else. Steps (1) and (4) — the actual DB reads/writes — cost the same whether
+  driven from R or C++, because the data still has to leave/enter DuckDB's storage.
+- Batching (Stage 1) already bounds the R output-vector memory, and `duckdb_register()`
+  already makes the read zero-copy, so the thing C++-direct would optimize is already
+  small. Not worth trading the portable `duckdb`-package abstraction for it.
+
+**The "Appender API vs register+INSERT SELECT" A/B (Stage 1 deliverable) is between two
+R-side DuckDB write APIs** — `duckdb`'s appender vs `duckdb_register`+`INSERT SELECT` —
+**not** C++-direct-to-DuckDB. C++-direct is out of scope (see Explicitly out of scope).
+
+### What this means for how the Rcpp is written
+
+`make_gametes_batch()` is a `// [[Rcpp::export]]` function whose **entire signature is
+plain numeric arrays** (packed parent alleles, chr position/length vectors in Morgans,
+parent index vectors, base seed, flags) and whose **return is a list of plain numeric
+vectors** (the long output). No `tidybreed_pop`, no `DBI`, no `data.frame`, no
+connection handle ever enters C++ — the same seam constraint Stage 0 already imposes.
+That is exactly what makes it (a) portable, (b) unit-testable in isolation against the R
+reference for parity, and (c) zero-copy at both boundaries. The DuckDB read, the
+`id_ind`/`locus_id`/`line_origin` resolution, and the INSERT all stay in R, wrapped in
+the one per-call transaction.
 
 ---
 
@@ -349,17 +570,29 @@ be **resolved before the C++ kernel**, not during it. **Decision + spike:**
   stream_kind)` where `stream_kind ∈ {"autosome", "special"}` (the two must not share a
   counter — see Special chromosomes). `o` is the **original `matings` row index**, never
   a batch- or group-local index.
-- **Derivation:** `dqrng::dqset.seed(base_seed, stream_id)` where `stream_id` is dqrng's
-  64-bit substream selector, computed as a fixed hash of `(o, r, stream_kind)`
-  (candidate: a splitmix64 mix of the packed tuple). This gives each gamete an
-  independent counter-based stream with no shared mutable state.
-- **Pre-implementation spike (blocks Stage 2):** a tiny standalone check proving the R
-  side (`dqrng` R API) and the C++ side (`dqrng.h`) produce **bit-identical uniform
-  sequences** from the same `(base_seed, o, r, stream_kind)` for several tuples, without
-  relying on undocumented dqrng behavior. If dqrng's documented substream API cannot
-  guarantee this, fall back to seeding each stream from the hash directly
-  (`dqset.seed(hash64(base_seed, o, r, stream_kind))`) and re-run the spike. The kernel
-  is not built until this passes.
+- **Derivation — RESOLVED by the spike (2026-07-07), simpler than the original
+  hash64 proposal.** `dqrng::dqset.seed()` accepts only a **scalar or 2-int seed and a
+  scalar stream** (a length-≥3 vector errors `"out-of-range seed"`), so the tuple is
+  folded to a single **stream id** `sid = ((o*2 + (r-1))*2 + (kind-1))`
+  (`kind`: 1 = autosome, 2 = special; `r` = `parent_origin` ∈ {1,2}). No hand-rolled
+  `splitmix64`/`hash64` is needed — **dqrng's own `convert_seed()` does the 64-bit
+  folding**, so feeding the identical integer vector through it in R and C++ yields a
+  bit-identical generator seed by construction. **Adopted (Scheme A):**
+  - **R reference (Stage 2):** `dqrng::dqRNGkind("Xoroshiro128++"); dqrng::dqset.seed(
+    c(base_seed, sid)); dqrng::dqrunif(n)`.
+  - **C++ kernel (Stage 3):** `dqrng::convert_seed<uint64_t>(c(base_seed, sid))` →
+    `dqrng::random_64bit_wrapper<dqrng::xoroshiro128plusplus>` → `uniform01()`
+    (`= (x >> 11) * 2^-53`, which the spike confirmed `dqrunif` uses for `[0,1)`).
+  - **Bound:** `sid` fits signed-32-bit for `o < ~5e8` (>> realistic `n_offspring`);
+    if ever exceeded, split `sid` into a 2-int stream — `convert_seed` handles it.
+  - Scheme B (`dqset.seed(base_seed, sid)` scalar stream → C++ `seed(base)+jump(sid)`)
+    was **also** proven bit-identical and is the fallback; Scheme A is preferred (no
+    jump semantics, everything through `convert_seed`).
+- **Pre-implementation spike — DONE and GREEN** (`dev/spikes/dqrng_parity/`,
+  dqrng 0.4.1): Scheme A and Scheme B both `ALL IDENTICAL` across 6 tuples × {1,5,50}
+  draws; distinct keys give distinct streams (`ALL DISTINCT`); `dqrunif` matches C++
+  `uniform01()`. This retires the foundational R↔C++ RNG risk; the kernel (Stage 3) is
+  built on Scheme A.
 
 **Within one gamete's stream**, the draw order across `C` chromosomes (ascending
 `chr`) is fixed and identical in R and C++ — this per-gamete order is the parity
@@ -433,8 +666,8 @@ homolog. Deterministic part is vectorizable in R and a tight loop in C++.
 
 Handled on the **R path** (not the C++ kernel in v1) and emitted into the **same
 long output**. Non-recombining / single-copy inheritance (`pass_through_gamete`,
-`R/recombination_helpers.R:103`) consumes RNG only when `k == 2` (one uniform
-`< 0.5` row choice) — keep that rule.
+`R/recombination_helpers.R:107`, row choice `sample.int(k, 1)` at `:109`)
+consumes RNG only when `k == 2` (one uniform `< 0.5` row choice) — keep that rule.
 
 **Stream independence (important under per-gamete streams):** because autosomes
 are drawn in C++ and special chromosomes in R, the two must **not** share one
@@ -444,7 +677,7 @@ kernel left the counter (fragile across the boundary). Instead, key the two on
 "autosome")`, special chromosomes use `(base_seed, o, r, "special")`. Both are
 deterministic and reproducible; neither depends on the other's draw count. This
 replaces the old "special strictly after autosome" ordering discipline
-(`R/add_offspring.R:415-417`), which existed only because both shared base R's
+(`R/add_offspring.R:447`, comment at `:218`), which existed only because both shared base R's
 single global stream — a constraint the per-gamete stream model removes. These
 chromosomes are low-locus-count; correctness first, speed second.
 
@@ -508,9 +741,10 @@ principle). Includes crossovers on recombining special chromosomes
 **Schema registration (critique #9).** `ind_crossover` follows the same package
 conventions as every other system table — it is **not** ad-hoc. Stage 1 must:
 
-- create the empty table in **`define_genome()`** (the real genome-setup surface), so
-  `restore_pop()` sees it and it exists before the first opt-in insert. (Do **not** wire
-  it only into the deprecated `initialize_genome()`.)
+- create the empty table in **`define_genome()`** (the genome-setup surface), so
+  `restore_pop()` sees it and it exists before the first opt-in insert. (Note:
+  `initialize_genome()` was **removed** in v0.51.0 — `define_genome()` is the only
+  genome-setup entry point.)
 - register it in `R/sql_utils.R` — `TABLE_RESERVED_COLS` (all columns reserved),
   `TABLE_PRIMARY_KEYS` (`id_crossover`), `TABLE_ROW_KEYS`, and `SYSTEM_TABLES`;
 - add its description to the schema metadata in `R/schema.R`;
@@ -602,11 +836,53 @@ reuse than interleaving sire/dam per offspring). Parent-grouping (data access)
 and per-gamete streams (randomness) are orthogonal and coexist cleanly: group by
 parent for locality while each gamete still draws from its own `(o, r)` stream.
 
-**Toolchain:** `dqrng` exposes its engine to C++ via `dqrng.h`; combine with
-`RcppParallel` (`parallelFor`) or OpenMP over the offspring range. Single- and
-multi-threaded runs must pass the *same* golden test. This is now **in scope**
-(designed-for from the start), scheduled after the single-threaded kernel and
-write path are correct (Stage 4).
+**Toolchain — DECISION: `RcppParallel`, not OpenMP (install portability).**
+`dqrng` exposes its engine to C++ via `dqrng.h`; drive the threading with
+**`RcppParallel::parallelFor` over the offspring range**. Single- and
+multi-threaded runs must pass the *same* golden test (thread-count invariance,
+test 2). This is **in scope** but is the **last** stage, scheduled only after the
+single-threaded kernel and write path are correct and parity-verified (Stage 4
+after Stage 3).
+
+> **Why `RcppParallel` and not OpenMP — this is a portability decision, not a
+> preference.** Raw **OpenMP is the classic "won't install on macOS" trap**:
+> Apple's default clang (Xcode Command Line Tools) ships **no `libomp`**, so a
+> `devtools::install_github()` source build with `$(SHLIB_OPENMP_*FLAGS)` **fails
+> on a stock Mac** unless the user has separately installed `libomp` — exactly the
+> friction we must avoid for a GitHub-distributed package. **`RcppParallel` bundles
+> Intel TBB** and handles platform detection, so it compiles cleanly on
+> macOS/Windows/Linux with only the standard R toolchain — **no system library, no
+> OpenMP**. It is the ecosystem-standard, CRAN-safe choice for portable multicore.
+>
+> **Zero-dependency alternative:** `std::thread` (C++11, already required by the
+> toolchain) partitioning the flat offspring range needs **no extra package at
+> all** — viable here because the kernel is a pure numeric function that never calls
+> the R API off-thread (the one hard rule for off-main-thread code). If
+> `RcppParallel` ever proves unavailable on a target platform, fall back to
+> `std::thread`; the single-threaded Stage-3 kernel is always the ultimate fallback.
+> **OpenMP is rejected as a hard requirement** on macOS-install grounds (consistent
+> with CLAUDE.md's compiled-code policy: no required system libraries).
+
+### Install portability (why Stage 4 does not hurt GitHub installs)
+
+The whole point of layering parallelism last is that **the package is fully
+functional and universally installable long before any threading dependency
+enters**:
+
+- **Stages 0–2:** pure R + `dqrng` (an ordinary CRAN R package). Installs
+  everywhere, no compiler beyond what R itself needs.
+- **Stage 3 (single-threaded C++):** deps `Rcpp`, `dqrng`, `BH`, `sitmo` — **all
+  header-only or standard CRAN packages, no system libraries, no OpenMP**. Compiles
+  from GitHub source with only the toolchain every source-install user already has
+  (Rtools / Xcode CLT / build-essential). This is the same install surface as any
+  Rcpp package.
+- **Stage 4 (parallel):** adds `RcppParallel` (bundled TBB, no system lib) **or**
+  `std::thread` (nothing). Still the big-three, still no OpenMP.
+
+So the only way installs break is requiring OpenMP or a system library — both
+**forbidden** here. Binary channels (r-universe / CRAN) need no compiler at all. The
+R reference generator (Stage 2) also remains as a runtime fallback if the compiled
+object is ever unavailable.
 
 ---
 
@@ -631,6 +907,21 @@ untouched (pure structural refactor); Stage 1 converts the write path to long wh
 still driving allele values from base-R `make_gamete()` (so only the write *shape*
 changes, not the values); Stage 2 swaps in the dqrng kernel (the one intentional
 RNG-stream change).
+
+> **Phase 0 finding (2026-07-07) — reprioritization.** The committed baseline
+> (`dev/benchmarks/profile_haplotype_paths.R`;
+> `plans/optimize_add_offspring_stage_0_summary.md`) showed **gamete generation is
+> only ~2–6% of `add_offspring()` time**; the dominant costs are the parent scan
+> (now fixed in Stage 0) and the **wide→`UNPIVOT` DB write** (34–70% of
+> `add_offspring()`, ~69% of `add_founders()`, ~96% of the founder-pool write),
+> which also drove ~43 GB of allocation churn for 200 offspring. **Consequence:
+> Stage 1 (long/batched write) is the highest-ROI next step and the priority; the
+> dqrng/C++/parallel kernel (Stages 2–4) is a *later, smaller* optimization of a
+> <5% slice.** The parity spike being done keeps Stages 2–3 unblocked whenever we
+> want them, but they no longer lead. **Stage 0 (profile + seam + `split()` +
+> preallocation) is complete and green** (output-neutral: parity golden + seam-
+> equivalence proof; full suite 1229 pass / 0 fail; O(P×N) scan ~12× faster, churn
+> ~28× lower).
 
 ---
 
@@ -753,8 +1044,8 @@ absent) and nothing is allocated for them.
 **Scope of the kernel:** autosomes only. `chr_start`/`chr_end` assume each
 chromosome's loci are **contiguous** in the compacted autosome ordering. This
 holds today by construction — `define_genome()` assigns loci in contiguous
-blocks (`R/define_genome.R:103-104`: `rep(seq_len(n_chr), times = loci_per_chr)`
-with `locus_id = seq_len(n_loci)`), and dropping whole special-chromosome blocks
+blocks (`R/define_genome.R:133-134`: `rep(seq_len(n_chr), times = loci_per_chr)`
+with `locus_id = seq_len(n_loci)` at `:173`), and dropping whole special-chromosome blocks
 preserves contiguity of the rest. **Caveat:** any loci added after founding
 (Stage-5 novel mutations / gene edits) may append out-of-order `locus_id`s and
 break this, so the kernel should either (a) assert contiguity on entry, or (b)
@@ -767,7 +1058,7 @@ caller.
 Also in Stage 0 (cheap, measured against Phase 0):
 
 - Replace the O(P×N) parent scan (the `parent_haps_raw[... == pid, ]` subset at
-  `R/add_offspring.R:292`, inside the `unique_parents` loop `:291-348`) with a
+  `R/add_offspring.R:321`, inside the `unique_parents` loop `:320-405`) with a
   single `split(parent_haps_raw, parent_haps_raw$id_ind)`.
 - Preallocate the `special_rows` structure instead of `data.frame`-per-iteration.
 
@@ -797,23 +1088,39 @@ first, so the dqrng kernel (Stage 2) drops into an already-long, already-batched
 ### 1a. Direct long insert (no wide, no UNPIVOT)
 
 Shared internal helper, e.g. `.write_long_haplotypes(conn, long_frame,
-line_origin_decode)`, used by **both** `add_offspring()` and `add_founders()`:
+line_origin_decode)`, used by **both** `add_offspring()` and `add_founders()`
+(this is the shared "allele source" seam from "The founder path" section — the
+write core is identical, only the source differs):
 
-- Caller has already attached `id_ind`, `strand = 1L`, and either resolved
-  `locus_idx → locus_id` or left the join to the helper. The helper registers
-  the long parallel vectors (from the seam) as a temp Arrow/DuckDB relation.
+- **Seam shape in Stage 1 (important — the seam is still WIDE here).** The Stage-0
+  `make_gametes_batch()` returns the four **wide** matrices
+  (`sire_allele`/`dam_allele`/`sire_lo`/`dam_lo`, each `B × n_autosome_loci`); the
+  long-native seam signature is a **Stage 2** change (see Stage 0 / the target
+  architecture). So in Stage 1 the caller **reshapes each batch's wide matrices to
+  long parallel vectors in R** — a cheap `as.vector()`/`rep()` reshape **bounded by
+  the batch `B`**, *not* a dense full-`n_offspring` frame and *not* a SQL `UNPIVOT` —
+  then hands `(parent_origin, locus_idx/locus_id, allele, line_origin)` to the helper.
+  Stage 2 makes the seam emit those long vectors directly and this reshape disappears.
+- The helper registers the long parallel vectors as a temp Arrow/DuckDB relation.
+  Caller has already attached `id_ind`, `strand = 1L`, and either resolved
+  `locus_idx → locus_id` or left the join to the helper.
 - `INSERT INTO ind_haplotype (id_ind, parent_origin, strand, line_origin,
   locus_id, locus_name, allele) SELECT ... JOIN genome_meta` — a plain join
   resolving `locus_id`/`locus_name` (and, once the kernel emits codes, decoding
-  `line_origin_code → line_origin`), **no `UNPIVOT`** (`R/add_offspring.R:536-547`
-  and `R/add_founders.R:298-306` both go away). `strand` is always `1L` in this
+  `line_origin_code → line_origin`), **no `UNPIVOT`** (the current UNPIVOT+INSERT at
+  `R/add_offspring.R:~594-620` — post-Stage-0 line numbers — and
+  `R/add_founders.R:279-308` both go away). `strand` is always `1L` in this
   version (ploidy 2).
 - Convert `add_founders()` to build its rows in long form too (it currently
-  builds `hap_wide` at `R/add_founders.R:248-257`); founders have no meiosis and
-  just materialize sampled-haplotype rows in long form. At the large-scale target
-  `add_founders()` also builds a dense `(2 · n_founders) × n_loci` matrix
-  (`R/add_founders.R:245`), so it must use the **same batching** (1b) to bound
-  memory — not only `add_offspring()`.
+  builds the wide `hap_matrix` + `hap_wide` at `R/add_founders.R:244-257`);
+  founders have no meiosis and just materialize **sampled whole-haplotype** rows
+  in long form (the founder allele source). At the large-scale target
+  `add_founders()` also reconstructs the dense pool `hap_data_matrix`
+  (`R/add_founders.R:178-180`) and the selected `(2 · n_founders) × n_loci` matrix
+  (`R/add_founders.R:244-246`) — **two** dense matrices — so it must use the
+  **same batching** (1b) to bound memory, not only `add_offspring()`. Materialize
+  each batch's long rows **directly from the pre-drawn sample indices against the
+  pool** (see RNG trap), skipping both dense matrices entirely.
 
   **Founder RNG trap (critique #8).** `add_founders()` currently draws **all**
   haplotype indices in **one** `sample()` call (`R/add_founders.R:200-205`). If founder
@@ -823,19 +1130,94 @@ line_origin_decode)`, used by **both** `add_offspring()` and `add_founders()`:
   *materialization + write* of the selected haplotypes — never the sampling. (Batching
   the write, not the draw, is what makes founder output byte-identical to the pre-refactor
   code for a fixed seed.) At target scale, also avoid building the whole dense selected
-  `hap_data_matrix` before writing — materialize each batch's long rows directly from the
+  matrix before writing — materialize each batch's long rows directly from the
   pre-drawn indices, so peak memory is bounded by `B`, not `n_founders`.
+
+  **`define_founder_haplotypes()` pool write (the third dense materialization).**
+  `.write_founder_haplotypes()` (`R/founder_haplotype_helpers.R:206-225`) currently
+  builds the **entire** long `founder_haplotypes` frame (`n_hap × n_loci` rows) in R
+  via `rep()` before `dbWriteTable`. At target pool scale this is a 250M-row R
+  data.frame on top of the wide `haplotype_matrix`. Stage 1 must **batch the pool
+  write** the same way — stream the wide `haplotype_matrix` to the long
+  `founder_haplotypes` table in column/haplotype batches (or via a DuckDB
+  `register` + `INSERT ... SELECT` over a wide temp relation, analogous to the
+  `ind_haplotype` path but keyed on `haplotype_id`/`locus_name`) so peak memory is
+  bounded, not `O(n_hap × n_loci)`. `founder_haplotypes` has its **own** schema
+  (`line_name, haplotype_id, locus_name, allele`), so it does **not** reuse
+  `.write_long_haplotypes()` verbatim, but it uses the same batched-register-and-insert
+  mechanism. RNG note: the pool generator draws are unchanged — only the write is
+  batched — so seeded pools stay identical (same discipline as the founder RNG trap).
 
 ### 1b. Batching for memory
 
-Process `matings` in batches of `B` offspring (generate → write → free). Bounds
-peak memory at `B × n_loci × 2` long rows regardless of total `n_offspring`.
-Pick `B` from Phase 0 memory numbers (e.g. target a few hundred MB per batch).
+Process `matings` in batches of `B` offspring (generate → write → free → `gc()`).
+Bounds peak memory at `~B × n_loci` long rows **regardless of total `n_offspring`**.
 **Batch index must preserve the original `matings` row order (and the global
 offspring index `o`)** so that (i) in Stage 1 the base-R draw order is unchanged by
 batching, and (ii) from Stage 2 on, gamete `(o, r)` uses stream `(o, r)` regardless of
 which batch it lands in. Either way any `B` (including `B = n_offspring`) yields
 identical output — no ordering constraint at batch boundaries.
+
+**`B` is exposed AND RAM-aware by default (resolves Open Q#3).** Decided:
+
+- **`add_offspring(..., batch_size = NULL, max_batch_mem = NULL)`.** `batch_size`
+  is an explicit offspring-per-batch override; `max_batch_mem` is an explicit
+  per-batch memory budget (bytes/`"512MB"`). Either wins over the default when set.
+- **Default (both `NULL`): auto-pick `B` to not overrun RAM.** Detect *available*
+  system memory, target a conservative fraction of it (e.g. ~25%), and set
+  `B = target_bytes / (n_loci × bytes_per_offspring_row)` where the per-row constant
+  is calibrated from the Phase-0 numbers. This protects the 8–16 GB laptop
+  automatically and lets a 256 GB HPC node use large batches without configuration.
+- **Cross-OS memory detection (build correct once — main platforms only).** Support
+  **Windows, macOS (Intel + Apple Silicon), and mainstream Ubuntu/Linux**; do **not**
+  chase exotic OSes. Prefer a small, portable path: parse `/proc/meminfo`
+  (`MemAvailable`) on Linux, `sysctl hw.memsize` + `vm_stat` on macOS,
+  `GlobalMemoryStatusEx`/`wmic OS get FreePhysicalMemory` on Windows — or lean on a
+  maintained helper (`memuse`/`benchmarkme`) if it covers all three cleanly. **If
+  detection fails, fall back to a fixed conservative default** (target ~512 MB/batch)
+  — never error, never assume unlimited RAM.
+- **Speed/RAM trade-off:** smaller `B` → lower peak, slightly more per-batch overhead
+  (transaction, register/unregister, INSERT round-trips); the penalty is mild over a
+  broad range and only bites at very small `B`. The long-write itself (1a) and integer
+  `line_origin` codes are win-win (lower memory *and* faster); `B` is the only genuine
+  dial.
+
+### 1b-note. High-fecundity / low-memory contract (aquaculture, poultry)
+
+The binding RAM quantity is **`n_offspring_in_one_call × n_loci`**, not the whole
+database (which lives on disk in DuckDB). Because offspring are independent given
+their parents, batching operates on **offspring rows** and bounds peak memory the
+same way whether those offspring come from many pairs or from **one** mega-mating
+(e.g. an aquaculture spawn of hundreds of thousands, or a poultry line). **So a single
+huge mating is handled by batching alone — no separate mechanism is needed**, and a
+16 GB machine can generate an arbitrarily large single-mating cohort by looping
+batches, streaming each to disk. The parent side is loaded once and is tiny (2 parents
+× 2 haplotypes × `n_loci`), so it does not scale with offspring.
+
+Reference bounds (order-of-magnitude, anchored on the Phase-0 measurement of 418 MB
+peak for 500 × 5k; **confirm with the gated large run**):
+
+- **RAM, current wide path (pre-Stage-1):** peak ≈ `~50–150 B × n_offspring × n_loci`.
+  On 16 GB the worry line is `product ≳ 5×10⁷` (e.g. 1,000 offspring × 50k loci).
+- **RAM, post-Stage-1 (batched, long, integer codes):** peak ≈ `~64 B × B × n_loci`,
+  independent of total offspring. 8 GB → `B ≈ 600` @ 50k loci; 16 GB → `B ≈ 1,250`;
+  256 GB → `B ≈ 20k` or unbatched.
+- **Disk (DuckDB, cumulative):** `ind_haplotype` is 2 × `n_loci` rows/individual,
+  heavily compressed (alleles bit-pack; `id_ind`/`line_origin` dictionary+RLE;
+  `locus_id` delta) to ~1–4 B/row, so ~400 GB usable holds **~1–2 M individuals at
+  50k loci**. Disk is not the binding constraint. (A later schema question: dropping
+  the denormalized `locus_name` from `ind_haplotype` in favor of a join would cut disk
+  further — out of scope here.)
+
+**Deferred, deliberately (non-foreclosing): a count-based `matings` spec.** For an
+extreme single mating the *user-supplied* `matings` tibble is itself `O(n_offspring)`.
+An optional `n_offspring` count column (one row expands to N offspring internally)
+would avoid materializing millions of identical rows. **Not built now** — it adds a
+second input convention and per-row extra-column semantics we don't want to confuse
+users with yet. It is **purely additive, needs no schema/DB change, and stays
+non-breaking whenever added.** Stage 1 must not foreclose it: keep `matings`
+normalization/expansion at the **top** of `add_offspring()` (before the batch loop) so
+a future count column feeds the same batched path with no refactor.
 
 ### `line_origin` encoding (kernel boundary, Stage 2+)
 
@@ -866,13 +1248,17 @@ generation** (some batches written, some not). One transaction per call makes th
 generation atomic — it lands completely or rolls back cleanly, and `restore_pop()` never
 sees a half-written generation. (Per-batch transactions were considered and rejected:
 they reintroduce the partial-generation hazard for negligible gain, since the batch loop
-already bounds memory.) `add_founders()` gets the same one-call transaction wrapper.
+already bounds memory.) `add_founders()` gets the same one-call transaction wrapper,
+and `define_founder_haplotypes()` wraps its (now batched) pool write in one
+transaction too.
 
-**Deliverable:** shared `.write_long_haplotypes()` helper; both `add_offspring()` and
-`add_founders()` on the long path; batching in place (offspring + founders); one
-transaction per call; `ind_crossover` created + registered in schema; before/after
-write-time + memory benchmark vs the Phase 0 wide baseline; a documented decision on
-Appender API vs `register`+`INSERT SELECT` from a direct A/B.
+**Deliverable:** shared `.write_long_haplotypes()` helper; **all three** write paths
+on the long, batched path — `add_offspring()`, `add_founders()` (with the pre-draw
+RNG discipline), and `define_founder_haplotypes()`'s pool write (no full-frame
+materialization); one transaction per call each; `ind_crossover` created + registered
+in schema; before/after write-time + memory benchmark vs the Phase 0 wide baseline for
+**both** the offspring and founder paths; a documented decision on Appender API vs
+`register`+`INSERT SELECT` from a direct A/B.
 
 ---
 
@@ -998,9 +1384,13 @@ write** is wired here once the kernel emits the `xover_*` buffer.)*
 7. **`store_crossovers` has no side effects** — `ind_haplotype` contents are
    byte-identical with the flag off vs on for the same seed (storing crossovers
    must not perturb the allele stream).
-8. **Founders long-write equivalence** — founder `ind_haplotype` allele values
-   unchanged after moving to the long path (only the write shape changes) — requires
-   the founder-RNG pre-draw discipline (Stage 1 founder note).
+8. **Founder-path long-write equivalence** — for a fixed seed: (a)
+   `define_founder_haplotypes()`'s `founder_haplotypes` pool is byte-identical after
+   batching the pool write (only the write shape changes, generator draws unchanged);
+   and (b) `add_founders()`'s `ind_haplotype` allele values are unchanged after moving
+   to the long/batched path — both require the founder-RNG pre-draw discipline (Stage 1
+   founder note). Also assert the founder path builds **no** dense `n × n_loci` R
+   matrix (peak memory bounded by `B`), the point of the refactor.
 9. **Transaction atomicity** (Stage 1) — an injected mid-generation failure leaves
    `ind_meta`/`ind_haplotype`/`ind_crossover` with **no** rows from the aborted call
    (rollback), never a partial generation.
@@ -1012,6 +1402,11 @@ write** is wired here once the kernel emits the `xover_*` buffer.)*
 
 - **Wide matrices / `UNPIVOT`** in the write path — removed by decision. The only
   wide representation is the user-facing `extract_genotypes()`.
+- **C++ reading/writing DuckDB tables directly** (linking `duckdb` into the package
+  and using the C++ `Appender` / reaching into the R package's connection pointer) —
+  rejected for ABI fragility and CRAN-hostility, for a marginal gain the batched
+  zero-copy `register`+`INSERT` design already neutralizes. See "Data path & memory
+  model". The C++ kernel is a pure in-memory numeric function; R owns all DB I/O.
 - **CUDA/GPU** — meiosis simulation is **branchy** (interval search per locus) and
   **memory-bound** (scatter writes into long-format rows), not the dense
   linear-algebra shape GPUs accelerate. It would also fragment the dev/test story:
@@ -1033,18 +1428,21 @@ stream model makes it reproducible. It is no longer a deferred stretch.)*
   crossover-storage feature (decision #9) drove this — it needs exact genetic
   (cM) positions, which the uniform-only Markov model cannot produce.
 
-1. ~~**Per-gamete stream seeding scheme**~~ — **PINNED** (critique #5, see the
-   stream-derivation section): key tuple `(base_seed, global o, parent_origin,
-   stream_kind ∈ {"autosome","special"})`; derive via `dqset.seed(base_seed,
-   stream_id)` with `stream_id = hash64(o, r, stream_kind)`, or seed directly from the
-   hash if dqrng's substream API can't guarantee R↔C++ bit-parity. **A pre-Stage-3
-   dqrng uniform-parity spike must confirm the scheme** before the C++ kernel is built.
+1. ~~**Per-gamete stream seeding scheme**~~ — **RESOLVED by the spike** (2026-07-07,
+   `dev/spikes/dqrng_parity/`): fold the tuple to `sid = ((o*2 + (r-1))*2 + (kind-1))`
+   and seed with the **2-int seed `c(base_seed, sid)` through dqrng's own
+   `convert_seed`** (Scheme A) — no hand-rolled hash. Proven bit-identical R↔C++ (both
+   Scheme A and the seed+stream/jump Scheme B). See the stream-derivation section.
 2. **Base-seed storage / audit** (critique #4) — when `store_crossovers = TRUE` (or
    always), persist the resolved `base_seed` so a run is exactly replayable?
    Recommendation: yes, a single cheap `base_seed` scalar/column with the crossover
    rows; decide at Stage 2. Default off otherwise (CLAUDE.md's "disdain for metadata").
-3. **Batch size `B`** — derive from Phase 0 memory numbers, or expose as an
-   argument/option with a sensible default?
+3. ~~**Batch size `B`**~~ — **RESOLVED (2026-07-07):** expose `batch_size` and
+   `max_batch_mem` args **and** default to a RAM-aware auto-pick (detect available
+   memory on Windows/macOS-Intel+ARM/Ubuntu, target a conservative fraction, fixed
+   fallback if detection fails). Batching bounds peak independent of total offspring,
+   which also covers a single high-fecundity mega-mating (aqua/poultry) with no
+   separate mechanism. See Stage 1 (1b) + the high-fecundity/low-memory contract.
 4. **`line_origin` as DuckDB `ENUM`** vs decoded `VARCHAR` on insert — decide
    from the Stage 1 write benchmark.
 5. **Appender API vs register+INSERT** — decide from the Stage 1 A/B, not a priori.
@@ -1058,10 +1456,10 @@ stream model makes it reproducible. It is no longer a deferred stretch.)*
 | Stage | What | New dep? | Status |
 |---|---|---|---|
 | **Pre** | **`plans/position_coordinates.md`** — `pos_Mb` → `pos_bp` + `genome_map`/`pos_cM` migration | None | ✅ **Implemented + green** (working tree, `feat/position-coordinates-genome-map`; 0 fail / 1236 pass) |
-| **Spike** | dqrng R↔C++ uniform-parity check for `(base_seed, o, r, stream_kind)` (blocks Stage 3) | dqrng | ⬜ Not started |
-| 0 (profile) | Extend harness: per-step timing + memory (skip gracefully if `profvis`/`bench` absent), realistic mating designs; committed baseline table | None | ⬜ Not started |
-| 0 (seam) | Extract `make_gametes_batch()` seam wrapping base-R `make_gamete()`, **wide write kept**; `split()` fix; preallocate `special_rows`; transient within-branch output-neutrality check | None | ⬜ Not started |
-| 1 | **Direct long write + batching** (offspring **and** founders, founder pre-draw discipline), `line_origin` path, `ind_crossover` schema + registration, **one transaction per call** — still base-R `make_gamete()` internally | None | ⬜ Not started |
+| **Spike** | dqrng R↔C++ uniform-parity check for `(base_seed, o, r, stream_kind)` (blocks Stage 3) | dqrng | ✅ **Done + green** (`dev/spikes/dqrng_parity/`; Scheme A adopted — 2-int seed `c(base_seed, sid)` via `convert_seed`, `xoroshiro128plusplus.uniform01()`) |
+| 0 (profile) | Extend harness: per-step timing + memory (skip gracefully if `profvis`/`bench` absent), realistic mating designs; committed baseline table | None | ✅ **Done + green** (`dev/benchmarks/profile_haplotype_paths.R`; baseline + conclusion committed) |
+| 0 (seam) | Extract `make_gametes_batch()` seam wrapping base-R `make_gamete()`, **wide write kept**; `split()` fix (index-split); preallocate `special_rows`; output-neutrality check | None | ✅ **Done + green** (parity golden + seam-equivalence; 1229 pass / 0 fail; O(P×N) ~12× faster, churn ~28× lower) |
+| 1 | **Direct long write + batching** across **all three** write paths — `add_offspring()`, `add_founders()` (founder pre-draw discipline, kills both dense matrices), **and `define_founder_haplotypes()`'s pool write** (batched, no full-frame materialization) — `line_origin` path, `ind_crossover` schema + registration, **one transaction per call**, **exposed `batch_size`/`max_batch_mem` with a RAM-aware auto-default (cross-OS: Win/macOS-Intel+ARM/Ubuntu, conservative fallback)**, `matings` expansion kept at the top (non-foreclosing count-spec) — still base-R `make_gamete()` internally | None | ✅ Done (2026-07-07) — output-neutral (byte-identical golden, autosome + sex-chr, multi-batch); batch invariance + txn atomicity + 1257 tests green; `add_offspring(200)` mem_alloc 1.55GB→464MB, peak decoupled from offspring count. See [Stage-1 summary](optimize_add_offspring_stage_1_summary.md). |
 | 2 | Pure-R reference generator, per-gamete `dqrng` streams, **log-accumulation** inversion Poisson sampler, long output, optional crossover buffer, seed API (intentional stream change) | dqrng | ⬜ Not started |
 | 3 | C++17 kernel (Rcpp + `dqrng.h`), one entry point, autosome-only, same log-accumulation Poisson, group-by-map calls, R↔C++ parity test (incl. crossovers + sex-chr wrapper parity) | Rcpp, dqrng, BH, sitmo | ⬜ Not started |
-| 4 | Parallelize across individuals (RcppParallel/OpenMP over offspring); thread-count invariance test | RcppParallel | ⬜ In scope (after 3) |
+| 4 | Parallelize across individuals (**`RcppParallel::parallelFor`** over offspring — **not** OpenMP, for macOS install portability; `std::thread` as zero-dep fallback); thread-count invariance test | RcppParallel (header-only TBB, no system lib) | ⬜ In scope (after 3) |

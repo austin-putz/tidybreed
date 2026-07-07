@@ -22,9 +22,10 @@ continue to work unchanged.
 }
 \examples{
 \dontrun{
-pop <- initialize_genome(pop_name = "A", n_loci = 100, n_chr = 2)
+pop <- open_pop(pop_name = "A", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 100)
 
-# Read-only query (backward compatible)
+# Read-only query
 get_table(pop, "genome_meta") |> dplyr::collect()
 
 # Mutate all rows

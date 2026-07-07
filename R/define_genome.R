@@ -199,6 +199,15 @@ define_genome <- function(pop,
     "PRIMARY KEY (id_ind, locus_id))"
   ))
 
+  # Create empty ind_crossover table (opt-in crossover-event storage). Created
+  # here so restore_pop() sees it and it exists before the first insert; row
+  # writes land with the Stage-2 kernel (add_offspring(store_crossovers = TRUE)).
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE ind_crossover (",
+    "id_crossover INTEGER PRIMARY KEY, id_ind VARCHAR, parent_origin UTINYINT, ",
+    "chr INTEGER, chr_name VARCHAR, pos_cM DOUBLE)"
+  ))
+
   # ---- genome_map (genetic map, long) ------------------------------------
   # One row per (locus x sex x line x map) with a defined genetic position. v1
   # writes a single default map (sex NULL = both sexes, line_name NULL = all
@@ -262,7 +271,7 @@ define_genome <- function(pop,
 
   # Update pop$tables
   pop$tables <- c(pop$tables, "genome_meta", "genome_map",
-                  "ind_haplotype", "ind_genotype", "chr_meta")
+                  "ind_haplotype", "ind_genotype", "ind_crossover", "chr_meta")
 
   chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
     paste0("all equal to ", chr_len_Mb[1], " Mb")
@@ -272,7 +281,7 @@ define_genome <- function(pop,
   message(
     "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
     " | chr lengths (Mb): ", chr_len_str,
-    "\n  Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, chr_meta"
+    "\n  Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_meta"
   )
 
   pop

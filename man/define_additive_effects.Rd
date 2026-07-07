@@ -90,8 +90,8 @@ membership is determined from existing rows in \code{genome_effects}.
 The \code{base} argument controls which allele frequencies are used:
 \itemize{
 \item \code{"founder_haplotypes"} (default) — uses \code{founder_allele_freq} from
-\code{genome_meta} (requires \code{initialize_genome()} was called with
-\code{n_haplotypes}).
+\code{genome_meta} (requires \code{define_founder_haplotypes()} was called to
+populate it).
 \item \code{"current_pop"} — computes allele frequencies from the current
 \code{ind_haplotype} table. Pass a filtered \code{tidybreed_table} via
 \code{base_tbl} to restrict which individuals define the base population.

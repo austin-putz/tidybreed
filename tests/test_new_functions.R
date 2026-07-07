@@ -1,21 +1,15 @@
 #!/usr/bin/env Rscript
 # Quick integration test for mutate_table() on genome_meta and define_chip()
 
-library(tidybreed)
 library(dplyr)
 
 cat("=== Testing mutate_table() on genome_meta and define_chip() ===\n\n")
 
-# Initialize genome
+# Initialize genome (current long-format API)
 cat("1. Initializing genome...\n")
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 1000,
-  n_chr = 10,
-  chr_len_Mb = 100,
-  db_path = ":memory:",
-  n_haplotypes = 100
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100)
 
 # Define SNP chips
 cat("2. Defining SNP chips...\n")
@@ -50,7 +44,13 @@ cat("  SNPs on 50k chip:", sum(genome$is_50k), "\n")
 cat("  SNPs on HD chip:", sum(genome$is_HD), "\n")
 cat("  SNPs on 10k chip:", sum(genome$is_10k), "\n")
 
+stopifnot(sum(genome$is_50k) == 500)
+stopifnot(sum(genome$is_HD) == 900)
+stopifnot(sum(genome$is_10k) == 100)
+
 # Add custom columns to genome_meta via mutate_table()
+# Per-row values must be passed as a tibble keyed on the primary key (locus_id);
+# plain vectors are rejected because DB row order is not guaranteed.
 cat("4. Adding custom columns to genome_meta via mutate_table()...\n")
 n_loci <- nrow(genome)
 set.seed(123)
@@ -59,13 +59,20 @@ effect_vec <- ifelse(genome$is_50k, rnorm(n_loci, 0, 1), 0)
 pop <- pop %>%
   get_table("genome_meta") %>%
   mutate_table(
-    effect_50k    = effect_vec,
-    is_QTL_growth = genome$is_50k  # Mark chip SNPs as QTL
+    effect_50k = tibble::tibble(locus_id = genome$locus_id,
+                                effect_50k = effect_vec)
+  )
+pop <- pop %>%
+  get_table("genome_meta") %>%
+  mutate_table(
+    is_QTL_growth = tibble::tibble(locus_id = genome$locus_id,
+                                   is_QTL_growth = genome$is_50k)  # chip SNPs as QTL
   )
 
-# Add founders
+# Add founders (current API: pipe founder_haplotypes into add_founders)
 cat("5. Adding founders...\n")
 pop <- pop %>%
+  get_table("founder_haplotypes") %>%
   add_founders(n_males = 10, n_females = 100, line_name = "A")
 
 # Mark individuals via mutate_table() on ind_meta
@@ -85,30 +92,41 @@ chip_loci <- genome %>%
 
 cat("  First 10 chip loci:", paste(head(chip_loci, 10), collapse = ", "), "\n")
 
-# Get genotypes for chip SNPs
-chip_genotypes <- get_table(pop, "genome_genotype") %>%
-  select(id_ind, all_of(chip_loci)) %>%
+# Materialize dosages for chip SNPs (on-demand cache: ind_genotype is empty
+# until add_dosage() populates it), then query them in long format.
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  add_dosage(chip_name = "50k")
+
+chip_genotypes <- get_table(pop, "ind_genotype") %>%
+  filter(locus_name %in% chip_loci) %>%
   collect()
 
-cat("  Genotype matrix dimensions:", nrow(chip_genotypes), "x", ncol(chip_genotypes), "\n")
+n_ind  <- length(unique(chip_genotypes$id_ind))
+n_loc  <- length(unique(chip_genotypes$locus_name))
+cat("  Genotype rows:", nrow(chip_genotypes),
+    "| individuals:", n_ind, "| loci:", n_loc, "\n")
+
+stopifnot(n_ind == 110)
+stopifnot(n_loc == 500)
+stopifnot(all(chip_genotypes$dosage_value %in% c(0L, 1L, 2L)))
 
 # Summary
 cat("\n=== Summary ===\n")
-cat("✓ get_table('genome_meta') |> mutate_table() working correctly\n")
-cat("✓ define_chip() working correctly\n")
-cat("✓ Integration with add_founders() working\n")
-cat("✓ get_table('ind_meta') |> mutate_table() working\n")
-cat("✓ Can query chip genotypes successfully\n")
+cat("get_table('genome_meta') |> mutate_table() working correctly\n")
+cat("define_chip() working correctly\n")
+cat("Integration with add_founders() working\n")
+cat("get_table('ind_meta') |> mutate_table() working\n")
+cat("Can query chip genotypes successfully (long-format ind_genotype)\n")
 
 # View final genome_meta structure
 cat("\n8. Final genome_meta structure:\n")
 result <- get_table(pop, "genome_meta") %>%
   filter(is_50k == TRUE) %>%
   select(locus_id, locus_name, chr, pos_bp, is_50k, is_HD, is_10k, effect_50k, is_QTL_growth) %>%
-  head(10) %>%
   collect()
 
-print(result)
+print(head(result, 10))
 
 cat("\n=== All tests passed! ===\n")
 

@@ -6,6 +6,17 @@
 #' control over the mating design.
 #'
 #' @param pop A `tidybreed_pop` object
+#' @param batch_size Optional integer. Offspring generated + written per batch.
+#'   Bounds peak memory at roughly `batch_size x n_loci` long rows regardless of
+#'   the total number of offspring (a single huge mating streams to disk batch by
+#'   batch). Any value — including `batch_size = nrow(matings)` — produces
+#'   byte-identical output for a fixed seed; it only trades peak memory against
+#'   per-batch overhead. Overrides `max_batch_mem` when both are set.
+#' @param max_batch_mem Optional per-batch memory budget as bytes (e.g. `512e6`)
+#'   or a string (e.g. `"512MB"`, `"2GB"`). Used to derive `batch_size` when
+#'   `batch_size` is `NULL`. When both are `NULL` (the default), the batch size
+#'   is auto-picked from detected available system memory (falling back to a
+#'   conservative fixed budget if detection is unavailable).
 #' @param matings A tibble or data.frame where each row = one offspring.
 #'
 #'   **Required columns** (canonical names match `ind_meta`):
@@ -88,7 +99,7 @@
 #' )
 #' pop <- pop |> add_offspring(matings2)
 #' }
-add_offspring <- function(pop, matings) {
+add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL) {
 
   # ============================================================================
   # 1. Validate pop and matings types
@@ -178,7 +189,7 @@ add_offspring <- function(pop, matings) {
   if (length(missing_tables) > 0) {
     stop(
       "Required table(s) not found: ", paste(missing_tables, collapse = ", "), ". ",
-      "Ensure the population was created with initialize_genome().",
+      "Ensure the population was created with open_pop() |> define_genome().",
       call. = FALSE
     )
   }
@@ -317,8 +328,17 @@ add_offspring <- function(pop, matings) {
   names(parent_lo)       <- unique_parents
   names(parent_chr_haps) <- unique_parents
 
+  # One O(N) split of ROW INDICES replaces the old O(parents x rows) per-parent
+  # scan (parent_haps_raw[parent_haps_raw$id_ind == pid, ] inside the loop).
+  # Splitting indices (not the data.frame) keeps peak memory low — only one
+  # parent's subset is materialized at a time, as before — while removing the
+  # repeated full-table scan. split() preserves each group's original row order
+  # (the query's ORDER BY id_ind, parent_origin, locus_id), so the per-parent
+  # frames are identical — RNG- and output-neutral.
+  parent_row_idx <- split(seq_len(nrow(parent_haps_raw)), parent_haps_raw$id_ind)
+
   for (pid in unique_parents) {
-    rows <- parent_haps_raw[parent_haps_raw$id_ind == pid, ]
+    rows <- parent_haps_raw[parent_row_idx[[pid]], ]
 
     # --- Autosome portion: every individual always has exactly 2 copies of
     # every autosome (autosomes are "full/full" by definition of the
@@ -406,129 +426,24 @@ add_offspring <- function(pop, matings) {
   }
 
   # ============================================================================
-  # 11. Generate gametes and build genomic matrices
+  # 11. Batch setup (parent-keyed descriptors + offspring metadata; once)
   # ============================================================================
 
-  # Autosome path: one make_gamete() call per parent against that parent's resolved
-  # autosome descriptor. When every chromosome is a plain autosome (chr_meta
-  # all-default), special_chr_names is empty, so this is the ONLY code executed per
-  # offspring.
-  hap_sire_mat    <- matrix(0L, nrow = n_offspring, ncol = n_autosome_loci)
-  hap_dam_mat     <- matrix(0L, nrow = n_offspring, ncol = n_autosome_loci)
-  hap_sire_lo_mat <- matrix(NA_character_, nrow = n_offspring, ncol = n_autosome_loci)
-  hap_dam_lo_mat  <- matrix(NA_character_, nrow = n_offspring, ncol = n_autosome_loci)
-  col_idx <- seq_len(n_autosome_loci)
-
-  # Long-format accumulator for special-chromosome (sex-linked/organelle) rows
-  # — one entry per (offspring, parent_origin) written. Empty when there are
-  # no special chromosomes.
-  special_rows <- vector("list", 0L)
-
-  for (i in seq_len(n_offspring)) {
-    sire    <- matings$id_parent_1[i]
-    dam     <- matings$id_parent_2[i]
-    off_sex <- matings$sex[i]
-
-    # Each gamete uses its producing parent's resolved map (v1: all the default map).
-    sire_info <- gamete_info_cache[[gamete_info_key[[sire]]]]
-    dam_info  <- gamete_info_cache[[gamete_info_key[[dam]]]]
-
-    # make_gamete() returns allele + the per-locus homolog (1/2) it came from.
-    # line_origin follows whichever parental homolog donated each locus, so it
-    # is correct across F1/F2/backcross generations.
-    gs <- make_gamete(parent_haps[[sire]], sire_info$autosome)
-    hap_sire_mat[i, ]    <- gs$allele
-    hap_sire_lo_mat[i, ] <- parent_lo[[sire]][cbind(gs$homolog, col_idx)]
-
-    gd <- make_gamete(parent_haps[[dam]], dam_info$autosome)
-    hap_dam_mat[i, ]    <- gd$allele
-    hap_dam_lo_mat[i, ] <- parent_lo[[dam]][cbind(gd$homolog, col_idx)]
-
-    # --- Special-chromosome path, executed strictly AFTER the autosome path
-    # above for this offspring (never reordered ahead of it), so any RNG draws
-    # here cannot perturb draws already made for the autosome gametes. ---
-    for (cn in special_chr_names) {
-      chr_row <- chr_meta_map[[cn]]
-      cm_off  <- if (off_sex == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
-      if (cm_off == "none") next
-
-      contributors <- if (cm_off == "half") {
-        side <- chr_row$hemi_parent
-        list(list(pid = if (side == "parent_1") sire else dam,
-                  parent_origin = if (side == "parent_1") 1L else 2L))
-      } else {
-        list(list(pid = sire, parent_origin = 1L),
-             list(pid = dam,  parent_origin = 2L))
-      }
-
-      for (contrib in contributors) {
-        mats <- parent_chr_haps[[contrib$pid]][[cn]]
-        k_p  <- nrow(mats$hap)
-        if (k_p == 0L) {
-          stop(
-            "chr_meta misconfiguration: parent '", contrib$pid,
-            "' has zero copies of chromosome '", cn,
-            "' to pass on as its designated contribution.", call. = FALSE
-          )
-        }
-        # Recombination in this contributor's meiosis is governed by its OWN sex
-        # (recombines_M for a male contributor, recombines_F for a female).
-        contrib_recombines <- if (parent_sex[[contrib$pid]] == "M") {
-          chr_row$recombines_M
-        } else {
-          chr_row$recombines_F
-        }
-        if (k_p == 2L && isTRUE(contrib_recombines)) {
-          # Use the contributor's own resolved map for this special chromosome.
-          contrib_special <- gamete_info_cache[[gamete_info_key[[contrib$pid]]]]$special[[cn]]
-          g <- make_gamete(mats$hap, contrib_special)
-          allele <- g$allele
-          lo     <- mats$lo[cbind(g$homolog, seq_along(g$homolog))]
-        } else {
-          g <- pass_through_gamete(mats$hap, mats$lo)
-          allele <- g$allele
-          lo     <- g$line_origin
-        }
-        special_rows[[length(special_rows) + 1L]] <- data.frame(
-          id_ind        = offspring_ids[i],
-          parent_origin = contrib$parent_origin,
-          locus_id      = special_locus_ids[[cn]],
-          allele        = as.integer(allele),
-          line_origin   = lo,
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-  }
-
-  # ============================================================================
-  # 12. Build the wide allele frame (transient; the vehicle for the UNPIVOT into
-  #     the long ind_haplotype). Never written to a wide DB table. Restricted
-  #     to autosome columns — special-chromosome loci are written separately
-  #     from `special_rows` below.
-  # ============================================================================
-
-  autosome_locus_cols <- locus_cols[autosome_locus_idx]
-
-  hap_wide <- dplyr::bind_rows(
-    dplyr::bind_cols(
-      tibble::tibble(id_ind = offspring_ids, parent_origin = 1L),
-      setNames(as.data.frame(hap_sire_mat), autosome_locus_cols)
-    ),
-    dplyr::bind_cols(
-      tibble::tibble(id_ind = offspring_ids, parent_origin = 2L),
-      setNames(as.data.frame(hap_dam_mat), autosome_locus_cols)
-    )
+  # Per-parent resolved autosome descriptor, keyed by parent id, for the seam.
+  # (v1: every parent resolves to the single default map.)
+  autosome_info_by_parent <- stats::setNames(
+    lapply(unique_parents,
+           function(pid) gamete_info_cache[[gamete_info_key[[pid]]]]$autosome),
+    unique_parents
   )
-
-  # ============================================================================
-  # 14. Build ind_meta rows and handle extra columns
-  # ============================================================================
+  # Autosome locus_ids in LOCAL (compact) column order — the column ordering the
+  # gamete seam's wide matrices use. Column k of hap_*_mat is autosome_locus_ids[k].
+  autosome_locus_ids <- genome_meta_df$locus_id[autosome_locus_idx]
 
   # Offspring ploidy is computed, not hardcoded, as the sum of each parent's
-  # gamete contribution (own_ploidy / 2 per parent) — always 2L in this
-  # version (both parents are always 2L), but written this way so this code
-  # doesn't need revisiting when real polyploidy ships later.
+  # gamete contribution (own_ploidy / 2 per parent) — always 2L in this version
+  # (both parents are always 2L), but written this way so this code doesn't need
+  # revisiting when real polyploidy ships later. (RNG-neutral; no draws.)
   offspring_ploidy <- parent_ploidy[matings$id_parent_1] %/% 2L +
     parent_ploidy[matings$id_parent_2] %/% 2L
   stopifnot(all(offspring_ploidy == 2L))
@@ -542,68 +457,189 @@ add_offspring <- function(pop, matings) {
     ploidy      = as.integer(unname(offspring_ploidy))
   )
 
+  # ============================================================================
+  # 12. Batched long write, all inside ONE transaction.
+  #
+  # Offspring are generated + written in batches of B in the original `matings`
+  # row order, so the base-R gamete draw sequence is byte-identical to an
+  # unbatched run (any B -> identical ind_haplotype). Peak memory is bounded by
+  # ~B x n_loci long rows, independent of total n_offspring — a single huge
+  # mating streams to disk batch by batch.
+  #
+  # RNG discipline (output-neutral): all gamete draws happen inside the loop;
+  # `.write_long_haplotypes()` is register+INSERT (RNG-neutral). The single
+  # `dbWriteTable(ind_meta)` (which DOES advance R's RNG) is issued AFTER the
+  # loop, so it lands after every gamete draw — the same position it held in the
+  # pre-Stage-1 code, preserving both this call's and downstream seeded output.
+  # ============================================================================
+
+  B    <- resolve_batch_size(n_offspring, n_loci, batch_size, max_batch_mem)
+  conn <- pop$db_conn
+
+  DBI::dbExecute(conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
+          add = TRUE)
+
+  for (b_start in seq.int(1L, n_offspring, by = B)) {
+    b_idx  <- b_start:min(b_start + B - 1L, n_offspring)
+    b_n    <- length(b_idx)
+    b_ids  <- offspring_ids[b_idx]
+    b_sire <- matings$id_parent_1[b_idx]
+    b_dam  <- matings$id_parent_2[b_idx]
+    b_sex  <- matings$sex[b_idx]
+
+    if (length(special_chr_names) == 0L) {
+      # --- Fast path: no special chromosomes, hence no interleaved special RNG.
+      # Generate this batch's autosome gametes in one call. The seam draws
+      # sire-then-dam per offspring in row order — identical to the old inline
+      # loop and to any other B. ---
+      g <- make_gametes_batch(b_sire, b_dam, parent_haps, parent_lo,
+                              autosome_info_by_parent, n_autosome_loci)
+      hap_sire_mat    <- g$sire_allele
+      hap_dam_mat     <- g$dam_allele
+      hap_sire_lo_mat <- g$sire_lo
+      hap_dam_lo_mat  <- g$dam_lo
+      batch_special   <- list()
+
+    } else {
+      # --- Special chromosomes configured. Their meiosis draws base-R RNG that
+      # must stay interleaved directly AFTER each offspring's autosome draws. So
+      # call the seam per offspring (batch of one) and run the special path in
+      # the same iteration — identical draw order to the old loop and to any B. ---
+      hap_sire_mat    <- matrix(0L, nrow = b_n, ncol = n_autosome_loci)
+      hap_dam_mat     <- matrix(0L, nrow = b_n, ncol = n_autosome_loci)
+      hap_sire_lo_mat <- matrix(NA_character_, nrow = b_n, ncol = n_autosome_loci)
+      hap_dam_lo_mat  <- matrix(NA_character_, nrow = b_n, ncol = n_autosome_loci)
+
+      # Preallocated to the known upper bound (one entry per offspring x special
+      # chromosome x up-to-2 contributors), filled via a counter.
+      batch_special <- vector("list", b_n * length(special_chr_names) * 2L)
+      sr_count      <- 0L
+
+      for (j in seq_len(b_n)) {
+        sire    <- b_sire[j]
+        dam     <- b_dam[j]
+        off_sex <- b_sex[j]
+
+        gi <- make_gametes_batch(sire, dam, parent_haps, parent_lo,
+                                 autosome_info_by_parent, n_autosome_loci)
+        hap_sire_mat[j, ]    <- gi$sire_allele[1, ]
+        hap_dam_mat[j, ]     <- gi$dam_allele[1, ]
+        hap_sire_lo_mat[j, ] <- gi$sire_lo[1, ]
+        hap_dam_lo_mat[j, ]  <- gi$dam_lo[1, ]
+
+        # --- Special-chromosome path, executed strictly AFTER this offspring's
+        # autosome gametes above (never reordered ahead of them). ---
+        for (cn in special_chr_names) {
+          chr_row <- chr_meta_map[[cn]]
+          cm_off  <- if (off_sex == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
+          if (cm_off == "none") next
+
+          contributors <- if (cm_off == "half") {
+            side <- chr_row$hemi_parent
+            list(list(pid = if (side == "parent_1") sire else dam,
+                      parent_origin = if (side == "parent_1") 1L else 2L))
+          } else {
+            list(list(pid = sire, parent_origin = 1L),
+                 list(pid = dam,  parent_origin = 2L))
+          }
+
+          for (contrib in contributors) {
+            mats <- parent_chr_haps[[contrib$pid]][[cn]]
+            k_p  <- nrow(mats$hap)
+            if (k_p == 0L) {
+              stop(
+                "chr_meta misconfiguration: parent '", contrib$pid,
+                "' has zero copies of chromosome '", cn,
+                "' to pass on as its designated contribution.", call. = FALSE
+              )
+            }
+            # Recombination in this contributor's meiosis is governed by its OWN
+            # sex (recombines_M for a male contributor, recombines_F for a female).
+            contrib_recombines <- if (parent_sex[[contrib$pid]] == "M") {
+              chr_row$recombines_M
+            } else {
+              chr_row$recombines_F
+            }
+            if (k_p == 2L && isTRUE(contrib_recombines)) {
+              contrib_special <- gamete_info_cache[[gamete_info_key[[contrib$pid]]]]$special[[cn]]
+              gg <- make_gamete(mats$hap, contrib_special)
+              allele <- gg$allele
+              lo     <- mats$lo[cbind(gg$homolog, seq_along(gg$homolog))]
+            } else {
+              gg <- pass_through_gamete(mats$hap, mats$lo)
+              allele <- gg$allele
+              lo     <- gg$line_origin
+            }
+            sr_count <- sr_count + 1L
+            batch_special[[sr_count]] <- data.frame(
+              id_ind        = b_ids[j],
+              parent_origin = contrib$parent_origin,
+              strand        = 1L,
+              line_origin   = lo,
+              locus_id      = special_locus_ids[[cn]],
+              allele        = as.integer(allele),
+              stringsAsFactors = FALSE
+            )
+          }
+        }
+      }
+      batch_special <- if (sr_count > 0L) batch_special[seq_len(sr_count)] else list()
+    }
+
+    # Reshape this batch's wide autosome matrices to long parallel vectors in R
+    # (bounded by B; column-major as.vector() aligns with rep(locus, each = b_n)
+    # and rep(id, times = n_autosome_loci)). No dense n_offspring frame, no UNPIVOT.
+    long_frame <- rbind(
+      data.frame(
+        id_ind        = rep(b_ids, times = n_autosome_loci),
+        parent_origin = 1L,
+        strand        = 1L,
+        line_origin   = as.vector(hap_sire_lo_mat),
+        locus_id      = rep(autosome_locus_ids, each = b_n),
+        allele        = as.vector(hap_sire_mat),
+        stringsAsFactors = FALSE
+      ),
+      data.frame(
+        id_ind        = rep(b_ids, times = n_autosome_loci),
+        parent_origin = 2L,
+        strand        = 1L,
+        line_origin   = as.vector(hap_dam_lo_mat),
+        locus_id      = rep(autosome_locus_ids, each = b_n),
+        allele        = as.vector(hap_dam_mat),
+        stringsAsFactors = FALSE
+      )
+    )
+    if (length(batch_special) > 0L) {
+      long_frame <- rbind(long_frame, do.call(rbind, batch_special))
+    }
+
+    .write_long_haplotypes(conn, long_frame)
+
+    rm(hap_sire_mat, hap_dam_mat, hap_sire_lo_mat, hap_dam_lo_mat,
+       long_frame, batch_special)
+    gc(verbose = FALSE)
+  }
+
+  # ind_meta rows: extra user columns validated + type-inferred here (RNG-neutral
+  # ALTER TABLE), then the single dbWriteTable append — issued after every gamete
+  # draw so its RNG advance matches the pre-Stage-1 stream position exactly.
   if (length(extra_cols) > 0) {
-    # Build a named list of per-offspring values from matings columns
     extra_list <- stats::setNames(
       lapply(extra_cols, function(col) matings[[col]]),
       extra_cols
     )
-    prepped <- prepare_extra_cols(extra_list, n_offspring, "ind_meta", pop$db_conn)
+    prepped <- prepare_extra_cols(extra_list, n_offspring, "ind_meta", conn)
     for (nm in names(prepped)) ind_meta_new[[nm]] <- prepped[[nm]]
   }
+  DBI::dbWriteTable(conn, "ind_meta", ind_meta_new, append = TRUE)
+
+  DBI::dbExecute(conn, "COMMIT")
+  committed <- TRUE
 
   # ============================================================================
-  # 15. Write all tables to database
-  # ============================================================================
-
-  DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_new, append = TRUE)
-
-  # Write the long ind_haplotype (autosomes). A wide allele frame and a wide
-  # line_origin frame are unpivoted and joined in DuckDB (per (id_ind,
-  # parent_origin, locus)) so R never materializes the long frame. ind_genotype
-  # stays on-demand (add_dosage()).
-  lo_df <- dplyr::bind_rows(
-    dplyr::bind_cols(
-      tibble::tibble(id_ind = offspring_ids, parent_origin = 1L),
-      setNames(as.data.frame(hap_sire_lo_mat, stringsAsFactors = FALSE), autosome_locus_cols)
-    ),
-    dplyr::bind_cols(
-      tibble::tibble(id_ind = offspring_ids, parent_origin = 2L),
-      setNames(as.data.frame(hap_dam_lo_mat, stringsAsFactors = FALSE), autosome_locus_cols)
-    )
-  )
-  duckdb::duckdb_register(pop$db_conn, "__tmp_hap", as.data.frame(hap_wide))
-  duckdb::duckdb_register(pop$db_conn, "__tmp_lo",  lo_df)
-  DBI::dbExecute(pop$db_conn, paste0(
-    "INSERT INTO ind_haplotype ",
-    "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
-    "SELECT a.id_ind, a.parent_origin, 1, l.line_origin, gm.locus_id, gm.locus_name, a.allele ",
-    "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
-    "INTO NAME locus_col VALUE allele) a ",
-    "JOIN (UNPIVOT __tmp_lo ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
-    "INTO NAME locus_col VALUE line_origin) l ",
-    "ON a.id_ind = l.id_ind AND a.parent_origin = l.parent_origin ",
-    "AND a.locus_col = l.locus_col ",
-    "JOIN genome_meta gm ON a.locus_col = 'locus_' || gm.locus_id"
-  ))
-  duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
-  duckdb::duckdb_unregister(pop$db_conn, "__tmp_lo")
-
-  # Write special-chromosome (sex-linked/organelle) rows, already in long
-  # format — no UNPIVOT needed. RNG-neutral (register + INSERT).
-  if (length(special_rows) > 0L) {
-    special_df <- do.call(rbind, special_rows)
-    duckdb::duckdb_register(pop$db_conn, "__tmp_special_hap", special_df)
-    DBI::dbExecute(pop$db_conn, paste0(
-      "INSERT INTO ind_haplotype (id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
-      "SELECT s.id_ind, s.parent_origin, 1, s.line_origin, gm.locus_id, gm.locus_name, s.allele ",
-      "FROM __tmp_special_hap s JOIN genome_meta gm ON s.locus_id = gm.locus_id"
-    ))
-    duckdb::duckdb_unregister(pop$db_conn, "__tmp_special_hap")
-  }
-
-  # ============================================================================
-  # 16. Return
+  # 13. Return
   # ============================================================================
 
   message("Added ", n_offspring, " offspring")

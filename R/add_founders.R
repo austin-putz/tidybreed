@@ -25,6 +25,15 @@
 #'   are inferred from the R type: use `0L` for INTEGER, `0` for DOUBLE,
 #'   `"text"` for VARCHAR, `TRUE`/`FALSE` for BOOLEAN. Reserved column names
 #'   (`id_ind`, `sex`, `line_name`, `ploidy`, etc.) are blocked.
+#' @param batch_size Optional integer. Founders materialized + written per batch.
+#'   Bounds peak memory at roughly `batch_size x n_loci` long rows regardless of
+#'   the total number of founders. Any value produces byte-identical output for a
+#'   fixed seed (only the *write* is batched, never the sampling). Overrides
+#'   `max_batch_mem` when both are set.
+#' @param max_batch_mem Optional per-batch memory budget as bytes (e.g. `512e6`)
+#'   or a string (e.g. `"512MB"`). Used to derive `batch_size` when it is `NULL`.
+#'   When both are `NULL` (the default), the batch size is auto-picked from
+#'   detected available system memory (conservative fallback if unavailable).
 #'
 #' @return The modified `tidybreed_pop` object (invisibly).
 #'   **Important:** Assign the result back to update your object: `pop <- add_founders(pop, ...)`
@@ -92,7 +101,8 @@
 #' # View founders
 #' get_table(pop, "ind_meta") |> dplyr::collect()
 #' }
-add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...) {
+add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
+                         batch_size = NULL, max_batch_mem = NULL) {
 
   # ============================================================================
   # 1. Validate inputs
@@ -183,7 +193,7 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...) {
   # 3. Determine ID sequence
   # ============================================================================
 
-  # ind_meta always exists (created by initialize_genome()); query current max.
+  # ind_meta always exists (created by open_pop()); query current max.
   max_num_result <- DBI::dbGetQuery(pop$db_conn, paste0(
     "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('_' IN id_ind) + 1) AS INTEGER)) as max_num ",
     "FROM ind_meta WHERE LEFT(id_ind, ", nchar(line_name) + 1L, ") = '", line_name, "_'"
@@ -232,80 +242,91 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...) {
   }
 
   # ============================================================================
-  # 6. Build the wide allele frame (transient; the vehicle for the UNPIVOT into
-  #    the long ind_haplotype). It is never written to a wide DB table.
+  # 6. Batched long write of founder haplotypes (+ ind_meta), one transaction.
+  #
+  # Founders are whole-haplotype pool draws — no meiosis. The single sample()
+  # in step 4 drew every haplotype index up front; batching here only
+  # materializes and writes the selected long rows, never the sampling, so
+  # seeded pools stay byte-identical for any batch size (the founder RNG trap).
+  # Peak memory is bounded by ~B x n_loci long rows, not the full
+  # (2 x n_founders) x n_loci selected matrix (which is never built).
+  #
+  # copy_mode_M/copy_mode_F decides which (sex, parent_origin) slots are written
+  # per chromosome — "full" writes both parent_origin slots (diploid-autosome
+  # default), "half" writes only the hemi_parent slot, "none" writes nothing —
+  # the same rule the old per-chr UNPIVOT applied, now emitted directly in long
+  # form. strand = 1 (ploidy 2); line_origin = the founder's own line for every
+  # allele. .write_long_haplotypes() is register+INSERT (RNG-neutral); the single
+  # dbWriteTable(ind_meta) advances R's RNG exactly once, matching the pre-Stage-1
+  # stream. ind_genotype stays on-demand (add_dosage()); nothing written here.
   # ============================================================================
 
-  # Interleave paternal/maternal row indices: [pat1, mat1, pat2, mat2, ...].
-  # This is the ONLY use of hap_indices (drawn once, flat, in step 4) — no
-  # additional sampling happens below. copy_mode below only decides which of
-  # these already-drawn rows get WRITTEN per chromosome, never how many values
-  # sample() draws, so the RNG sequence from step 4 is unaffected by chr_meta.
-  row_idx <- c(rbind(hap_indices[, 1], hap_indices[, 2]))
-  hap_matrix <- hap_data_matrix[row_idx, , drop = FALSE]
-  storage.mode(hap_matrix) <- "integer"
+  # hap_data_matrix column c holds locus_id c; founder i's paternal copy is
+  # pool row hap_indices[i, 1], maternal is hap_indices[i, 2].
+  pat_row <- hap_indices[, 1]
+  mat_row <- hap_indices[, 2]
 
-  hap_wide <- cbind(
-    data.frame(
-      id_ind        = rep(ind_ids, each = 2),
-      parent_origin = rep(c(1L, 2L), times = n_founders),
-      sex           = rep(sex_vector, each = 2),
-      stringsAsFactors = FALSE
-    ),
-    as.data.frame(hap_matrix)
-  )
-  colnames(hap_wide)[4:(3 + n_loci)] <- locus_cols
+  chr_meta_map  <- get_chr_meta_map(pop$db_conn)
+  chr_names_uni <- unique(gm$chr_name)
 
-  # ============================================================================
-  # 7. Write data to database
-  # ============================================================================
+  B    <- resolve_batch_size(n_founders, n_loci, batch_size, max_batch_mem)
+  conn <- pop$db_conn
 
-  # Write ind_meta table (always append; table was created by initialize_genome())
-  DBI::dbWriteTable(pop$db_conn, "ind_meta", ind_meta_df, append = TRUE)
+  DBI::dbExecute(conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
+          add = TRUE)
 
-  # Write the long ind_haplotype, one UNPIVOT+INSERT per chromosome, using
-  # chr_meta's copy_mode_M/copy_mode_F to decide which (sex, parent_origin)
-  # rows are written for that chromosome's loci — "full" writes both
-  # parent_origin slots (today's diploid-autosome behavior, unchanged), "half"
-  # writes only the hemi_parent-designated slot, "none" writes nothing. R never
-  # materializes the long frame; strand = 1 (ploidy is 2 in this version);
-  # line_origin = the founder's own line for every allele. register + INSERT
-  # is RNG-neutral. ind_genotype stays on-demand (add_dosage()); nothing is
-  # written to it here.
-  chr_meta_map <- get_chr_meta_map(pop$db_conn)
-  chr_ids      <- sort(unique(gm$chr))
-  chr_order    <- vapply(chr_ids, function(x) gm$chr_name[gm$chr == x][1], character(1))
+  DBI::dbWriteTable(conn, "ind_meta", ind_meta_df, append = TRUE)
 
-  for (cn in chr_order) {
-    chr_row  <- chr_meta_map[[cn]]
-    chr_cols <- locus_cols[gm$chr_name == cn]
+  for (b_start in seq.int(1L, n_founders, by = B)) {
+    b_idx <- b_start:min(b_start + B - 1L, n_founders)
+    b_ids <- ind_ids[b_idx]
+    b_sex <- sex_vector[b_idx]
+    b_pat <- pat_row[b_idx]
+    b_mat <- mat_row[b_idx]
 
-    keep_rows <- rep(FALSE, nrow(hap_wide))
-    for (s in c("M", "F")) {
-      cm <- if (s == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
-      if (cm == "none") next
-      keep_po <- if (cm == "full") {
-        c(1L, 2L)
-      } else if (chr_row$hemi_parent == "parent_1") 1L else 2L
-      keep_rows <- keep_rows |
-        (hap_wide$sex == s & hap_wide$parent_origin %in% keep_po)
+    parts <- list()
+    for (cn in chr_names_uni) {
+      cols    <- which(gm$chr_name == cn)   # column positions (= locus_id)
+      lids    <- gm$locus_id[cols]
+      nl      <- length(cols)
+      chr_row <- chr_meta_map[[cn]]
+
+      keep_po_for <- function(cm) {
+        if (cm == "none") integer(0)
+        else if (cm == "full") c(1L, 2L)
+        else if (chr_row$hemi_parent == "parent_1") 1L else 2L
+      }
+      poM <- keep_po_for(chr_row$copy_mode_M)
+      poF <- keep_po_for(chr_row$copy_mode_F)
+
+      for (po in c(1L, 2L)) {
+        emit <- (b_sex == "M" & po %in% poM) | (b_sex == "F" & po %in% poF)
+        sub  <- which(emit)
+        if (!length(sub)) next
+        pool_rows <- if (po == 1L) b_pat[sub] else b_mat[sub]
+        block <- hap_data_matrix[pool_rows, cols, drop = FALSE]  # length(sub) x nl
+        parts[[length(parts) + 1L]] <- data.frame(
+          id_ind        = rep(b_ids[sub], times = nl),
+          parent_origin = po,
+          strand        = 1L,
+          line_origin   = line_name,
+          locus_id      = rep(lids, each = length(sub)),
+          allele        = as.integer(as.vector(block)),
+          stringsAsFactors = FALSE
+        )
+      }
     }
-    if (!any(keep_rows)) next
-
-    chr_wide <- hap_wide[keep_rows, c("id_ind", "parent_origin", chr_cols), drop = FALSE]
-
-    duckdb::duckdb_register(pop$db_conn, "__tmp_hap", chr_wide)
-    DBI::dbExecute(pop$db_conn, paste0(
-      "INSERT INTO ind_haplotype ",
-      "(id_ind, parent_origin, strand, line_origin, locus_id, locus_name, allele) ",
-      "SELECT u.id_ind, u.parent_origin, 1, '", line_name, "', ",
-      "gm.locus_id, gm.locus_name, u.allele ",
-      "FROM (UNPIVOT __tmp_hap ON COLUMNS(* EXCLUDE (id_ind, parent_origin)) ",
-      "INTO NAME locus_col VALUE allele) u ",
-      "JOIN genome_meta gm ON u.locus_col = 'locus_' || gm.locus_id"
-    ))
-    duckdb::duckdb_unregister(pop$db_conn, "__tmp_hap")
+    if (length(parts) > 0L) {
+      .write_long_haplotypes(conn, do.call(rbind, parts))
+    }
+    rm(parts)
+    gc(verbose = FALSE)
   }
+
+  DBI::dbExecute(conn, "COMMIT")
+  committed <- TRUE
 
   # ============================================================================
   # 9. Update and return

@@ -208,21 +208,52 @@
   gm_order <- DBI::dbGetQuery(
     pop$db_conn, "SELECT locus_name FROM genome_meta ORDER BY locus_id")$locus_name
 
-  # Build LONG founder_haplotypes: one row per (haplotype x locus). haplotype_id
-  # is sequential within this pool. as.integer() flattens column-major, matching
-  # haplotype_id = rep(seq, times) and locus = rep(seq, each).
-  fh <- data.frame(
-    line_name    = if (!is.null(line_name)) line_name else NA_character_,
-    haplotype_id = rep(seq_len(n_haplotypes), times = n_loci),
-    locus_name   = rep(gm_order, each = n_haplotypes),
-    allele       = as.integer(haplotype_matrix),
-    stringsAsFactors = FALSE
-  )
-
+  # Write LONG founder_haplotypes (one row per haplotype x locus), batched over
+  # haplotypes so the full n_hap x n_loci frame is never materialized at once —
+  # peak memory is bounded by ~B x n_loci. The pool generator's draws already
+  # happened above; only the WRITE is batched, so seeded pools are byte-identical.
+  #
+  # RNG discipline: dbWriteTable advances R's RNG by a fixed, size-independent
+  # amount (temp-name generation); register+INSERT is RNG-neutral. To reproduce
+  # the historical single-dbWriteTable advance exactly (preserving downstream
+  # seeded simulations), the FIRST batch uses dbWriteTable — which also creates
+  # the table when new — and any remaining batches use register+INSERT. One
+  # transaction makes the whole pool write atomic.
   is_new_table <- !DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")
-  # dbWriteTable (not register+INSERT) so the incidental RNG advance matches the
-  # historical wide writer exactly, preserving seeded simulations.
-  DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, append = TRUE)
+  lname <- if (!is.null(line_name)) line_name else NA_character_
+  B     <- resolve_batch_size(n_haplotypes, n_loci)
+  conn  <- pop$db_conn
+
+  DBI::dbExecute(conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
+          add = TRUE)
+
+  first_batch <- TRUE
+  for (h_start in seq.int(1L, n_haplotypes, by = B)) {
+    h_idx <- h_start:min(h_start + B - 1L, n_haplotypes)
+    sub   <- haplotype_matrix[h_idx, , drop = FALSE]      # length(h_idx) x n_loci
+    fh <- data.frame(
+      line_name    = lname,
+      haplotype_id = rep(h_idx, times = n_loci),
+      locus_name   = rep(gm_order, each = length(h_idx)),
+      allele       = as.integer(as.vector(sub)),
+      stringsAsFactors = FALSE
+    )
+    if (first_batch) {
+      DBI::dbWriteTable(conn, "founder_haplotypes", fh, append = TRUE)
+      first_batch <- FALSE
+    } else {
+      duckdb::duckdb_register(conn, "__tmp_fh", fh)
+      DBI::dbExecute(conn, "INSERT INTO founder_haplotypes SELECT * FROM __tmp_fh")
+      duckdb::duckdb_unregister(conn, "__tmp_fh")
+    }
+    rm(sub, fh)
+    gc(verbose = FALSE)
+  }
+
+  DBI::dbExecute(conn, "COMMIT")
+  committed <- TRUE
 
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
 

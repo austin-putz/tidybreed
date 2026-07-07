@@ -1,3 +1,51 @@
+# tidybreed 0.51.0 (2026-07-06)
+
+## Haplotype write-path optimization (Stage 0 + Stage 1)
+
+Internal performance work on the `add_founders()` / `add_offspring()` /
+`define_founder_haplotypes()` write paths. **Output-neutral** — seeded
+`ind_haplotype` / `founder_haplotypes` are byte-identical to before (verified
+across autosome and sex-chromosome designs and every batch size).
+
+- **Direct long, batched writes.** All three paths now insert `ind_haplotype`
+  (and the founder pool) in long format directly, replacing the dense
+  wide-matrix + `UNPIVOT` write. Peak memory is now **decoupled from the number
+  of individuals** — a single high-fecundity mating streams to disk batch by
+  batch. `add_offspring(200)` allocation churn dropped from ~43 GB to ~0.46 GB.
+- **RAM-aware batching.** `add_offspring()` and `add_founders()` gain
+  `batch_size` and `max_batch_mem` arguments; by default the batch size is
+  auto-picked from detected available system memory (cross-OS: Linux, macOS
+  Intel + Apple Silicon, Windows; conservative fallback, never errors). Any
+  batch size yields byte-identical output.
+- **One transaction per call.** Each `add_offspring()` / `add_founders()` /
+  founder-pool write is wrapped in a single transaction — a mid-run failure
+  rolls back cleanly instead of leaving a partially written generation.
+- **New `ind_crossover` table** created (empty) by `define_genome()` and
+  registered across the schema, reserving crossover-event storage for a later
+  stage; no rows are written yet.
+- Extracted the `make_gametes_batch()` gamete seam (Stage 0) plus cheap
+  structural wins (index-`split()` parent lookup, preallocated special-row
+  accumulator).
+
+## Deprecated-code removal (pre-1.0.0 cleanup)
+
+Per the pre-1.0.0 "break freely / no compatibility shims" policy, all remaining
+deprecated wrappers and legacy code paths were removed:
+
+- **Removed `initialize_genome()`** (the `.Deprecated` wrapper, since 0.40.0).
+  Use `open_pop() |> define_genome()` — and `define_founder_haplotypes()` for the
+  founder pool. `define_genome(cM_per_Mb = ...)` exposes the genetic-map rate the
+  old wrapper could not.
+- **Removed `set_qtl_effects_multi()`** (internal `.Deprecated` wrapper). Use
+  `define_additive_effects()` with a character vector of trait names.
+- **Removed `migrate_schema_meta()`** (legacy pre-v0.36.0 DB migration). Dead
+  under the forward-only reproducibility contract; new databases always create
+  `_schema_meta` via `open_pop()`. Also dropped the now-orphaned internal
+  `.genome_layer_descriptions()` helper.
+- Cleaned all stale `initialize_genome()` references in roxygen examples,
+  comments, and error strings; rewrote the loose `tests/test_*.R` manual scripts
+  against the current long-format schema.
+
 # tidybreed 0.50.0 (2026-07-06)
 
 ## Genome position coordinates & genetic map (breaking schema change)

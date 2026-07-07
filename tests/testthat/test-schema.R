@@ -236,16 +236,6 @@ test_that("define_chip() auto-registers column description in _schema_meta", {
 })
 
 
-test_that("migrate_schema_meta() is idempotent", {
-  pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
-    define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
-  on.exit(close_pop(pop))
-
-  # Already has _schema_meta — calling again should message, not error
-  expect_message(migrate_schema_meta(pop), regexp = "already present")
-})
-
-
 test_that("summary.tidybreed_pop() pulls descriptions from _schema_meta (not hard-coded)", {
   pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)

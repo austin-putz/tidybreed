@@ -1,73 +1,26 @@
 # ---------------------------------------------------------------------------
-# Parity harness for the wide -> long haplotype/genotype refactor (Stage 1).
+# Parity harness for the long-format haplotype/genotype schema.
 #
-# The goal: prove the long-format rewrite preserves current simulation behavior
-# exactly. A deterministic, seeded 2-line -> F1 -> F2 simulation is run and its
-# semantic content (haplotypes, dosages, TBVs, exported genotype matrix) is
-# canonicalized into format-agnostic long tibbles. On the first run (against the
-# current WIDE code) these are captured as golden files; every later run (against
-# the LONG code) is compared against them. See plans/refactor_haplotype.md.
-#
-# The canonicalize_*() helpers accept EITHER the wide tables
-# (genome_haplotype / genome_genotype with locus_1..locus_n columns) OR the long
-# tables (ind_haplotype / ind_genotype), so the same harness works before and
-# after the refactor.
+# The goal: prove the simulation is reproducible for a fixed seed. A
+# deterministic, seeded 2-line -> F1 -> F2 simulation is run and its semantic
+# content (haplotypes, dosages, TBVs, exported genotype matrix) is canonicalized
+# into long tibbles. These are captured as golden files on first run; every later
+# run is compared against them. See plans/refactor_haplotype.md.
 # ---------------------------------------------------------------------------
 
 parity_golden_dir <- function() {
   testthat::test_path("parity_golden")
 }
 
-# Melt a wide haplotype/genotype data frame (id cols + locus_<id> columns) into
-# a long data frame keyed by locus_id. `id_cols` are the non-locus columns.
-.parity_melt_wide <- function(wide, id_cols) {
-  locus_cols <- grep("^locus_[0-9]+$", names(wide), value = TRUE)
-  locus_ids  <- as.integer(sub("^locus_", "", locus_cols))
-  mat <- as.matrix(wide[, locus_cols, drop = FALSE])
-  n   <- nrow(wide)
-  p   <- length(locus_cols)
-  out <- data.frame(
-    lapply(id_cols, function(cc) rep(wide[[cc]], times = p)),
-    locus_id = rep(locus_ids, each = n),
-    allele   = as.integer(mat),   # column-major flatten matches rep(each = n)
-    stringsAsFactors = FALSE
-  )
-  names(out)[seq_along(id_cols)] <- id_cols
-  out
-}
-
-# Canonical haplotypes: (id_ind, parent_origin, locus_name, allele), sorted.
-# Reads ind_haplotype if present (long), else genome_haplotype (wide).
-# During the transition both wide (genome_haplotype) and long (ind_haplotype)
-# tables can exist. Prefer the long table only when it is FULLY populated (a row
-# for every individual in ind_meta) so that partial dual-write states (e.g.
-# founders migrated but offspring not yet) correctly fall back to the still-
-# authoritative wide table. Once the wide table is dropped, use long
-# unconditionally.
-.parity_use_long <- function(conn) {
-  if (!DBI::dbExistsTable(conn, "ind_haplotype")) return(FALSE)
-  if (!DBI::dbExistsTable(conn, "genome_haplotype")) return(TRUE)
-  n_ind  <- DBI::dbGetQuery(conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
-  n_long <- DBI::dbGetQuery(
-    conn, "SELECT COUNT(DISTINCT id_ind) AS n FROM ind_haplotype")$n
-  n_long > 0 && n_long == n_ind
-}
-
+# Canonical haplotypes: (id_ind, parent_origin, locus_name, allele), sorted,
+# read from the long ind_haplotype table.
 canonicalize_haplotypes <- function(pop) {
   conn <- pop$db_conn
-  gm   <- DBI::dbGetQuery(conn, "SELECT locus_id, locus_name FROM genome_meta")
 
-  if (.parity_use_long(conn)) {
-    df <- DBI::dbGetQuery(
-      conn,
-      "SELECT id_ind, parent_origin, locus_name, allele FROM ind_haplotype"
-    )
-  } else {
-    wide <- DBI::dbGetQuery(conn, "SELECT * FROM genome_haplotype")
-    long <- .parity_melt_wide(wide, id_cols = c("id_ind", "parent_origin"))
-    long <- merge(long, gm, by = "locus_id", all.x = TRUE)
-    df   <- long[, c("id_ind", "parent_origin", "locus_name", "allele")]
-  }
+  df <- DBI::dbGetQuery(
+    conn,
+    "SELECT id_ind, parent_origin, locus_name, allele FROM ind_haplotype"
+  )
 
   df$allele        <- as.integer(df$allele)
   df$parent_origin <- as.integer(df$parent_origin)
@@ -76,10 +29,10 @@ canonicalize_haplotypes <- function(pop) {
   tibble::as_tibble(df)
 }
 
-# Canonical dosage: (id_ind, locus_name, dosage_value), sorted. ALWAYS derived
-# from haplotypes (dosage = sum of alleles across parent_origin). This equals the
-# wide genome_genotype (which is that same sum) and the future add_dosage()
-# output, so it stays available even after ind_genotype becomes on-demand/empty.
+# Canonical dosage: (id_ind, locus_name, dosage_value), sorted. Derived from
+# haplotypes (dosage = sum of alleles across parent_origin), which matches
+# add_dosage() output, so it stays available even though ind_genotype is
+# on-demand/empty until add_dosage() is called.
 canonicalize_dosage <- function(pop) {
   hap <- canonicalize_haplotypes(pop)
   agg <- stats::aggregate(
@@ -92,10 +45,10 @@ canonicalize_dosage <- function(pop) {
   tibble::as_tibble(agg)
 }
 
-# Canonicalize an extract_genotypes() result. The wide code returns columns named
-# locus_<locus_id>; the long code returns columns named by locus_name. Map both
-# to locus_name and return BOTH a sorted long value tibble and the ordered
-# locus_name vector (to verify column ordering survives the PIVOT).
+# Canonicalize an extract_genotypes() result. extract_genotypes() returns a wide
+# matrix with columns named locus_<locus_id> (ordered by locus_id). Map those
+# headers to locus_name and return BOTH a sorted long value tibble and the ordered
+# locus_name vector (to verify column ordering is preserved).
 canonicalize_export <- function(pop, export_df) {
   conn <- pop$db_conn
   gm   <- DBI::dbGetQuery(conn, "SELECT locus_id, locus_name FROM genome_meta")

@@ -79,6 +79,8 @@ TABLE_RESERVED_COLS <- list(
   ind_haplotype    = c("id_ind", "parent_origin", "strand", "line_origin",
                        "locus_id", "locus_name", "allele"),
   ind_genotype     = c("id_ind", "locus_id", "locus_name", "dosage_value"),
+  ind_crossover    = c("id_crossover", "id_ind", "parent_origin", "chr",
+                       "chr_name", "pos_cM"),
   chr_meta         = c("chr_name", "copy_mode_M", "copy_mode_F", "hemi_parent",
                        "recombines_M", "recombines_F"),
   ind_phenotype    = c("id_phenotype", "id_ind", "phenotype_name", "pheno_value", "pheno_number",
@@ -113,6 +115,7 @@ TABLE_PRIMARY_KEYS <- list(
   genome_meta      = "locus_id",
   genome_map       = "id_genome_map",
   chr_meta         = "chr_name",
+  ind_crossover    = "id_crossover",
   genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   ind_tbv          = "id_tbv",
@@ -146,6 +149,7 @@ TABLE_ROW_KEYS <- list(
   ind_true_index   = c("id_ind", "index_name", "weight_type"),
   ind_haplotype    = c("id_ind", "parent_origin", "strand", "locus_id"),
   ind_genotype     = c("id_ind", "locus_id"),
+  ind_crossover    = "id_crossover",
   chr_meta         = "chr_name",
   trait_effects    = c("trait_name", "effect_name"),
   trait_var_comp     = "id_trait_var_comp",
@@ -179,7 +183,7 @@ next_int_id <- function(conn, table, id_col) {
 SYSTEM_TABLES <- c(
   "_schema_meta",
   "genome_meta", "genome_map", "genome_effects",
-  "ind_haplotype", "ind_genotype", "chr_meta",
+  "ind_haplotype", "ind_genotype", "ind_crossover", "chr_meta",
   "founder_haplotypes",
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
   "trait_meta", "trait_effects", "trait_var_comp", "trait_random_effects",
@@ -194,7 +198,7 @@ SYSTEM_TABLES <- c(
 IND_TABLE_ID_IND_COLS <- c(
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
   "ind_index", "ind_true_index",
-  "ind_haplotype", "ind_genotype"
+  "ind_haplotype", "ind_genotype", "ind_crossover"
 )
 
 

@@ -82,6 +82,70 @@ make_gamete <- function(hap_matrix, chr_info) {
   list(allele = gamete, homolog = homolog)
 }
 
+#' Generate autosome gametes for a batch of offspring (the swappable seam)
+#'
+#' Stage-0 extraction of the per-offspring autosome gamete generation out of
+#' [add_offspring()]. This is the **single swappable seam** that the later
+#' dqrng R reference (Stage 2) and C++ kernel (Stage 3) drop into; its signature
+#' is deliberately dependency-free — no `tidybreed_pop`, no DBI connection, no
+#' `data.frame` — so it is drop-in swappable and unit-testable in isolation.
+#'
+#' In Stage 0 it keeps the base-R internals ([make_gamete()], base RNG) and the
+#' wide-matrix output shape, so seeded `ind_haplotype` output is unchanged. The
+#' long-output / `base_seed` / `store_crossovers` signature arrives in Stage 2.
+#'
+#' **RNG order:** offspring are processed in the given order, **parent_1 (sire)
+#' gamete then parent_2 (dam) gamete** — the identical `make_gamete()` call
+#' sequence [add_offspring()] used inline, so the global RNG stream is untouched.
+#' When special chromosomes are configured, [add_offspring()] calls this per
+#' offspring (batch of one) so each offspring's special-chromosome draws remain
+#' interleaved directly after its autosome draws (base-R global-stream order).
+#'
+#' @param sire_ids,dam_ids Character vectors of parent IDs, length `n` (one per
+#'   offspring). `sire_ids[i]`/`dam_ids[i]` name the parent_1/parent_2 of
+#'   offspring `i`; both index into `parent_haps`/`parent_lo`.
+#' @param parent_haps Named list; `parent_haps[[pid]]` is the parent's
+#'   `2 x n_autosome_loci` integer allele matrix (homolog x locus).
+#' @param parent_lo Named list; `parent_lo[[pid]]` is the parallel
+#'   `2 x n_autosome_loci` character `line_origin` matrix.
+#' @param autosome_info_by_parent Named list; `autosome_info_by_parent[[pid]]` is
+#'   the parent's resolved autosome `chr_info` (from `build_chr_info()`, LOCAL
+#'   indices) for its `(sex, line)` map.
+#' @param n_autosome_loci Integer. Number of autosome loci (matrix column count).
+#' @return A list of four matrices, each `n x n_autosome_loci`:
+#'   `sire_allele`, `dam_allele` (integer alleles) and `sire_lo`, `dam_lo`
+#'   (character `line_origin`, gathered from the donating homolog).
+#' @keywords internal
+make_gametes_batch <- function(sire_ids, dam_ids, parent_haps, parent_lo,
+                               autosome_info_by_parent, n_autosome_loci) {
+  n       <- length(sire_ids)
+  col_idx <- seq_len(n_autosome_loci)
+
+  sire_allele <- matrix(0L, nrow = n, ncol = n_autosome_loci)
+  dam_allele  <- matrix(0L, nrow = n, ncol = n_autosome_loci)
+  sire_lo     <- matrix(NA_character_, nrow = n, ncol = n_autosome_loci)
+  dam_lo      <- matrix(NA_character_, nrow = n, ncol = n_autosome_loci)
+
+  for (i in seq_len(n)) {
+    sire <- sire_ids[i]
+    dam  <- dam_ids[i]
+
+    # make_gamete() returns allele + the per-locus homolog (1/2) it came from;
+    # line_origin follows the donating homolog so it stays correct across
+    # F1/F2/backcross generations.
+    gs <- make_gamete(parent_haps[[sire]], autosome_info_by_parent[[sire]])
+    sire_allele[i, ] <- gs$allele
+    sire_lo[i, ]     <- parent_lo[[sire]][cbind(gs$homolog, col_idx)]
+
+    gd <- make_gamete(parent_haps[[dam]], autosome_info_by_parent[[dam]])
+    dam_allele[i, ] <- gd$allele
+    dam_lo[i, ]     <- parent_lo[[dam]][cbind(gd$homolog, col_idx)]
+  }
+
+  list(sire_allele = sire_allele, dam_allele = dam_allele,
+       sire_lo = sire_lo, dam_lo = dam_lo)
+}
+
 #' Pass a chromosome copy through to a gamete without recombination
 #'
 #' Used for non-recombining chromosomes (the contributing parent's own-sex

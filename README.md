@@ -783,8 +783,8 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 |-------|------|-------------|
 | `genome_meta` | 1 per locus | Locus positions; user chip columns added via `define_chip()` |
 | `founder_haplotypes` | 1 per (haplotype × locus) | Haplotype pool sampled by `add_founders()` |
-| `genome_haplotype` | 2 per individual | Phased haplotypes (paternal / maternal) |
-| `genome_genotype` | 1 per individual | 0/1/2-encoded genotypes (SNP chip loci) |
+| `ind_haplotype` | 2 per (individual × locus) | Phased haplotypes, long format (paternal / maternal) |
+| `ind_genotype` | 1 per (individual × locus) | 0/1/2 dosages, long format; on-demand cache filled by `add_dosage()` |
 | `genome_effects` | 1 per (locus × trait × effect type) | Additive QTL effect sizes |
 | `ind_meta` | 1 per individual | Pedigree, sex, line; user date/status columns added via `mutate_table()` |
 | `ind_phenotype` | 1 per (individual × phenotype record) | Long-format phenotype records |

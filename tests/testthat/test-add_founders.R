@@ -309,7 +309,7 @@ test_that("add_founders errors if n_males or n_females invalid", {
 })
 
 
-test_that("integration: initialize_genome -> add_founders -> mutate_table", {
+test_that("integration: define_genome -> add_founders -> mutate_table", {
   pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 100) |>
     define_founder_haplotypes(n_haplotypes = 50) |>

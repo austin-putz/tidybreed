@@ -10,9 +10,8 @@
 \item{db_conn}{An active DuckDB connection.}
 }
 \description{
-Internal helper called by \code{\link[=open_pop]{open_pop()}} (and the deprecated
-\code{initialize_genome()} wrapper). Creates the \verb{_schema_meta} system table and
-all non-genome metadata tables. Genome tables (\code{genome_meta},
+Internal helper called by \code{\link[=open_pop]{open_pop()}}. Creates the \verb{_schema_meta} system
+table and all non-genome metadata tables. Genome tables (\code{genome_meta},
 \code{ind_haplotype}, \code{ind_genotype}, \code{chr_meta}) are created by \code{\link[=define_genome]{define_genome()}}.
 }
 \keyword{internal}

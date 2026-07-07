@@ -1,8 +1,7 @@
 # Manual test script for add_founders() function
 # Run this in R to verify the implementation works correctly
 
-library(tidyverse)
-devtools::load_all()
+library(dplyr)
 
 cat("=" , rep("=", 70), "\n", sep = "")
 cat("Testing add_founders() Implementation\n")
@@ -12,16 +11,12 @@ cat("=" , rep("=", 70), "\n\n", sep = "")
 cat("Test 1: Basic functionality\n")
 cat("--------------------------\n")
 
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 100,
-  n_chr = 5,
-  chr_len_Mb = 100,
-  n_haplotypes = 50,
-  db_path = ":memory:"
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 50)
 
-pop <- add_founders(pop, n_males = 10, n_females = 20, line_name = "A")
+pop <- get_table(pop, "founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 20, line_name = "A")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 cat("✓ Created", nrow(ind_meta), "founders\n")
@@ -33,23 +28,23 @@ cat("✓ All parents are NA:", all(is.na(ind_meta$id_parent_1)) && all(is.na(ind
 cat("Test 2: Haplotype and genotype verification\n")
 cat("-------------------------------------------\n")
 
-haps <- get_table(pop, "genome_haplotype") %>% collect()
-genos <- get_table(pop, "genome_genotype") %>% collect()
+haps <- get_table(pop, "ind_haplotype") %>% collect()
+cat("✓ Haplotype rows (30 ind x 100 loci x 2 strands):", nrow(haps), "\n")
 
-cat("✓ Haplotype rows (should be 60):", nrow(haps), "\n")
-cat("✓ Genotype rows (should be 30):", nrow(genos), "\n")
+# Dosage is on-demand: populate ind_genotype from haplotypes, then verify
+pop <- get_table(pop, "ind_meta") |> add_dosage()
+genos <- get_table(pop, "ind_genotype") %>% collect()
+cat("✓ Genotype rows (30 ind x 100 loci):", nrow(genos), "\n")
 
-# Verify genotype = sum of haplotypes for first individual
+# Verify dosage = sum of alleles at locus 1 for first individual
 ind_id <- ind_meta$id_ind[1]
-hap_rows <- haps %>% filter(id_ind == !!ind_id)
-geno_row <- genos %>% filter(id_ind == !!ind_id)
+hap_sum <- haps %>% filter(id_ind == !!ind_id, locus_id == 1L) %>%
+  summarise(s = sum(allele)) %>% pull(s)
+geno_val <- genos %>% filter(id_ind == !!ind_id, locus_id == 1L) %>%
+  pull(dosage_value)
 
-locus_name <- "locus_1"
-hap_sum <- sum(hap_rows[[locus_name]])
-geno_val <- geno_row[[locus_name]][1]
-
-cat("✓ Genotype = sum of haplotypes:", hap_sum == geno_val,
-    "(", hap_rows[[locus_name]][1], "+", hap_rows[[locus_name]][2], "=", geno_val, ")\n\n")
+cat("✓ Dosage = sum of alleles:", hap_sum == geno_val,
+    "(", hap_sum, "=", geno_val, ")\n\n")
 
 close_pop(pop)
 
@@ -57,17 +52,14 @@ close_pop(pop)
 cat("Test 3: Multiple lines\n")
 cat("----------------------\n")
 
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 50,
-  n_chr = 2,
-  chr_len_Mb = 100,
-  n_haplotypes = 20,
-  db_path = ":memory:"
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 20)
 
-pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
-pop <- add_founders(pop, n_males = 3, n_females = 7, line_name = "B")
+pop <- get_table(pop, "founder_haplotypes") |>
+  add_founders(n_males = 5, n_females = 5, line_name = "A")
+pop <- get_table(pop, "founder_haplotypes") |>
+  add_founders(n_males = 3, n_females = 7, line_name = "B")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
@@ -85,17 +77,14 @@ close_pop(pop)
 cat("Test 4: Sequential additions to same line\n")
 cat("-----------------------------------------\n")
 
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 50,
-  n_chr = 2,
-  chr_len_Mb = 100,
-  n_haplotypes = 20,
-  db_path = ":memory:"
-)
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 20)
 
-pop <- add_founders(pop, n_males = 5, n_females = 5, line_name = "A")
-pop <- add_founders(pop, n_males = 2, n_females = 3, line_name = "A")
+pop <- get_table(pop, "founder_haplotypes") |>
+  add_founders(n_males = 5, n_females = 5, line_name = "A")
+pop <- get_table(pop, "founder_haplotypes") |>
+  add_founders(n_males = 2, n_females = 3, line_name = "A")
 
 ind_meta <- get_table(pop, "ind_meta") %>% collect()
 
@@ -109,14 +98,10 @@ close_pop(pop)
 cat("Test 5: Integration with get_table('ind_meta') |> mutate_table()\n")
 cat("------------------------------------------------------------------\n")
 
-pop <- initialize_genome(
-  pop_name = "test",
-  n_loci = 100,
-  n_chr = 5,
-  chr_len_Mb = 100,
-  n_haplotypes = 50,
-  db_path = ":memory:"
-) %>%
+pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
+  define_genome(n_loci = 100, n_chr = 5, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 50)
+pop <- get_table(pop, "founder_haplotypes") |>
   add_founders(n_males = 10, n_females = 100, line_name = "A",
                gen = 0L, farm = "FarmA", date_birth = as.Date("2024-01-01"))
 

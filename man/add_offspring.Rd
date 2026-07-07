@@ -4,7 +4,7 @@
 \alias{add_offspring}
 \title{Add offspring via recombination}
 \usage{
-add_offspring(pop, matings)
+add_offspring(pop, matings, batch_size = NULL, max_batch_mem = NULL)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object}
@@ -25,6 +25,19 @@ Alias: \code{id_dam}
 validated and written directly to \code{ind_meta}. If a column does not yet
 exist in \code{ind_meta} it is added automatically. Scalar values in a tibble
 are recycled to all rows before being passed to this function.}
+
+\item{batch_size}{Optional integer. Offspring generated + written per batch.
+Bounds peak memory at roughly \verb{batch_size x n_loci} long rows regardless of
+the total number of offspring (a single huge mating streams to disk batch by
+batch). Any value — including \code{batch_size = nrow(matings)} — produces
+byte-identical output for a fixed seed; it only trades peak memory against
+per-batch overhead. Overrides \code{max_batch_mem} when both are set.}
+
+\item{max_batch_mem}{Optional per-batch memory budget as bytes (e.g. \code{512e6})
+or a string (e.g. \code{"512MB"}, \code{"2GB"}). Used to derive \code{batch_size} when
+\code{batch_size} is \code{NULL}. When both are \code{NULL} (the default), the batch size
+is auto-picked from detected available system memory (falling back to a
+conservative fixed budget if detection is unavailable).}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).

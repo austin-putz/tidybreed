@@ -4,7 +4,16 @@
 \alias{add_founders}
 \title{Add founder individuals to population}
 \usage{
-add_founders(tbl, n_males, n_females, line_name, ploidy = 2L, ...)
+add_founders(
+  tbl,
+  n_males,
+  n_females,
+  line_name,
+  ploidy = 2L,
+  ...,
+  batch_size = NULL,
+  max_batch_mem = NULL
+)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{get_table("founder_haplotypes")}
@@ -28,6 +37,17 @@ founders; vectors must have length \code{n_males + n_females}. Column types
 are inferred from the R type: use \code{0L} for INTEGER, \code{0} for DOUBLE,
 \code{"text"} for VARCHAR, \code{TRUE}/\code{FALSE} for BOOLEAN. Reserved column names
 (\code{id_ind}, \code{sex}, \code{line_name}, \code{ploidy}, etc.) are blocked.}
+
+\item{batch_size}{Optional integer. Founders materialized + written per batch.
+Bounds peak memory at roughly \verb{batch_size x n_loci} long rows regardless of
+the total number of founders. Any value produces byte-identical output for a
+fixed seed (only the \emph{write} is batched, never the sampling). Overrides
+\code{max_batch_mem} when both are set.}
+
+\item{max_batch_mem}{Optional per-batch memory budget as bytes (e.g. \code{512e6})
+or a string (e.g. \code{"512MB"}). Used to derive \code{batch_size} when it is \code{NULL}.
+When both are \code{NULL} (the default), the batch size is auto-picked from
+detected available system memory (conservative fallback if unavailable).}
 }
 \value{
 The modified \code{tidybreed_pop} object (invisibly).

@@ -141,7 +141,23 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("chr_meta", "recombines_M",
             "TRUE if recombination occurs in male meiosis (default TRUE); FALSE = whole-chromosome achiasmy in males"),
     .sm_col("chr_meta", "recombines_F",
-            "TRUE if recombination occurs in female meiosis (default TRUE); FALSE = whole-chromosome achiasmy in females")
+            "TRUE if recombination occurs in female meiosis (default TRUE); FALSE = whole-chromosome achiasmy in females"),
+
+    # ind_crossover (long; opt-in crossover-event storage)
+    .sm_tbl("ind_crossover",
+            "Crossover events in long format, one row per crossover drawn during meiosis. Created empty by define_genome(); populated only when add_offspring(store_crossovers = TRUE) (row writes land with the Stage-2 kernel). Absence of a row for a (id_ind, parent_origin, chr) means that gamete's chromosome did not recombine."),
+    .sm_col("ind_crossover", "id_crossover",
+            "Primary key assigned R-side via next_int_id()"),
+    .sm_col("ind_crossover", "id_ind",
+            "The offspring; FK to ind_meta.id_ind"),
+    .sm_col("ind_crossover", "parent_origin",
+            "1 = event in parent_1's (sire's) meiosis, 2 = parent_2's (dam's); matches ind_haplotype.parent_origin"),
+    .sm_col("ind_crossover", "chr",
+            "Chromosome number"),
+    .sm_col("ind_crossover", "chr_name",
+            "Chromosome name; FK to genome_meta.chr_name"),
+    .sm_col("ind_crossover", "pos_cM",
+            "Crossover genetic location in centiMorgans (the exact drawn position)")
   )
 }
 
@@ -312,17 +328,6 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_var_comp", "poly_order",
             "Polynomial order for legendre weight type")
   )
-}
-
-
-#' Combined genome-layer descriptions (core tables + genome tables)
-#'
-#' Convenience wrapper used by the deprecated initialize_genome() and
-#' migrate_schema_meta(). New code should call .core_layer_descriptions() and
-#' .genome_table_descriptions() separately.
-#' @keywords internal
-.genome_layer_descriptions <- function() {
-  rbind(.core_layer_descriptions(), .genome_table_descriptions())
 }
 
 
@@ -902,8 +907,8 @@ define_schema_description <- function(tbl, column_name = NULL, description,
 
   if (!"_schema_meta" %in% pop$tables) {
     warning(
-      "This database does not have a _schema_meta table. ",
-      "Run migrate_schema_meta(pop) first.",
+      "This database does not have a _schema_meta table; ",
+      "it predates the _schema_meta system table. Descriptions cannot be stored.",
       call. = FALSE
     )
     return(invisible(tbl))
@@ -920,57 +925,4 @@ define_schema_description <- function(tbl, column_name = NULL, description,
   register_schema_meta(pop$db_conn, entry)
 
   invisible(tbl)
-}
-
-
-#' Migrate a legacy database to include _schema_meta
-#'
-#' @description
-#' Creates the `_schema_meta` table and populates it with all standard
-#' descriptions for databases created before v0.36.0. Safe to call on a
-#' database that already has the table (idempotent).
-#'
-#' @param pop A `tidybreed_pop` object.
-#'
-#' @return `pop`, invisibly (with `_schema_meta` added to `pop$tables` if
-#'   it was not already present).
-#'
-#' @seealso [schema()], [describe_table()]
-#'
-#' @examples
-#' \dontrun{
-#' pop <- restore_pop("old_sim.duckdb")
-#' pop <- migrate_schema_meta(pop)
-#' schema(pop)
-#' }
-#' @export
-migrate_schema_meta <- function(pop) {
-  stopifnot(inherits(pop, "tidybreed_pop"))
-
-  if ("_schema_meta" %in% pop$tables) {
-    message("_schema_meta already present in this database.")
-    return(invisible(pop))
-  }
-
-  DBI::dbExecute(pop$db_conn, "
-    CREATE TABLE _schema_meta (
-      id_schema_meta INTEGER PRIMARY KEY,
-      object_type    VARCHAR NOT NULL,
-      table_name     VARCHAR NOT NULL,
-      column_name    VARCHAR,
-      description    VARCHAR NOT NULL,
-      notes          VARCHAR
-    )
-  ")
-
-  register_schema_meta(pop$db_conn, .genome_layer_descriptions())
-
-  if ("trait_meta" %in% pop$tables) {
-    register_schema_meta(pop$db_conn, .trait_layer_descriptions())
-  }
-
-  pop$tables <- unique(c(pop$tables, "_schema_meta"))
-  message("Added _schema_meta to database.")
-
-  invisible(pop)
 }

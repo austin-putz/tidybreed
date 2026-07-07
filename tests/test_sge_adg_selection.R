@@ -22,7 +22,6 @@
 #   Rscript tests/test_sge_adg_selection.R
 
 suppressPackageStartupMessages({
-  library(tidybreed)
   library(dplyr)
   library(tibble)
 })
@@ -178,16 +177,11 @@ select_parents <- function(pop, gen, model = "pa_v0") {
 
 # ── Initialise population ─────────────────────────────────────────────────────
 
-pop <- initialize_genome(
-  pop_name          = "pig_sge_sel",
-  n_loci            = 2000L,
-  n_chr             = 18L,
-  chr_len_Mb        = 100,
-  n_haplotypes      = 400L,
-  db_path           = ":memory:",
-  min_allele_freq   = 0.05,
-  max_allele_freq   = 0.95
-)
+pop <- open_pop(pop_name = "pig_sge_sel", db_name = ":memory:") |>
+  define_genome(n_loci = 2000L, n_chr = 18L, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes     = 400L,
+                            min_allele_freq  = 0.05,
+                            max_allele_freq  = 0.95)
 
 # Pre-declare typed columns on empty tables
 pop <- get_table(pop, "ind_meta") |> mutate_table(gen    = NA_integer_,
@@ -218,16 +212,18 @@ pop <- define_phenotype(pop, "ADG",
 n_founders_m <- N_MALES_SELECT   * 10L
 n_founders_f <- N_FEMALES_SELECT * 3L
 
-pop <- add_founders(pop,
-  n_males   = n_founders_m,
-  n_females = n_founders_f,
-  line_name = "Pig",
-  gen       = 0L)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(
+    n_males   = n_founders_m,
+    n_females = n_founders_f,
+    line_name = "Pig",
+    gen       = 0L)
 
 g0_ids  <- collect(get_table(pop, "ind_meta") |> filter(gen == 0L))$id_ind
 g0_pens <- make_pen_ids(0L, length(g0_ids))
-pop <- get_table(pop, "ind_meta") |> filter(gen == 0L) |>
-  mutate_table(pen_id = g0_pens)
+pop <- get_table(pop, "ind_meta") |>
+  mutate_table(pen_id = tibble::tibble(id_ind = g0_ids, pen_id = g0_pens))
 
 # Phenotype founders
 pop <- get_table(pop, "ind_meta") |> filter(gen == 0L) |>
@@ -276,8 +272,7 @@ for (gen in seq_len(N_GEN)) {
 
   new_pens <- make_pen_ids(gen, length(new_ids))
   pop <- get_table(pop, "ind_meta") |>
-    filter(id_ind %in% new_ids) |>
-    mutate_table(pen_id = new_pens)
+    mutate_table(pen_id = tibble::tibble(id_ind = new_ids, pen_id = new_pens))
 
   # 4. Phenotype current generation
   pop <- get_table(pop, "ind_meta") |>
