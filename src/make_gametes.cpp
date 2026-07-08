@@ -36,7 +36,7 @@ static inline int gamete_stream_id(int o, int r) {
 static inline int draw_poisson(rng_t& rng, double lambda) {
   if (lambda <= 0.0) return 0;
   if (lambda > 30.0) {
-    Rcpp::stop("Recombination rate lambda = %s exceeds the supported ceiling "
+    Rcpp::stop("Recombination rate lambda = %g exceeds the supported ceiling "
                "(30 Morgans / 3000 cM per chromosome).", lambda);
   }
   double target = -lambda, acc = 0.0;

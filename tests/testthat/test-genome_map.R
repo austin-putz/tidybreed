@@ -181,16 +181,98 @@ test_that("add_offspring() uses the gamete-producing parent's resolved map (sex-
       id_parent_2 = ids$id_ind[ids$sex == "F"][1:4],
       sex = "M", line_name = "B", stringsAsFactors = FALSE)
     set.seed(seed + 1)
-    pop <- add_offspring(pop, matings)
-    h <- DBI::dbGetQuery(pop$db_conn,
-      "SELECT allele FROM ind_haplotype WHERE id_ind LIKE 'B_%' AND parent_origin = 1
-       ORDER BY id_ind, locus_id")$allele
-    close_pop(pop); h
+    pop <- suppressMessages(add_offspring(pop, matings))
+    hap <- function(po) DBI::dbGetQuery(pop$db_conn, sprintf(
+      "SELECT allele FROM ind_haplotype WHERE id_ind LIKE 'B_%%' AND parent_origin = %d
+       ORDER BY id_ind, locus_id", po))$allele
+    out <- list(sire = hap(1L), dam = hap(2L)); close_pop(pop); out
   }
   default_run  <- build(7, FALSE)
   override_run <- build(7, TRUE)
-  # A male-specific genetic map must change sire-derived recombination.
-  expect_false(identical(default_run, override_run))
+  # A male-specific map must change SIRE-derived recombination (parent_origin 1)...
+  expect_false(identical(default_run$sire, override_run$sire))
+  # ...but leave DAM-derived recombination untouched: females resolve to the
+  # default map in both runs, so with the same base seed the dam gametes are
+  # byte-identical — proving the map is resolved PER gamete-producing parent.
+  expect_identical(default_run$dam, override_run$dam)
+})
+
+test_that("add_offspring() uses a line-specific resolved map (within-line cross)", {
+  build <- function(seed, add_line_override) {
+    set.seed(seed)
+    pop <- open_pop(pop_name = "lm", db_name = ":memory:") |>
+      define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = c(30, 30)) |>
+      define_founder_haplotypes(n_haplotypes = 30, method = "uniform") |>
+      get_table("founder_haplotypes") |>
+      add_founders(n_males = 4, n_females = 4, line_name = "A")
+    if (add_line_override) {
+      base <- resolve_genome_map(pop$db_conn)
+      nid  <- next_int_id(pop$db_conn, "genome_map", "id_genome_map")
+      df <- data.frame(id_genome_map = seq.int(nid, length.out = nrow(base)),
+                       locus_id = base$locus_id, locus_name = base$locus_name,
+                       sex = NA_character_, line_name = "A", map_name = "default",
+                       pos_cM = base$pos_cM * 8)   # line A recombines ~8x more
+      duckdb::duckdb_register(pop$db_conn, "__lo", df)
+      DBI::dbExecute(pop$db_conn, "INSERT INTO genome_map SELECT * FROM __lo")
+      duckdb::duckdb_unregister(pop$db_conn, "__lo")
+      validate_genome_map(pop$db_conn)
+    }
+    ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind, sex FROM ind_meta")
+    matings <- data.frame(
+      id_parent_1 = ids$id_ind[ids$sex == "M"][1:4],
+      id_parent_2 = ids$id_ind[ids$sex == "F"][1:4],
+      sex = "M", line_name = "C", stringsAsFactors = FALSE)   # offspring line C
+    set.seed(seed + 1)
+    pop <- suppressMessages(add_offspring(pop, matings))
+    h <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT allele FROM ind_haplotype WHERE id_ind LIKE 'C_%'
+       ORDER BY id_ind, parent_origin, locus_id")$allele
+    close_pop(pop); h
+  }
+  # Both parents are line A, so the line-A map changes both sides of the cross.
+  expect_false(identical(build(11, FALSE), build(11, TRUE)))
+})
+
+test_that("add_offspring() resolves sire and dam maps independently (cross-line)", {
+  build <- function(seed, add_A_override) {
+    set.seed(seed)
+    pop <- open_pop(pop_name = "xl", db_name = ":memory:") |>
+      define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = c(30, 30)) |>
+      define_founder_haplotypes(n_haplotypes = 30, method = "uniform")
+    pop <- pop |> get_table("founder_haplotypes") |>
+      add_founders(n_males = 4, n_females = 4, line_name = "A")
+    pop <- pop |> get_table("founder_haplotypes") |>
+      add_founders(n_males = 4, n_females = 4, line_name = "B")
+    if (add_A_override) {                       # line-A-only map (sex-agnostic)
+      base <- resolve_genome_map(pop$db_conn)
+      nid  <- next_int_id(pop$db_conn, "genome_map", "id_genome_map")
+      df <- data.frame(id_genome_map = seq.int(nid, length.out = nrow(base)),
+                       locus_id = base$locus_id, locus_name = base$locus_name,
+                       sex = NA_character_, line_name = "A", map_name = "default",
+                       pos_cM = base$pos_cM * 8)
+      duckdb::duckdb_register(pop$db_conn, "__ao", df)
+      DBI::dbExecute(pop$db_conn, "INSERT INTO genome_map SELECT * FROM __ao")
+      duckdb::duckdb_unregister(pop$db_conn, "__ao")
+      validate_genome_map(pop$db_conn)
+    }
+    ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind, sex, line_name FROM ind_meta")
+    matings <- data.frame(                      # line-A sire x line-B dam
+      id_parent_1 = ids$id_ind[ids$sex == "M" & ids$line_name == "A"][1:4],
+      id_parent_2 = ids$id_ind[ids$sex == "F" & ids$line_name == "B"][1:4],
+      sex = "M", line_name = "C", stringsAsFactors = FALSE)
+    set.seed(seed + 1)
+    pop <- suppressMessages(add_offspring(pop, matings))
+    hap <- function(po) DBI::dbGetQuery(pop$db_conn, sprintf(
+      "SELECT allele FROM ind_haplotype WHERE id_ind LIKE 'C_%%' AND parent_origin = %d
+       ORDER BY id_ind, locus_id", po))$allele
+    out <- list(sire = hap(1L), dam = hap(2L)); close_pop(pop); out
+  }
+  default_run  <- build(23, FALSE)
+  override_run <- build(23, TRUE)
+  # The line-A map is applied only to the line-A SIRE gamete; the line-B dam
+  # falls back to the default map in both runs, so only the sire side changes.
+  expect_false(identical(default_run$sire, override_run$sire))
+  expect_identical(default_run$dam, override_run$dam)
 })
 
 test_that("validate_genome_map() catches duplicate key, orphan, and name mismatch", {

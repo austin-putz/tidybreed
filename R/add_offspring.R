@@ -244,10 +244,12 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   # ============================================================================
   # 8. Load genome metadata (once); classify chromosomes as "plain autosome"
   #    (both sexes full copy, recombines in both sexes — chr_meta's default row) vs.
-  #    "special" (any sex-linked/organelle rule). Autosomes are handled by the
-  #    unchanged fast path below; special chromosomes get their own branch,
-  #    executed strictly AFTER the autosome path for each offspring so autosome
-  #    RNG draws are never perturbed by chr_meta configuration.
+  #    "special" (any sex-linked/organelle rule). Autosomes go through the C++/R
+  #    gamete kernel; special chromosomes get their own branch below. The two draw
+  #    from INDEPENDENT dqrng sub-streams keyed by kind (autosome kind = 1, special
+  #    kind = 2), so their output is order-independent regardless of which branch
+  #    runs first — the special path runs after the autosome path only as code
+  #    sequencing, not for RNG correctness.
   # ============================================================================
 
   # Recombination is driven by pos_cM (genetic distance), resolved PER GAMETE for
@@ -363,8 +365,8 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
     # every autosome (autosomes are "full/full" by definition of the
     # classification above), regardless of sex. Built COMPACT
     # (2 x n_autosome_loci, special-chromosome loci excluded entirely) using
-    # LOCAL column positions (full_to_local), matching autosome_chr_info's
-    # local indexing above. ---
+    # LOCAL column positions (full_to_local), matching the compact locus indexing
+    # the kernel's chr arrays (chr_arrays_by_key) use. ---
     auto_rows <- rows[rows$locus_id %in% genome_meta_df$locus_id[autosome_locus_idx], ]
     if (nrow(auto_rows) != 2L * n_autosome_loci) {
       stop(
@@ -435,6 +437,20 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   }
 
   n_offspring  <- nrow(matings)
+
+  # Per-gamete stream id sid = ((o*2 + (r-1))*2 + (kind-1)) must fit signed int32,
+  # since the R reference (as.integer) and the C++ kernel (int) both compute it in
+  # 32-bit. o is the global matings row index (1..n_offspring); the largest sid is
+  # ~4*n_offspring + 3. Beyond the bound R overflows to NA (seed error) while C++
+  # wraps — so guard loudly rather than diverge silently. The limit (~5.3e8
+  # offspring in one call) is far above any realistic run.
+  max_offspring_sid <- (.Machine$integer.max - 3L) %/% 4L
+  if (n_offspring > max_offspring_sid) {
+    stop("add_offspring(): n_offspring = ", n_offspring, " exceeds the supported ",
+         "per-call limit (", max_offspring_sid, ") for the int32 per-gamete stream ",
+         "id. Split the mating into multiple add_offspring() calls.", call. = FALSE)
+  }
+
   offspring_ids <- character(n_offspring)
   line_counter  <- as.list(line_start)
 

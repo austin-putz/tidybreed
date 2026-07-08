@@ -122,6 +122,31 @@ test_that("store_crossovers populates ind_crossover without perturbing ind_haplo
   expect_true(all(on$xc$pos_cM >= 0 & on$xc$pos_cM <= 200))
 })
 
+test_that("ind_crossover EVENTS are batch-invariant (surrogate id excluded)", {
+  # Crossover events (id_ind, parent_origin, chr, chr_name, pos_cM) must be
+  # identical across batch sizes for a fixed seed; only id_crossover — a surrogate
+  # assigned in write order — may differ, so it is dropped from the comparison.
+  run <- function(bs) {
+    set.seed(51)
+    pop <- open_pop(pop_name = "xb", db_name = ":memory:") |>
+      define_genome(n_loci = 150, n_chr = 3, chr_len_Mb = 150) |>
+      define_founder_haplotypes(n_haplotypes = 30, line_name = "A", method = "uniform")
+    pop <- pop |> get_table("founder_haplotypes") |>
+      add_founders(n_males = 5, n_females = 5, line_name = "A")
+    pop <- suppressMessages(add_offspring(pop, tibble::tibble(
+      id_parent_1 = rep(paste0("A_", 1:5), 5), id_parent_2 = rep(paste0("A_", 6:10), 5),
+      sex = rep(c("M", "F"), length.out = 25), line_name = "A"),
+      seed = 707L, store_crossovers = TRUE, batch_size = bs))
+    xc <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT id_ind, parent_origin, chr, chr_name, pos_cM FROM ind_crossover
+       ORDER BY id_ind, parent_origin, chr, pos_cM")
+    close_pop(pop); xc
+  }
+  small <- run(1L); big <- run(1000L)
+  expect_gt(nrow(small), 0L)
+  expect_equal(small, big)
+})
+
 test_that("recorded crossovers reproduce the homolog switches in the gamete", {
   # Controlled fixture: the two homologs differ at every locus (row1 all 0, row2
   # all 1), so allele == homolog - 1 and every homolog switch is visible. Assert
