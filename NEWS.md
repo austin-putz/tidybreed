@@ -1,3 +1,17 @@
+# tidybreed 0.54.0 (2026-07-08)
+
+## Swine vignette updated for the recombination refactor
+
+- `vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R` now exercises the
+  v0.53.0 recombination API: `define_genome(cM_per_Mb = ...)` writes the default
+  genetic map, a single `set.seed()` pins the whole replicate, and
+  `add_offspring(seed = as.integer(cur_date), store_crossovers, batch_size)` makes
+  each day's matings byte-reproducible while surfacing the new `ind_crossover`
+  table and memory-batching controls. Documented that the recombination kernel is
+  compiled C++ by default (`TIDYBREED_KERNEL = "r"` forces the R reference).
+- Correctness fix in the disabled cleanup block: `DELETE FROM ind_phenotype` keyed
+  on `trait_name`; that table's column is `phenotype_name`.
+
 # tidybreed 0.53.0 (2026-07-07)
 
 ## C++ recombination kernel + R↔C++ parity (Stage 3)

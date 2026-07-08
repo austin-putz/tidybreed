@@ -204,7 +204,13 @@ pop <- pop %>%
   define_genome(
 		n_loci       = config$genome$n_loci,  # number of loci (all* -> SNP/QTL/etc)
 		n_chr        = config$genome$n_chr,   # number of chromosomes
-		chr_len_Mb   = config$genome$chr_len  # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
+		chr_len_Mb   = config$genome$chr_len, # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
+		cM_per_Mb    = 1.0                     # genetic-map rate: pos_cM = pos_Mb * cM_per_Mb.
+		                                       #   Writes the DEFAULT map to the new `genome_map`
+		                                       #   table. 50 Mb chr * 1.0 = 50 cM -> ~0.5 crossovers
+		                                       #   per chromosome per meiosis (lambda = cM/100).
+		                                       #   Sex-/line-specific maps can be layered in later as
+		                                       #   extra `genome_map` rows without a schema change.
 	)
 
 # print genome info table (1 row per locus)
@@ -420,7 +426,16 @@ pop %>% get_table("ind_index")
 
 #for (repl in 1:config$general$n_reps){
 repl = 1
-  
+
+# ----- REPRODUCIBILITY (recombination refactor, v0.53.0) ----- #
+# One set.seed() here pins the entire replicate: founder sampling, birth-date
+# jitter, sire sampling AND the new per-gamete dqrng recombination streams.
+# Because add_offspring(seed = NULL) draws its base seed from this base-R stream,
+# every mating event downstream is reproducible from this single seed. (Below we
+# ALSO pass an explicit per-date seed to add_offspring() so recombination is
+# pinned independently of unrelated RNG churn in the loop.)
+set.seed(config$general$seed %||% (1000L + repl))
+
 warning("\n ----------    REPLICATE: ", repl, "    --------------------\n")
 
 # set min birth dates
@@ -1447,10 +1462,10 @@ pop %>% get_table("ind_true_index") %>% collect() %>% glimpse()
 if (1 > 2){
 
   # delete rows in tables if needed!  
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'AP'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'ADG'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'BF'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE trait_name = 'NW'")
+  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'AP'")
+  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'ADG'")
+  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'BF'")
+  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'NW'")
   dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'WW'")
   # delete rows in tables if needed!
   dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'AP'")
@@ -2292,9 +2307,25 @@ if (cur_date == female_selection_date){
   message("Add offspring")
   
   # add new offspring based on tibble mating plan (1 row per offspring)
+  #
+  # RECOMBINATION (v0.53.0 refactor): each offspring gamete is drawn on its own
+  # deterministic dqrng sub-stream keyed on (seed, offspring index, parent role),
+  # using the genetic map written by define_genome() (genome_map.pos_cM). The
+  # kernel runs in compiled C++ by default; force the pure-R reference with
+  # Sys.setenv(TIDYBREED_KERNEL = "r") if you ever need to cross-check.
+  #
+  #   seed             : explicit per-DATE base seed -> this day's matings are
+  #                      byte-reproducible and independent of other loop RNG.
+  #   store_crossovers : TRUE also logs every crossover to the `ind_crossover`
+  #                      table (id_ind, parent_origin, chr, chr_name, pos_cM).
+  #   batch_size       : bounds peak memory to ~batch_size x n_loci long rows;
+  #                      output is byte-identical for any batch size / same seed.
   pop %>%
     add_offspring(
-      data.new.matings
+      data.new.matings,
+      seed             = as.integer(cur_date),   # days-since-epoch: unique per date, < int32
+      store_crossovers = FALSE,                  # set TRUE to populate ind_crossover
+      batch_size       = NULL                    # NULL = one batch; e.g. 2000L to cap memory
     )
   
   #---------------- UPDATE SOW DATES ----------------#
