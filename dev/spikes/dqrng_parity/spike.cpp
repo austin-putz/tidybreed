@@ -58,3 +58,41 @@ NumericVector spike_unif_seed_stream(IntegerVector seed, IntegerVector stream, i
 NumericVector spike_unif_from_seedvec_first(IntegerVector key, int n) {
   return spike_unif_seedvec(key, n);
 }
+
+// ---------------------------------------------------------------------------
+// Stage-3 pre-port additions: prove the TWO transforms the recombination
+// kernel layers on top of uniform01() also match R bit-for-bit, since the
+// original spike only covered the 1-arg [0,1) uniform.
+// ---------------------------------------------------------------------------
+
+// Ranged uniform via L * uniform01() (the crossover-position transform). If
+// this matches dqrng::dqrunif(n, min = 0, max = L), the C++ kernel can draw
+// positions as chr_len * uniform01() and stay bit-identical to the R reference.
+// [[Rcpp::export]]
+NumericVector spike_ranged(IntegerVector key, int n, double L) {
+  uint64_t s = dqrng::convert_seed<uint64_t>(key);
+  rng_t rng;
+  rng.seed(s);
+  NumericVector out(n);
+  for (int i = 0; i < n; ++i) out[i] = L * rng.uniform01();
+  return out;
+}
+
+// Log-accumulation inversion Poisson count (the crossover-count sampler), the
+// EXACT algorithm .draw_poisson_dqrng() uses in R. Must return an identical
+// count for the same stream.
+// [[Rcpp::export]]
+int spike_poisson(IntegerVector key, double lambda) {
+  uint64_t s = dqrng::convert_seed<uint64_t>(key);
+  rng_t rng;
+  rng.seed(s);
+  if (lambda <= 0) return 0;
+  double target = -lambda, acc = 0.0;
+  int k = 0;
+  for (;;) {
+    acc += std::log(rng.uniform01());
+    if (acc <= target) break;
+    ++k;
+  }
+  return k;
+}

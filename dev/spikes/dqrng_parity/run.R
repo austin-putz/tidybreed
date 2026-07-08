@@ -72,6 +72,40 @@ for (k in keys) {
 }
 report("Scheme B (seed + stream):", b_ok, b_supported)
 
+# ---- Stage-3 pre-port: ranged-uniform parity dqrunif(n,0,L) vs L*uniform01() -
+# The kernel draws crossover positions as uniforms scaled to (0, chr_len). If
+# dqrng's ranged form is min + (max-min)*uniform01() (one uniform01 per value),
+# C++ `L*uniform01()` is bit-identical and Stage-2 output is preserved.
+ranged_ok <- logical(0)
+for (k in keys) {
+  seedvec <- c(as.integer(k$base), sid(k$o, k$r, k$kind))
+  for (L in c(1, 50, 137.035)) for (n in ns) {
+    dqrng::dqset.seed(seedvec)
+    r_out <- dqrng::dqrunif(n, min = 0, max = L)
+    ranged_ok <- c(ranged_ok, identical(r_out, spike_ranged(seedvec, n, L)))
+  }
+}
+report("ranged uniform (0,L):", ranged_ok, TRUE)
+
+# ---- Stage-3 pre-port: Poisson-count parity (log-accumulation inversion) -----
+# The EXACT R sampler .draw_poisson_dqrng() vs the C++ mirror, same stream.
+r_poisson <- function(seedvec, lambda) {
+  dqrng::dqset.seed(seedvec)
+  if (lambda <= 0) return(0L)
+  s <- 0; k <- 0L
+  repeat { s <- s + log(dqrng::dqrunif(1L)); if (s <= -lambda) break; k <- k + 1L }
+  k
+}
+pois_ok <- logical(0)
+for (k in keys) {
+  seedvec <- c(as.integer(k$base), sid(k$o, k$r, k$kind))
+  for (lam in c(0.3, 1, 5, 25)) {
+    pois_ok <- c(pois_ok, identical(as.integer(r_poisson(seedvec, lam)),
+                                    as.integer(spike_poisson(seedvec, lam))))
+  }
+}
+report("poisson count (log-accum):", pois_ok, TRUE)
+
 # ---- Independence sanity: distinct keys must give distinct streams ----------
 mk <- function(base, o, r, kind) spike_unif_seedvec(c(as.integer(base), sid(o, r, kind)), 5L)
 streams <- list(mk(42, 1, 1, 1), mk(42, 1, 2, 1), mk(42, 2, 1, 1), mk(42, 1, 1, 2))

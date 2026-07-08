@@ -187,83 +187,129 @@ make_gamete <- function(hap_matrix, chr_info, base_seed, sid,
        xover_chr_idx = xchr, xover_pos_cM = xpos)
 }
 
-#' Generate autosome gametes for a batch of offspring (the swappable seam)
+#' Reconstruct the per-chromosome `chr_info` list from flat kernel arrays
 #'
-#' The single seam the C++ kernel (Stage 3) drops into. Dependency-free — no
-#' `tidybreed_pop`, no DBI, no `data.frame` in its numeric inputs — so it is
-#' drop-in swappable and unit-testable in isolation.
+#' The C++-ready seam ([make_gametes_batch_r()]) receives the autosome map as
+#' flat arrays (`chr_start`/`chr_end`/`chr_pos_cM`/`chr_len_cM`) rather than the
+#' nested `chr_info` list [make_gamete()] consumes. This rebuilds that list so
+#' the unchanged per-gamete core can be reused verbatim. `chr_start`/`chr_end`
+#' are 1-based inclusive locus-index ranges into `1..n_autosome_loci`.
 #'
-#' **RNG order:** offspring in the given order, **parent_1 (sire) gamete then
-#' parent_2 (dam) gamete**; each gamete draws from its own dqrng stream keyed on
-#' its global offspring index `o_index[i]` (autosome kind = 1), so output is
-#' independent of batch size and iteration order.
-#'
-#' @param sire_ids,dam_ids Character vectors of parent IDs, length `n`; index
-#'   into `parent_haps`/`parent_lo`.
-#' @param parent_haps Named list; `parent_haps[[pid]]` is the parent's
-#'   `2 x n_autosome_loci` integer allele matrix (homolog x locus).
-#' @param parent_lo Named list; parallel `2 x n_autosome_loci` `line_origin`
-#'   character matrix.
-#' @param autosome_info_by_parent Named list; `[[pid]]` is the parent's resolved
-#'   autosome `chr_info` (LOCAL indices) for its `(sex, line)` map.
-#' @param n_autosome_loci Integer autosome locus count (matrix column count).
-#' @param base_seed Integer base seed for the `add_offspring()` call.
-#' @param o_index Integer vector length `n` — the global offspring index `o`
-#'   (original `matings` row) per batch element; drives the per-gamete stream.
-#' @param store_crossovers Logical; collect the crossover buffer when `TRUE`.
-#' @return List of four `n x n_autosome_loci` matrices (`sire_allele`,
-#'   `dam_allele`, `sire_lo`, `dam_lo`) plus `crossovers`: `NULL`, or a
-#'   data.frame `(local_j, parent_origin, chr_idx, pos_cM)` (`chr_idx` indexes
-#'   into the autosome `chr_info` order; the caller maps it to `chr`/`chr_name`).
+#' @param chr_start,chr_end Integer per-chromosome locus-index ranges.
+#' @param chr_pos_cM Numeric per-locus genetic positions (cM), length
+#'   `n_autosome_loci`.
+#' @param chr_len_cM Numeric per-chromosome genetic length (cM).
+#' @return A `chr_info`-shaped list (one element per chromosome).
 #' @keywords internal
-make_gametes_batch <- function(sire_ids, dam_ids, parent_haps, parent_lo,
-                               autosome_info_by_parent, n_autosome_loci,
-                               base_seed, o_index, store_crossovers = FALSE) {
-  n       <- length(sire_ids)
-  col_idx <- seq_len(n_autosome_loci)
+.chr_info_from_arrays <- function(chr_start, chr_end, chr_pos_cM, chr_len_cM) {
+  lapply(seq_along(chr_start), function(c_i) {
+    idx <- chr_start[c_i]:chr_end[c_i]
+    list(locus_idx = idx, pos_cM = chr_pos_cM[idx], chr_len = chr_len_cM[c_i])
+  })
+}
 
-  sire_allele <- matrix(0L, nrow = n, ncol = n_autosome_loci)
-  dam_allele  <- matrix(0L, nrow = n, ncol = n_autosome_loci)
-  sire_lo     <- matrix(NA_character_, nrow = n, ncol = n_autosome_loci)
-  dam_lo      <- matrix(NA_character_, nrow = n, ncol = n_autosome_loci)
+#' Generate autosome gametes for one resolved-map group (the swappable seam)
+#'
+#' The single seam the C++ kernel (Stage 3) drops into: a dependency-free numeric
+#' function over **packed integer arrays** — no `tidybreed_pop`, no DBI, no
+#' `data.frame`, no character `line_origin`, no string-keyed lists — so the R
+#' reference and the C++ kernel take byte-identical inputs and their outputs can
+#' be compared directly for parity. This is the R reference / parity oracle;
+#' [make_gametes_batch()] dispatches to it (or to the compiled kernel).
+#'
+#' **Gamete-flat / one-map-per-call (group-by-map seam).** Each gamete may use a
+#' different genetic map (sex-specific, achiasmy, line-specific), so the caller
+#' groups gametes by resolved-map key and calls this once per group with that
+#' group's `chr_*` arrays. The unit is a **gamete**, identified by
+#' `(gamete_o, gamete_origin)`; each draws from its own dqrng stream keyed on its
+#' **global** offspring index `gamete_o` (autosome kind = 1), so output is
+#' independent of batch size, iteration order, and how gametes are partitioned
+#' into map-groups or calls.
+#'
+#' @param parent_allele Integer matrix `(2 * n_parents) x n_autosome_loci`,
+#'   homolog-major: rows `2p-1` and `2p` are parent `p`'s homolog 1 and 2.
+#' @param parent_lo_code Integer matrix, same shape: `line_origin` dictionary
+#'   codes (the caller decodes back to `VARCHAR`).
+#' @param gamete_parent_idx Integer length `G`: 1-based packed parent row that
+#'   produces each gamete.
+#' @param gamete_o Integer length `G`: global offspring index `o` per gamete
+#'   (original `matings` row); drives the per-gamete stream.
+#' @param gamete_origin Integer length `G`: `parent_origin` (1 = parent_1/sire,
+#'   2 = parent_2/dam) per gamete.
+#' @param chr_start,chr_end Integer per-chromosome locus-index ranges (1-based
+#'   inclusive, contiguous, into `1..n_autosome_loci`) for THIS group's map.
+#' @param chr_pos_cM Numeric per-locus genetic positions (cM), length
+#'   `n_autosome_loci`, for this group's map.
+#' @param chr_len_cM Numeric per-chromosome genetic length (cM) for this group.
+#' @param base_seed Integer base seed for the `add_offspring()` call.
+#' @param store_crossovers Logical; emit the ragged crossover buffer when `TRUE`.
+#' @return List of long parallel vectors over the `G` gametes in the given order
+#'   (gamete -> locus ascending): `parent_origin`, `locus_idx`
+#'   (1..n_autosome_loci), `allele`, `line_origin_code`; plus the ragged
+#'   crossover buffer `xover_gamete_o` (global `o`), `xover_parent_origin`,
+#'   `xover_chr` (index into the autosome chromosome order), `xover_pos_cM`
+#'   (length 0 unless `store_crossovers`).
+#' @keywords internal
+make_gametes_batch_r <- function(parent_allele, parent_lo_code,
+                                 gamete_parent_idx, gamete_o, gamete_origin,
+                                 chr_start, chr_end, chr_pos_cM, chr_len_cM,
+                                 base_seed, store_crossovers = FALSE) {
+  n_chr <- length(chr_start)
+  # Contiguity contract: chromosomes tile 1..n_autosome_loci with no gaps, in
+  # ascending order (holds by construction today; guards future out-of-order
+  # locus_id additions — see plans/optimize_add_offspring.md Stage 0 caveat).
+  if (n_chr > 1L &&
+      !identical(as.integer(chr_start[-1L]), as.integer(chr_end[-n_chr]) + 1L)) {
+    stop("make_gametes_batch_r(): chromosomes must be contiguous locus-index blocks.",
+         call. = FALSE)
+  }
 
-  # Preallocated to the upper bound (one crossover frame per gamete = 2n).
-  xo <- if (store_crossovers) vector("list", 2L * n) else NULL
+  G       <- length(gamete_parent_idx)
+  n_loci  <- ncol(parent_allele)
+  col_idx <- seq_len(n_loci)
+  chr_info <- .chr_info_from_arrays(chr_start, chr_end, chr_pos_cM, chr_len_cM)
+
+  total         <- G * n_loci
+  parent_origin <- integer(total)
+  locus_idx     <- integer(total)
+  allele        <- integer(total)
+  lo_code       <- integer(total)
+
+  # Ragged crossover accumulator, preallocated to the upper bound (G gametes).
+  xo <- if (store_crossovers) vector("list", G) else NULL
   xk <- 0L
 
-  for (i in seq_len(n)) {
-    o    <- o_index[i]
-    sire <- sire_ids[i]
-    dam  <- dam_ids[i]
+  pos <- 0L
+  for (i in seq_len(G)) {
+    o    <- gamete_o[i]
+    r    <- gamete_origin[i]
+    pidx <- gamete_parent_idx[i]
+    rows <- c(2L * pidx - 1L, 2L * pidx)
+    g    <- make_gamete(parent_allele[rows, , drop = FALSE], chr_info,
+                        base_seed, .gamete_stream_id(o, r, 1L), store_crossovers)
 
-    gs <- make_gamete(parent_haps[[sire]], autosome_info_by_parent[[sire]],
-                      base_seed, .gamete_stream_id(o, 1L, 1L), store_crossovers)
-    sire_allele[i, ] <- gs$allele
-    sire_lo[i, ]     <- parent_lo[[sire]][cbind(gs$homolog, col_idx)]
+    rng                <- (pos + 1L):(pos + n_loci)
+    parent_origin[rng] <- r
+    locus_idx[rng]     <- col_idx
+    allele[rng]        <- g$allele
+    lo_code[rng]       <- parent_lo_code[rows, , drop = FALSE][cbind(g$homolog, col_idx)]
+    pos                <- pos + n_loci
 
-    gd <- make_gamete(parent_haps[[dam]], autosome_info_by_parent[[dam]],
-                      base_seed, .gamete_stream_id(o, 2L, 1L), store_crossovers)
-    dam_allele[i, ] <- gd$allele
-    dam_lo[i, ]     <- parent_lo[[dam]][cbind(gd$homolog, col_idx)]
-
-    if (store_crossovers) {
-      if (length(gs$xover_pos_cM)) {
-        xk <- xk + 1L
-        xo[[xk]] <- data.frame(local_j = i, parent_origin = 1L,
-                               chr_idx = gs$xover_chr_idx, pos_cM = gs$xover_pos_cM)
-      }
-      if (length(gd$xover_pos_cM)) {
-        xk <- xk + 1L
-        xo[[xk]] <- data.frame(local_j = i, parent_origin = 2L,
-                               chr_idx = gd$xover_chr_idx, pos_cM = gd$xover_pos_cM)
-      }
+    if (store_crossovers && length(g$xover_pos_cM)) {
+      xk <- xk + 1L
+      xo[[xk]] <- data.frame(o = o, parent_origin = r,
+                             chr = g$xover_chr_idx, pos_cM = g$xover_pos_cM)
     }
   }
 
-  crossovers <- if (store_crossovers && xk > 0L) do.call(rbind, xo[seq_len(xk)]) else NULL
+  x <- if (store_crossovers && xk > 0L) do.call(rbind, xo[seq_len(xk)]) else
+    data.frame(o = integer(0), parent_origin = integer(0),
+               chr = integer(0), pos_cM = numeric(0))
 
-  list(sire_allele = sire_allele, dam_allele = dam_allele,
-       sire_lo = sire_lo, dam_lo = dam_lo, crossovers = crossovers)
+  list(parent_origin = parent_origin, locus_idx = locus_idx,
+       allele = allele, line_origin_code = lo_code,
+       xover_gamete_o = x$o, xover_parent_origin = x$parent_origin,
+       xover_chr = x$chr, xover_pos_cM = x$pos_cM)
 }
 
 #' Pass a chromosome copy through to a gamete without recombination

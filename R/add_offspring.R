@@ -448,19 +448,61 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   # 11. Batch setup (parent-keyed descriptors + offspring metadata; once)
   # ============================================================================
 
-  # Per-parent resolved autosome descriptor, keyed by parent id, for the seam.
-  # (v1: every parent resolves to the single default map.)
-  autosome_info_by_parent <- stats::setNames(
-    lapply(unique_parents,
-           function(pid) gamete_info_cache[[gamete_info_key[[pid]]]]$autosome),
-    unique_parents
+  # ---- Packed, C++-ready kernel inputs (Stage 3a) ---------------------------
+  # The gamete seam (make_gametes_batch_r / the C++ kernel) is a numeric function
+  # over packed integer arrays — no string-keyed lists, no character line_origin.
+  # Build them once here from the per-parent structures assembled in §9.
+  n_par   <- length(unique_parents)
+  par_row <- stats::setNames(seq_len(n_par), unique_parents)  # packed row per pid
+
+  parent_allele <- matrix(0L, nrow = 2L * n_par, ncol = n_autosome_loci)
+  parent_lo_str <- matrix(NA_character_, nrow = 2L * n_par, ncol = n_autosome_loci)
+  for (pid in unique_parents) {
+    p <- par_row[[pid]]
+    parent_allele[c(2L * p - 1L, 2L * p), ] <- parent_haps[[pid]]
+    parent_lo_str[c(2L * p - 1L, 2L * p), ] <- parent_lo[[pid]]
+  }
+  # line_origin dictionary (integer codes, first-seen order); decoded back to
+  # VARCHAR at write time. Bijective, so the stored line_origin is unchanged.
+  lo_levels      <- unique(as.vector(parent_lo_str))
+  lo_levels      <- lo_levels[!is.na(lo_levels)]
+  parent_lo_code <- matrix(match(parent_lo_str, lo_levels),
+                           nrow = 2L * n_par, ncol = n_autosome_loci)
+
+  # Packed-parent index per offspring (global; sliced per batch below).
+  parent_1_idx_all <- unname(par_row[matings$id_parent_1])
+  parent_2_idx_all <- unname(par_row[matings$id_parent_2])
+
+  # Per-gamete resolved-map key (group-by-map seam). A gamete's map is its
+  # PRODUCING parent's (sex, line) map, so a sire and a dam — or two lines — can
+  # use different maps (sex-specific recombination, achiasmy, line maps). Each
+  # distinct key's autosome descriptor is flattened to the kernel's flat arrays
+  # once here; the batch loop groups gametes by key and calls the kernel per
+  # group. In v1 with only the default map there is one key and one call.
+  sire_mapkey_all <- unname(gamete_info_key[matings$id_parent_1])
+  dam_mapkey_all  <- unname(gamete_info_key[matings$id_parent_2])
+
+  chr_arrays_by_key <- stats::setNames(
+    lapply(names(gamete_info_cache), function(key) {
+      auto <- gamete_info_cache[[key]]$autosome
+      pos  <- numeric(n_autosome_loci)
+      for (ci in auto) pos[ci$locus_idx] <- ci$pos_cM
+      list(
+        chr_start  = vapply(auto, function(ci) min(ci$locus_idx), integer(1)),
+        chr_end    = vapply(auto, function(ci) max(ci$locus_idx), integer(1)),
+        chr_len_cM = vapply(auto, function(ci) ci$chr_len, numeric(1)),
+        chr_pos_cM = pos
+      )
+    }),
+    names(gamete_info_cache)
   )
-  # Autosome locus_ids in LOCAL (compact) column order — the column ordering the
-  # gamete seam's wide matrices use. Column k of hap_*_mat is autosome_locus_ids[k].
+
+  # Autosome locus_ids in LOCAL (compact) column order — column k of the kernel's
+  # locus_idx (1..n_autosome_loci) maps to autosome_locus_ids[k].
   autosome_locus_ids <- genome_meta_df$locus_id[autosome_locus_idx]
 
   # chr number/name lookups for ind_crossover. The autosome kernel returns
-  # `chr_idx` (position in the ascending autosome chr_info order); map it here.
+  # `xover_chr` (position in the ascending autosome chr order); map it here.
   autosome_chr_nums  <- chr_ids_all[is_autosome_id]
   autosome_chr_names <- unname(chr_name_by_id[chr_id_keys[is_autosome_id]])
   # chr_name -> chr number, for special-chromosome crossover rows.
@@ -529,30 +571,55 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
     b_dam  <- matings$id_parent_2[b_idx]
     b_sex  <- matings$sex[b_idx]
 
-    # --- Autosomes: one call over the whole batch (kind = 1 streams). Because
-    # each gamete owns an independent stream keyed on its global o = b_idx[j],
-    # this is identical for any B, with or without special chromosomes. ---
-    g <- make_gametes_batch(b_sire, b_dam, parent_haps, parent_lo,
-                            autosome_info_by_parent, n_autosome_loci,
-                            base_seed, b_idx, store_crossovers)
-    hap_sire_mat    <- g$sire_allele
-    hap_dam_mat     <- g$dam_allele
-    hap_sire_lo_mat <- g$sire_lo
-    hap_dam_lo_mat  <- g$dam_lo
+    # --- Autosomes: gamete-flat kernel, grouped by resolved-map key (kind = 1
+    # streams). Each gamete owns an independent stream keyed on its global
+    # o = b_idx[i], so output is identical for any B and any map partitioning,
+    # with or without special chromosomes. In v1 there is a single map group.
+    gam_o      <- rep(b_idx, each = 2L)
+    gam_origin <- rep(c(1L, 2L), times = b_n)
+    gam_parent <- integer(2L * b_n)
+    gam_parent[c(TRUE, FALSE)] <- parent_1_idx_all[b_idx]
+    gam_parent[c(FALSE, TRUE)] <- parent_2_idx_all[b_idx]
+    gam_key <- character(2L * b_n)
+    gam_key[c(TRUE, FALSE)] <- sire_mapkey_all[b_idx]
+    gam_key[c(FALSE, TRUE)] <- dam_mapkey_all[b_idx]
 
-    # Batch crossover accumulator (autosomes + special), long form.
-    xover_parts <- list()
-    if (store_crossovers && !is.null(g$crossovers)) {
-      gx <- g$crossovers
-      xover_parts[[length(xover_parts) + 1L]] <- data.frame(
-        id_ind        = b_ids[gx$local_j],
-        parent_origin = gx$parent_origin,
-        chr           = autosome_chr_nums[gx$chr_idx],
-        chr_name      = autosome_chr_names[gx$chr_idx],
-        pos_cM        = gx$pos_cM,
-        stringsAsFactors = FALSE
-      )
+    auto_parts  <- list()
+    xover_parts <- list()   # batch crossover accumulator (autosomes + special)
+    if (n_autosome_loci > 0L) {
+      for (key in unique(gam_key)) {
+        sel <- which(gam_key == key)
+        ca  <- chr_arrays_by_key[[key]]
+        gg  <- make_gametes_batch_r(
+          parent_allele, parent_lo_code,
+          gam_parent[sel], gam_o[sel], gam_origin[sel],
+          ca$chr_start, ca$chr_end, ca$chr_pos_cM, ca$chr_len_cM,
+          base_seed, store_crossovers)
+
+        # Rows are in this group's gamete order; each gamete is one n_loci block.
+        row_o <- rep(gam_o[sel], each = n_autosome_loci)
+        auto_parts[[length(auto_parts) + 1L]] <- data.frame(
+          id_ind        = b_ids[match(row_o, b_idx)],
+          parent_origin = gg$parent_origin,
+          strand        = 1L,
+          line_origin   = lo_levels[gg$line_origin_code],
+          locus_id      = autosome_locus_ids[gg$locus_idx],
+          allele        = gg$allele,
+          stringsAsFactors = FALSE
+        )
+        if (store_crossovers && length(gg$xover_pos_cM)) {
+          xover_parts[[length(xover_parts) + 1L]] <- data.frame(
+            id_ind        = b_ids[match(gg$xover_gamete_o, b_idx)],
+            parent_origin = gg$xover_parent_origin,
+            chr           = autosome_chr_nums[gg$xover_chr],
+            chr_name      = autosome_chr_names[gg$xover_chr],
+            pos_cM        = gg$xover_pos_cM,
+            stringsAsFactors = FALSE
+          )
+        }
+      }
     }
+    auto_long <- if (length(auto_parts) > 0L) do.call(rbind, auto_parts) else NULL
 
     # --- Special chromosomes (sex chromosomes / organelles): the R path, on the
     # independent kind = 2 stream. Seed ONCE per (offspring o, parent_origin r)
@@ -648,31 +715,13 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
       batch_special <- if (sr_count > 0L) sr[seq_len(sr_count)] else list()
     }
 
-    # Reshape this batch's wide autosome matrices to long parallel vectors in R
-    # (bounded by B; column-major as.vector() aligns with rep(locus, each = b_n)
-    # and rep(id, times = n_autosome_loci)). No dense n_offspring frame, no UNPIVOT.
-    long_frame <- rbind(
-      data.frame(
-        id_ind        = rep(b_ids, times = n_autosome_loci),
-        parent_origin = 1L,
-        strand        = 1L,
-        line_origin   = as.vector(hap_sire_lo_mat),
-        locus_id      = rep(autosome_locus_ids, each = b_n),
-        allele        = as.vector(hap_sire_mat),
-        stringsAsFactors = FALSE
-      ),
-      data.frame(
-        id_ind        = rep(b_ids, times = n_autosome_loci),
-        parent_origin = 2L,
-        strand        = 1L,
-        line_origin   = as.vector(hap_dam_lo_mat),
-        locus_id      = rep(autosome_locus_ids, each = b_n),
-        allele        = as.vector(hap_dam_mat),
-        stringsAsFactors = FALSE
-      )
-    )
+    # Assemble the batch's long rows: kernel autosome output (already long) plus
+    # the special-chromosome rows. No wide matrices, no UNPIVOT.
+    long_frame <- auto_long
     if (length(batch_special) > 0L) {
-      long_frame <- rbind(long_frame, do.call(rbind, batch_special))
+      special_long <- do.call(rbind, batch_special)
+      long_frame <- if (is.null(long_frame)) special_long else
+        rbind(long_frame, special_long)
     }
 
     .write_long_haplotypes(conn, long_frame)
@@ -681,8 +730,8 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
       .write_crossovers(conn, do.call(rbind, xover_parts))
     }
 
-    rm(hap_sire_mat, hap_dam_mat, hap_sire_lo_mat, hap_dam_lo_mat,
-       long_frame, batch_special, xover_parts)
+    rm(auto_parts, auto_long, long_frame, batch_special, xover_parts,
+       gam_o, gam_origin, gam_parent, gam_key)
     gc(verbose = FALSE)
   }
 
