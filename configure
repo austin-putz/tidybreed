@@ -1,0 +1,52 @@
+#!/bin/sh
+# tidybreed configure (macOS + Linux)
+# -----------------------------------------------------------------------------
+# tidybreed ships compiled C++17 code in src/ (the add_offspring() recombination
+# kernel), so a source install needs a working C++ compiler. This script does
+# NOT change any build flags or generate a Makevars — it only checks that a
+# compiler is present and, if it is missing, prints a clear, platform-specific
+# message instead of a cryptic build error. If any compiler is found it exits 0
+# immediately and the normal R build proceeds unchanged.
+# -----------------------------------------------------------------------------
+
+: "${R_HOME=$(R RHOME)}"
+
+# The compiler R would use (may include flags or a ccache prefix); take the
+# first token as the binary name.
+CXX=`"${R_HOME}/bin/R" CMD config CXX 2>/dev/null`
+CXXBIN=${CXX%% *}   # first token (drop any flags / ccache-style prefix args)
+
+if [ -n "$CXXBIN" ] && command -v "$CXXBIN" >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Fallback: any common C++ compiler on PATH is good enough to proceed.
+for c in c++ g++ clang++; do
+  if command -v "$c" >/dev/null 2>&1; then
+    exit 0
+  fi
+done
+
+# --- No compiler found: emit friendly, actionable guidance and stop. ---
+echo "" >&2
+echo "*** tidybreed: no C++ compiler was found on this system. ***" >&2
+echo "*** tidybreed ships compiled C++17 code, so a compiler is required.  ***" >&2
+echo "" >&2
+case "`uname -s`" in
+  Darwin)
+    echo "  macOS: install the Xcode Command Line Tools, then re-install:" >&2
+    echo "" >&2
+    echo "      xcode-select --install" >&2
+    ;;
+  Linux)
+    echo "  Debian/Ubuntu: sudo apt-get install -y r-base-dev build-essential" >&2
+    echo "  Fedora/RHEL:   sudo dnf install -y gcc-c++ make" >&2
+    ;;
+  *)
+    echo "  Install a C++17 compiler (g++ or clang++) and re-install." >&2
+    ;;
+esac
+echo "" >&2
+echo "  Full instructions: https://github.com/austin-putz/tidybreed#installation" >&2
+echo "" >&2
+exit 1

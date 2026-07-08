@@ -56,6 +56,43 @@ pak::pak("austin-putz/tidybreed")
 library(tidybreed)
 ```
 
+### System requirements: a C++ compiler
+
+As of `v0.53.0`, `tidybreed` ships **compiled C++17 code** (the recombination
+kernel used by `add_offspring()`). Installing from GitHub is a **source install**,
+so each machine needs a working C++ toolchain. `tidybreed`'s header-only build
+dependencies (`Rcpp`, `dqrng`, `BH`, `sitmo`) are pulled in automatically by
+`pak` — **no system libraries are required** — but the compiler itself must be
+present. If it is missing, the install stops with a platform-specific message
+telling you exactly what to install.
+
+| Platform | What to install | Command / link |
+|----------|-----------------|----------------|
+| **Windows 11 / 10** | **Rtools** matching your R version (Rtools45 for R 4.5.x, Rtools44 for R 4.4.x) | Download & run the installer from <https://cran.r-project.org/bin/windows/Rtools/>, then restart R. Rtools puts `g++`/`make` on `PATH` for you. |
+| **Ubuntu / Debian** | `r-base-dev` + `build-essential` | `sudo apt-get update && sudo apt-get install -y r-base-dev build-essential` |
+| **Fedora / RHEL / Rocky** | `gcc-c++` + `make` | `sudo dnf install -y gcc-c++ make` |
+| **macOS** | **Xcode Command Line Tools** (provides `clang++`) | `xcode-select --install` |
+
+> **macOS note:** the Command Line Tools alone are enough — you do **not** need
+> the full Xcode app. If `clang++` was already installed with a previous R/dev
+> setup, no action is needed. (Apple Silicon and Intel are both supported; the
+> kernel is portable C++17 with no architecture-specific code.)
+
+Once the toolchain is in place, re-run the `pak::pak(...)` command above. To force
+a fresh recompile after adding a compiler:
+
+```r
+pak::pak("austin-putz/tidybreed", upgrade = TRUE)
+```
+
+To force the pure-R reference kernel (e.g. to cross-check results, or on a machine
+with no compiler where you install a **binary** build), set an environment
+variable before loading the package:
+
+```r
+Sys.setenv(TIDYBREED_KERNEL = "r")   # "auto" (default) uses the compiled C++ kernel
+```
+
 > **WARNING:** Pre-`v1.0.0` packages are considered beta and subject to breaking changes. **Pin your version** to avoid surprises.
 
 ```r

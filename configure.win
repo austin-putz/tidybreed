@@ -1,0 +1,32 @@
+#!/bin/sh
+# tidybreed configure.win (Windows)
+# -----------------------------------------------------------------------------
+# On Windows the C++ compiler is provided by Rtools. If this script runs at all,
+# an sh from Rtools is already present; we still verify g++ is on PATH and give a
+# clear message pointing at Rtools if something is misconfigured. Changes NO
+# build flags. If a compiler is found it exits 0 and the normal build proceeds.
+#
+# Note: when Rtools is entirely absent, pak/pkgbuild usually stops with its own
+# "build tools not found" error BEFORE this script can run, so the README table
+# is the primary Windows guardrail; this is a best-effort second message.
+# -----------------------------------------------------------------------------
+
+for c in g++ c++ clang++; do
+  if command -v "$c" >/dev/null 2>&1; then
+    exit 0
+  fi
+done
+
+echo "" >&2
+echo "*** tidybreed: no C++ compiler was found. ***" >&2
+echo "*** On Windows this means Rtools is missing or not on PATH.  ***" >&2
+echo "" >&2
+echo "  Install Rtools matching your R version (Rtools45 for R 4.5.x," >&2
+echo "  Rtools44 for R 4.4.x):" >&2
+echo "" >&2
+echo "      https://cran.r-project.org/bin/windows/Rtools/" >&2
+echo "" >&2
+echo "  Then restart R and re-install tidybreed." >&2
+echo "  Full instructions: https://github.com/austin-putz/tidybreed#installation" >&2
+echo "" >&2
+exit 1

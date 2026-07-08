@@ -1,3 +1,22 @@
+# tidybreed 0.55.0 (2026-07-08)
+
+## Install-time compiler guidance (source installs)
+
+Since `v0.53.0` the package ships compiled C++17 code, so a source install needs
+a C++ toolchain. This release makes that requirement explicit and self-diagnosing.
+
+- **README install section** now documents the exact toolchain per platform —
+  **Windows** (Rtools45/44), **Ubuntu/Debian** (`r-base-dev` + `build-essential`),
+  **Fedora/RHEL** (`gcc-c++` + `make`), and **macOS** (Xcode Command Line Tools via
+  `xcode-select --install`) — plus how to force the pure-R kernel with
+  `TIDYBREED_KERNEL = "r"`.
+- **`configure` / `configure.win`** — new fail-safe probes. If no C++ compiler is
+  found they stop the install with a clear, platform-specific message (e.g. "no
+  C++ compiler was found … macOS: xcode-select --install" or "Rtools is missing …
+  https://cran.r-project.org/bin/windows/Rtools/") instead of a cryptic build
+  error. When a compiler is present they exit 0 and change nothing about the
+  build (no flags, no `Makevars`).
+
 # tidybreed 0.54.0 (2026-07-08)
 
 ## Swine vignette updated for the recombination refactor
