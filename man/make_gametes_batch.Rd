@@ -10,48 +10,49 @@ make_gametes_batch(
   parent_haps,
   parent_lo,
   autosome_info_by_parent,
-  n_autosome_loci
+  n_autosome_loci,
+  base_seed,
+  o_index,
+  store_crossovers = FALSE
 )
 }
 \arguments{
-\item{sire_ids, dam_ids}{Character vectors of parent IDs, length \code{n} (one per
-offspring). \code{sire_ids[i]}/\code{dam_ids[i]} name the parent_1/parent_2 of
-offspring \code{i}; both index into \code{parent_haps}/\code{parent_lo}.}
+\item{sire_ids, dam_ids}{Character vectors of parent IDs, length \code{n}; index
+into \code{parent_haps}/\code{parent_lo}.}
 
 \item{parent_haps}{Named list; \code{parent_haps[[pid]]} is the parent's
 \verb{2 x n_autosome_loci} integer allele matrix (homolog x locus).}
 
-\item{parent_lo}{Named list; \code{parent_lo[[pid]]} is the parallel
-\verb{2 x n_autosome_loci} character \code{line_origin} matrix.}
+\item{parent_lo}{Named list; parallel \verb{2 x n_autosome_loci} \code{line_origin}
+character matrix.}
 
-\item{autosome_info_by_parent}{Named list; \code{autosome_info_by_parent[[pid]]} is
-the parent's resolved autosome \code{chr_info} (from \code{build_chr_info()}, LOCAL
-indices) for its \verb{(sex, line)} map.}
+\item{autosome_info_by_parent}{Named list; \verb{[[pid]]} is the parent's resolved
+autosome \code{chr_info} (LOCAL indices) for its \verb{(sex, line)} map.}
 
-\item{n_autosome_loci}{Integer. Number of autosome loci (matrix column count).}
+\item{n_autosome_loci}{Integer autosome locus count (matrix column count).}
+
+\item{base_seed}{Integer base seed for the \code{add_offspring()} call.}
+
+\item{o_index}{Integer vector length \code{n} — the global offspring index \code{o}
+(original \code{matings} row) per batch element; drives the per-gamete stream.}
+
+\item{store_crossovers}{Logical; collect the crossover buffer when \code{TRUE}.}
 }
 \value{
-A list of four matrices, each \verb{n x n_autosome_loci}:
-\code{sire_allele}, \code{dam_allele} (integer alleles) and \code{sire_lo}, \code{dam_lo}
-(character \code{line_origin}, gathered from the donating homolog).
+List of four \verb{n x n_autosome_loci} matrices (\code{sire_allele},
+\code{dam_allele}, \code{sire_lo}, \code{dam_lo}) plus \code{crossovers}: \code{NULL}, or a
+data.frame \verb{(local_j, parent_origin, chr_idx, pos_cM)} (\code{chr_idx} indexes
+into the autosome \code{chr_info} order; the caller maps it to \code{chr}/\code{chr_name}).
 }
 \description{
-Stage-0 extraction of the per-offspring autosome gamete generation out of
-\code{\link[=add_offspring]{add_offspring()}}. This is the \strong{single swappable seam} that the later
-dqrng R reference (Stage 2) and C++ kernel (Stage 3) drop into; its signature
-is deliberately dependency-free — no \code{tidybreed_pop}, no DBI connection, no
-\code{data.frame} — so it is drop-in swappable and unit-testable in isolation.
+The single seam the C++ kernel (Stage 3) drops into. Dependency-free — no
+\code{tidybreed_pop}, no DBI, no \code{data.frame} in its numeric inputs — so it is
+drop-in swappable and unit-testable in isolation.
 }
 \details{
-In Stage 0 it keeps the base-R internals (\code{\link[=make_gamete]{make_gamete()}}, base RNG) and the
-wide-matrix output shape, so seeded \code{ind_haplotype} output is unchanged. The
-long-output / \code{base_seed} / \code{store_crossovers} signature arrives in Stage 2.
-
-\strong{RNG order:} offspring are processed in the given order, \strong{parent_1 (sire)
-gamete then parent_2 (dam) gamete} — the identical \code{make_gamete()} call
-sequence \code{\link[=add_offspring]{add_offspring()}} used inline, so the global RNG stream is untouched.
-When special chromosomes are configured, \code{\link[=add_offspring]{add_offspring()}} calls this per
-offspring (batch of one) so each offspring's special-chromosome draws remain
-interleaved directly after its autosome draws (base-R global-stream order).
+\strong{RNG order:} offspring in the given order, \strong{parent_1 (sire) gamete then
+parent_2 (dam) gamete}; each gamete draws from its own dqrng stream keyed on
+its global offspring index \code{o_index[i]} (autosome kind = 1), so output is
+independent of batch size and iteration order.
 }
 \keyword{internal}

@@ -7,28 +7,19 @@
 pass_through_gamete(hap_matrix, lo_matrix)
 }
 \arguments{
-\item{hap_matrix}{\verb{k x n_chr_loci} integer matrix, \code{k} in \verb{\{1, 2\}} — the
-contributing parent's own stored copies for this chromosome's loci only.}
+\item{hap_matrix}{\verb{k x n_chr_loci} integer matrix, \code{k} in \verb{\{1, 2\}}.}
 
-\item{lo_matrix}{\verb{k x n_chr_loci} character matrix of \code{line_origin},
-parallel to \code{hap_matrix}.}
+\item{lo_matrix}{\verb{k x n_chr_loci} character \code{line_origin} matrix, parallel.}
 }
 \value{
-A list with \code{allele} and \code{line_origin}, each a length-\code{n_chr_loci}
-vector. When \code{k == 2}, one whole row is chosen uniformly at random (a
-single \code{sample.int(2, 1)} draw) and passed through unchanged — no
-crossover, no \code{homolog} vector needed. When \code{k == 1}, the only row is
-passed through with \strong{no} random draw at all — there is nothing to
-choose, so strictly hemizygous, non-recombining inheritance (e.g.
-patrilineal Y, matrilineal MT) never consumes RNG state.
+List with \code{allele} and \code{line_origin}, each length \code{n_chr_loci}.
 }
 \description{
-Used for non-recombining chromosomes (the contributing parent's own-sex
-\code{chr_meta.recombines_M}/\code{recombines_F} is \code{FALSE} — Y, W, MT, most organelles)
-and for any chromosome where the contributing parent's own copy count for it is
-1 (nothing to recombine against regardless of the \verb{recombines_*} flags).
-Deliberately not routed through \code{\link[=make_gamete]{make_gamete()}} —
-that function's whole contract is "simulate crossovers," and a chromosome
-that never recombines has no crossover model at all.
+Used for non-recombining / single-copy special chromosomes (Y, W, MT, most
+organelles). Draws from the \strong{current, already-seeded} dqrng stream (the
+caller seeds the gamete's \code{"special"} stream once, then processes all of that
+gamete's special chromosomes in sequence). When \code{k == 2}, one dqrng uniform
+chooses the homolog (\code{u < 0.5}); when \code{k == 1} there is nothing to choose, so
+strictly hemizygous inheritance consumes \strong{no} RNG.
 }
 \keyword{internal}

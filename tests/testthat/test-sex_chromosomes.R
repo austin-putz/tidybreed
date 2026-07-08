@@ -199,37 +199,44 @@ test_that("MT: both sexes get 1 copy, strictly maternal, never recombined", {
   }
 })
 
-test_that("pass_through_gamete() makes zero RNG draws when only one copy exists (k == 1)", {
+test_that("pass_through_gamete() makes zero dqrng draws when only one copy exists (k == 1)", {
   # This is the exact mechanism behind non-recombining, strictly hemizygous
   # inheritance (patrilineal Y, matrilineal MT): the contributing parent has
-  # only one stored copy, so there is nothing to choose between.
+  # only one stored copy, so there is nothing to choose between. Stage 2:
+  # pass_through_gamete() draws from the CURRENT (caller-seeded) dqrng stream, so
+  # "zero draws" means the stream is not advanced.
   hap <- matrix(c(1L, 0L, 1L), nrow = 1)
   lo  <- matrix(c("A", "A", "A"), nrow = 1)
 
-  set.seed(4242)
-  before <- runif(1)
+  dqrng::dqRNGkind("Xoroshiro128++")
+  dqrng::dqset.seed(c(1L, 1L))
+  ref <- dqrng::dqrunif(1)          # first draw from a fresh stream
 
-  set.seed(4242)
-  g <- pass_through_gamete(hap, lo)
-  after <- runif(1)
+  dqrng::dqset.seed(c(1L, 1L))
+  g     <- pass_through_gamete(hap, lo)   # must consume nothing
+  after <- dqrng::dqrunif(1)
 
-  expect_equal(before, after)
+  expect_equal(after, ref)          # stream position unchanged
   expect_equal(g$allele, c(1L, 0L, 1L))
   expect_equal(g$line_origin, c("A", "A", "A"))
 })
 
-test_that("pass_through_gamete() draws exactly one value when two copies exist (k == 2, non-recombining)", {
+test_that("pass_through_gamete() draws exactly one dqrng uniform when two copies exist (k == 2, non-recombining)", {
   hap <- matrix(c(1L, 0L, 1L, 0L, 1L, 0L), nrow = 2, byrow = TRUE)
   lo  <- matrix(c("A", "A", "A", "B", "B", "B"), nrow = 2, byrow = TRUE)
 
-  set.seed(99)
-  chosen_row <- sample.int(2, size = 1)
+  dqrng::dqRNGkind("Xoroshiro128++")
+  dqrng::dqset.seed(c(7L, 3L))
+  ref        <- dqrng::dqrunif(2)   # the row choice is u < 0.5 on the first draw
+  chosen_row <- if (ref[1] < 0.5) 1L else 2L
 
-  set.seed(99)
-  g <- pass_through_gamete(hap, lo)
+  dqrng::dqset.seed(c(7L, 3L))
+  g     <- pass_through_gamete(hap, lo)
+  after <- dqrng::dqrunif(1)        # the next draw after exactly one was consumed
 
   expect_equal(g$allele, hap[chosen_row, ])
   expect_equal(g$line_origin, lo[chosen_row, ])
+  expect_equal(after, ref[2])       # exactly one uniform consumed
 })
 
 

@@ -245,7 +245,10 @@
       first_batch <- FALSE
     } else {
       duckdb::duckdb_register(conn, "__tmp_fh", fh)
-      DBI::dbExecute(conn, "INSERT INTO founder_haplotypes SELECT * FROM __tmp_fh")
+      DBI::dbExecute(conn, paste0(
+        "INSERT INTO founder_haplotypes ",
+        "(line_name, haplotype_id, locus_name, allele) ",
+        "SELECT line_name, haplotype_id, locus_name, allele FROM __tmp_fh"))
       duckdb::duckdb_unregister(conn, "__tmp_fh")
     }
     rm(sub, fh)

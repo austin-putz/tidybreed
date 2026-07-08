@@ -13,7 +13,7 @@ archive_replicate(
   store_once = c("genome_meta", "genome_effects", "trait_meta", "trait_effects",
     "trait_var_comp", "phenotype_meta", "phenotype_components", "phenotype_var_comp",
     "index_meta"),
-  reset_only = c("ind_haplotype", "ind_genotype")
+  reset_only = c("ind_haplotype", "ind_genotype", "ind_crossover")
 )
 }
 \arguments{
@@ -41,8 +41,8 @@ variance components, index weights).}
 
 \item{reset_only}{Character vector. Tables whose rows are deleted from the
 working DB without being archived. Intended for large genomic tables
-(\code{ind_haplotype}, \code{ind_genotype}) that are unnecessary for most
-downstream analyses.}
+(\code{ind_haplotype}, \code{ind_genotype}, \code{ind_crossover}) that are unnecessary for
+most downstream analyses.}
 }
 \value{
 \code{pop} invisibly (pipeline-compatible).

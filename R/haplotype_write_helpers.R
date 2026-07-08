@@ -188,3 +188,32 @@ resolve_batch_size <- function(n_total, n_loci,
   ))
   invisible(NULL)
 }
+
+
+#' Insert a batch of crossover events into `ind_crossover`
+#'
+#' Assigns `id_crossover` R-side via the BIGINT-safe [next_row_id()] (the table
+#' can accumulate far more rows than any INTEGER-keyed table), then registers the
+#' frame and does one `INSERT`. RNG-neutral (register + INSERT). Called only when
+#' `add_offspring(store_crossovers = TRUE)`; within a transaction, `next_row_id()`
+#' sees prior batches' rows, so ids stay sequential across batches.
+#'
+#' @param conn DuckDB connection.
+#' @param xframe data.frame with columns `id_ind`, `parent_origin`, `chr`,
+#'   `chr_name`, `pos_cM` (one row per crossover event).
+#' @return Invisibly `NULL`.
+#' @keywords internal
+.write_crossovers <- function(conn, xframe) {
+  if (is.null(xframe) || nrow(xframe) == 0L) return(invisible(NULL))
+  start_id <- next_row_id(conn, "ind_crossover", "id_crossover")
+  xframe$id_crossover <- seq.int(start_id, length.out = nrow(xframe))
+  duckdb::duckdb_register(conn, "__tmp_xover", as.data.frame(xframe))
+  on.exit(duckdb::duckdb_unregister(conn, "__tmp_xover"), add = TRUE)
+  DBI::dbExecute(conn, paste0(
+    "INSERT INTO ind_crossover ",
+    "(id_crossover, id_ind, parent_origin, chr, chr_name, pos_cM) ",
+    "SELECT id_crossover, id_ind, parent_origin, chr, chr_name, pos_cM ",
+    "FROM __tmp_xover"
+  ))
+  invisible(NULL)
+}

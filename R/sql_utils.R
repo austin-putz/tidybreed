@@ -177,6 +177,31 @@ next_int_id <- function(conn, table, id_col) {
 }
 
 
+#' Get the next ID for a BIGINT primary-key sequence (overflow-safe).
+#'
+#' Like [next_int_id()] but returns a **double** rather than an `integer`, so it
+#' is safe for `BIGINT` PK columns whose values can exceed `.Machine$integer.max`
+#' (`2^31 - 1`). `as.integer()` would return `NA` past that ceiling; a double is
+#' exact to `2^53`. Used for `ind_crossover.id_crossover`, which accumulates far
+#' more rows than any `INTEGER`-keyed table. DuckDB already returns `BIGINT`
+#' `MAX()` as an R double, so no precision is lost on the read.
+#'
+#' For multi-row inserts, pre-generate a range:
+#'   `seq.int(next_row_id(conn, tbl, col), length.out = n)`
+#'
+#' @param conn A DBI connection.
+#' @param table Character. Table name.
+#' @param id_col Character. BIGINT PK column name.
+#' @return Numeric (double) scalar.
+#' @keywords internal
+next_row_id <- function(conn, table, id_col) {
+  as.numeric(DBI::dbGetQuery(
+    conn,
+    paste0("SELECT COALESCE(MAX(", id_col, "), 0) + 1 AS nxt FROM ", table)
+  )$nxt)
+}
+
+
 #' System-managed tables that users must not overwrite with `define_table()`
 #'
 #' @keywords internal

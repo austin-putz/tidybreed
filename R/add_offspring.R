@@ -6,6 +6,21 @@
 #' control over the mating design.
 #'
 #' @param pop A `tidybreed_pop` object
+#' @param seed Optional integer base seed for the per-gamete recombination
+#'   streams. Each gamete draws from its own deterministic `dqrng` sub-stream
+#'   keyed on its global offspring index, so output is independent of
+#'   `batch_size` and (later) thread count. `seed = NULL` (default) draws one
+#'   base seed from base-R's RNG, so an upstream [set.seed()] still fully
+#'   reproduces the call; pass an integer to fix the gamete streams independently
+#'   of surrounding base-R state. The resolved base seed is reported in the
+#'   message and attached to the returned object as `attr(pop, "base_seed")`; it
+#'   is not written to any table.
+#' @param store_crossovers Logical (default `FALSE`). When `TRUE`, every
+#'   crossover drawn during meiosis is recorded as one row in `ind_crossover`
+#'   (`id_ind`, `parent_origin`, `chr`, `chr_name`, `pos_cM`). Absence of a row
+#'   for a `(id_ind, parent_origin, chr)` means that gamete's chromosome did not
+#'   recombine. Includes crossovers on recombining special chromosomes. `FALSE`
+#'   costs nothing (no buffer emitted, no `ind_crossover` write).
 #' @param batch_size Optional integer. Offspring generated + written per batch.
 #'   Bounds peak memory at roughly `batch_size x n_loci` long rows regardless of
 #'   the total number of offspring (a single huge mating streams to disk batch by
@@ -49,12 +64,16 @@
 #' `id_parent_2`. Both naming styles produce identical results.
 #'
 #' **Recombination model:**
-#' Gametes are simulated using the Haldane map function. For chromosome i,
-#' the number of crossovers ~ Poisson(chr_len_cM\[i\] / 100), i.e.
-#' Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Genetic positions
-#' come from the resolved genetic map (`genome_map`, per the gamete-producing
-#' parent's sex/line); crossover positions are uniform in cM within each
-#' chromosome, and the starting haplotype is chosen at random. This
+#' Gametes are simulated using the Haldane map function. Each gamete draws from
+#' its own deterministic `dqrng` sub-stream keyed on `(base seed, offspring
+#' index, parent role)`, so output is identical for any `batch_size` (and, in
+#' later versions, any thread count) and is set by `seed` (see above). The
+#' crossover count per chromosome ~ Poisson(chr_len_cM\[i\] / 100), i.e.
+#' Poisson(genetic length in Morgans) since 1 Morgan = 100 cM, drawn by a
+#' uniform-only inversion sampler. Genetic positions come from the resolved
+#' genetic map (`genome_map`, per the gamete-producing parent's sex/line);
+#' crossover positions are uniform in cM within each chromosome, and the starting
+#' haplotype is chosen at random. This
 #' applies to plain autosomes (`chr_meta`'s default `copy_mode_M`/`copy_mode_F
 #' = "full"`, `recombines_M`/`recombines_F = TRUE`). Sex chromosomes and
 #' organelles configured via [define_chr()] follow their own inheritance rule
@@ -99,7 +118,8 @@
 #' )
 #' pop <- pop |> add_offspring(matings2)
 #' }
-add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL) {
+add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
+                          batch_size = NULL, max_batch_mem = NULL) {
 
   # ============================================================================
   # 1. Validate pop and matings types
@@ -242,7 +262,6 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
   genome_meta_df <- resolve_genome_map(pop$db_conn)   # base/default map
 
   n_loci     <- nrow(genome_meta_df)
-  locus_cols <- paste0("locus_", seq_len(n_loci))
 
   chr_meta_map   <- get_chr_meta_map(pop$db_conn)
   chr_ids_all    <- sort(unique(genome_meta_df$chr))
@@ -440,6 +459,13 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
   # gamete seam's wide matrices use. Column k of hap_*_mat is autosome_locus_ids[k].
   autosome_locus_ids <- genome_meta_df$locus_id[autosome_locus_idx]
 
+  # chr number/name lookups for ind_crossover. The autosome kernel returns
+  # `chr_idx` (position in the ascending autosome chr_info order); map it here.
+  autosome_chr_nums  <- chr_ids_all[is_autosome_id]
+  autosome_chr_names <- unname(chr_name_by_id[chr_id_keys[is_autosome_id]])
+  # chr_name -> chr number, for special-chromosome crossover rows.
+  chr_num_by_name    <- stats::setNames(chr_ids_all, unname(chr_name_by_id[chr_id_keys]))
+
   # Offspring ploidy is computed, not hardcoded, as the sum of each parent's
   # gamete contribution (own_ploidy / 2 per parent) — always 2L in this version
   # (both parents are always 2L), but written this way so this code doesn't need
@@ -458,20 +484,34 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
   )
 
   # ============================================================================
-  # 12. Batched long write, all inside ONE transaction.
+  # 12. Seed resolution + batched long write, all inside ONE transaction.
   #
-  # Offspring are generated + written in batches of B in the original `matings`
-  # row order, so the base-R gamete draw sequence is byte-identical to an
-  # unbatched run (any B -> identical ind_haplotype). Peak memory is bounded by
-  # ~B x n_loci long rows, independent of total n_offspring — a single huge
-  # mating streams to disk batch by batch.
-  #
-  # RNG discipline (output-neutral): all gamete draws happen inside the loop;
-  # `.write_long_haplotypes()` is register+INSERT (RNG-neutral). The single
-  # `dbWriteTable(ind_meta)` (which DOES advance R's RNG) is issued AFTER the
-  # loop, so it lands after every gamete draw — the same position it held in the
-  # pre-Stage-1 code, preserving both this call's and downstream seeded output.
+  # RNG model (Stage 2): every gamete draws from its own dqrng sub-stream keyed
+  # on its GLOBAL offspring index `o` (the original `matings` row), so output is
+  # independent of `batch_size` and iteration order. `seed = NULL` draws one base
+  # seed from base-R RNG, so an upstream set.seed() reproduces the whole run;
+  # `seed = <int>` uses it directly. The resolved base seed is surfaced (message
+  # + invisible attribute), never persisted (CLAUDE.md's no-metadata stance).
   # ============================================================================
+
+  if (!is.null(seed)) {
+    # Guard finiteness/range BEFORE as.integer(): a non-finite or out-of-int32
+    # seed (e.g. Inf, 3e9) makes as.integer() return NA, and `NA != NA` would
+    # yield `if (NA)` — a cryptic "missing value" error instead of this message.
+    if (length(seed) != 1L || is.na(seed) || !is.finite(seed) ||
+        seed != trunc(seed) || seed > .Machine$integer.max ||
+        seed < -.Machine$integer.max) {
+      stop("seed must be NULL or a single integer within +/- .Machine$integer.max.",
+           call. = FALSE)
+    }
+    base_seed <- as.integer(seed)
+  } else {
+    base_seed <- sample.int(.Machine$integer.max, 1L)
+  }
+  if (length(store_crossovers) != 1L || is.na(store_crossovers) ||
+      !is.logical(store_crossovers)) {
+    stop("store_crossovers must be a single TRUE/FALSE.", call. = FALSE)
+  }
 
   B    <- resolve_batch_size(n_offspring, n_loci, batch_size, max_batch_mem)
   conn <- pop$db_conn
@@ -489,103 +529,123 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
     b_dam  <- matings$id_parent_2[b_idx]
     b_sex  <- matings$sex[b_idx]
 
-    if (length(special_chr_names) == 0L) {
-      # --- Fast path: no special chromosomes, hence no interleaved special RNG.
-      # Generate this batch's autosome gametes in one call. The seam draws
-      # sire-then-dam per offspring in row order — identical to the old inline
-      # loop and to any other B. ---
-      g <- make_gametes_batch(b_sire, b_dam, parent_haps, parent_lo,
-                              autosome_info_by_parent, n_autosome_loci)
-      hap_sire_mat    <- g$sire_allele
-      hap_dam_mat     <- g$dam_allele
-      hap_sire_lo_mat <- g$sire_lo
-      hap_dam_lo_mat  <- g$dam_lo
-      batch_special   <- list()
+    # --- Autosomes: one call over the whole batch (kind = 1 streams). Because
+    # each gamete owns an independent stream keyed on its global o = b_idx[j],
+    # this is identical for any B, with or without special chromosomes. ---
+    g <- make_gametes_batch(b_sire, b_dam, parent_haps, parent_lo,
+                            autosome_info_by_parent, n_autosome_loci,
+                            base_seed, b_idx, store_crossovers)
+    hap_sire_mat    <- g$sire_allele
+    hap_dam_mat     <- g$dam_allele
+    hap_sire_lo_mat <- g$sire_lo
+    hap_dam_lo_mat  <- g$dam_lo
 
-    } else {
-      # --- Special chromosomes configured. Their meiosis draws base-R RNG that
-      # must stay interleaved directly AFTER each offspring's autosome draws. So
-      # call the seam per offspring (batch of one) and run the special path in
-      # the same iteration — identical draw order to the old loop and to any B. ---
-      hap_sire_mat    <- matrix(0L, nrow = b_n, ncol = n_autosome_loci)
-      hap_dam_mat     <- matrix(0L, nrow = b_n, ncol = n_autosome_loci)
-      hap_sire_lo_mat <- matrix(NA_character_, nrow = b_n, ncol = n_autosome_loci)
-      hap_dam_lo_mat  <- matrix(NA_character_, nrow = b_n, ncol = n_autosome_loci)
+    # Batch crossover accumulator (autosomes + special), long form.
+    xover_parts <- list()
+    if (store_crossovers && !is.null(g$crossovers)) {
+      gx <- g$crossovers
+      xover_parts[[length(xover_parts) + 1L]] <- data.frame(
+        id_ind        = b_ids[gx$local_j],
+        parent_origin = gx$parent_origin,
+        chr           = autosome_chr_nums[gx$chr_idx],
+        chr_name      = autosome_chr_names[gx$chr_idx],
+        pos_cM        = gx$pos_cM,
+        stringsAsFactors = FALSE
+      )
+    }
 
-      # Preallocated to the known upper bound (one entry per offspring x special
-      # chromosome x up-to-2 contributors), filled via a counter.
-      batch_special <- vector("list", b_n * length(special_chr_names) * 2L)
-      sr_count      <- 0L
+    # --- Special chromosomes (sex chromosomes / organelles): the R path, on the
+    # independent kind = 2 stream. Seed ONCE per (offspring o, parent_origin r)
+    # and draw all of that (gamete, r)'s special chromosomes in ascending-chr
+    # order from the one stream — never re-seed per chromosome (that would
+    # collide). Order-independent from autosomes: different stream kind. ---
+    batch_special <- list()
+    if (length(special_chr_names) > 0L) {
+      sr <- vector("list", b_n * length(special_chr_names))
+      sr_count <- 0L
 
       for (j in seq_len(b_n)) {
+        o       <- b_idx[j]
         sire    <- b_sire[j]
         dam     <- b_dam[j]
         off_sex <- b_sex[j]
 
-        gi <- make_gametes_batch(sire, dam, parent_haps, parent_lo,
-                                 autosome_info_by_parent, n_autosome_loci)
-        hap_sire_mat[j, ]    <- gi$sire_allele[1, ]
-        hap_dam_mat[j, ]     <- gi$dam_allele[1, ]
-        hap_sire_lo_mat[j, ] <- gi$sire_lo[1, ]
-        hap_dam_lo_mat[j, ]  <- gi$dam_lo[1, ]
-
-        # --- Special-chromosome path, executed strictly AFTER this offspring's
-        # autosome gametes above (never reordered ahead of them). ---
-        for (cn in special_chr_names) {
-          chr_row <- chr_meta_map[[cn]]
-          cm_off  <- if (off_sex == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
-          if (cm_off == "none") next
-
-          contributors <- if (cm_off == "half") {
-            side <- chr_row$hemi_parent
-            list(list(pid = if (side == "parent_1") sire else dam,
-                      parent_origin = if (side == "parent_1") 1L else 2L))
-          } else {
-            list(list(pid = sire, parent_origin = 1L),
-                 list(pid = dam,  parent_origin = 2L))
+        for (r in c(1L, 2L)) {
+          # Which special chromosomes does parent_origin r contribute to this
+          # offspring (given its sex)? Ascending chr order (special_chr_names is
+          # already chr-ascending).
+          r_chrs <- character(0)
+          for (cn in special_chr_names) {
+            chr_row <- chr_meta_map[[cn]]
+            cm_off  <- if (off_sex == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
+            if (cm_off == "none") next
+            if (cm_off == "full") {
+              r_chrs <- c(r_chrs, cn)                      # both r contribute
+            } else {                                       # "half": hemi side only
+              hemi_po <- if (chr_row$hemi_parent == "parent_1") 1L else 2L
+              if (hemi_po == r) r_chrs <- c(r_chrs, cn)
+            }
           }
+          if (length(r_chrs) == 0L) next
 
-          for (contrib in contributors) {
-            mats <- parent_chr_haps[[contrib$pid]][[cn]]
-            k_p  <- nrow(mats$hap)
+          pid <- if (r == 1L) sire else dam
+          .seed_gamete_stream(base_seed, .gamete_stream_id(o, r, 2L))
+
+          for (cn in r_chrs) {
+            chr_row <- chr_meta_map[[cn]]
+            mats    <- parent_chr_haps[[pid]][[cn]]
+            k_p     <- nrow(mats$hap)
             if (k_p == 0L) {
               stop(
-                "chr_meta misconfiguration: parent '", contrib$pid,
+                "chr_meta misconfiguration: parent '", pid,
                 "' has zero copies of chromosome '", cn,
                 "' to pass on as its designated contribution.", call. = FALSE
               )
             }
-            # Recombination in this contributor's meiosis is governed by its OWN
-            # sex (recombines_M for a male contributor, recombines_F for a female).
-            contrib_recombines <- if (parent_sex[[contrib$pid]] == "M") {
+            contrib_recombines <- if (parent_sex[[pid]] == "M") {
               chr_row$recombines_M
             } else {
               chr_row$recombines_F
             }
+
+            xpos <- numeric(0)
             if (k_p == 2L && isTRUE(contrib_recombines)) {
-              contrib_special <- gamete_info_cache[[gamete_info_key[[contrib$pid]]]]$special[[cn]]
-              gg <- make_gamete(mats$hap, contrib_special)
-              allele <- gg$allele
-              lo     <- mats$lo[cbind(gg$homolog, seq_along(gg$homolog))]
+              si <- gamete_info_cache[[gamete_info_key[[pid]]]]$special[[cn]][[1L]]
+              d  <- .draw_chr_recombination(si$pos_cM, si$chr_len, store_crossovers)
+              col_idx <- seq_along(d$hap_idx_vec)
+              allele  <- mats$hap[cbind(d$hap_idx_vec, col_idx)]
+              lo      <- mats$lo[cbind(d$hap_idx_vec, col_idx)]
+              xpos    <- d$xover_pos_cM
             } else {
-              gg <- pass_through_gamete(mats$hap, mats$lo)
+              gg     <- pass_through_gamete(mats$hap, mats$lo)
               allele <- gg$allele
               lo     <- gg$line_origin
             }
+
             sr_count <- sr_count + 1L
-            batch_special[[sr_count]] <- data.frame(
+            sr[[sr_count]] <- data.frame(
               id_ind        = b_ids[j],
-              parent_origin = contrib$parent_origin,
+              parent_origin = r,
               strand        = 1L,
               line_origin   = lo,
               locus_id      = special_locus_ids[[cn]],
               allele        = as.integer(allele),
               stringsAsFactors = FALSE
             )
+            if (store_crossovers && length(xpos)) {
+              xover_parts[[length(xover_parts) + 1L]] <- data.frame(
+                id_ind        = b_ids[j],
+                parent_origin = r,
+                chr           = unname(chr_num_by_name[cn]),
+                chr_name      = cn,
+                pos_cM        = xpos,
+                stringsAsFactors = FALSE
+              )
+            }
           }
         }
       }
-      batch_special <- if (sr_count > 0L) batch_special[seq_len(sr_count)] else list()
+      batch_special <- if (sr_count > 0L) sr[seq_len(sr_count)] else list()
     }
 
     # Reshape this batch's wide autosome matrices to long parallel vectors in R
@@ -617,8 +677,12 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
 
     .write_long_haplotypes(conn, long_frame)
 
+    if (store_crossovers && length(xover_parts) > 0L) {
+      .write_crossovers(conn, do.call(rbind, xover_parts))
+    }
+
     rm(hap_sire_mat, hap_dam_mat, hap_sire_lo_mat, hap_dam_lo_mat,
-       long_frame, batch_special)
+       long_frame, batch_special, xover_parts)
     gc(verbose = FALSE)
   }
 
@@ -642,7 +706,10 @@ add_offspring <- function(pop, matings, batch_size = NULL, max_batch_mem = NULL)
   # 13. Return
   # ============================================================================
 
-  message("Added ", n_offspring, " offspring")
+  message("Added ", n_offspring, " offspring (base_seed = ", base_seed, ")")
 
+  # Surface the resolved base seed for note-taking / exact replay via
+  # add_offspring(seed = <that value>). Not persisted to any table.
+  attr(pop, "base_seed") <- base_seed
   invisible(pop)
 }

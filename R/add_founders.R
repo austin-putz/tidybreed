@@ -173,7 +173,6 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   gm <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_id, locus_name, chr, chr_name FROM genome_meta ORDER BY locus_id")
   n_loci     <- nrow(gm)
-  locus_cols <- paste0("locus_", seq_len(n_loci))
 
   founder_haps_long$locus_id <-
     gm$locus_id[match(founder_haps_long$locus_name, gm$locus_name)]

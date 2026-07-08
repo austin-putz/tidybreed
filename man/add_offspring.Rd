@@ -4,7 +4,14 @@
 \alias{add_offspring}
 \title{Add offspring via recombination}
 \usage{
-add_offspring(pop, matings, batch_size = NULL, max_batch_mem = NULL)
+add_offspring(
+  pop,
+  matings,
+  seed = NULL,
+  store_crossovers = FALSE,
+  batch_size = NULL,
+  max_batch_mem = NULL
+)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object}
@@ -25,6 +32,23 @@ Alias: \code{id_dam}
 validated and written directly to \code{ind_meta}. If a column does not yet
 exist in \code{ind_meta} it is added automatically. Scalar values in a tibble
 are recycled to all rows before being passed to this function.}
+
+\item{seed}{Optional integer base seed for the per-gamete recombination
+streams. Each gamete draws from its own deterministic \code{dqrng} sub-stream
+keyed on its global offspring index, so output is independent of
+\code{batch_size} and (later) thread count. \code{seed = NULL} (default) draws one
+base seed from base-R's RNG, so an upstream \code{\link[=set.seed]{set.seed()}} still fully
+reproduces the call; pass an integer to fix the gamete streams independently
+of surrounding base-R state. The resolved base seed is reported in the
+message and attached to the returned object as \code{attr(pop, "base_seed")}; it
+is not written to any table.}
+
+\item{store_crossovers}{Logical (default \code{FALSE}). When \code{TRUE}, every
+crossover drawn during meiosis is recorded as one row in \code{ind_crossover}
+(\code{id_ind}, \code{parent_origin}, \code{chr}, \code{chr_name}, \code{pos_cM}). Absence of a row
+for a \verb{(id_ind, parent_origin, chr)} means that gamete's chromosome did not
+recombine. Includes crossovers on recombining special chromosomes. \code{FALSE}
+costs nothing (no buffer emitted, no \code{ind_crossover} write).}
 
 \item{batch_size}{Optional integer. Offspring generated + written per batch.
 Bounds peak memory at roughly \verb{batch_size x n_loci} long rows regardless of
@@ -64,12 +88,15 @@ same \code{id_parent_1}
 \code{id_parent_2}. Both naming styles produce identical results.
 
 \strong{Recombination model:}
-Gametes are simulated using the Haldane map function. For chromosome i,
-the number of crossovers ~ Poisson(chr_len_cM[i] / 100), i.e.
-Poisson(genetic length in Morgans) since 1 Morgan = 100 cM. Genetic positions
-come from the resolved genetic map (\code{genome_map}, per the gamete-producing
-parent's sex/line); crossover positions are uniform in cM within each
-chromosome, and the starting haplotype is chosen at random. This
+Gametes are simulated using the Haldane map function. Each gamete draws from
+its own deterministic \code{dqrng} sub-stream keyed on \verb{(base seed, offspring index, parent role)}, so output is identical for any \code{batch_size} (and, in
+later versions, any thread count) and is set by \code{seed} (see above). The
+crossover count per chromosome ~ Poisson(chr_len_cM[i] / 100), i.e.
+Poisson(genetic length in Morgans) since 1 Morgan = 100 cM, drawn by a
+uniform-only inversion sampler. Genetic positions come from the resolved
+genetic map (\code{genome_map}, per the gamete-producing parent's sex/line);
+crossover positions are uniform in cM within each chromosome, and the starting
+haplotype is chosen at random. This
 applies to plain autosomes (\code{chr_meta}'s default \code{copy_mode_M}/\code{copy_mode_F = "full"}, \code{recombines_M}/\code{recombines_F = TRUE}). Sex chromosomes and
 organelles configured via \code{\link[=define_chr]{define_chr()}} follow their own inheritance rule
 instead: the contributing parent's copy recombines via the same Haldane model

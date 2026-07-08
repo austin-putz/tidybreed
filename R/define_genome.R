@@ -202,9 +202,14 @@ define_genome <- function(pop,
   # Create empty ind_crossover table (opt-in crossover-event storage). Created
   # here so restore_pop() sees it and it exists before the first insert; row
   # writes land with the Stage-2 kernel (add_offspring(store_crossovers = TRUE)).
+  # id_crossover is BIGINT (not INTEGER like other id_ PKs): crossover events are
+  # ~1-2 orders of magnitude more numerous than any other id_-keyed row (a
+  # ~25-Morgan genome is ~50 events/offspring), so large multi-generation runs
+  # would blow past INTEGER's 2.1B ceiling. Deliberate exception; empty now so
+  # the wider PK costs nothing.
   DBI::dbExecute(db_conn, paste0(
     "CREATE TABLE ind_crossover (",
-    "id_crossover INTEGER PRIMARY KEY, id_ind VARCHAR, parent_origin UTINYINT, ",
+    "id_crossover BIGINT PRIMARY KEY, id_ind VARCHAR, parent_origin UTINYINT, ",
     "chr INTEGER, chr_name VARCHAR, pos_cM DOUBLE)"
   ))
 

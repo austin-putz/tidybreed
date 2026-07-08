@@ -147,7 +147,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_tbl("ind_crossover",
             "Crossover events in long format, one row per crossover drawn during meiosis. Created empty by define_genome(); populated only when add_offspring(store_crossovers = TRUE) (row writes land with the Stage-2 kernel). Absence of a row for a (id_ind, parent_origin, chr) means that gamete's chromosome did not recombine."),
     .sm_col("ind_crossover", "id_crossover",
-            "Primary key assigned R-side via next_int_id()"),
+            "Primary key (BIGINT) assigned R-side via next_row_id() (the BIGINT-safe allocator); wider than other id_ PKs because crossover events are far more numerous"),
     .sm_col("ind_crossover", "id_ind",
             "The offspring; FK to ind_meta.id_ind"),
     .sm_col("ind_crossover", "parent_origin",
