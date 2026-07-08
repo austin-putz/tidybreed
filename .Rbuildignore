@@ -9,3 +9,7 @@
 ^plans$
 ^results$
 ^dev$
+^:memory:$
+^tidybreed_output$
+.*/tidybreed_output$
+^tests/test_[^/]*\.R$

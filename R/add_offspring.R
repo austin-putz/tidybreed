@@ -590,7 +590,7 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
       for (key in unique(gam_key)) {
         sel <- which(gam_key == key)
         ca  <- chr_arrays_by_key[[key]]
-        gg  <- make_gametes_batch_r(
+        gg  <- make_gametes_batch(
           parent_allele, parent_lo_code,
           gam_parent[sel], gam_o[sel], gam_origin[sel],
           ca$chr_start, ca$chr_end, ca$chr_pos_cM, ca$chr_len_cM,

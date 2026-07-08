@@ -8,6 +8,8 @@
 #' @importFrom DBI dbConnect dbDisconnect dbIsValid dbListTables
 #' @importFrom DBI dbGetQuery dbExecute dbWriteTable dbListFields
 #' @import duckdb
+#' @useDynLib tidybreed, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
 ## usethis namespace: end
 NULL
 

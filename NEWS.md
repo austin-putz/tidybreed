@@ -1,3 +1,54 @@
+# tidybreed 0.53.0 (2026-07-07)
+
+## C++ recombination kernel + R↔C++ parity (Stage 3)
+
+The `add_offspring()` autosome gamete kernel now runs in **compiled C++17**
+(`Rcpp` + the `dqrng` C++ headers), driven by the same `dqrng` engine as the R
+reference, so a given seed produces **byte-identical** output in R and C++
+(within-version R↔C++ parity; seeded output is unchanged from 0.52.0).
+
+- **First compiled code in the package.** New `LinkingTo: Rcpp, dqrng, BH, sitmo`
+  and `SystemRequirements: C++17`; a source install now needs a compiler (binary
+  installs do not). The pure-R kernel is kept as the parity oracle and a
+  no-compiler fallback.
+- **Runtime kernel selector.** `getOption("tidybreed.kernel")` /
+  `TIDYBREED_KERNEL` (`"auto"` default, `"r"` forces the R reference) picks the
+  kernel; both paths produce identical results.
+- **Gamete-flat, group-by-map seam.** The internal gamete generator was reshaped
+  to packed integer arrays, `line_origin` integer codes, and long-native output
+  (output-neutral), and now groups gametes by their producing parent's resolved
+  map so sex-specific / line-specific maps drive sire and dam gametes
+  independently within one offspring.
+- New dependency: **`Rcpp`** (Imports).
+
+## dqrng per-gamete recombination + crossover storage (Stage 2)
+
+`add_offspring()` now generates gametes from **per-gamete `dqrng` sub-streams**
+instead of base R's global RNG. **This is an intentional seeded-output change**:
+for a given seed, `ind_haplotype` offspring differ from 0.51.0. Pre-1.0.0 there
+is no cross-version output guarantee — only forward reproducibility (same seed
+reproduces on the current code).
+
+- **`add_offspring(seed = NULL)`.** Each gamete draws from its own deterministic
+  stream keyed on `(base seed, global offspring index, parent role)`, so output
+  is **identical for any `batch_size`** (and, in a later stage, any thread
+  count). `seed = NULL` draws one base seed from base R's RNG, so an upstream
+  `set.seed()` still reproduces the whole run; pass an integer to fix the gamete
+  streams independently of surrounding base-R state. The resolved base seed is
+  reported and attached as `attr(pop, "base_seed")` (not persisted to any table).
+- **`add_offspring(store_crossovers = FALSE)`.** When `TRUE`, every crossover
+  drawn during meiosis is written to the `ind_crossover` table (`id_ind`,
+  `parent_origin`, `chr`, `chr_name`, `pos_cM`), including recombining special
+  chromosomes. Off costs nothing. Absence of a row means that gamete's
+  chromosome did not recombine.
+- **Uniform-only inversion Poisson sampler.** Crossover counts are drawn by a
+  log-accumulation inversion sampler consuming only `dqrng` uniforms (no base
+  `rpois`), the exact algorithm the future C++ kernel will mirror. Documented
+  ceiling of 30 Morgans (3000 cM) per chromosome; errors above it.
+- Special (sex-chromosome / organelle) inheritance also moved to `dqrng`, on an
+  independent per-gamete `"special"` sub-stream.
+- New dependency: **`dqrng`** (Imports).
+
 # tidybreed 0.51.0 (2026-07-06)
 
 ## Haplotype write-path optimization (Stage 0 + Stage 1)

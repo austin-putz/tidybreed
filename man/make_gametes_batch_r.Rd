@@ -2,19 +2,19 @@
 % Please edit documentation in R/recombination_helpers.R
 \name{make_gametes_batch_r}
 \alias{make_gametes_batch_r}
-\title{Generate autosome gametes for a batch of offspring (the swappable seam)}
+\title{Generate autosome gametes for one resolved-map group (the swappable seam)}
 \usage{
 make_gametes_batch_r(
   parent_allele,
   parent_lo_code,
-  parent_1_idx,
-  parent_2_idx,
+  gamete_parent_idx,
+  gamete_o,
+  gamete_origin,
   chr_start,
   chr_end,
   chr_pos_cM,
   chr_len_cM,
   base_seed,
-  o_index,
   store_crossovers = FALSE
 )
 }
@@ -25,27 +25,30 @@ homolog-major: rows \verb{2p-1} and \verb{2p} are parent \code{p}'s homolog 1 an
 \item{parent_lo_code}{Integer matrix, same shape: \code{line_origin} dictionary
 codes (the caller decodes back to \code{VARCHAR}).}
 
-\item{parent_1_idx, parent_2_idx}{Integer vectors length \code{n}: 1-based packed
-parent row per offspring (parent_1/sire and parent_2/dam).}
+\item{gamete_parent_idx}{Integer length \code{G}: 1-based packed parent row that
+produces each gamete.}
 
-\item{chr_start, chr_end}{Integer per-autosome-chromosome locus-index ranges
-(1-based inclusive, contiguous, into \verb{1..n_autosome_loci}).}
+\item{gamete_o}{Integer length \code{G}: global offspring index \code{o} per gamete
+(original \code{matings} row); drives the per-gamete stream.}
+
+\item{gamete_origin}{Integer length \code{G}: \code{parent_origin} (1 = parent_1/sire,
+2 = parent_2/dam) per gamete.}
+
+\item{chr_start, chr_end}{Integer per-chromosome locus-index ranges (1-based
+inclusive, contiguous, into \verb{1..n_autosome_loci}) for THIS group's map.}
 
 \item{chr_pos_cM}{Numeric per-locus genetic positions (cM), length
-\code{n_autosome_loci}.}
+\code{n_autosome_loci}, for this group's map.}
 
-\item{chr_len_cM}{Numeric per-chromosome genetic length (cM).}
+\item{chr_len_cM}{Numeric per-chromosome genetic length (cM) for this group.}
 
 \item{base_seed}{Integer base seed for the \code{add_offspring()} call.}
-
-\item{o_index}{Integer vector length \code{n} — the global offspring index \code{o}
-(original \code{matings} row) per batch element; drives the per-gamete stream.}
 
 \item{store_crossovers}{Logical; emit the ragged crossover buffer when \code{TRUE}.}
 }
 \value{
-List of long parallel vectors in canonical order (offspring ->
-parent_origin 1 then 2 -> locus ascending): \code{parent_origin}, \code{locus_idx}
+List of long parallel vectors over the \code{G} gametes in the given order
+(gamete -> locus ascending): \code{parent_origin}, \code{locus_idx}
 (1..n_autosome_loci), \code{allele}, \code{line_origin_code}; plus the ragged
 crossover buffer \code{xover_gamete_o} (global \code{o}), \code{xover_parent_origin},
 \code{xover_chr} (index into the autosome chromosome order), \code{xover_pos_cM}
@@ -60,10 +63,13 @@ be compared directly for parity. This is the R reference / parity oracle;
 \code{\link[=make_gametes_batch]{make_gametes_batch()}} dispatches to it (or to the compiled kernel).
 }
 \details{
-\strong{RNG order:} offspring in the given order, \strong{parent_1 (sire) gamete then
-parent_2 (dam) gamete}; each gamete draws from its own dqrng stream keyed on
-its global offspring index \code{o_index[i]} (autosome kind = 1), so output is
+\strong{Gamete-flat / one-map-per-call (group-by-map seam).} Each gamete may use a
+different genetic map (sex-specific, achiasmy, line-specific), so the caller
+groups gametes by resolved-map key and calls this once per group with that
+group's \verb{chr_*} arrays. The unit is a \strong{gamete}, identified by
+\verb{(gamete_o, gamete_origin)}; each draws from its own dqrng stream keyed on its
+\strong{global} offspring index \code{gamete_o} (autosome kind = 1), so output is
 independent of batch size, iteration order, and how gametes are partitioned
-into calls.
+into map-groups or calls.
 }
 \keyword{internal}

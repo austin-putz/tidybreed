@@ -187,6 +187,44 @@ make_gamete <- function(hap_matrix, chr_info, base_seed, sid,
        xover_chr_idx = xchr, xover_pos_cM = xpos)
 }
 
+#' Dispatch the autosome gamete kernel to the C++ or R implementation
+#'
+#' The single call site `add_offspring()` uses. Prefers the compiled kernel
+#' [make_gametes_batch_cpp()] and falls back to the pure-R reference /
+#' parity oracle [make_gametes_batch_r()] when the compiled object is
+#' unavailable or explicitly disabled. Both take byte-identical inputs and
+#' return byte-identical output for a given `base_seed` (the R↔C++ parity
+#' contract), so the choice never changes results.
+#'
+#' Selection: `getOption("tidybreed.kernel")`, else the `TIDYBREED_KERNEL`
+#' environment variable, else `"auto"`. `"r"` forces the R reference (for
+#' debugging / no-compiler environments); anything else uses C++ when available.
+#'
+#' @inheritParams make_gametes_batch_r
+#' @return The list returned by the selected kernel.
+#' @keywords internal
+make_gametes_batch <- function(parent_allele, parent_lo_code,
+                               gamete_parent_idx, gamete_o, gamete_origin,
+                               chr_start, chr_end, chr_pos_cM, chr_len_cM,
+                               base_seed, store_crossovers = FALSE) {
+  kernel  <- getOption("tidybreed.kernel",
+                       Sys.getenv("TIDYBREED_KERNEL", "auto"))
+  use_cpp <- !identical(kernel, "r") &&
+    exists("make_gametes_batch_cpp", mode = "function")
+
+  if (use_cpp) {
+    make_gametes_batch_cpp(parent_allele, parent_lo_code,
+                           gamete_parent_idx, gamete_o, gamete_origin,
+                           chr_start, chr_end, chr_pos_cM, chr_len_cM,
+                           as.integer(base_seed), isTRUE(store_crossovers))
+  } else {
+    make_gametes_batch_r(parent_allele, parent_lo_code,
+                         gamete_parent_idx, gamete_o, gamete_origin,
+                         chr_start, chr_end, chr_pos_cM, chr_len_cM,
+                         base_seed, store_crossovers)
+  }
+}
+
 #' Reconstruct the per-chromosome `chr_info` list from flat kernel arrays
 #'
 #' The C++-ready seam ([make_gametes_batch_r()]) receives the autosome map as

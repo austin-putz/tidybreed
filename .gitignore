@@ -35,3 +35,9 @@ test_results.txt
 # lint
 .markdownlint*
 
+
+# Compiled Rcpp artifacts (Stage 3)
+src/*.o
+src/*.so
+src/*.dll
+src/*.rds
