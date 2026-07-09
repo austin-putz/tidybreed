@@ -285,10 +285,15 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
     b_pat <- pat_row[b_idx]
     b_mat <- mat_row[b_idx]
 
-    parts <- list()
+    # Assemble the batch's long rows by preallocation (no do.call(rbind, parts)):
+    # pass 1 enumerates the emitted (chr x parent_origin) blocks and their row
+    # counts; pass 2 fills preallocated typed vectors by slice, then builds one
+    # data.frame. Byte-identical values/order to the prior parts/rbind build,
+    # but without the O(n) rbind copies and per-part data.frame overhead.
+    blocks <- list()
+    total  <- 0L
     for (cn in chr_names_uni) {
       cols    <- which(gm$chr_name == cn)   # column positions (= locus_id)
-      lids    <- gm$locus_id[cols]
       nl      <- length(cols)
       chr_row <- chr_meta_map[[cn]]
 
@@ -304,23 +309,45 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
         emit <- (b_sex == "M" & po %in% poM) | (b_sex == "F" & po %in% poF)
         sub  <- which(emit)
         if (!length(sub)) next
-        pool_rows <- if (po == 1L) b_pat[sub] else b_mat[sub]
-        block <- hap_data_matrix[pool_rows, cols, drop = FALSE]  # length(sub) x nl
-        parts[[length(parts) + 1L]] <- data.frame(
-          id_ind        = rep(b_ids[sub], times = nl),
-          parent_origin = po,
-          strand        = 1L,
-          line_origin   = line_name,
-          locus_id      = rep(lids, each = length(sub)),
-          allele        = as.integer(as.vector(block)),
-          stringsAsFactors = FALSE
-        )
+        n_blk <- length(sub) * nl
+        blocks[[length(blocks) + 1L]] <- list(
+          po = po, sub = sub, cols = cols, lids = gm$locus_id[cols],
+          nl = nl, n = n_blk)
+        total <- total + n_blk
       }
     }
-    if (length(parts) > 0L) {
-      .write_long_haplotypes(conn, do.call(rbind, parts))
+
+    if (total > 0L) {
+      id_ind_v        <- character(total)
+      parent_origin_v <- integer(total)
+      locus_id_v      <- integer(total)
+      allele_v        <- integer(total)
+      pos <- 0L
+      for (blk in blocks) {
+        sub <- blk$sub
+        ls  <- length(sub)
+        idx <- (pos + 1L):(pos + blk$n)
+        pool_rows <- if (blk$po == 1L) b_pat[sub] else b_mat[sub]
+        block <- hap_data_matrix[pool_rows, blk$cols, drop = FALSE]  # ls x nl
+        id_ind_v[idx]        <- rep(b_ids[sub], times = blk$nl)
+        parent_origin_v[idx] <- blk$po
+        locus_id_v[idx]      <- rep(blk$lids, each = ls)
+        allele_v[idx]        <- as.integer(as.vector(block))
+        pos <- pos + blk$n
+      }
+      long_frame <- data.frame(
+        id_ind        = id_ind_v,
+        parent_origin = parent_origin_v,
+        strand        = 1L,
+        line_origin   = line_name,
+        locus_id      = locus_id_v,
+        allele        = allele_v,
+        stringsAsFactors = FALSE
+      )
+      .write_long_haplotypes(conn, long_frame)
+      rm(long_frame, id_ind_v, parent_origin_v, locus_id_v, allele_v)
     }
-    rm(parts)
+    rm(blocks)
     gc(verbose = FALSE)
   }
 

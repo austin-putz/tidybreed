@@ -99,7 +99,7 @@ register_schema_meta <- function(conn, entries) {
 
     # ind_haplotype (long)
     .sm_tbl("ind_haplotype",
-            "Phased haplotypes in long format. One row per individual x haplotype x locus. parent_origin (1/2) and strand (1 for diploids) identify the copy; line_origin traces the allele's founding line. PRIMARY KEY (id_ind, parent_origin, strand, locus_id)."),
+            "Phased haplotypes in long format. One row per individual x haplotype x locus. parent_origin (1/2) and strand (1 for diploids) identify the copy; line_origin traces the allele's founding line. No DB primary key (dropped for insert speed); (id_ind, parent_origin, strand, locus_id) is unique by construction, guaranteed R-side."),
     .sm_col("ind_haplotype", "id_ind",
             "Individual identifier; FK to ind_meta.id_ind"),
     .sm_col("ind_haplotype", "parent_origin",
@@ -109,7 +109,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("ind_haplotype", "line_origin",
             "Founding genetic line this allele traces back to; NULL only when genuinely untracked"),
     .sm_col("ind_haplotype", "locus_id",
-            "Locus identifier; FK to genome_meta.locus_id; physical sort/PK key"),
+            "Locus identifier; FK to genome_meta.locus_id; physical sort key"),
     .sm_col("ind_haplotype", "locus_name",
             "Locus name; FK to genome_meta.locus_name; denormalized for direct joins to genome_effects"),
     .sm_col("ind_haplotype", "allele",

@@ -600,9 +600,21 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
     gam_key[c(TRUE, FALSE)] <- sire_mapkey_all[b_idx]
     gam_key[c(FALSE, TRUE)] <- dam_mapkey_all[b_idx]
 
-    auto_parts  <- list()
     xover_parts <- list()   # batch crossover accumulator (autosomes + special)
+    # Autosome long rows by preallocation (no do.call(rbind, auto_parts)): every
+    # gamete emits exactly n_autosome_loci rows, so the batch total is known up
+    # front (2*b_n gametes x n_autosome_loci). Each per-gam_key kernel call still
+    # runs in the same order with the same args (RNG-neutral restructuring); its
+    # long output is written straight into preallocated slices. Byte-identical.
+    auto_long <- NULL
     if (n_autosome_loci > 0L) {
+      n_auto <- length(gam_key) * n_autosome_loci
+      ai_id_ind   <- character(n_auto)
+      ai_po       <- integer(n_auto)
+      ai_lo       <- character(n_auto)
+      ai_locus_id <- integer(n_auto)
+      ai_allele   <- integer(n_auto)
+      pos <- 0L
       for (key in unique(gam_key)) {
         sel <- which(gam_key == key)
         ca  <- chr_arrays_by_key[[key]]
@@ -614,15 +626,14 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
 
         # Rows are in this group's gamete order; each gamete is one n_loci block.
         row_o <- rep(gam_o[sel], each = n_autosome_loci)
-        auto_parts[[length(auto_parts) + 1L]] <- data.frame(
-          id_ind        = b_ids[match(row_o, b_idx)],
-          parent_origin = gg$parent_origin,
-          strand        = 1L,
-          line_origin   = lo_levels[gg$line_origin_code],
-          locus_id      = autosome_locus_ids[gg$locus_idx],
-          allele        = gg$allele,
-          stringsAsFactors = FALSE
-        )
+        m   <- length(gg$allele)
+        idx <- (pos + 1L):(pos + m)
+        ai_id_ind[idx]   <- b_ids[match(row_o, b_idx)]
+        ai_po[idx]       <- gg$parent_origin
+        ai_lo[idx]       <- lo_levels[gg$line_origin_code]
+        ai_locus_id[idx] <- autosome_locus_ids[gg$locus_idx]
+        ai_allele[idx]   <- gg$allele
+        pos <- pos + m
         if (store_crossovers && length(gg$xover_pos_cM)) {
           xover_parts[[length(xover_parts) + 1L]] <- data.frame(
             id_ind        = b_ids[match(gg$xover_gamete_o, b_idx)],
@@ -634,8 +645,17 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
           )
         }
       }
+      auto_long <- data.frame(
+        id_ind        = ai_id_ind,
+        parent_origin = ai_po,
+        strand        = 1L,
+        line_origin   = ai_lo,
+        locus_id      = ai_locus_id,
+        allele        = ai_allele,
+        stringsAsFactors = FALSE
+      )
+      rm(ai_id_ind, ai_po, ai_lo, ai_locus_id, ai_allele)
     }
-    auto_long <- if (length(auto_parts) > 0L) do.call(rbind, auto_parts) else NULL
 
     # --- Special chromosomes (sex chromosomes / organelles): the R path, on the
     # independent kind = 2 stream. Seed ONCE per (offspring o, parent_origin r)
@@ -746,7 +766,7 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
       .write_crossovers(conn, do.call(rbind, xover_parts))
     }
 
-    rm(auto_parts, auto_long, long_frame, batch_special, xover_parts,
+    rm(auto_long, long_frame, batch_special, xover_parts,
        gam_o, gam_origin, gam_parent, gam_key)
     gc(verbose = FALSE)
   }

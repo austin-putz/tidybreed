@@ -87,6 +87,22 @@ test_that("add_founders creates correct long ind_haplotype table", {
 })
 
 
+test_that("ind_haplotype key stays unique after founders (no DB PK)", {
+  # ind_haplotype carries no DB PRIMARY KEY (dropped for insert speed).
+  # Uniqueness of (id_ind, parent_origin, strand, locus_id) must still hold,
+  # guaranteed R-side. This is the backstop that replaces the dropped constraint.
+  pop <- make_test_pop(n_loci = 50, n_males = 5, n_females = 5)
+
+  n_dup <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT COUNT(*) AS n FROM (",
+    "SELECT id_ind, parent_origin, strand, locus_id, COUNT(*) AS c ",
+    "FROM ind_haplotype GROUP BY 1, 2, 3, 4 HAVING c > 1)"))$n
+  expect_equal(n_dup, 0L)
+
+  close_pop(pop)
+})
+
+
 test_that("add_founders leaves ind_genotype empty (on-demand cache)", {
   pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
     define_genome(n_loci = 50, n_chr = 2, chr_len_Mb = 100) |>

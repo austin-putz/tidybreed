@@ -184,12 +184,18 @@ define_genome <- function(pop,
   ))
   duckdb::duckdb_unregister(db_conn, "__tmp_genome_meta")
 
-  # Create empty long ind_haplotype table (one row per individual x haplotype x locus)
+  # Create empty long ind_haplotype table (one row per individual x haplotype x locus).
+  # No PRIMARY KEY: the 4-col ART index dominated bulk-insert cost (~53% of
+  # add_founders runtime; benched ~2x faster to drop, and it makes remove_rows'
+  # id_ind DELETE ~74x faster via zonemap pruning). Uniqueness of
+  # (id_ind, parent_origin, strand, locus_id) is guaranteed R-side: id_ind is
+  # MAX(id)+1 from ind_meta (which has its own PK) and each individual emits each
+  # (parent_origin, strand, locus_id) tuple exactly once. Contrast ind_genotype,
+  # which keeps its PK for INSERT OR REPLACE idempotency.
   DBI::dbExecute(db_conn, paste0(
     "CREATE TABLE ind_haplotype (",
     "id_ind VARCHAR, parent_origin UTINYINT, strand UTINYINT, ",
-    "line_origin VARCHAR, locus_id INTEGER, locus_name VARCHAR, allele UTINYINT, ",
-    "PRIMARY KEY (id_ind, parent_origin, strand, locus_id))"
+    "line_origin VARCHAR, locus_id INTEGER, locus_name VARCHAR, allele UTINYINT)"
   ))
 
   # Create empty long ind_genotype table (on-demand dosage cache; add_dosage())

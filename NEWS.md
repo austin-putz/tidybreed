@@ -1,3 +1,26 @@
+# tidybreed 0.56.0 (2026-07-08)
+
+## Faster `ind_haplotype` write path (`add_founders()` + `add_offspring()`)
+
+Profiling of the swine-scale founder build (40M `ind_haplotype` rows) traced the
+cost to the bulk-insert PRIMARY KEY and the R-side long-frame assembly. Two
+changes on the shared write core speed up both `add_founders()` and every
+per-generation `add_offspring()` mating:
+
+- **Dropped the `ind_haplotype` `PRIMARY KEY (id_ind, parent_origin, strand,
+  locus_id)`.** A micro-bench showed the 4-column key's index maintenance
+  dominated insert cost (~2× faster to drop) and that dropping it also makes
+  `remove_rows()`'s `id_ind` DELETE ~74× faster (DuckDB prunes by zonemap, so a
+  secondary index only adds overhead). Uniqueness is now guaranteed R-side —
+  `id_ind` is `MAX(id)+1` from `ind_meta` (which keeps its own PK) and each
+  individual emits each `(parent_origin, strand, locus_id)` tuple exactly once —
+  and covered by a new test. **Schema change** (pre-1.0, no compatibility shim).
+  `ind_genotype` keeps its PK (needed for `INSERT OR REPLACE` idempotency).
+- **Replaced the `do.call(rbind, parts)` long-frame assembly with preallocated
+  typed vectors** filled by slice, in both `add_founders()` and the autosome path
+  of `add_offspring()`. Output is byte-identical for a given seed; this only
+  removes the O(n) `rbind` copies and per-part `data.frame` overhead.
+
 # tidybreed 0.55.0 (2026-07-08)
 
 ## Install-time compiler guidance (source installs)
