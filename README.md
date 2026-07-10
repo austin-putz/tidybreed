@@ -5,7 +5,36 @@
 
 A pipe-friendly (`%>%` or `|>`) R package for breeding program simulation backed by [DuckDB](https://duckdb.org). 
 Design large-scale genomic simulations without running out of memory — all data lives on disk in a DuckDB database 
-and is queried lazily via `dplyr`. 
+and is queried lazily via `dplyr`. It is easier to show than explain. 
+
+```r
+pop |>                       # stores 'db_conn' connection to your .duckdb file
+  get_table("ind_meta") |>   # stores 1 record per individual to track pedigree, sex, line, any user defined fields
+  filter(
+    sex == "M",                  # subset to males only
+	line_name == "Angus",        # subset to Angus genetic line only
+	birth_date == Sys.Date(),    # user added column to track birth dates
+	status == "piglet"           # user defined column to track animal 'status'
+  ) |>
+  add_phenotype(
+    c("birth_weigth", "stillborn"),       # list of phenotypes to 'collect'
+	phenotype_date = Sys.Date()           # user added column to track phenotype date
+  )
+```
+
+**Steps:** 
+* User identifies a table to pass via `get_table()`
+* User filters/subsets the table to identify rows/records/animals
+* User passes that table to either a `define_*()` function or `add_*()` function
+    - `define_*()` functions often add records as meta data
+	- `add_*()` functions often add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc)
+* New records are stored on disk to your `.duckdb` file (database)
+
+> `tidybreed` uses a lightweight S3 object as a handle to a DuckDB-backed breeding program. 
+> Rather than storing simulation state in R objects, the breeding program is represented 
+> as a persistent relational database. Functions operate by querying subsets of the database, 
+> performing calculations in R or C++, and writing results back to the database. 
+> The S3 object primarily manages access to the underlying database rather than storing biological state.
 
 ## License
 

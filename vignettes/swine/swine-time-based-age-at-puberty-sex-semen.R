@@ -230,6 +230,10 @@ pop <- pop %>%
     max_allele_freq  = 0.99                         # max allele freq
   )
 
+# print genome info table (1 row per locus)
+pop %>% get_table("founder_haplotypes")
+pop %>% get_table("founder_haplotypes") |> count()
+
 # line B
 pop <- pop %>%
   define_founder_haplotypes(
@@ -1403,7 +1407,8 @@ pop %>%
 pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "NW")
 
 # count NW phenotypes 
-pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "NW") %>% collect() %>% count()
+pop %>% get_table("ind_phenotype") %>% filter(phenotype_name == "NW") %>% 
+  collect() %>% count()
 
 #------------------------------------------------------------------------------#
 # Checks
@@ -1446,8 +1451,11 @@ pop %>%
 # Calculate true index value
 #------------------------------------------------------------#
 
-pop %>% get_table("ind_meta") %>% add_tbv(index_names = "maternal")
+# add true index value given index weights
+pop %>% get_table("ind_meta") %>% 
+  add_tbv(index_names = "maternal")
 
+pop %>% get_table("ind_true_index") 
 pop %>% get_table("ind_true_index") %>% collect() %>% glimpse()
 
 
@@ -1484,7 +1492,7 @@ if (1 > 2){
 #------------------------------------------------------------------------------#
 
 # just set it for now
-repl = 1
+#repl = 1
 
 # start loop time
 time_start_loop <- proc.time()
