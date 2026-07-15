@@ -196,14 +196,13 @@ test_that("define_schema_description() can be chained for multiple columns", {
 })
 
 
-test_that("print.tidybreed_pop() hides _schema_meta from table list", {
+test_that("print.tidybreed_pop() never leaks the internal _schema_meta table", {
   pop <- open_pop(pop_name = "schema_test", db_name = ":memory:") |>
     define_genome(n_loci = 100, n_chr = 2, chr_len_Mb = 50)
   on.exit(close_pop(pop))
 
-  output <- capture.output(print(pop))
-  table_line <- output[grep("^Tables:", output)]
-  expect_false(grepl("_schema_meta", table_line))
+  output <- paste(capture.output(print(pop)), collapse = "\n")
+  expect_false(grepl("_schema_meta", output))
 })
 
 

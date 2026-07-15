@@ -1,3 +1,29 @@
+# tidybreed 0.57.0 (2026-07-15)
+
+## Redesigned `print()` summary for a population
+
+`print(pop)` (and typing `pop` at the console) now renders a grouped,
+unicode-ruled summary instead of a flat table dump. It reuses the same rule
+style as `schema()`/`summary()` and surfaces the data the package actually
+tracks:
+
+- **Header** — population name, database location (basename, or `in-memory`),
+  and live connection status (`[connected]` / `[disconnected]`).
+- **Genome** — loci, chromosomes, physical length (Mb) and genetic length (cM),
+  plus a founder haplotype-pool line when `define_founder_haplotypes()` has run.
+- **Model** — genetic-component traits, observed phenotypes, selection indices,
+  and QTL count.
+- **Individuals** — total, broken down by sex and (for multi-line populations)
+  by line.
+- **Records** — phenotype, TBV, EBV, and index-value row counts.
+
+Every section is hidden when its underlying data does not yet exist, so a
+freshly opened population collapses to just the header, database line, and a
+pointer to `schema()` / `describe_table()`. A closed connection prints
+`[disconnected]` without issuing any queries. The old `Tables:` line (a raw
+comma-joined list of every table) has been removed in favor of the `schema(pop)`
+pointer.
+
 # tidybreed 0.56.0 (2026-07-08)
 
 ## Faster `ind_haplotype` write path (`add_founders()` + `add_offspring()`)
