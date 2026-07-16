@@ -101,7 +101,7 @@ if (is.na(config_path)) {
 
 # check if yaml file exists
 if (!file.exists(config_path)) {
-  stop("yaml file does not exist")
+  stop("yaml file does not exist, change the path above to find your local path")
 } else {
   message("yaml file exists")
 }
@@ -156,11 +156,16 @@ time_start_total <- proc.time()
 start_date <- as.Date(config$general$start_date)
 end_date   <- as.Date(config$general$end_date)
 
+message("Start/End Date: ", start_date, " / ", end_date)
+
 # SEPARATE BOAR AND GILT/SOW SELECTION STEPS
 
 # set starting selection date
 female_selection_date <- as.Date(config$general$start_date_selection)
 male_selection_date   <- as.Date(config$general$start_date_selection)
+
+message("Female/Male Start Selection Date: ", female_selection_date, " / ",
+                                              male_selection_date)
 
 # add to data frame
 data.timing <- tibble(
@@ -195,6 +200,9 @@ pop <- open_pop(
 # print pop object
 print(pop)
 
+# summary of tables
+schema(pop)
+
 #------------------------------------------------------------------------------#
 # Start Genome + Population Object with database
 #------------------------------------------------------------------------------#
@@ -215,6 +223,9 @@ pop <- pop %>%
 
 # print genome info table (1 row per locus)
 pop %>% get_table("genome_meta")
+pop %>% get_table("genome_map")
+
+
 
 #------------------------------------------------------------------------------#
 # Add founder haplotypes
@@ -232,7 +243,7 @@ pop <- pop %>%
 
 # print genome info table (1 row per locus)
 pop %>% get_table("founder_haplotypes")
-pop %>% get_table("founder_haplotypes") |> count()
+pop %>% get_table("founder_haplotypes") |> collect() |> count(locus_name)
 
 # line B
 pop <- pop %>%
@@ -496,6 +507,8 @@ pop <- pop %>%
     alive         = TRUE,
     active        = FALSE
   )
+
+pop |> get_table("ind_meta")
 
 #------------------------------------------------------------------------------#
 # Add SNP Chip
@@ -763,12 +776,15 @@ pop %>%
   )
 
 # print 'genome_effects'
-pop %>% get_table("genome_effects")
+pop %>% get_table("genome_effects") |>
+  count(locus_name)
 
 # calculate all TBV for AP
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
-    #filter(rep == repl) %>%
+    #filter(
+    #  rep == repl
+    #) %>%
   add_tbv(
     trait_name = "AP"
   )

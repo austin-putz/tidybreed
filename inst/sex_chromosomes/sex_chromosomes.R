@@ -16,6 +16,7 @@ pop <- pop |>
 pop |> get_table("genome_meta")
 pop |> get_table("chr_meta")
 
+# list chromsome 1 names
 locus_names_1 <- pop |> get_table("genome_meta") |>
   filter(chr_name == "1") |>
   pull(locus_name)
