@@ -3,9 +3,15 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
+> `tidybreed` is very much in the "alpha testing" phase, I do not recommend building on it
+> just yet. I am however looking for valuable feedback to finish the API prior to 
+> version 1.0.0
+
 A pipe-friendly (`%>%` or `|>`) R package for breeding program simulation backed by [DuckDB](https://duckdb.org). 
 Design large-scale genomic simulations without running out of memory — all data lives on disk in a DuckDB database 
-and is queried lazily via `dplyr`. It is easier to show than explain. 
+and is queried lazily via `dplyr`. 
+
+It is easier to show than explain. The API often resembles the following steps: 
 
 ```r
 pop |>                       # stores 'db_conn' connection to your .duckdb file
@@ -23,18 +29,32 @@ pop |>                       # stores 'db_conn' connection to your .duckdb file
 ```
 
 **Steps:** 
-* User identifies a table to pass via `get_table()`
-* User filters/subsets the table to identify rows/records/animals
-* User passes that table to either a `define_*()` function or `add_*()` function
-    - `define_*()` functions often add records as meta data
-	- `add_*()` functions often add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc)
-* New records are stored on disk to your `.duckdb` file (database)
+* :one: User identifies a table to pass via `get_table()`
+* :two: User filters/subsets the table to identify rows/records/animals
+    - `filter()` is from `dplyr`, users often already know this package well
+* :three: User passes that table to either a `define_*()` function or `add_*()` function
+    - `define_*()` :arrow_right: functions often add records as meta data
+	- `add_*()` :arrow_right: functions often add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc)
+* :four: New records are stored on disk to your `.duckdb` file (database)
+    - database allows for efficient storage and IO
+	- users allowed to insert rows themselves without me having to provide 'helper functions'
 
 > `tidybreed` uses a lightweight S3 object as a handle to a DuckDB-backed breeding program. 
 > Rather than storing simulation state in R objects, the breeding program is represented 
 > as a persistent relational database. Functions operate by querying subsets of the database, 
 > performing calculations in R or C++, and writing results back to the database. 
 > The S3 object primarily manages access to the underlying database rather than storing biological state.
+
+## Motivation
+
+I've both struggled to learn other simulation software and also found them extremely 
+limiting for several reasons. `tidybreed` started as a fresh conceptual idea on
+simulation software to allow users to easy store custom data (tables + columns) and
+easily manipulate any data they want (metadata or otherwise). 
+
+I also try to make it as intuitive and easy to learn as possible. Users can 
+utilize many functions they already know from `tidyverse` such as `filter()` or
+`slice_*()` functions (for selection for instance). 
 
 ## License
 
@@ -54,30 +74,34 @@ the copyright notice is retained.
 | [R](https://www.r-project.org) | → | Standard for most scientists; flexible design of custom breeding programs |
 | [DuckDB](https://duckdb.org/) | → | Columnar, embedded, no server needed; handles datasets larger than RAM |
 | Pipe everything | → | Filter individuals, add phenotypes/genotypes/EBVs/index with `tidyverse` verbs |
-| Customizable | → | Add your own table, any column within any table with `mutate_table()`; query with standard `dplyr` and SQL will function in the background |
+| Customizable | → | Add your own table, any column within any table with `mutate_table()`; query with standard `dplyr` and SQL will function in the background. `DBI` allows users to interact with the database directly in any way they want. |
 
-- **Databases** are efficient enough for our large simulations, both in speed and memory savings. Users can pull from different tables using the `get_table()` function. We no  longer need to fill up our RAM with data from generation 1 in a long term simulation pipeline. 
-- **SQL** can add any custom table or field/column of any type, allowing users to define a DATE that would allow almost near perfect "digital twins". My understanding is DuckDB was written very efficiently with C++ mostly. Users can `DBI` their way to modifying any table at any time and often do not have to worry about "breaking" `tidybreed` if I build the functions correctly and truly modular. 
-- **R** is great for many things and has become a standard for us in research, however memory is a massive issue compared to python/julia/etc and it's simply not efficient enough for massive datasets of this size. This will be moderated by the use of SQL and C++ with Rcpp and many operations will (hopefully) never be pulled into R, but can be orchestrated through R. 
-- **Pipes** allow users to insert `filter` steps that is critical for most operations to "point" to certain individuals or groups to calculate TBVs, EBVs, phenotypes, or to extract data such as genotypes/QTL. 
+- **Databases** :white_check_mark: are efficient enough for our large simulations, both in speed and memory savings. Users can pull from different tables using the `get_table()` function. We no  longer need to fill up our RAM with data from generation 1 in a long term simulation pipeline. 
+- **SQL** :white_check_mark: can add any custom table or field/column of any type, allowing users to define a DATE that would allow almost near perfect "digital twins". My understanding is DuckDB was written very efficiently with C++ mostly. Users can `DBI` their way to modifying any table at any time and often do not have to worry about "breaking" `tidybreed` if I build the functions correctly and truly modular. 
+- **R** :white_check_mark: is great for many things and has become a standard for us in research, however memory is a massive issue compared to python/julia/etc and it's simply not efficient enough for massive datasets of this size. This will be moderated by the use of SQL and C++ with `Rcpp` and many operations will (hopefully) never be pulled into R, but can be orchestrated through R. 
+- **Pipes** :white_check_mark: allow users to insert `filter` steps that is critical for most operations to "point" to certain individuals or groups to calculate TBVs, EBVs, phenotypes, or to extract data such as genotypes/QTL. 
 
 **What I try to AVOID:**
 
-- **Storing metadata**
-  - such a n_loci or such, a truly modular system using SQL can easily calculate this from a table as needed with very little "cost" to timing of the simulation
+- :x: **Storing metadata**
+  - such a n_loci or such, a truly composable/modular system using SQL can easily calculate this from a table as needed with very little "cost" to timing of the simulation
   - metadata is stored, just in tables such as the variance components but other fixed metadata is silly most of the time when it can be taken from a table at any moment in time cheaply
-- **helper/wrapper functions**
+- :x: **helper/wrapper functions**
+  - any function that exists, but the user could easily do it themselves
   - e.g. a function to design a specific mating scheme
-  - users love them, developers love them, but they are *almost* always a *bad idea* leading to spaghetti code long term. **Why?** :point_right: There is a nearly infinite number of ways users could mate a list of dams to a list of sires, I cannot program every possible option for users, therefore I designed a simple tibble as input and users just list exactly what offspring they want per row (sire, dam, sex, etc). No helper function needed to create the mating design, you can do this yourself easily without a function using `sample()`, `rep()`, etc. and building a tibble yourself. This also avoids me having to break your code later changing functions and arguments. 
-- **generation**
-  - generation was a leftover artifact from QMSim and the original AlphaSim I believe. 
-  - generation has no useful application besides making some simulations easier to follow or design in a generic way
+  - users love them, developers love them, but they are *almost* always a *bad idea* leading to spaghetti code long term. 
+  - **Why?** :point_right: There is a nearly infinite number of ways users could mate a list of dams to a list of sires, I cannot program every possible option for users, therefore I designed a simple tibble as input and users just list exactly what offspring they want per row (sire, dam, sex, etc). No helper function needed to create the mating design, you can do this yourself easily without a function using `sample()`, `rep()`, etc. and building a tibble yourself. This also avoids me having to break your code later changing functions and arguments. 
+- :x: **generation** :skull: :sos: :no_entry_sign:
+  - generation was a leftover archaic artifact from QMSim and the original AlphaSim I think
+  - generation has no useful application besides making some simulations easier to follow or design in a generic/fixed way
   - generation only exists in simple simulations and selection experiments, not real breeding programs (for the most part)
-  - users can add a field/column called "gen" or "generation" within `tidybreed` in every table they want, however I do not enforce you to use such a silly idea unless doing some simple simulations and need to create something quick/easy
+  - users can add a field/column called "gen" or "generation" within `tidybreed` in every table they want, **however I do not enforce you to use such a silly idea** unless doing some simple simulations and need to create something quick/easy
 
 ## Installation
 
 Install [pak](https://pak.r-lib.org/) then install `tidybreed` from [GitHub](https://github.com/austin-putz/tidybreed/):
+
+**WINDOWS People** :arrow_right: **YOU NEED RTools SETUP**, please read below
 
 ```r
 install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
@@ -644,7 +668,7 @@ pop |>
 ### 10. Add Genotypes
 
 ```r
-# Add 9k genotypes to all animals
+# Add 9k genotypes to ONLY CURRENT MALES
 pop |>
   get_table("ind_meta") |>
     filter(
@@ -661,20 +685,29 @@ pop |>
   extract_genotypes(chip_name = "9k")
 ```
 
-Of course, you can all use `pull(id_ind)` to extract a character vector and ues that to filter rows as well
+Of course, you can all use `pull(id_ind)` to extract a character vector and use that to filter rows as well
 to get a more precise set of animals for genotyping, phenotyping, or whatever you want. 
 
 ### 11. Add Phenotypes
 
+:no_entry: Remember :bangbang: `tidybreed` is explicit in separation of "trait" vs "phenotype". 
+
+- `trait` :arrow_right: is linked to genome via QTL effects
+- `phenotype` :arrow_right: is linked to the observed phenotype
+
+This allows us to separate something like **weaning weight** into :two: components **weaning weight direct** 
+and **weaning weight maternal**. 
+
 ```r
-# Phenotype animals that reached off-test today
+# Phenotype male animals that reached off-test today
 pop |>
   get_table("ind_meta") |>
     filter(
+	  sex == "M",
       off_test_date == cur_date         # power to loop over dates allows real breeding program dynamics
     ) |>
   add_phenotype(
-    phenotype_name = c("ADG", "BF"),   # add both ADG and BF for these filtered animals
+    phenotype_name = c("ADG", "BF", "IMF"),   # add ADG, Backfat, and IMF for these filtered animals
     pheno_date     = cur_date          # this is a user defined column in the 'ind_phenotype' table, pass it here
   )
 
@@ -696,6 +729,15 @@ pop |>
 ```
 
 ### 12. Run Evaluations (EBVs)
+
+:bangbang: **NOTICE**
+
+> This is probably the sketchiest part of any simulation software as it's nearly impossible
+> to accurately solve all models you can simulate. Simulation is far easier than solving
+> equations. If users define a very complex structure to simulation, we cannot guarantee
+> there is a solver out there for it. BLUPF90 is nice and easy, however extremely limited
+> and we get what we get from it. Safest always to run user defined parameter files and 
+> programs. PLEASE BE CAREFUL!
 
 Run [BLUPF90](https://nce.ads.uga.edu/wiki/doku.php) to estimate breeding values:
 
