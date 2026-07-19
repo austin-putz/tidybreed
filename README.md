@@ -14,11 +14,11 @@ pop |>                       # stores 'db_conn' connection to your .duckdb file
     sex == "M",                  # subset to males only
 	line_name == "Angus",        # subset to Angus genetic line only
 	birth_date == Sys.Date(),    # user added column to track birth dates
-	status == "piglet"           # user defined column to track animal 'status'
+	status == "calf"           # user defined column to track animal 'status'
   ) |>
   add_phenotype(
-    c("birth_weigth", "stillborn"),       # list of phenotypes to 'collect'
-	phenotype_date = Sys.Date()           # user added column to track phenotype date
+    c("birth_weigth", "stillborn"),       # list of phenotypes to 'collect' on filtered individuals
+	phenotype_date = Sys.Date()           # user added column, added to ind_phenotype table
   )
 ```
 
