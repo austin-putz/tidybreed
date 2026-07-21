@@ -1,0 +1,148 @@
+url: https://austin-putz.github.io/tidybreed/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#1a7f5a"
+    base_font: {google: "Inter"}
+    heading_font: {google: "Inter"}
+    code_font: {google: "JetBrains Mono"}
+
+home:
+  title: Tidy Breeding Program Simulation
+  description: >
+    Simulate animal and plant breeding programs with a pipe-friendly, database-first
+    API. All genomic and individual data lives in a DuckDB file on disk, so
+    simulations can exceed available RAM and runs stay resumable and shareable.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles]
+    right: [search, github]
+
+reference:
+
+- title: Population lifecycle
+  desc: >
+    Create, reopen, and close the DuckDB-backed population that holds every table.
+  contents:
+  - open_pop
+  - restore_pop
+  - close_pop
+  - archive_replicate
+
+- title: Genome and genetic map
+  desc: >
+    Define loci, chromosomes, per-chromosome inheritance rules, and the founder
+    haplotype pools that individuals are sampled from.
+  contents:
+  - define_genome
+  - define_chr
+  - define_founder_haplotypes
+
+- title: Individuals
+  desc: >
+    Create founders and simulate meiosis to produce offspring from a mating plan.
+  contents:
+  - add_founders
+  - add_offspring
+
+- title: Traits — genetic layer
+  desc: >
+    Define the underlying genetic quantities: additive variance, QTL effects, and
+    genetic covariances between traits. Nothing here describes an observation.
+  contents:
+  - define_trait
+  - define_trait_simple
+  - define_additive_effects
+  - define_effect_cov_matrix
+
+- title: Phenotypes — observation layer
+  desc: >
+    Define what is actually recorded on an animal: distribution, mean, residual
+    variance, sex expression, and any fixed or random effects.
+  contents:
+  - define_phenotype
+  - define_residual_cov
+  - define_effect_intercept
+  - define_effect_fixed_class
+  - define_effect_fixed_cov
+  - define_effect_random
+
+- title: Simulation output
+  desc: >
+    Compute and store true breeding values, phenotype records, and estimated
+    breeding values from an external evaluation.
+  contents:
+  - add_tbv
+  - add_phenotype
+  - add_ebv
+
+- title: Genotypes and SNP chips
+  desc: >
+    Define chips, record which animals were genotyped, and pull dosage matrices
+    out for analysis or export.
+  contents:
+  - define_chip
+  - add_genotypes
+  - add_dosage
+  - extract_genotypes
+
+- title: Selection index
+  desc: >
+    Register index weights and apply them to EBVs, TBVs, or any table of values.
+  contents:
+  - define_index
+  - add_index
+
+- title: Tables, columns, and queries
+  desc: >
+    Read any table lazily, add or update columns, build group-level variables, and
+    delete rows. This is how simulation state stays in the database rather than in
+    parallel R objects.
+  contents:
+  - get_table
+  - mutate_table
+  - mutate_derived
+  - mutate_group_seq
+  - mutate_group_named
+  - mutate_group_concatenate
+  - remove_rows
+  - define_table
+
+- title: Schema documentation
+  desc: >
+    Inspect what every table and column means, and attach your own descriptions
+    that travel with the `.duckdb` file.
+  contents:
+  - schema
+  - describe_table
+  - define_schema_description
+
+- title: dplyr methods for tidybreed_table
+  desc: >
+    Standard dplyr verbs work on the lazy table reference returned by
+    `get_table()`. Filtering happens inside DuckDB; `collect()` pulls into R.
+  contents:
+  - filter.tidybreed_table
+  - select.tidybreed_table
+  - arrange.tidybreed_table
+  - collect.tidybreed_table
+  - pull.tidybreed_table
+  - count.tidybreed_table
+  - slice_head.tidybreed_table
+  - slice_tail.tidybreed_table
+  - slice_min.tidybreed_table
+  - slice_max.tidybreed_table
+  - slice_sample.tidybreed_table
+
+- title: Print and summary methods
+  desc: >
+    Display methods for the package's S3 classes.
+  contents:
+  - print.tidybreed_pop
+  - summary.tidybreed_pop
+  - print.tidybreed_table
+  - print.tidybreed_schema
+  - print.tidybreed_summary
+  - print.tidybreed_table_desc

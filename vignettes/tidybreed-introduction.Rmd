@@ -1,55 +1,609 @@
 ---
 title: "Introduction to tidybreed"
-output: rmarkdown::html_vignette
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
 vignette: >
   %\VignetteIndexEntry{Introduction to tidybreed}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
 ```
 
-## Overview
+## What `tidybreed` is
 
-`tidybreed` simulates animal and plant breeding programs using a pipe-friendly
-API backed by a file-based DuckDB database.
+`tidybreed` simulates animal and plant breeding programs. You build a population
+step by step — a genome, founder animals, traits, phenotypes, matings, selection —
+and the package tracks every individual, haplotype, and record for you.
+
+What makes it different from other simulators is where the data lives. **Everything
+is stored in a [DuckDB](https://duckdb.org/) database, not in R memory.** A
+simulation with a million animals does not need a million animals' worth of RAM.
+The database is a plain file on disk, so runs are resumable, shareable, and
+queryable with ordinary SQL long after the R session that made them has ended.
+
+The API is pipe-friendly and built on `dplyr` verbs, so if you know the tidyverse
+you already know most of the syntax.
+
+This vignette walks through a complete single-generation simulation. Every code
+block below actually runs when this page is built, so what you see is real output.
 
 ## Installation
 
-Eventually, I will try to push the package to CRAN, however, right now the
-package is only available via GitHub, see below. 
+`tidybreed` is not on CRAN yet. Install from GitHub — `pak` handles the compiled
+code and dependencies cleanly:
 
-```{r install_cran, eval=FALSE}
-# install.packages("tidybreed")
-```
-
-I highly suggest using the `pak` package to download `tidybreed` from GitHub. 
-
-```{r install_github, eval=FALSE}
-# install pak package
-install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
-
-# loadd pak
-library(pak)
-
-# install this package
+```{r install, eval = FALSE}
+install.packages("pak")
 pak::pak("austin-putz/tidybreed")
-``` 
-
-
-## Basic usage
-
-First, make sure to load `tidybreed`. 
-
-```{r load_tidybreed, eval=FALSE}
-library(tidybreed)
 ```
 
-Users should refer to the `/vignettes/qmd/` folder and open the HTML file
-to learn this package right now. Later I will build this official `.Rmd` file
-for users once I hit version `1.0.0` and get something official. 
+You will need a C++ compiler (Xcode command line tools on macOS, Rtools on
+Windows). Then:
 
+```{r libs, message = FALSE}
+library(tidybreed)
+library(dplyr)
 
+set.seed(1)   # so this page renders the same numbers every time
+```
 
+## How the package works
+
+Three ideas explain almost all of the API. They are worth reading before the code.
+
+### 1. R is the control layer, DuckDB is the storage layer
+
+Your R session holds a small object with a database connection in it. It does
+**not** hold your genotypes. When you ask for a table you get a *lazy reference* —
+nothing is pulled into R until you call `collect()`. This is why you should filter
+first and collect last.
+
+### 2. There are two object types
+
+| Object | Created by | What it is |
+|---|---|---|
+| `tidybreed_pop` | `open_pop()` | The population: a database connection plus a table registry |
+| `tidybreed_table` | `get_table()` | A lazy reference to one table, plus any pending filter |
+
+Most functions take a `tidybreed_pop` and return a `tidybreed_pop`, so they chain:
+
+```r
+pop <- pop |> define_genome(...) |> define_founder_haplotypes(...)
+```
+
+But **action functions** — the ones that operate on a *subset of rows* — take a
+`tidybreed_table` as their first argument instead. That is how you tell them which
+rows to act on:
+
+```r
+pop <- pop |>
+  get_table("ind_meta") |>       # which table
+  filter(sex == "F") |>          # which rows
+  add_phenotype("ADG")           # what to do
+```
+
+`add_founders()`, `add_phenotype()`, `add_tbv()`, `add_index()`,
+`define_additive_effects()`, `define_chip()`, `add_genotypes()`,
+`extract_genotypes()`, and `mutate_table()` all work this way. Most of them return
+a `tidybreed_pop`, so the chain continues; the `extract_*` family is the exception
+— it hands you data back as a tibble, since pulling results into R is the whole
+point of it.
+
+There is no positional row selection anywhere in `tidybreed` — no `TRUE`/`FALSE`
+masks, no integer indices. Database row order is not guaranteed, so selection
+always goes through names (`id_ind`, `locus_name`) or a SQL filter.
+
+### 3. Genetics and observations are separate layers
+
+This one trips people up, so it is worth being explicit. A trait's **genetics** and
+the **phenotype someone writes on a clipboard** are defined by two different
+functions:
+
+| You want to specify | Function | Examples |
+|---|---|---|
+| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `expressed_parent`, `units` |
+| What gets observed | `define_phenotype()` | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
+
+For a simple trait the two share a name and you call both. The payoff comes later:
+one observed phenotype (weaning weight) can be built from several genetic
+components (direct + maternal), and the split makes that natural instead of a
+special case.
+
+## Open a population
+
+`open_pop()` creates the database. Here we use `":memory:"` so this vignette writes
+nothing to disk; in a real run you would omit `db_name` and get a `sim.duckdb` file
+inside an organised output folder.
+
+```{r open}
+pop <- open_pop(pop_name = "demo", db_name = ":memory:")
+
+pop
+```
+
+Printing a population gives you a live summary. Right now there is almost nothing
+in it — sections appear as you add data.
+
+## Define the genome
+
+```{r genome}
+pop <- pop |>
+  define_genome(
+    n_loci     = 500,   # total loci (SNP and QTL both come from this pool)
+    n_chr      = 5,     # chromosomes
+    chr_len_Mb = 100    # length of each chromosome in megabases
+  )
+
+pop |> get_table("genome_meta")
+```
+
+`genome_meta` holds one row per locus with its **physical** position (`pos_bp`).
+The **genetic** map lives in its own table, because a genome can have several maps
+— male vs female, or line-specific:
+
+```{r genome_map}
+pop |> get_table("genome_map")
+```
+
+Per-chromosome inheritance rules live in `chr_meta`. Every chromosome starts as a
+normal diploid autosome; `define_chr()` is how you would declare an X, Y, or
+mitochondrial chromosome.
+
+```{r chr_meta}
+pop |> get_table("chr_meta") |> collect()
+```
+
+## Explore the database
+
+Two helpers exist so you never have to guess what is in the database.
+`schema(pop)` lists every table:
+
+```{r schema}
+schema(pop)
+```
+
+`describe_table()` explains one table's columns:
+
+```{r describe}
+describe_table(pop, "ind_meta")
+```
+
+Remember that `get_table()` is lazy. The filter below runs *inside* DuckDB and only
+the answer comes back to R:
+
+```{r lazy}
+pop |>
+  get_table("genome_meta") |>
+  filter(chr == 1L) |>
+  count() |>
+  collect()
+```
+
+## Create founder haplotypes
+
+Founders are sampled from a pool of haplotypes. Tagging the pool with a
+`line_name` is good practice — it is what lets you run crossbreeding later.
+
+```{r haps}
+pop <- pop |>
+  define_founder_haplotypes(
+    line_name       = "A",
+    n_haplotypes    = 100,
+    method          = "uniform",
+    min_allele_freq = 0.05,
+    max_allele_freq = 0.95
+  )
+```
+
+Several methods control the allele-frequency spectrum and linkage disequilibrium:
+
+| `method` | What it gives you |
+|---|---|
+| `"uniform"` | Frequencies drawn uniformly between `min_allele_freq` and `max_allele_freq` |
+| `"fixed"` | Every locus at the same `allele_freq` |
+| `"beta"` | Beta-distributed frequencies (`beta_shape1`, `beta_shape2`) — U-shaped is realistic |
+| `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_freq`) |
+| `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `switch_rate`) |
+| `"gaussian_copula"` | Correlated frequencies with distance-based decay (`decay_rate`) |
+
+## Add founder individuals
+
+This is the first action function, and it shows why the `tidybreed_table` pattern
+exists: you pipe in the haplotype pool you want to sample *from*.
+
+Any extra named argument — like `gen` below — becomes a new column on `ind_meta`,
+written in the same transaction as the animals themselves.
+
+```{r founders}
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  filter(line_name == "A") |>
+  add_founders(
+    n_males   = 250,
+    n_females = 250,
+    line_name = "A",
+    gen       = 0L      # custom column
+  )
+
+pop |> get_table("ind_meta") |> collect() |> head()
+```
+
+> **Watch the type suffix.** `gen = 0L` creates an `INTEGER` column; `gen = 0`
+> would create a `DOUBLE`. The same applies to `NA_integer_`, `NA_character_`,
+> and friends.
+
+Haplotypes are stored in long format — one row per individual × parent × locus:
+
+```{r haplo}
+pop |> get_table("ind_haplotype")
+```
+
+## Add your own columns
+
+`mutate_table()` adds or updates columns on *any* table. This is the mechanism for
+keeping simulation state in the database instead of in parallel R objects.
+
+```{r mutate}
+# Broadcast a value to every row
+pop <- pop |> get_table("ind_meta") |> mutate_table(farm = "Iowa")
+
+# Update only some rows
+pop <- pop |>
+  get_table("ind_meta") |>
+  filter(sex == "M") |>
+  mutate_table(farm = "AI_Stud")
+
+pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
+```
+
+The warning above is deliberate: `mutate_table()` tells you whenever it overwrites
+values that were already there, so you notice an accidental clobber instead of
+discovering it three generations later.
+
+Calling `mutate_table()` on an *empty* table still creates the column, which lets
+you declare a typed schema before any data arrives:
+
+```r
+pop |> get_table("ind_ebv") |> mutate_table(model_version = NA_character_)
+```
+
+## Define a trait
+
+The genetic layer. `target_add_var` is the additive genetic variance the QTL
+effects will be scaled to hit.
+
+```{r trait}
+pop <- pop |>
+  define_trait("ADG", target_add_var = 0.25, units = "kg/day")
+
+pop |> get_table("trait_meta") |> collect()
+```
+
+Note what is *not* here: no mean, no residual variance, no trait type. Those are
+observation-layer properties and come later.
+
+## Assign QTL effects
+
+Which loci are QTL is decided by the filter you pipe in. Here chromosomes 4 and 5
+carry the QTL, leaving 1–3 free for a SNP chip.
+
+```{r qtl}
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(chr %in% c(4L, 5L)) |>
+  define_additive_effects("ADG")
+
+pop |> get_table("genome_effects") |> collect() |> head()
+```
+
+QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
+`genome_effects`. There is no `is_QTL` flag to keep in sync. `base_allele_freq` is
+stored alongside each effect because it is what centres breeding values.
+
+## Define the phenotype
+
+The observation layer. With `target_add_var = 0.25` and `residual_var = 0.75`,
+this trait has a heritability of 0.25.
+
+```{r pheno_def}
+pop <- pop |>
+  define_phenotype(
+    "ADG",
+    type         = "continuous",
+    mean         = 1.0,
+    residual_var = 0.75
+  )
+
+pop |> get_table("phenotype_meta") |> collect() |> select(1:6)
+```
+
+`type` also accepts `"count"`, `"categorical"` (with `prevalence` or `thresholds`),
+and `"derived_formula"`.
+
+## Add a fixed effect
+
+Non-genetic terms attach to the *phenotype*, not the trait. Here males grow
+0.30 kg/day faster than females, with females as the reference level.
+
+```{r fixed}
+pop <- pop |>
+  define_effect_fixed_class(
+    "ADG",
+    effect_name   = "sex",
+    source_column = "sex",
+    levels        = c(M = 0.30, F = 0)
+  )
+```
+
+`define_effect_fixed_cov()` adds a regression on a covariate, and
+`define_effect_random()` adds a named random effect such as pen or litter.
+
+## Compute breeding values and phenotypes
+
+`add_tbv()` computes true breeding values — the simulation's ground truth, which
+you would never know in a real population.
+
+```{r tbv}
+pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+
+pop |> get_table("ind_tbv") |> collect() |> head()
+```
+
+`add_phenotype()` builds the observed record: intercept, plus fixed and random
+effects, plus the breeding value, plus a sampled residual. It calls `add_tbv()`
+internally, so you can go straight to it.
+
+```{r pheno}
+pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+pop |> get_table("ind_phenotype") |> collect() |> head()
+```
+
+The sex effect we defined should show up as a gap of roughly 0.30 between the
+group means:
+
+```{r pheno_summary}
+pop |>
+  get_table("ind_phenotype") |>
+  collect() |>
+  left_join(
+    pop |> get_table("ind_meta") |> collect() |> select(id_ind, sex),
+    by = "id_ind"
+  ) |>
+  group_by(sex) |>
+  summarise(n = n(), mean_ADG = mean(pheno_value))
+```
+
+## A second, genetically correlated trait
+
+Real programs select on several traits at once. Define the second trait, then
+supply a genetic covariance matrix.
+
+```{r trait2}
+pop <- pop |> define_trait("BF", target_add_var = 0.30, units = "mm")
+
+G <- matrix(
+  c(0.25, 0.08,
+    0.08, 0.30),
+  nrow = 2,
+  dimnames = list(c("ADG", "BF"), c("ADG", "BF"))
+)
+
+pop <- pop |> define_effect_cov_matrix("gen_add", G)
+
+pop |> get_table("trait_var_comp") |> collect()
+```
+
+Covariance matrices are stored in the database, not passed around in R. Now one
+call draws correlated effects for both traits from `MVN(0, G)`:
+
+```{r qtl2}
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(chr %in% c(4L, 5L)) |>
+  define_additive_effects(c("ADG", "BF"))
+
+pop <- pop |>
+  define_phenotype("BF", type = "continuous", mean = 12, residual_var = 0.70)
+```
+
+> This **replaces** the ADG effects assigned earlier with a fresh correlated draw.
+> Re-running `define_additive_effects()` for a trait always overwrites its rows in
+> `genome_effects`, so recompute anything derived from them.
+
+```{r tbv2}
+pop <- pop |> get_table("ind_meta") |> add_tbv()   # no trait_name = all traits
+
+pop |>
+  get_table("ind_tbv") |>
+  collect() |>
+  group_by(trait_name) |>
+  summarise(n = n(), mean_tbv = mean(tbv_value), var_tbv = var(tbv_value))
+```
+
+The realised variances are in the neighbourhood of the 0.25 and 0.30 we asked
+for, but they are not exact — and that is worth understanding rather than
+glossing over. `target_add_var` scales the QTL effects so the additive variance
+comes out right **in the founder haplotype pool**. The animals you actually
+created are a finite sample from that pool, so their realised variance wobbles
+around the target. Larger founder populations wobble less.
+
+## Make some offspring
+
+Matings are described by an ordinary tibble: one row per offspring, with
+`id_parent_1`, `id_parent_2`, `sex`, and `line_name` required. Any custom
+`ind_meta` column can ride along.
+
+```{r matings}
+sires <- pop |> get_table("ind_meta") |> filter(sex == "M") |> collect() |> pull(id_ind)
+dams  <- pop |> get_table("ind_meta") |> filter(sex == "F") |> collect() |> pull(id_ind)
+
+matings <- tibble::tibble(
+  id_parent_1 = rep(sires[1:5], each = 4),
+  id_parent_2 = dams[1:20],
+  sex         = rep(c("M", "F"), 10),
+  line_name   = "A",
+  gen         = 1L
+)
+
+head(matings)
+```
+
+`add_offspring()` simulates meiosis — crossovers are drawn from the genetic map in
+`genome_map`, respecting the per-chromosome rules in `chr_meta`.
+
+```{r offspring}
+pop <- add_offspring(pop, matings)
+
+pop |> get_table("ind_meta") |> filter(gen == 1L) |> collect() |> head()
+```
+
+Because you build the mating plan yourself, any design is possible — nested,
+factorial, reciprocal crosses, assortative mating — without the package needing a
+special argument for each.
+
+```{r pop_now}
+pop
+```
+
+## SNP chips and genotypes
+
+A chip is a named set of loci. Mark them with a filter:
+
+```{r chip}
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(chr %in% c(1L, 2L, 3L)) |>
+  define_chip("50K")
+
+pop |> get_table("genome_meta") |> count(is_50K) |> collect()
+```
+
+`add_genotypes()` records *which animals were genotyped* — here, only the
+offspring:
+
+```{r genotype}
+pop <- pop |>
+  get_table("ind_meta") |>
+  filter(gen == 1L) |>
+  add_genotypes("50K")
+
+pop |> get_table("ind_meta") |> count(has_50K) |> collect()
+```
+
+`extract_genotypes()` returns the familiar wide 0/1/2 dosage matrix, ready for
+GBLUP or export:
+
+```{r extract}
+geno <- pop |> get_table("ind_meta") |> extract_genotypes("50K")
+
+dim(geno)
+geno[1:5, 1:6]
+```
+
+Haplotypes are the source of truth and dosages are derived on demand, so nothing
+is stored twice. If you need dosages repeatedly, `add_dosage()` caches them in
+`ind_genotype`.
+
+## Selection index
+
+Register the weights:
+
+```{r index_def}
+pop <- pop |>
+  define_index("terminal",
+               trait_names = c("ADG", "BF"),
+               index_wts   = c(1.2, -0.8))
+
+pop |> get_table("index_meta") |> collect()
+```
+
+The rows with a missing `index_name` are the global economic-weight entries that
+`define_trait()` writes for every trait; the `terminal` rows are our index.
+
+Because we know the true breeding values, we can compute the **true** index —
+useful for measuring how well selection actually worked:
+
+```{r true_index}
+pop <- pop |> get_table("ind_meta") |> add_tbv(index_names = "terminal")
+
+pop |> get_table("ind_true_index") |> collect() |> head()
+```
+
+`add_index()` does the same arithmetic on any table of values. In a real program
+you would run it on `ind_ebv` after a BLUP evaluation; here we use the TBVs.
+**Filter first** so there is exactly one value per individual per trait:
+
+```{r add_index}
+pop <- pop |>
+  get_table("ind_tbv") |>
+  filter(trait_name %in% c("ADG", "BF")) |>
+  add_index("terminal")
+
+pop |>
+  get_table("ind_index") |>
+  collect() |>
+  arrange(desc(index_value)) |>
+  head(5)
+```
+
+Those top animals are your selection candidates. Pull their IDs, build a new
+mating plan, call `add_offspring()`, and you have closed the loop on a breeding
+cycle.
+
+## Close the population
+
+```{r close}
+close_pop(pop)
+```
+
+For an on-disk run, `close_pop()` flushes everything to the `.duckdb` file and you
+can pick the simulation back up later:
+
+```r
+pop <- restore_pop("tidybreed_output/sim.duckdb")
+```
+
+Nothing needs to be re-specified — the genome, traits, variance components, and
+every animal are already in the file. This is the payoff of keeping configuration
+in the database rather than in R.
+
+## Where to go next
+
+This vignette covered the main path. The package has more, grouped by prefix:
+
+| Prefix | Meaning |
+|---|---|
+| `open_` / `restore_` | Create or reopen a population |
+| `define_` | Write model configuration — how the simulation should behave |
+| `add_` | Write simulation output — data the model produced |
+| `mutate_` | Add or update columns on an existing table |
+| `get_` / `extract_` | Read data out, lazily or in analysis format |
+| `remove_` / `archive_` | Delete rows, or stamp a finished replicate |
+
+Functions not shown above, with a pointer to their help page:
+
+| Function | What it does |
+|---|---|
+| `?add_ebv` | Run BLUPF90 (or parent average) and store estimated breeding values |
+| `?define_chr` | Sex chromosomes, organelles, and achiasmatic meiosis |
+| `?define_phenotype` | Composite traits: maternal effects and social genetic effects, via `components` |
+| `?define_residual_cov` | Correlated or heterogeneous residual (co)variances |
+| `?define_effect_random` | Named random effects such as pen, litter, or herd-year-season |
+| `?define_effect_fixed_cov` | Fixed regression on a covariate |
+| `?define_trait_simple` | Shortcut wrapper: `define_trait()` + `define_additive_effects()` |
+| `?archive_replicate` | Collect many replicates into one archive database |
+| `?remove_rows` | Delete rows safely across related tables |
+| `?mutate_group_seq` | Litter and group utilities (`mutate_group_*`) |
+| `?define_table` | Create your own tables inside the population |
+
+The project README covers installation, global options, the output directory
+layout, and scenario YAML files in more detail.

@@ -1,3 +1,48 @@
+# tidybreed 0.58.0 (2026-07-21)
+
+## Documentation overhaul
+
+The introduction vignette is now a real, working tour of the package instead of a
+stub that pointed readers at an HTML file. `vignettes/tidybreed-introduction.Rmd`
+walks the full pipeline — open a population, define a genome and founder
+haplotypes, add founders, define traits and phenotypes, assign QTL effects,
+compute TBVs and phenotypes, add a genetically correlated second trait, produce
+offspring, define a SNP chip, and build a selection index.
+
+Every chunk executes at build time against an in-memory DuckDB database
+(`db_name = ":memory:"`) with a fixed seed, so the vignette writes nothing to
+disk, renders identical numbers on every build, and — because it runs during
+`R CMD check` — fails loudly if the API changes underneath it.
+
+## pkgdown site and continuous integration
+
+- New `_pkgdown.yml` publishes a documentation site to
+  <https://austin-putz.github.io/tidybreed/>, with all 56 user-facing topics
+  organised into 12 sections that mirror the package's own workflow order and the
+  genetic-layer / observation-layer split.
+- New GitHub Actions workflows: `pkgdown.yaml` (builds and deploys the site) and
+  `R-CMD-check.yaml` (Ubuntu and macOS).
+
+## Bug fixes
+
+- `?schema` showed the wrong documentation. A file-level roxygen block in
+  `R/schema.R` used `@name schema` with `@keywords internal`, which collided with
+  the exported `schema()` function and overwrote its topic — leaving `man/schema.Rd`
+  with no `\usage`, `\arguments`, `\value`, or examples, and marked internal.
+  `schema()` now documents itself.
+- The internal `%||%` operator was marked `@keywords internal` rather than `@noRd`,
+  generating a manual page whose `\name` contained an illegal `|` character. It is
+  no longer documented.
+
+## Housekeeping
+
+- Orphaned Quarto assets moved from `docs/` to `tools/quarto/` so pkgdown can own
+  `docs/`. The superseded `overview.qmd` and `tidybreed-quick-start.qmd` moved to
+  `tools/quarto/legacy/`; both were written against the v0.9-era API and would
+  otherwise have been published to the new site as if current.
+- `.Rbuildignore` additions clear the "non-standard files at top level" check
+  warning.
+
 # tidybreed 0.57.0 (2026-07-15)
 
 ## Redesigned `print()` summary for a population

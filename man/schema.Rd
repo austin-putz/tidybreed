@@ -2,7 +2,7 @@
 % Please edit documentation in R/schema.R
 \name{schema}
 \alias{schema}
-\title{Schema metadata functions for tidybreed populations}
+\title{View table-level descriptions for a tidybreed population}
 \usage{
 schema(pop)
 }
@@ -16,10 +16,6 @@ A tibble of class \code{tidybreed_schema} with columns
 Printed via \code{\link[=print.tidybreed_schema]{print.tidybreed_schema()}}.
 }
 \description{
-These functions allow users to view and manage table and column descriptions
-stored directly in the DuckDB database. Descriptions persist across
-\code{restore_pop()} restores and travel with the \code{.duckdb} file.
-
 Returns a tibble of all user-visible tables with row counts, column counts,
 and descriptions from \verb{_schema_meta}. Print the result for an aligned
 overview; use \code{describe_table(pop, "name")} to drill into a specific table.
@@ -34,4 +30,3 @@ schema(pop)
 \seealso{
 \code{\link[=describe_table]{describe_table()}}, \code{\link[=define_schema_description]{define_schema_description()}}
 }
-\keyword{internal}

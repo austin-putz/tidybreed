@@ -1,13 +1,11 @@
-#' Schema metadata functions for tidybreed populations
-#'
-#' @description
-#' These functions allow users to view and manage table and column descriptions
-#' stored directly in the DuckDB database. Descriptions persist across
-#' `restore_pop()` restores and travel with the `.duckdb` file.
-#'
-#' @keywords internal
-#' @name schema
-NULL
+# Schema metadata functions for tidybreed populations
+#
+# These functions allow users to view and manage table and column descriptions
+# stored directly in the DuckDB database. Descriptions persist across
+# `restore_pop()` restores and travel with the `.duckdb` file.
+#
+# NOTE: this is a plain comment, not roxygen. An `@name schema` block here would
+# collide with the exported schema() topic below and overwrite its documentation.
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────

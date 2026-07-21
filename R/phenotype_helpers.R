@@ -370,7 +370,7 @@ get_residual_cov <- function(pop, phenotype_names, subset_df = NULL) {
 
 
 #' Null-coalescing operator for internal use
-#' @keywords internal
+#' @noRd
 `%||%` <- function(x, y) if (is.null(x) || (length(x) == 1 && is.na(x))) y else x
 
 

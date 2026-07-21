@@ -13,3 +13,16 @@
 ^tidybreed_output$
 .*/tidybreed_output$
 ^tests/test_[^/]*\.R$
+^doc$
+^Meta$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^tools$
+^CLAUDE\.md$
+^memory$
+^run_tests\.R$
+^test_results\.txt$
+^\.markdownlint\.json$
+^\.quarto$
+^\.\.Rcheck$
