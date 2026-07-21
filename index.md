@@ -1,0 +1,1153 @@
+# `tidybreed` R Package
+
+> `tidybreed` is very much in the “alpha testing” phase, I do not
+> recommend building on it just yet. I am however looking for valuable
+> feedback to finish the API prior to version 1.0.0
+
+A pipe-friendly (`%>%` or `|>`) R package for breeding program
+simulation backed by [DuckDB](https://duckdb.org). Design large-scale
+genomic simulations without running out of memory — all data lives on
+disk in a DuckDB database and is queried lazily via `dplyr`.
+
+It is easier to show than explain. The API often resembles the following
+steps:
+
+``` r
+
+pop |>                       # stores 'db_conn' connection to your .duckdb file
+  get_table("ind_meta") |>   # stores 1 record per individual to track pedigree, sex, line, any user defined fields
+  filter(
+    sex == "M",                  # subset to males only
+    line_name == "Angus",        # subset to Angus genetic line only
+    birth_date == Sys.Date(),    # user added column to track birth dates
+    status == "calf"           # user defined column to track animal 'status'
+  ) |>
+  add_phenotype(
+    c("birth_weigth", "stillborn"),       # list of phenotypes to 'collect' on filtered individuals
+    phenotype_date = Sys.Date()           # user added column, added to ind_phenotype table
+  )
+```
+
+**Steps:** \* 1️⃣ User identifies a table to pass via
+[`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
+\* 2️⃣ User filters/subsets the table to identify rows/records/animals -
+[`filter()`](https://rdrr.io/r/stats/filter.html) is from `dplyr`, users
+often already know this package well \* 3️⃣ User passes that table to
+either a `define_*()` function or `add_*()` function - `define_*()` ➡️
+functions often add records as meta data - `add_*()` ➡️ functions often
+add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc) \* 4️⃣
+New records are stored on disk to your `.duckdb` file (database) -
+database allows for efficient storage and IO - users allowed to insert
+rows themselves without me having to provide ‘helper functions’
+
+> `tidybreed` uses a lightweight S3 object as a handle to a
+> DuckDB-backed breeding program. Rather than storing simulation state
+> in R objects, the breeding program is represented as a persistent
+> relational database. Functions operate by querying subsets of the
+> database, performing calculations in R or C++, and writing results
+> back to the database. The S3 object primarily manages access to the
+> underlying database rather than storing biological state.
+
+## Motivation
+
+I’ve both struggled to learn other simulation software and also found
+them extremely limiting for several reasons. `tidybreed` started as a
+fresh conceptual idea on simulation software to allow users to easy
+store custom data (tables + columns) and easily manipulate any data they
+want (metadata or otherwise).
+
+I also try to make it as intuitive and easy to learn as possible. Users
+can utilize many functions they already know from `tidyverse` such as
+[`filter()`](https://rdrr.io/r/stats/filter.html) or `slice_*()`
+functions (for selection for instance).
+
+## License
+
+**MIT License**
+
+`tidybreed` is released under the [MIT
+License](https://austin-putz.github.io/tidybreed/LICENSE). You are free
+to use, modify, and distribute it, including in commercial and
+proprietary projects, provided the copyright notice is retained.
+
+> **NO WARRANTY** — This software is provided **as-is**, without
+> warranty of any kind, express or implied. The authors accept **no
+> liability** for any damages or losses arising from its use.
+
+## Design
+
+| Main |  | Reason or Description |
+|----|----|----|
+| [R](https://www.r-project.org) | → | Standard for most scientists; flexible design of custom breeding programs |
+| [DuckDB](https://duckdb.org/) | → | Columnar, embedded, no server needed; handles datasets larger than RAM |
+| Pipe everything | → | Filter individuals, add phenotypes/genotypes/EBVs/index with `tidyverse` verbs |
+| Customizable | → | Add your own table, any column within any table with [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md); query with standard `dplyr` and SQL will function in the background. `DBI` allows users to interact with the database directly in any way they want. |
+
+- **Databases** ✅ are efficient enough for our large simulations, both
+  in speed and memory savings. Users can pull from different tables
+  using the
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
+  function. We no longer need to fill up our RAM with data from
+  generation 1 in a long term simulation pipeline.
+- **SQL** ✅ can add any custom table or field/column of any type,
+  allowing users to define a DATE that would allow almost near perfect
+  “digital twins”. My understanding is DuckDB was written very
+  efficiently with C++ mostly. Users can `DBI` their way to modifying
+  any table at any time and often do not have to worry about “breaking”
+  `tidybreed` if I build the functions correctly and truly modular.
+- **R** ✅ is great for many things and has become a standard for us in
+  research, however memory is a massive issue compared to
+  python/julia/etc and it’s simply not efficient enough for massive
+  datasets of this size. This will be moderated by the use of SQL and
+  C++ with `Rcpp` and many operations will (hopefully) never be pulled
+  into R, but can be orchestrated through R.
+- **Pipes** ✅ allow users to insert `filter` steps that is critical for
+  most operations to “point” to certain individuals or groups to
+  calculate TBVs, EBVs, phenotypes, or to extract data such as
+  genotypes/QTL.
+
+**What I try to AVOID:**
+
+- ❌ **Storing metadata**
+  - such a n_loci or such, a truly composable/modular system using SQL
+    can easily calculate this from a table as needed with very little
+    “cost” to timing of the simulation
+  - metadata is stored, just in tables such as the variance components
+    but other fixed metadata is silly most of the time when it can be
+    taken from a table at any moment in time cheaply
+- ❌ **helper/wrapper functions**
+  - any function that exists, but the user could easily do it themselves
+  - e.g. a function to design a specific mating scheme
+  - users love them, developers love them, but they are *almost* always
+    a *bad idea* leading to spaghetti code long term.
+  - **Why?** 👉 There is a nearly infinite number of ways users could
+    mate a list of dams to a list of sires, I cannot program every
+    possible option for users, therefore I designed a simple tibble as
+    input and users just list exactly what offspring they want per row
+    (sire, dam, sex, etc). No helper function needed to create the
+    mating design, you can do this yourself easily without a function
+    using [`sample()`](https://rdrr.io/r/base/sample.html),
+    [`rep()`](https://rdrr.io/r/base/rep.html), etc. and building a
+    tibble yourself. This also avoids me having to break your code later
+    changing functions and arguments.
+- ❌ **generation** 💀 🆘 🚫
+  - generation was a leftover archaic artifact from QMSim and the
+    original AlphaSim I think
+  - generation has no useful application besides making some simulations
+    easier to follow or design in a generic/fixed way
+  - generation only exists in simple simulations and selection
+    experiments, not real breeding programs (for the most part)
+  - users can add a field/column called “gen” or “generation” within
+    `tidybreed` in every table they want, **however I do not enforce you
+    to use such a silly idea** unless doing some simple simulations and
+    need to create something quick/easy
+
+## Installation
+
+Install [pak](https://pak.r-lib.org/) then install `tidybreed` from
+[GitHub](https://github.com/austin-putz/tidybreed/):
+
+**WINDOWS People** ➡️ **YOU NEED RTools SETUP**, please read below
+
+``` r
+
+install.packages("pak", repos = "https://packagemanager.posit.co/cran/latest")
+library(pak)
+pak::pak("austin-putz/tidybreed")
+library(tidybreed)
+```
+
+### System requirements: a C++ compiler
+
+As of `v0.53.0`, `tidybreed` ships **compiled C++17 code** (the
+recombination kernel used by
+[`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)).
+Installing from GitHub is a **source install**, so each machine needs a
+working C++ toolchain. `tidybreed`’s header-only build dependencies
+(`Rcpp`, `dqrng`, `BH`, `sitmo`) are pulled in automatically by `pak` —
+**no system libraries are required** — but the compiler itself must be
+present. If it is missing, the install stops with a platform-specific
+message telling you exactly what to install.
+
+| Platform | What to install | Command / link |
+|----|----|----|
+| **Windows 11 / 10** | **Rtools** matching your R version (Rtools45 for R 4.5.x, Rtools44 for R 4.4.x) | Download & run the installer from <https://cran.r-project.org/bin/windows/Rtools/>, then restart R. Rtools puts `g++`/`make` on `PATH` for you. |
+| **Ubuntu / Debian** | `r-base-dev` + `build-essential` | `sudo apt-get update && sudo apt-get install -y r-base-dev build-essential` |
+| **Fedora / RHEL / Rocky** | `gcc-c++` + `make` | `sudo dnf install -y gcc-c++ make` |
+| **macOS** | **Xcode Command Line Tools** (provides `clang++`) | `xcode-select --install` |
+
+> **macOS note:** the Command Line Tools alone are enough — you do
+> **not** need the full Xcode app. If `clang++` was already installed
+> with a previous R/dev setup, no action is needed. (Apple Silicon and
+> Intel are both supported; the kernel is portable C++17 with no
+> architecture-specific code.)
+
+Once the toolchain is in place, re-run the `pak::pak(...)` command
+above. To force a fresh recompile after adding a compiler:
+
+``` r
+
+pak::pak("austin-putz/tidybreed", upgrade = TRUE)
+```
+
+To force the pure-R reference kernel (e.g. to cross-check results, or on
+a machine with no compiler where you install a **binary** build), set an
+environment variable before loading the package:
+
+``` r
+
+Sys.setenv(TIDYBREED_KERNEL = "r")   # "auto" (default) uses the compiled C++ kernel
+```
+
+> **WARNING:** Pre-`v1.0.0` packages are considered beta and subject to
+> breaking changes. **Pin your version** to avoid surprises.
+
+``` r
+
+packageVersion("tidybreed")   # check installed version, e.g. '0.46.1'
+pak::pak("austin-putz/tidybreed@v0.46.1")   # pin to a specific release
+```
+
+Browse all releases on the [GitHub Releases
+page](https://github.com/austin-putz/tidybreed/releases).
+
+------------------------------------------------------------------------
+
+## Global Options
+
+Set package-wide options at the top of your script (or in a startup /
+config script) so simulations can be parameterized without changing
+function calls throughout the codebase. Every option has a built-in
+default and is entirely optional — set only the ones you need. Options
+prefixed `tidybreed.` are read by
+[`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+(folder layout) and
+[`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)
+(multi-replicate archiving).
+
+``` r
+
+options(
+  tidybreed.pop_name        = "my_project",
+  tidybreed.base_dir        = "~/path/to/project/",
+  tidybreed.output          = "tidybreed_output",
+  tidybreed.scenario        = "baseline_scenario",
+  tidybreed.tools           = c("blupf90", "plink", "JWAS"),
+  tidybreed.db_name         = "sim.duckdb",
+  tidybreed.replicate       = 1L,
+  tidybreed.archive_path    = "~/path/to/project/archive/",
+  tidybreed.db_name_archive = "baseline_scenario_all_reps.duckdb",
+  tidybreed.quiet           = FALSE
+)
+```
+
+- **`tidybreed.pop_name`** — Label stored on the pop object
+  (`pop$pop_name`); shown in `print(pop)`. Default: `"sim"`. Purely
+  descriptive — does not affect file paths.
+- **`tidybreed.base_dir`** — Root folder (layer 1); default:
+  [`getwd()`](https://rdrr.io/r/base/getwd.html)
+- **`tidybreed.output`** — Output subfolder name (layer 2); default:
+  `"tidybreed_output"`
+- **`tidybreed.scenario`** — Scenario subfolder (layer 3). Default
+  `NULL` auto-generates a `YYYYMMDD_HHMMSS` folder so runs never
+  overwrite each other. Set explicitly (e.g. `"baseline"`) to reuse the
+  same folder, such as in an HPC array job.
+- **`tidybreed.tools`** — Character vector of tool subfolders created at
+  layer 4 (e.g. `c("blupf90", "plink")`). Default `NULL` skips tool
+  folder creation.
+- **`tidybreed.db_name`** — Working DuckDB file name; default:
+  `"sim.duckdb"`. Use `":memory:"` for an in-memory database (skips all
+  folder creation — useful for tests).
+- **`tidybreed.replicate`** — Integer replicate number stamped on
+  archive rows; default: `1L`. Auto-increments after each successful
+  [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)
+  call.
+- **`tidybreed.archive_path`** — Directory for the archive DuckDB file.
+  Default `NULL` places the archive next to the working database.
+- **`tidybreed.db_name_archive`** — Archive DuckDB file name
+  (e.g. `"all_reps.duckdb"`). Default `NULL` skips archiving entirely.
+- **`tidybreed.quiet`** — Suppress the startup banner on
+  [`library(tidybreed)`](https://github.com/austin-putz/tidybreed);
+  default: `FALSE`.
+
+> **Archive path resolution**
+> ([`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md))
+> — first non-`NULL` wins: 1. Explicit `archive_path` argument passed to
+> [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md).
+> 2. `file.path(tidybreed.archive_path, tidybreed.db_name_archive)` —
+> when both options are set. 3.
+> `file.path(dirname(pop$db_path), tidybreed.db_name_archive)` — archive
+> lands next to the working database. 4. `tidybreed.db_name_archive` is
+> `NULL` — no archive written; only reset phases run.
+
+------------------------------------------------------------------------
+
+## Directory Layout
+
+The recommended project structure separates scenario configs,
+per-scenario simulation databases, and the merged archive:
+
+    ~/projects/swine/                        ← tidybreed.base_dir
+    │
+    ├── scenarios/                           ← one YAML per scenario
+    │   ├── baseline.yaml
+    │   └── scenario_b.yaml                  ← next scenario to run
+    │
+    ├── results/                                ← merged multi-replicate archive
+    │   └── baseline_scenario_all_reps.duckdb   ← written by archive_replicate()
+    │
+    └── tidybreed_output/                    ← tidybreed.output
+        ├── baseline/                        ← tidybreed.scenario = "baseline"
+        │   ├── sim.duckdb                   ← tidybreed.db_name
+        │   ├── blupf90/                     ← subfolder per tool in tidybreed.tools
+        |   |-- JWAS/
+        │   └── plink/
+        │
+        └── scenario_b/                      ← tidybreed.scenario = "scenario_b"
+            ├── sim.duckdb
+            ├── blupf90/
+        |   |-- JWAS/
+            └── plink/
+
+### Scenario YAML format
+
+Save scenario parameters in `scenarios/baseline.yaml` and read them at
+the top of your script with
+[`yaml::read_yaml()`](https://yaml.r-lib.org/reference/read_yaml.html):
+
+``` yaml
+# scenarios/baseline.yaml
+pop_name:  swine
+base_dir:  ~/projects/swine/
+output:    tidybreed_output
+scenario:  baseline
+db_name:   sim.duckdb
+tools:
+  - blupf90
+  - plink
+```
+
+``` r
+
+cfg <- yaml::read_yaml("scenarios/baseline.yaml")
+
+options(
+  tidybreed.pop_name  = cfg$pop_name,
+  tidybreed.base_dir  = cfg$base_dir,
+  tidybreed.output    = cfg$output,
+  tidybreed.scenario  = cfg$scenario,
+  tidybreed.db_name   = cfg$db_name,
+  tidybreed.tools     = cfg$tools,
+  tidybreed.replicate = as.integer(Sys.getenv("REP", 1))  # set per run
+)
+```
+
+Swap scenarios by pointing to a different YAML file; the rest of the
+script stays identical.
+
+**NOTE:** I HIGHLY encourage the use of `purrr:chuck()` to pull from the
+stored yaml structure (`cfg` above), because it will throw an error
+unlike this structure when it returns nothing and will silently break
+your pipeline without a clear warning.
+
+------------------------------------------------------------------------
+
+## Core Concept
+
+Every function accepts and returns a `tidybreed_pop` object — a thin
+wrapper around a DuckDB connection. Chain operations with `|>` (or
+`%>%`):
+
+``` r
+
+pop <- pop |>
+  get_table("ind_meta") |>       # identify which DB table to work with
+  filter(                        # filter to the individuals you want
+    sex == "M",                  # filter to males
+    gen == 1L                    # filter to generation 1 (this was "user defined") 
+  ) |>  
+  add_phenotype("ADG")           # add records to ind_phenotype
+```
+
+All tables are queryable at any time. Use `collect()` to pull results
+into R as a `tibble`.
+
+------------------------------------------------------------------------
+
+## Simulation Workflow
+
+### 1. Open a population
+
+[`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+creates or re-opens a DuckDB-backed population object. Use
+`clean = TRUE` to start fresh.
+
+``` r
+
+pop <- open_pop(
+  clean = TRUE   # wipe and recreate the database
+)
+
+print(pop)
+```
+
+### 2. Define the genome
+
+``` r
+
+pop <- pop |>
+  define_genome(
+    n_loci     = 10000,  # total number of loci (SNP + QTL)
+    n_chr      = 18,     # number of chromosomes
+    chr_len_Mb = 50      # length of each chromosome in megabases
+  )
+
+pop |> get_table("genome_meta")   # 1 row per locus
+```
+
+### 3. Define founder haplotypes
+
+Generate haplotype pools for each genetic line. Multiple methods are
+available to control allele frequency distributions.
+
+``` r
+
+# Uniform allele frequencies between min and max
+pop <- pop |>
+  define_founder_haplotypes(
+    line_name       = "A",
+    n_haplotypes    = 1000,
+    method          = "uniform",
+    min_allele_freq = 0.01,
+    max_allele_freq = 0.99
+  )
+
+# Fixed frequency (all loci p = 0.5)
+pop <- pop |>
+  define_founder_haplotypes(line_name = "B", n_haplotypes = 1000,
+    method = "fixed", allele_freq = 0.5)
+
+# Beta distribution
+pop <- pop |>
+  define_founder_haplotypes(line_name = "C", n_haplotypes = 1000,
+    method = "beta", beta_shape1 = 0.5, beta_shape2 = 0.5)
+
+# Balding-Nichols (FST-based)
+pop <- pop |>
+  define_founder_haplotypes(line_name = "D", n_haplotypes = 1000,
+    method = "balding_nichols", fst = 0.1, mean_freq = 0.5)
+
+# Mosaic (introduces simple LD)
+pop <- pop |>
+  define_founder_haplotypes(line_name = "E", n_haplotypes = 1000,
+    method = "mosaic", n_templates = 32, switch_rate = 1.0)
+
+# Gaussian copula
+pop <- pop |>
+  define_founder_haplotypes(line_name = "F", n_haplotypes = 1000,
+    method = "gaussian_copula", decay_rate = 0.25)
+```
+
+### 4. Add founder individuals
+
+Sample haplotypes for founders. Pass any custom `ind_meta` column as
+`...` arguments — they are written atomically with the new rows.
+
+``` r
+
+pop <- pop |>
+  get_table("founder_haplotypes") |>  # pass this table only
+    filter(line_name == "A") |>       # neat way to filter and pass only haplotypes related to founder line "A"
+  add_founders(
+    n_males    = 400,
+    n_females  = 1600,
+    line_name  = "A",                   # required
+    birth_date = sampled_birth_dates,   # user sampled birth dates earlier
+    alive      = TRUE,                  # user defined - show as alive to filter by later
+    active     = FALSE                  # user defined - or set 'status' with character/VARCHAR
+  )
+```
+
+### 5. Add custom columns with `mutate_table()`
+
+The real power of `tidybreed` is freely adding columns to any table so
+your simulation state is stored in the database — no parallel R objects
+to maintain.
+
+``` r
+
+# Add user-defined fields to ind_meta (declare schema before data arrives)
+pop |>
+  get_table("ind_meta") |>     # stores 1 row / individual to store pedigree (sire/dam) and sex
+  mutate_table(
+    status        = NA_character_,   # VARCHAR: production status (update with `mutate_table()`)
+    birth_date    = as.Date(NA),     # DATE, initialize column with missing
+    puberty_date  = as.Date(NA),
+    mate_date     = as.Date(NA),
+    farrow_date   = as.Date(NA),
+    wean_date     = as.Date(NA),
+    cull_date     = as.Date(NA),
+    off_test_date = as.Date(NA),
+    alive         = TRUE,            # BOOLEAN with default value
+    active        = FALSE,
+    .set_default  = TRUE             # if TRUE -> write this value as the column default when creating new rows
+  )
+```
+
+Types are inferred from R values:
+
+| R value                                              | DuckDB type |
+|------------------------------------------------------|-------------|
+| `0L`, `NA_integer_`                                  | `INTEGER`   |
+| `0.0`, `NA_real_`                                    | `DOUBLE`    |
+| `TRUE`/`FALSE`                                       | `BOOLEAN`   |
+| `"text"`, `NA_character_`                            | `VARCHAR`   |
+| `as.Date(...)`                                       | `DATE`      |
+| [`Sys.time()`](https://rdrr.io/r/base/Sys.time.html) | `TIMESTAMP` |
+
+Users can then update the ‘status’ of an animal to closely mimic a real
+program
+
+``` r
+
+pop |> 
+  get_table("ind_meta") |>     # stores 1 row / individual to store pedigree (sire/dam) and sex
+    filter(
+      sex == "M",
+      off_test_date == current_date
+    ) |> 
+  mutate_table(
+    status = "after-test-boar"
+  ) 
+```
+
+Which now replaces the old ‘status’ of “on-test” perhaps. The next
+filter you set can filter out “after-test-boar” animals only to perform
+selection in any way you want.
+
+Add descriptions to columns for documentation:
+
+``` r
+
+pop |>
+  get_table("ind_meta") |>
+  define_schema_description("status",     "Production status (e.g. gestation, lactation)") |>
+  define_schema_description("birth_date", "Date of birth") |>
+  define_schema_description("alive",      "Is the animal alive?")
+```
+
+**If you get lost with tables** (and you will…) please use
+`schema(pop)`, `summary(pop)`, and `pop |> describe_table("table_name")`
+to get your feet back.
+
+``` r
+
+schema(pop)       # info and name of all tables
+```
+
+Pick out one table to focus on:
+
+``` r
+
+pop |> describe_table("ind_meta")    # view all column descriptions
+```
+
+### 6. Define a SNP chip
+
+Filter `genome_meta` to the loci you want, then call
+[`define_chip()`](https://austin-putz.github.io/tidybreed/reference/define_chip.md).
+Adds an `is_<chip_name>` boolean column to `genome_meta`.
+
+``` r
+
+# Random 9,000-locus chip
+pop |>
+  get_table("genome_meta") |>
+    slice_sample(n = 9000) |>         # simple dplyr function you already know
+  define_chip(chip_name = "9k")       # just name the chip, now `is_9k` field in `genome_meta`
+
+# QTL are defined as loci NOT on the chip
+pop |>
+  get_table("genome_meta") |>
+    filter(is_9k != TRUE) |>          # filter out SNP chip loci to become QTL
+  define_additive_effects(...)
+```
+
+This power architecture allows users to basically pass whatever they
+want and since you can define your own field to `genome_meta` and filter
+yourself, the possibilities are quite advanced and you know **exactly**
+what is going on.
+
+### 7. Define variance components
+
+Use a single entry point for all variance/covariance matrices.
+`effect_name = "gen_add"` routes to `trait_var_comp`; `"residual"` and
+named random effects (e.g. `"pen"`) route to `phenotype_var_comp`.
+
+``` r
+
+# Additive genetic (co)variance — 3 traits (ADG, WWD, WWM)
+vars.mat.add <- matrix(c(
+  0.0045, 0.00, 0.00,
+  0.00,   0.04, 0.00,
+  0.00,   0.00, 0.13),
+  nrow = 3, byrow = TRUE,
+  dimnames = list(c("ADG", "WWD", "WWM"),
+                  c("ADG", "WWD", "WWM")))
+
+# store matrix in a table called 'trait_var_comp'
+pop <- pop |>
+  define_effect_cov_matrix(effect_name = "gen_add", cov_matrix = vars.mat.add)
+
+# Residual (co)variance — 2 phenotypes (ADG, WW)
+vars.mat.res <- matrix(c(
+  0.0067, 0.00,
+  0.00,   0.45),
+  nrow = 2, byrow = TRUE,
+  dimnames = list(c("ADG", "WW"),
+                  c("ADG", "WW")))
+
+# store matrix in 'phenotype_var_comp' table
+pop <- pop |>
+  define_effect_cov_matrix(effect_name = "residual", cov_matrix = vars.mat.res)
+
+# Named random effect — pen effect on ADG only (1x1)
+vars.mat.pen <- matrix(0.0005, nrow = 1, byrow = TRUE,
+  dimnames = list("ADG", "ADG"))
+
+# add pen covariances to the 'phenotype_var_comp' table
+pop <- pop |>
+  define_effect_cov_matrix(effect_name = "pen", cov_matrix = vars.mat.pen)
+```
+
+### 8. Define traits and phenotypes (two-layer design)
+
+**Genetic layer** (`define_trait`) — one row per underlying genetic
+“trait”:
+
+``` r
+
+pop <- pop |>
+  define_trait(
+    trait_name      = "ADG",
+    description     = "Average Daily Gain",
+    units           = "kg/d",
+    target_add_mean = 0,      # TBV mean in base population
+    overwrite       = TRUE
+  )
+```
+
+**Observation layer** (`define_phenotype`) — what animals actually
+receive records for:
+
+``` r
+
+pop <- pop |>
+  define_phenotype(
+    phenotype_name = "ADG",
+    type           = "continuous",   # "continuous", "count", "categorical", "derived_formula"
+    mean           = 0.92,           # phenotypic population mean
+    expressed_sex  = "both",         # "both", "M", or "F"
+    min_value      = 0,
+    overwrite      = TRUE
+  )
+```
+
+**Why the split?** - composite traits exist that can be made up of
+multiple underlying “traits”, while the phenotype is physically
+observed. Some phenotypes are actually a combination of 3 “traits” such
+as the direct/maternal/nurse dam model from Egbert Knols research. Or
+social genetic effects where the phenotype is a combination of
+individual genetics but also the effects from different pen mates
+genetics.
+
+For composite phenotypes (e.g. weaning weight = direct + maternal):
+
+``` r
+
+pop <- pop |>
+  define_trait(
+    trait_name      = "WWD",
+    description     = "Weaning Weight - Direct",
+    units           = "kg",
+    target_add_mean = 0,      # TBV mean in base population
+    overwrite       = TRUE
+  ) |>
+  define_trait(
+    trait_name      = "WWM",
+    description     = "Weaning Weight - Maternal",
+    units           = "kg",
+    target_add_mean = 0,      # TBV mean in base population
+    overwrite       = TRUE
+  )
+
+pop <- pop |>
+  define_phenotype(
+    phenotype_name           = "WW",
+    type                     = "continuous",         # simple continuous phenotype, 
+    formula_tbv              = "WWD + dam(WWM)",     # DSL: self + dam TBV for 'MILK'
+    mean                     = 6.0,
+    expressed_sex            = "both",
+    missing_component_action = "skip",   # skip founders with no dam record
+    overwrite                = TRUE
+  )
+```
+
+Derived phenotypes computed from other phenotypes:
+
+``` r
+
+pop <- pop |>
+  define_phenotype(
+    phenotype_name = "FCR",
+    type           = "derived_formula",  # specify to make sure it builds this phenotype relative to other phenotypes observed
+    formula        = "ADFI / ADG",       # DSL allows for more than just division, but this is most common
+    expressed_sex  = "both",
+    overwrite      = TRUE
+  )
+```
+
+Add QTL effects for a trait (or multiple correlated traits at once):
+
+``` r
+
+# Single trait
+pop |>
+  get_table("genome_meta") |>
+    filter(is_9k != TRUE) |>           # QTL are non-SNP-chip loci
+  define_additive_effects(
+    trait_name      = "ADG",
+    distribution    = "normal",      # mostly set to normal for now until I can figure out other ways to sample multivariate
+    scale_to_target = TRUE,          # scale to target additive variance
+    base            = "current_pop"  # standardize to current animals
+  )
+
+# Multiple correlated traits in one call (draws from MVN with G matrix)
+pop |>
+  get_table("genome_meta") |>
+    filter(is_9k != TRUE) |>
+  define_additive_effects(
+    trait_name      = c("WWD", "WWM"),   # need to add together since they are genetically correlated
+    distribution    = "normal",
+    scale_to_target = TRUE,
+    base            = "current_pop"
+  )
+```
+
+Add fixed effects:
+
+``` r
+
+pop |>
+  define_effect_fixed_class(
+    phenotype_name = "ADG",
+    effect_name    = "sex",
+    source_column  = "sex",
+    levels         = c(M = 0.08, F = 0),     # male advantage in ADG
+    source_table   = "ind_meta",
+    overwrite      = TRUE
+  )
+```
+
+### 9. Calculate True Breeding Values
+
+``` r
+
+# All animals in ind_meta
+pop <- pop |>
+    get_table("ind_meta") |>      # pass table with no filter, so "select all" 
+  add_tbv(trait_name = "ADG")     # calculate TBV for all individuals (notice we use "traitn_name" here)
+```
+
+Then the real great part of the package is to simply extract any table,
+and utilize the functions you already know to verify it worked (or
+didn’t…).
+
+``` r
+
+# Check means by trait
+pop |>
+  get_table("ind_tbv") |>
+  collect() |>                              # pull into R memory
+  group_by(trait_name) |>
+  summarise(MeanTBV = mean(tbv_value))
+```
+
+Define a selection index first, then compute true index values from TBVs
+(ground truth for monitoring genetic trend):
+
+``` r
+
+# Define the index weights (must exist before add_tbv uses index_names)
+pop |>
+  define_index(
+    index_name   = "maternal",
+    trait_names  = c("ADG", "WWD", "WWM"),
+    index_wts    = c(ADG = 0.5, WWD = 0.3, WWM = 0.2),
+    economic_wts = c(ADG = 0.5, WWD = 0.3, WWM = 0.2)
+  )
+
+# Compute true index values from TBVs and write to ind_true_index
+pop |>
+  get_table("ind_meta") |>
+  add_tbv(index_names = "maternal")       # will save the true breeding value index in 'ind_true_index' table)
+
+pop |> 
+  get_table("ind_true_index") |> 
+  collect()
+```
+
+### 10. Add Genotypes
+
+``` r
+
+# Add 9k genotypes to ONLY CURRENT MALES
+pop |>
+  get_table("ind_meta") |>
+    filter(
+      sex == "M"
+    ) |>
+  add_genotypes(chip_name = "9k")
+
+# Extract genotypes for downstream analysis
+pop |>
+  get_table("ind_meta") |>
+    filter(
+      sex == "M"          # extract only for males
+    ) |> 
+  extract_genotypes(chip_name = "9k")
+```
+
+Of course, you can all use `pull(id_ind)` to extract a character vector
+and use that to filter rows as well to get a more precise set of animals
+for genotyping, phenotyping, or whatever you want.
+
+### 11. Add Phenotypes
+
+⛔ Remember ‼️ `tidybreed` is explicit in separation of “trait” vs
+“phenotype”.
+
+- `trait` ➡️ is linked to genome via QTL effects
+- `phenotype` ➡️ is linked to the observed phenotype
+
+This allows us to separate something like **weaning weight** into 2️⃣
+components **weaning weight direct** and **weaning weight maternal**.
+
+``` r
+
+# Phenotype male animals that reached off-test today
+pop |>
+  get_table("ind_meta") |>
+    filter(
+      sex == "M",
+      off_test_date == cur_date         # power to loop over dates allows real breeding program dynamics
+    ) |>
+  add_phenotype(
+    phenotype_name = c("ADG", "BF", "IMF"),   # add ADG, Backfat, and IMF for these filtered animals
+    pheno_date     = cur_date          # this is a user defined column in the 'ind_phenotype' table, pass it here
+  )
+
+# Phenotype all females for age at puberty (sex-limited trait)
+pop |>
+  get_table("ind_meta") |>
+    filter(sex == "F") |>              # only females get age at puberty
+  add_phenotype(phenotype_name = "AP")
+```
+
+Check counts:
+
+``` r
+
+pop |> 
+  get_table("ind_phenotype") |> 
+  filter(phenotype_name == "ADG") |> 
+  collect() |> 
+  count()
+```
+
+### 12. Run Evaluations (EBVs)
+
+‼️ **NOTICE**
+
+> This is probably the sketchiest part of any simulation software as
+> it’s nearly impossible to accurately solve all models you can
+> simulate. Simulation is far easier than solving equations. If users
+> define a very complex structure to simulation, we cannot guarantee
+> there is a solver out there for it. BLUPF90 is nice and easy, however
+> extremely limited and we get what we get from it. Safest always to run
+> user defined parameter files and programs. PLEASE BE CAREFUL!
+
+Run [BLUPF90](https://nce.ads.uga.edu/wiki/doku.php) to estimate
+breeding values:
+
+``` r
+
+pop <- pop |>
+  get_table("ind_meta") |>
+  add_ebv(
+    "ADG",
+    software  = "blupf90",
+    model     = "blup",
+    phenotype = pop |>                      # this was critical to implement as some records will need to be sampled "early"
+      get_table("ind_phenotype") |>
+      filter(pheno_date < cur_date | is.na(pheno_date)),  # exclude future records for evaluations
+    eval_date = cur_date
+  )
+
+pop |> get_table("ind_ebv") |> filter(trait_name == "ADG")
+```
+
+### 13. Define and Calculate a Selection Index
+
+``` r
+
+# Define a multi-trait selection index
+pop |>
+  define_index(
+    index_name   = "maternal",
+    trait_names  = c("ADG", "WWD", "WWM"),
+    index_wts    = c(1,2,3),    # simple vector of index weights
+    economic_wts = c(4,5,6)     # we can use later to establish profitability
+  )
+
+# Calculate index values from latest EBVs (run after add_ebv)
+pop |>
+  get_table("ind_ebv") |>
+    filter(
+      eval_date == cur_date         # only extract the latest EBVs to calc INDEX
+    ) |>
+  add_index("maternal", index_date = cur_date)
+
+pop |> get_table("ind_index")
+```
+
+Of course in crossbreeding, each line may have their own index, just
+name it and pass only those line animals to the
+[`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
+function and boom, you have your custom indexes per line.
+
+### 14. Select Parents
+
+Pull candidate IDs and then select from any table:
+
+`pull()` may be new to you, it pulls a vector back into the R object to
+use within [`filter()`](https://rdrr.io/r/stats/filter.html) downstream
+
+``` r
+
+# Step 1: identify candidates
+male_candidates <- pop |>
+  get_table("ind_meta") |>
+    filter(
+      sex == "M", 
+      status %in% c("after-test-boar", "breeding-boar")
+    ) |>
+  pull(id_ind)
+
+# Step 2: select top animals by index
+selected_males <- pop |>
+  get_table("ind_index") |>
+    filter(
+      id_ind %in% male_candidates, 
+      index_date == latest_index_date
+    ) |>
+  slice_max(index_value, n = 10) |>
+  pull(id_ind)
+
+# Update status
+pop |>
+  get_table("ind_meta") |>
+  filter(id_ind %in% selected_males) |>
+  mutate_table(status = "breeding-boar")
+```
+
+### 15. Add Offspring
+
+Build a mating plan as a `tibble` (one row per offspring), then call
+[`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md):
+
+(again I hate helper functions as I cannot imagine the infinite ways all
+these combinations could arise, for now just use the full tibble and
+learn how to use `rep` and `samle` yourself)
+
+``` r
+
+data.matings <- tibble(
+  id_parent_1   = rep(sampled_sires, times = nw_per_dam),  # sire IDs
+  id_parent_2   = rep(selected_dams, times = nw_per_dam),  # dam IDs
+  line_name     = "A",
+  sex           = sample(c("M", "F"), size = n_offspring, replace = TRUE),
+  conc_date     = cur_date,
+  birth_date    = cur_date + 116L,
+  on_test_date  = cur_date + 116L + 70L,
+  off_test_date = cur_date + 116L + 160L
+)
+
+pop |> add_offspring(data.matings)
+```
+
+116L refers to the average gestation length of sows these days, and
+70/160 refers to roughly the on-test and off-test ages of animals tested
+(weights, feed intake, ultrasounds, etc).
+
+### 16. Utility: mutate_group helpers
+
+I made a few exceptions to my “I hate helper functions” mentality, you
+can use some `mutate_group_*()` functions to create groups.
+
+Add sequence numbers, named labels, or concatenated strings within
+groups:
+
+``` r
+
+# Sequential number within each litter (group by dam ID)
+pop |>
+  get_table("ind_meta") |>
+    filter(birth_date == cur_date) |>
+  mutate_group_seq(
+    group_col  = "id_parent_2",   # group by dam
+    new_col    = "piglet_number"
+  )
+
+# Named labels within a group
+pop |>
+  get_table("ind_meta") |>
+  mutate_group_named(
+    group_col  = "id_parent_2",
+    name_col   = "id_ind",
+    new_col    = "litter_members"
+  )
+```
+
+### 17. Archive and Restore
+
+Save a replicate’s DuckDB to an archive database for multi-replicate
+analysis:
+
+``` r
+
+archive_replicate(pop, rep = 1L)
+```
+
+**NOTE:** `option(tidybreed.replicate)` will increase by 1
+automatically!!!!
+
+Restore a population from an existing DuckDB file (e.g. to resume a
+run):
+
+``` r
+
+pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
+```
+
+------------------------------------------------------------------------
+
+## Database Tables
+
+| Table | Rows | Description |
+|----|----|----|
+| `genome_meta` | 1 per locus | Locus positions; user chip columns added via [`define_chip()`](https://austin-putz.github.io/tidybreed/reference/define_chip.md) |
+| `founder_haplotypes` | 1 per (haplotype × locus) | Haplotype pool sampled by [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md) |
+| `ind_haplotype` | 2 per (individual × locus) | Phased haplotypes, long format (paternal / maternal) |
+| `ind_genotype` | 1 per (individual × locus) | 0/1/2 dosages, long format; on-demand cache filled by [`add_dosage()`](https://austin-putz.github.io/tidybreed/reference/add_dosage.md) |
+| `genome_effects` | 1 per (locus × trait × effect type) | Additive QTL effect sizes |
+| `ind_meta` | 1 per individual | Pedigree, sex, line; user date/status columns added via [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md) |
+| `ind_phenotype` | 1 per (individual × phenotype record) | Long-format phenotype records |
+| `ind_tbv` | 1 per (individual × trait) | True breeding values (simulation ground truth) |
+| `ind_true_index` | 1 per (individual × index × weight type) | True index values from TBVs |
+| `ind_ebv` | 1 per (individual × trait × evaluation) | Estimated breeding values from BLUP/GBLUP |
+| `ind_index` | 1 per (individual × index × run) | Computed selection index values |
+| `trait_meta` | 1 per genetic trait | Genetic-layer configuration (variance target, units) |
+| `trait_var_comp` | 1 per (effect × trait pair) | Additive genetic (co)variance matrix entries |
+| `trait_effects` | 1 per (trait × effect) | Fixed and random model effects |
+| `phenotype_meta` | 1 per observed phenotype | Observation-layer config (mean, type, sex expression) |
+| `phenotype_components` | 1 per (phenotype × component) | Composite phenotype wiring (self/dam/sire/group) |
+| `phenotype_var_comp` | 1 per (effect × phenotype pair) | Residual and random effect (co)variance entries |
+| `index_meta` | 1 per (index × trait) | Selection index weight definitions |
+
+------------------------------------------------------------------------
+
+## Function Overview
+
+### Population & Genome
+
+| Function | Purpose |
+|----|----|
+| [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | Open (or create) a DuckDB-backed population object |
+| [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md) | Define loci, chromosomes, and positions in `genome_meta` |
+| [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md) | Generate haplotype pools per line (`uniform`, `fixed`, `beta`, `balding_nichols`, `mosaic`, `gaussian_copula`) |
+| [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md) | Reopen an existing population from a DuckDB file |
+| [`close_pop()`](https://austin-putz.github.io/tidybreed/reference/close_pop.md) | Safely close the DuckDB connection |
+| [`print.tidybreed_pop()`](https://austin-putz.github.io/tidybreed/reference/print.tidybreed_pop.md) | Print population summary |
+
+### Individuals
+
+| Function | Purpose |
+|----|----|
+| [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md) | Sample haplotypes and create founder rows in `ind_meta` |
+| [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md) | Add progeny given a mating-plan `tibble` (1 row per offspring) |
+
+### Tables & Queries
+
+| Function | Purpose |
+|----|----|
+| [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md) | Return a lazy `dplyr` tbl from any database table |
+| [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md) | Add or update columns in any table (scalar or vector) |
+| [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md) | Delete rows from a table by filter (with safety confirmation) |
+| [`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md) | Print all table schemas |
+| [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md) | Print column descriptions for a table |
+| [`define_schema_description()`](https://austin-putz.github.io/tidybreed/reference/define_schema_description.md) | Register a description string for a user-defined column |
+
+### Genome & Chips
+
+| Function | Purpose |
+|----|----|
+| [`define_chip()`](https://austin-putz.github.io/tidybreed/reference/define_chip.md) | Mark filtered loci as members of a named SNP chip |
+| [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md) | adds a TRUE within `has_<chip_name>` field of ‘ind_meta’ |
+| [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md) | Pull genotypes into R for a chip or set of QTL effects |
+
+### Traits & Model Configuration
+
+| Function | Purpose |
+|----|----|
+| [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | Register a genetic-layer trait in `trait_meta` |
+| [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md) | Convenience wrapper: [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) + [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) |
+| [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | Register an observed phenotype in `phenotype_meta` |
+| [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) | Assign QTL effects to filtered loci (single or correlated multi-trait) |
+| [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md) | Load a (co)variance matrix into `trait_var_comp` or `phenotype_var_comp` |
+| [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md) | Add a discrete fixed-effect level-to-shift mapping |
+| [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md) | Add a linear regression fixed covariate |
+| [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md) | Add a named random effect |
+| [`define_effect_intercept()`](https://austin-putz.github.io/tidybreed/reference/define_effect_intercept.md) | Set the overall phenotypic mean (intercept) |
+| [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md) | Write residual (co)variance entries to `phenotype_var_comp` |
+
+### Simulation Output
+
+| Function | Purpose |
+|----|----|
+| [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md) | Compute and store true breeding values in `ind_tbv` |
+| [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md) | Sample and store phenotype records in `ind_phenotype` |
+| [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md) | Run BLUPF90 or parent average; store results in `ind_ebv` |
+| [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md) | Compute weighted index from `ind_ebv` (or any table); store in `ind_index` |
+
+### Selection Index
+
+| Function | Purpose |
+|----|----|
+| [`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md) | Register index weights in `index_meta` |
+| [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md) | Calculate and store index values from EBVs or TBVs |
+
+### Group / Litter Utilities
+
+| Function | Purpose |
+|----|----|
+| [`mutate_group_seq()`](https://austin-putz.github.io/tidybreed/reference/mutate_group_seq.md) | Add a within-group sequence number column |
+| [`mutate_group_named()`](https://austin-putz.github.io/tidybreed/reference/mutate_group_named.md) | Add a column with named labels within groups |
+| [`mutate_group_concatenate()`](https://austin-putz.github.io/tidybreed/reference/mutate_group_concatenate.md) | Concatenate values within groups into a string column |
+
+### Replication & Archiving
+
+| Function | Purpose |
+|----|----|
+| [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md) | Save a replicate’s database to an archive DuckDB |
+| `summary_pop()` | Print a structured summary of the population state |
