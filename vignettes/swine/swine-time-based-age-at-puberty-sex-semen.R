@@ -40,6 +40,8 @@ library(tidybreed)     # tidybreed
 # Options
 #------------------------------------------------------------------------------#
 
+# REMEMBER: Set your own paths here, go into a directory to setup this project
+
 # set based on yaml in the future or command line argument
 cur_scenario_name = "age_at_puberty"
 
