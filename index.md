@@ -1,5 +1,7 @@
 # `tidybreed` R Package
 
+📖 **Documentation:** <https://austin-putz.github.io/tidybreed/>
+
 > `tidybreed` is very much in the “alpha testing” phase, I do not
 > recommend building on it just yet. I am however looking for valuable
 > feedback to finish the API prior to version 1.0.0
