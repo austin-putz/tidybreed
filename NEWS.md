@@ -1,3 +1,16 @@
+# tidybreed 0.58.1 (2026-07-22)
+
+## Bug fixes
+
+- Fixed a test that could only pass on a machine with the BLUPF90 suite
+  installed. `add_ebv()` resolves the `renumf90` / `blupf90+` binaries *before*
+  it creates the eval directory — a deliberate fail-fast order that avoids
+  leaving empty eval folders behind when the suite is absent — so the assertion
+  in `test-add_ebv.R` that the directory exists could never hold without the
+  binaries on `PATH`. The test now skips in that case. Caught by the new
+  R-CMD-check workflow on its first run; the suite had been passing locally only
+  because BLUPF90 was installed.
+
 # tidybreed 0.58.0 (2026-07-21)
 
 ## Documentation overhaul
