@@ -1,3 +1,12 @@
+# tidybreed 0.58.2 (2026-07-23)
+
+## Documentation
+
+- `README.md` now uses GitHub Markdown alerts (`> [!NOTE]`, `> [!TIP]`,
+  `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`) for its callouts instead of
+  hand-rolled bold labels and emoji. Also fixed `purrr:chuck()` →
+  `purrr::chuck()` and `option()` → `options()` in the surrounding prose.
+
 # tidybreed 0.58.1 (2026-07-22)
 
 ## Bug fixes
