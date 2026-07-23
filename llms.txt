@@ -2,9 +2,9 @@
 
 📖 **Documentation:** <https://austin-putz.github.io/tidybreed/>
 
-> `tidybreed` is very much in the “alpha testing” phase, I do not
-> recommend building on it just yet. I am however looking for valuable
-> feedback to finish the API prior to version 1.0.0
+> \[!IMPORTANT\] `tidybreed` is very much in the “alpha testing” phase,
+> I do not recommend building on it just yet. I am however looking for
+> valuable feedback to finish the API prior to version 1.0.0
 
 A pipe-friendly (`%>%` or `|>`) R package for breeding program
 simulation backed by [DuckDB](https://duckdb.org). Design large-scale
@@ -42,7 +42,7 @@ New records are stored on disk to your `.duckdb` file (database) -
 database allows for efficient storage and IO - users allowed to insert
 rows themselves without me having to provide ‘helper functions’
 
-> `tidybreed` uses a lightweight S3 object as a handle to a
+> \[!NOTE\] `tidybreed` uses a lightweight S3 object as a handle to a
 > DuckDB-backed breeding program. Rather than storing simulation state
 > in R objects, the breeding program is represented as a persistent
 > relational database. Functions operate by querying subsets of the
@@ -72,9 +72,9 @@ License](https://austin-putz.github.io/tidybreed/LICENSE). You are free
 to use, modify, and distribute it, including in commercial and
 proprietary projects, provided the copyright notice is retained.
 
-> **NO WARRANTY** — This software is provided **as-is**, without
-> warranty of any kind, express or implied. The authors accept **no
-> liability** for any damages or losses arising from its use.
+> \[!CAUTION\] **NO WARRANTY** — This software is provided **as-is**,
+> without warranty of any kind, express or implied. The authors accept
+> **no liability** for any damages or losses arising from its use.
 
 ## Design
 
@@ -178,7 +178,7 @@ message telling you exactly what to install.
 | **Fedora / RHEL / Rocky** | `gcc-c++` + `make` | `sudo dnf install -y gcc-c++ make` |
 | **macOS** | **Xcode Command Line Tools** (provides `clang++`) | `xcode-select --install` |
 
-> **macOS note:** the Command Line Tools alone are enough — you do
+> \[!NOTE\] **macOS:** the Command Line Tools alone are enough — you do
 > **not** need the full Xcode app. If `clang++` was already installed
 > with a previous R/dev setup, no action is needed. (Apple Silicon and
 > Intel are both supported; the kernel is portable C++17 with no
@@ -201,7 +201,7 @@ environment variable before loading the package:
 Sys.setenv(TIDYBREED_KERNEL = "r")   # "auto" (default) uses the compiled C++ kernel
 ```
 
-> **WARNING:** Pre-`v1.0.0` packages are considered beta and subject to
+> \[!WARNING\] Pre-`v1.0.0` packages are considered beta and subject to
 > breaking changes. **Pin your version** to avoid surprises.
 
 ``` r
@@ -272,15 +272,18 @@ options(
   [`library(tidybreed)`](https://github.com/austin-putz/tidybreed);
   default: `FALSE`.
 
-> **Archive path resolution**
+> \[!NOTE\] **Archive path resolution**
 > ([`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md))
-> — first non-`NULL` wins: 1. Explicit `archive_path` argument passed to
-> [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md).
-> 2. `file.path(tidybreed.archive_path, tidybreed.db_name_archive)` —
-> when both options are set. 3.
-> `file.path(dirname(pop$db_path), tidybreed.db_name_archive)` — archive
-> lands next to the working database. 4. `tidybreed.db_name_archive` is
-> `NULL` — no archive written; only reset phases run.
+> — first non-`NULL` wins:
+>
+> 1.  Explicit `archive_path` argument passed to
+>     [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md).
+> 2.  `file.path(tidybreed.archive_path, tidybreed.db_name_archive)` —
+>     when both options are set.
+> 3.  `file.path(dirname(pop$db_path), tidybreed.db_name_archive)` —
+>     archive lands next to the working database.
+> 4.  `tidybreed.db_name_archive` is `NULL` — no archive written; only
+>     reset phases run.
 
 ------------------------------------------------------------------------
 
@@ -347,10 +350,11 @@ options(
 Swap scenarios by pointing to a different YAML file; the rest of the
 script stays identical.
 
-**NOTE:** I HIGHLY encourage the use of `purrr:chuck()` to pull from the
-stored yaml structure (`cfg` above), because it will throw an error
-unlike this structure when it returns nothing and will silently break
-your pipeline without a clear warning.
+> \[!TIP\] I HIGHLY encourage the use of
+> [`purrr::chuck()`](https://purrr.tidyverse.org/reference/chuck.html)
+> to pull from the stored yaml structure (`cfg` above). Unlike `$`, it
+> throws an error when the element is missing instead of returning
+> `NULL` and silently breaking your pipeline without a clear warning.
 
 ------------------------------------------------------------------------
 
@@ -538,9 +542,9 @@ pop |>
   define_schema_description("alive",      "Is the animal alive?")
 ```
 
-**If you get lost with tables** (and you will…) please use
-`schema(pop)`, `summary(pop)`, and `pop |> describe_table("table_name")`
-to get your feet back.
+> \[!TIP\] **If you get lost with tables** (and you will…) please use
+> `schema(pop)`, `summary(pop)`, and
+> `pop |> describe_table("table_name")` to get your feet back.
 
 ``` r
 
@@ -826,11 +830,11 @@ for genotyping, phenotyping, or whatever you want.
 
 ### 11. Add Phenotypes
 
-⛔ Remember ‼️ `tidybreed` is explicit in separation of “trait” vs
-“phenotype”.
-
-- `trait` ➡️ is linked to genome via QTL effects
-- `phenotype` ➡️ is linked to the observed phenotype
+> \[!IMPORTANT\] `tidybreed` is explicit in the separation of “trait” vs
+> “phenotype”.
+>
+> - `trait` ➡️ is linked to the genome via QTL effects
+> - `phenotype` ➡️ is linked to the observed phenotype
 
 This allows us to separate something like **weaning weight** into 2️⃣
 components **weaning weight direct** and **weaning weight maternal**.
@@ -869,15 +873,14 @@ pop |>
 
 ### 12. Run Evaluations (EBVs)
 
-‼️ **NOTICE**
-
-> This is probably the sketchiest part of any simulation software as
-> it’s nearly impossible to accurately solve all models you can
-> simulate. Simulation is far easier than solving equations. If users
-> define a very complex structure to simulation, we cannot guarantee
-> there is a solver out there for it. BLUPF90 is nice and easy, however
-> extremely limited and we get what we get from it. Safest always to run
-> user defined parameter files and programs. PLEASE BE CAREFUL!
+> \[!WARNING\] This is probably the sketchiest part of any simulation
+> software as it’s nearly impossible to accurately solve all models you
+> can simulate. Simulation is far easier than solving equations. If
+> users define a very complex structure to simulation, we cannot
+> guarantee there is a solver out there for it. BLUPF90 is nice and
+> easy, however extremely limited and we get what we get from it. Safest
+> always to run user defined parameter files and programs. PLEASE BE
+> CAREFUL!
 
 Run [BLUPF90](https://nce.ads.uga.edu/wiki/doku.php) to estimate
 breeding values:
@@ -1031,8 +1034,10 @@ analysis:
 archive_replicate(pop, rep = 1L)
 ```
 
-**NOTE:** `option(tidybreed.replicate)` will increase by 1
-automatically!!!!
+> \[!IMPORTANT\] `options(tidybreed.replicate)` will increase by 1
+> automatically after each successful
+> [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)
+> call.
 
 Restore a population from an existing DuckDB file (e.g. to resume a
 run):
