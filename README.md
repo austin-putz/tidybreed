@@ -36,13 +36,14 @@ pop |>                       # stores 'db_conn' connection to your .duckdb file
 ```
 
 **Steps:** 
-* :one: User identifies a table to pass via `get_table()`
-* :two: User filters/subsets the table to identify rows/records/animals
+
+- :one: User identifies a table to pass via `get_table()`
+- :two: User filters/subsets the table to identify rows/records/animals
     - `filter()` is from `dplyr`, users often already know this package well
-* :three: User passes that table to either a `define_*()` function or `add_*()` function
+- :three: User passes that table to either a `define_*()` function or `add_*()` function
     - `define_*()` :arrow_right: functions often add records as meta data
 	- `add_*()` :arrow_right: functions often add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc)
-* :four: New records are stored on disk to your `.duckdb` file (database)
+- :four: New records are stored on disk to your `.duckdb` file (database)
     - database allows for efficient storage and IO
 	- users allowed to insert rows themselves without me having to provide 'helper functions'
 
