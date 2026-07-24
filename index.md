@@ -30,17 +30,22 @@ pop |>                       # stores 'db_conn' connection to your .duckdb file
   )
 ```
 
-**Steps:** \* 1️⃣ User identifies a table to pass via
-[`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-\* 2️⃣ User filters/subsets the table to identify rows/records/animals -
-[`filter()`](https://rdrr.io/r/stats/filter.html) is from `dplyr`, users
-often already know this package well \* 3️⃣ User passes that table to
-either a `define_*()` function or `add_*()` function - `define_*()` ➡️
-functions often add records as meta data - `add_*()` ➡️ functions often
-add data on individuals (e.g. TBV, EBV, Phenotype, Genotype, etc) \* 4️⃣
-New records are stored on disk to your `.duckdb` file (database) -
-database allows for efficient storage and IO - users allowed to insert
-rows themselves without me having to provide ‘helper functions’
+**Steps:**
+
+- 1️⃣ User identifies a table to pass via
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
+- 2️⃣ User filters/subsets the table to identify rows/records/animals
+  - [`filter()`](https://rdrr.io/r/stats/filter.html) is from `dplyr`,
+    users often already know this package well
+- 3️⃣ User passes that table to either a `define_*()` function or
+  `add_*()` function
+  - `define_*()` ➡️ functions often add records as meta data
+  - `add_*()` ➡️ functions often add data on individuals (e.g. TBV, EBV,
+    Phenotype, Genotype, etc)
+- 4️⃣ New records are stored on disk to your `.duckdb` file (database)
+  - database allows for efficient storage and IO
+  - users allowed to insert rows themselves without me having to provide
+    ‘helper functions’
 
 > \[!NOTE\] `tidybreed` uses a lightweight S3 object as a handle to a
 > DuckDB-backed breeding program. Rather than storing simulation state

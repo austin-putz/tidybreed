@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb is keeping downloaded extensions in a temporary directory:
-#> ℹ /tmp/RtmpllFVjL/duckdb/extensions
+#> ℹ /tmp/RtmppIgflb/duckdb/extensions
 #> This is removed when the R session ends, so extensions are re-downloaded each session.
 #> ℹ To keep them, point `options(duckdb.extension_directory =)` or the `DUCKDB_EXTENSION_DIRECTORY` environment variable at a permanent path.
 #> Opened in-memory population 'demo'
@@ -406,8 +406,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 F     Iowa      250
-#> 2 M     AI_Stud   250
+#> 1 M     AI_Stud   250
+#> 2 F     Iowa      250
 ```
 
 The warning above is deliberate:
@@ -764,8 +764,8 @@ pop |> get_table("genome_meta") |> count(is_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   is_50K     n
 #>   <lgl>  <dbl>
-#> 1 FALSE    200
-#> 2 TRUE     300
+#> 1 TRUE     300
+#> 2 FALSE    200
 ```
 
 [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)
