@@ -25,7 +25,7 @@ pop |>                       # stores 'db_conn' connection to your .duckdb file
     status == "calf"           # user defined column to track animal 'status'
   ) |>
   add_phenotype(
-    c("birth_weigth", "stillborn"),       # list of phenotypes to 'collect' on filtered individuals
+    c("birth_weight", "stillborn"),       # list of phenotypes to 'collect' on filtered individuals
     phenotype_date = Sys.Date()           # user added column, added to ind_phenotype table
   )
 ```

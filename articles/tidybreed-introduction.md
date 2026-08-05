@@ -128,10 +128,14 @@ nothing to disk; in a real run you would omit `db_name` and get a
 ``` r
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
-#> duckdb is keeping downloaded extensions in a temporary directory:
-#> ℹ /tmp/RtmppIgflb/duckdb/extensions
-#> This is removed when the R session ends, so extensions are re-downloaded each session.
-#> ℹ To keep them, point `options(duckdb.extension_directory =)` or the `DUCKDB_EXTENSION_DIRECTORY` environment variable at a permanent path.
+#> duckdb keeps downloaded extensions and secrets in a temporary directory:
+#> ℹ /tmp/RtmpO3BNQl/duckdb
+#> This is removed when the R session ends.
+#> • Extensions are re-downloaded each session.
+#> • Secrets are lost.
+#> ℹ Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).
+#> ℹ Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).
+#> ℹ See ?duckdb_storage for details and alternatives.
 #> Opened in-memory population 'demo'
 
 pop
@@ -406,8 +410,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 M     AI_Stud   250
-#> 2 F     Iowa      250
+#> 1 F     Iowa      250
+#> 2 M     AI_Stud   250
 ```
 
 The warning above is deliberate:
@@ -542,12 +546,12 @@ pop |> get_table("ind_tbv") |> collect() |> head()
 #> # A tibble: 6 × 4
 #>   id_tbv id_ind trait_name tbv_value
 #>    <int> <chr>  <chr>          <dbl>
-#> 1      5 A_5    ADG          -0.137 
-#> 2     13 A_13   ADG           0.119 
-#> 3     16 A_16   ADG           0.115 
-#> 4     22 A_22   ADG           0.321 
-#> 5     25 A_25   ADG           0.127 
-#> 6     31 A_31   ADG          -0.0346
+#> 1      2 A_2    ADG         -0.00505
+#> 2     19 A_19   ADG         -0.124  
+#> 3     21 A_21   ADG          0.458  
+#> 4     27 A_27   ADG          0.165  
+#> 5     30 A_30   ADG         -0.416  
+#> 6     32 A_32   ADG          0.136
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -764,8 +768,8 @@ pop |> get_table("genome_meta") |> count(is_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   is_50K     n
 #>   <lgl>  <dbl>
-#> 1 TRUE     300
-#> 2 FALSE    200
+#> 1 FALSE    200
+#> 2 TRUE     300
 ```
 
 [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)
