@@ -1,11 +1,11 @@
 #' Assert that a set of individuals all have ploidy = 2
 #'
 #' Ploidy-aware dosage and genotype extraction for real polyploidy (ploidy > 2)
-#' is not yet supported. Sex-linked and organelle `chr_meta` rules
-#' (`copy_mode_M`/`copy_mode_F`) are fine here — `SUM(allele)` over however
-#' many `ind_haplotype` rows exist per locus already produces correct dosage
-#' regardless of row count, so this guard targets actual organism ploidy, not
-#' `chr_meta` shape.
+#' is not yet supported. Sex-linked and organelle `chr_inheritance` rules
+#' (reduced `from_parent_1`/`from_parent_2` copy counts) are fine here —
+#' `SUM(allele)` over however many `ind_haplotype` rows exist per locus already
+#' produces correct dosage regardless of row count, so this guard targets actual
+#' organism ploidy, not chromosome copy-count shape.
 #'
 #' @param pop A `tidybreed_pop`.
 #' @param ids Optional character vector of `id_ind` to check; `NULL` (default)
@@ -31,8 +31,8 @@ assert_ploidy_2 <- function(pop, ids = NULL) {
     stop(
       n_bad, " individual(s) have ploidy != 2. Ploidy-aware dosage and ",
       "genotype extraction for real polyploidy are not supported. ",
-      "Sex-linked/organelle chr_meta rules (copy_mode_M/copy_mode_F) are ",
-      "fine here and do not trigger this error.",
+      "Sex-linked/organelle chr_inheritance rules (reduced from_parent_1/",
+      "from_parent_2 copy counts) are fine here and do not trigger this error.",
       call. = FALSE
     )
   }

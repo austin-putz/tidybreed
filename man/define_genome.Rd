@@ -11,7 +11,9 @@ define_genome(
   chr_len_Mb,
   cM_per_Mb = 1,
   locus_names = NULL,
-  chr_names = NULL
+  chr_names = NULL,
+  recombines_M = TRUE,
+  recombines_F = TRUE
 )
 }
 \arguments{
@@ -37,13 +39,22 @@ locus names. When \code{NULL} (default), names are auto-generated as
 \item{chr_names}{Character vector of length \code{n_chr} or \code{NULL}. Custom
 chromosome names. When \code{NULL} (default), chromosomes are numbered
 \verb{1, 2, ..., n_chr}.}
+
+\item{recombines_M, recombines_F}{Logical scalar. Genome-wide recombination
+default for \strong{male-parent} and \strong{female-parent} meiosis, seeded into
+\code{chr_recombination}. Both default \code{TRUE}. Set one \code{FALSE} for a genome-wide,
+whole-genome achiasmatic sex (e.g. \code{recombines_F = FALSE} for silkworm
+females, \code{recombines_M = FALSE} for \emph{Drosophila} males) instead of writing a
+per-chromosome rule for every chromosome. Per-chromosome overrides (Y, W,
+\emph{Drosophila} chr4) still go through \code{\link[=define_chromosome]{define_chromosome()}}.}
 }
 \value{
 The input \code{tidybreed_pop} with genome tables added.
 }
 \description{
 Adds genome tables (\code{genome_meta}, \code{genome_map}, \code{ind_haplotype},
-\code{ind_genotype}, \code{chr_meta}) to a population opened with \code{\link[=open_pop]{open_pop()}}.
+\code{ind_genotype}, \code{chr_inheritance}, \code{chr_recombination}) to a population opened
+with \code{\link[=open_pop]{open_pop()}}.
 Pipe-friendly — accepts a \code{tidybreed_pop} and returns a \code{tidybreed_pop}.
 Physical position (\code{pos_bp}, base pairs) lives in \code{genome_meta}; the genetic
 map (\code{pos_cM}, centiMorgans) lives in the long \code{genome_map} table. Haplotypes
@@ -81,5 +92,11 @@ pop <- open_pop(pop_name = "B", db_name = ":memory:") |>
   define_founder_haplotypes(n_haplotypes = 100,
                             min_allele_freq = 0.05,
                             max_allele_freq = 0.95)
+
+# Genome-wide achiasmy — Drosophila males do not recombine (all chromosomes).
+# Per-chromosome overrides (e.g. chr4) still go through define_chromosome().
+pop <- open_pop(pop_name = "fly", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 4, chr_len_Mb = 100,
+                recombines_M = FALSE)
 }
 }

@@ -362,12 +362,13 @@ test_that("extract_genotypes() errors before querying when an individual has plo
   close_pop(pop)
 })
 
-test_that("extract_genotypes() does not error when chr_meta has a sex-linked copy_mode row", {
+test_that("extract_genotypes() does not error when chr_inheritance has a sex-linked row", {
   pop <- make_extract_pop("test_eg_sexlinked")
   pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
 
-  DBI::dbExecute(pop$db_conn,
-    "UPDATE chr_meta SET copy_mode_M = 'half', hemi_parent = 'parent_2' WHERE chr_name = '1'")
+  suppressMessages(
+    pop <- define_chromosome(pop, "1", offspring_sex = "M",
+                             from_parent_1 = 0, from_parent_2 = 1))
 
   expect_no_error(pop |> get_table("ind_meta") |> extract_genotypes("50k"))
 

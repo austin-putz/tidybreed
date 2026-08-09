@@ -250,10 +250,11 @@ without a table rewrite.
 
 Phased haplotypes in **long** format. One row per (individual × haplotype ×
 locus). Populated by `add_founders()` and `add_offspring()`. Row count per
-individual per chromosome follows `chr_meta.copy_mode_M`/`copy_mode_F` for
-that individual's sex: 2 rows/locus for `"full"` (the default, diploid
-autosomes), 1 for `"half"` (sex chromosomes), 0 for `"none"` (e.g. Y in
-females). See `chr_meta` below and `define_chr()`.
+individual per chromosome follows the resolved `chr_inheritance`
+`from_parent_1`/`from_parent_2` for that individual's sex: 2 rows/locus for a
+plain autosome (`1, 1`, the default), 1 for a hemizygous sex chromosome (e.g.
+`0, 1`), 0 for an absent chromosome (`0, 0`, e.g. Y in females). See
+`chr_inheritance` below and `define_chromosome()`.
 
 | Column        | Type     | Notes                                                       |
 |---------------|----------|-------------------------------------------------------------|
@@ -288,34 +289,72 @@ Haplotypes are the source of truth; dosage is derived on demand (SUM of alleles)
 rather than auto-stored, because dosage is cheap to recompute and only needed for
 specific downstream analyses (MAS, GBLUP export, allele frequencies).
 
-### `chr_meta`
+### `chr_inheritance`
 
-Per-chromosome inheritance rules. One row per chromosome. Created by
-`define_genome()` with default diploid-autosome rows. `define_chr()` sets
-non-default rules (sex chromosomes, organelles). Real polyploidy (ploidy > 2)
-is not yet supported — see `ind_meta.ploidy`.
+Per-chromosome copy counts, in **long** format, keyed by **offspring** sex. One
+row per `(chr_name, offspring_sex, line_name)`. Created by `define_genome()` with
+one seeded default row per chromosome (`from_parent_1 = from_parent_2 = 1`, a
+plain diploid autosome). `define_chromosome()` sets non-default rules (sex
+chromosomes, organelles). Answers: *"an offspring of sex S inherits N copies of
+this chromosome from each parent."* Real polyploidy (ploidy > 2) is not yet
+supported — see `ind_meta.ploidy`.
 
-| Column      | Type    | Notes                                                    |
-|-------------|---------|-----------------------------------------------------------|
-| chr_name    | VARCHAR | Primary key; matches `genome_meta.chr_name`              |
-| copy_mode_M | VARCHAR | `"full"`/`"half"`/`"none"` — copy count for males, **relative to that individual's own ploidy** (not an absolute number). Default `"full"`. |
-| copy_mode_F | VARCHAR | Same as `copy_mode_M`, for females. Default `"full"`.    |
-| hemi_parent | VARCHAR | When either sex's `copy_mode` is non-`"full"`: `"parent_1"`/`"parent_2"` — which parent supplies the reduced copy; NULL when both are `"full"` |
-| recombines_M | BOOLEAN | TRUE if recombination occurs in **male** meiosis (default TRUE); FALSE = whole-chromosome achiasmy in males |
-| recombines_F | BOOLEAN | TRUE if recombination occurs in **female** meiosis (default TRUE); FALSE = achiasmy in females |
+| Column        | Type     | Notes                                                     |
+|---------------|----------|-----------------------------------------------------------|
+| chr_name      | VARCHAR  | FK to `genome_meta.chr_name` (R-enforced)                 |
+| offspring_sex | VARCHAR  | `NULL` = all/default; `'M'`/`'F'` — the **offspring** (carrier) sex |
+| line_name     | VARCHAR  | `NULL` = all lines; reserved for line-specific rules (crossbreeding) |
+| from_parent_1 | UTINYINT | Absolute copies inherited from parent_1 (sire), at ploidy 2 |
+| from_parent_2 | UTINYINT | Absolute copies inherited from parent_2 (dam), at ploidy 2  |
 
-`recombines_M`/`recombines_F` are per-sex (matching `copy_mode_M`/`copy_mode_F`).
-`define_chr(recombines = ...)` is the primary shorthand that sets both; pass
-`recombines_M`/`recombines_F` explicitly for single-sex achiasmy (e.g. *Drosophila*
-males: `recombines_M = FALSE`, `recombines_F = TRUE`). A chromosome takes the fast
-autosome path only when both sexes are `copy_mode "full"` **and** both
-`recombines_*` are TRUE.
+**Logical key** `(chr_name, offspring_sex, line_name)`, NULL-normalized in R.
+Counts are **absolute** (correct at ploidy 2, enforced): autosome `1,1`; male's X
+`0,1`; male's Y `1,0`; female's Y `0,0`; maternal mito `0,1`. Row-local
+`CHECK`/`NOT NULL` constraints enforce `offspring_sex IN ('M','F')` (NULL passes),
+non-negative counts, and `from_parent_1 + from_parent_2 <= 2` (a diploid-release
+constraint). `from_parent_1`/`from_parent_2` map directly onto
+`ind_haplotype.parent_origin` (1 = sire, 2 = dam) and `strand`.
 
-`copy_mode` is intentionally relative rather than absolute: `"half"` means 1
-copy for a diploid (2N) individual and would mean 2 copies for a tetraploid
-(4N) individual, without the field itself changing meaning. See
-`plans/refactor_haplotype.md` ("Ploidy vs. sex-linkage") for the full design
-rationale.
+### `chr_recombination`
+
+Per-chromosome recombination, in **long** format, keyed by **producing-parent**
+sex. One row per `(chr_name, parent_sex, line_name)`. Seeded by `define_genome()`
+from its genome-wide `recombines_M`/`recombines_F` defaults (one `parent_sex =
+NULL` row per chromosome when both agree, else a `'M'` and an `'F'` row).
+`define_chromosome()` sets non-default rules (Y, W, achiasmy). Answers: *"when a
+parent of sex S makes gametes, does this chromosome recombine?"*
+
+| Column     | Type    | Notes                                                        |
+|------------|---------|--------------------------------------------------------------|
+| chr_name   | VARCHAR | FK to `genome_meta.chr_name` (R-enforced)                    |
+| parent_sex | VARCHAR | `NULL` = both parents; `'M'`/`'F'` — the **producing-parent** sex |
+| line_name  | VARCHAR | `NULL` = all lines; reserved for line-specific rules         |
+| recombines | BOOLEAN | TRUE if the chromosome recombines in that parent sex's meiosis |
+
+**Logical key** `(chr_name, parent_sex, line_name)`, NULL-normalized in R.
+
+**Why two tables:** "which sex" means the **offspring** for copy count but the
+**producing parent** for recombination — one table would force one `sex` column to
+mean both. Splitting them lets each column say what it means (`offspring_sex` vs
+`parent_sex`), and the two concerns resolve **independently** (a copy rule can
+never shadow a recombination rule).
+
+**Resolution.** Two internal resolvers mirror `resolve_genome_map()`'s
+priority-window fallback `(sex=S,line=L) → (sex=S,NULL) → (NULL,line=L) →
+(NULL,NULL)`:
+- `resolve_chr_inheritance(conn, offspring_sex, line_name)` — called with the
+  **offspring's** sex and line; returns `(from_parent_1, from_parent_2)` per chr.
+- `resolve_chr_recombination(conn, parent_sex, line_name)` — called with the
+  **producing parent's** sex and line; returns `recombines` per chr.
+
+`validate_chr_inheritance()`/`validate_chr_recombination()` run inside every write
+transaction: NULL-normalized key uniqueness, orphan-`chr_name` (R-enforced FK),
+valid sex, `sum ≤ 2`, resolvability for both `M` and `F`, and a deterministic
+sex-vs-line shadowing check. A chromosome takes the fast autosome path only when
+its resolved inheritance is `1,1` for both offspring sexes **and** `recombines`
+for both parent sexes. `2,0` (uniparental disomy) is storage-expressible but
+errors at the `add_offspring()`/`add_founders()` kernel boundary (unimplemented
+transmission mechanism).
 
 ### `founder_haplotypes`
 
@@ -587,12 +626,15 @@ in R via DELETE + INSERT when `overwrite_index = TRUE`.
 The current surface for creating a population and its genome is
 `open_pop() |> define_genome(...)`. `define_genome()` populates the genome tables:
 
-- Genome: `genome_meta` (physical `pos_bp`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `chr_meta` (default autosome rows)
+- Genome: `genome_meta` (physical `pos_bp`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `chr_inheritance` + `chr_recombination` (default autosome rows)
 
 `define_genome()` key params: `pop`, `n_loci`, `n_chr`, `chr_len_Mb` (finite,
 strictly positive), `cM_per_Mb` (genetic-map rate, cM per Mb; scalar or
 length-`n_chr`, finite, strictly positive, default `1.0` →
-`pos_cM = pos_bp/1e6 * cM_per_Mb`), `locus_names`, `chr_names`. Calling
+`pos_cM = pos_bp/1e6 * cM_per_Mb`), `locus_names`, `chr_names`,
+`recombines_M`/`recombines_F` (genome-wide per-parent-sex recombination defaults,
+both `TRUE`; set one `FALSE` for a whole-genome achiasmatic sex, seeded into
+`chr_recombination`). Calling
 `define_genome()` on a population that already has a non-empty `genome_meta` is a
 hard error (no partial re-definition).
 
@@ -603,9 +645,11 @@ hard error (no partial re-definition).
 Samples haplotypes for each founder individual from the `founder_haplotypes`
 pool. Appends rows to `ind_meta` (core 6 cols, including `ploidy`) and
 `ind_haplotype` (long: one row per (individual x haplotype x locus), row count
-per chromosome driven by `chr_meta.copy_mode_M`/`copy_mode_F` for the
-founder's sex — 2 rows/locus for `"full"`, 1 for `"half"`, 0 for `"none"`;
-`line_origin` = the founder's line, `strand = 1`). Does **not** write
+per chromosome driven by the resolved `chr_inheritance`
+`from_parent_1`/`from_parent_2` for the founder's sex — 2 rows/locus for a plain
+autosome (`1, 1`), 1 for a hemizygous sex chromosome (e.g. `0, 1`), 0 for an
+absent chromosome (`0, 0`); `line_origin` = the founder's line, `strand = 1`).
+Does **not** write
 `ind_genotype` (on-demand via `add_dosage()`). ID format: `{line_name}_{n}`
 (e.g. `Libra_1`).
 
@@ -676,30 +720,38 @@ functions.
 - `add_phenotype()` / `add_tbv()` / `add_ebv()`: scalar only (row count per
   trait varies). Use `mutate_table()` afterwards for per-record vectors.
 
-### `define_chr()`
+### `define_chromosome()`
 
-`R/define_chr.R`
+`R/define_chromosome.R`
 
-Sets a non-default `chr_meta` inheritance rule for one chromosome — sex
-chromosomes (X/Y, Z/W, X0/Z0) and organelles (MT, plastids). Upserts by
-`chr_name`; call before `add_founders()` for the chromosomes it configures.
+Sets a non-default rule for one chromosome — sex chromosomes (X/Y, Z/W, X0/Z0)
+and organelles (MT, plastids). Call before `add_founders()` for the chromosomes
+it configures. **Each call sets exactly one concern:** supply `from_parent_1` +
+`from_parent_2` to write a `chr_inheritance` row (keyed by `offspring_sex`), or
+supply `recombines` to write a `chr_recombination` row (keyed by `parent_sex`) —
+never both in one call (mixing them would make "which sex" ambiguous). Writes are
+transactional (delete-then-insert with `IS NOT DISTINCT FROM`, then validate, then
+commit; rollback on failure). `overwrite = TRUE` (default) upserts; `overwrite =
+FALSE` errors if the exact NULL-safe key already exists.
 
 ```r
 pop <- pop |>
-  define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
-             hemi_parent = "parent_2", recombines = TRUE) |>
-  define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
-             hemi_parent = "parent_1", recombines = FALSE)
+  # Mammal X/Y — inheritance (override only the deviating sexes)
+  define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
+  define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
+  define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
+  define_chromosome("Y", recombines = FALSE)   # recombination (both parent sexes)
 ```
 
-`add_founders()` and `add_offspring()` read `chr_meta` per chromosome:
-autosomes (`copy_mode_M`/`copy_mode_F` both `"full"`, `recombines_M`/`recombines_F`
-both `TRUE`) go through the original, unchanged diploid path; any other chromosome
-routes
-through a separate branch that writes only the applicable `(sex,
-parent_origin)` rows and — for non-recombining or single-copy inheritance
-(Y, W, MT) — passes the parent's stored copy straight through instead of
-simulating a crossover.
+`add_founders()` and `add_offspring()` resolve `chr_inheritance`/
+`chr_recombination` per chromosome: a chromosome whose resolved inheritance is
+`1,1` for both offspring sexes **and** `recombines` for both parent sexes goes
+through the original, unchanged diploid path; any other chromosome routes through
+a separate branch that writes only the applicable `(sex, parent_origin)` rows and
+— for non-recombining or single-copy inheritance (Y, W, MT) — passes the parent's
+stored copy straight through instead of simulating a crossover. Copy resolution
+uses the **offspring's** sex/line; recombination resolution uses the **producing
+parent's** sex/line.
 
 Real polyploidy (ploidy > 2, uneven-ploidy crosses) is not yet supported;
 `ind_meta.ploidy` must be `2` for every individual.

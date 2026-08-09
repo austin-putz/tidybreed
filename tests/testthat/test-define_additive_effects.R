@@ -262,7 +262,7 @@ test_that("define_additive_effects() errors when filter returns zero rows", {
 make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 100) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
   pop |>
     get_table("founder_haplotypes") |>

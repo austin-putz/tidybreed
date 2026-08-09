@@ -77,8 +77,8 @@ test_that("batch invariance holds with a sex chromosome configured", {
     set.seed(99)
     pop <- open_pop(pop_name = "bx", db_name = ":memory:") |>
       define_genome(n_loci = 160, n_chr = 4, chr_len_Mb = 100) |>
-      define_chr("4", copy_mode_M = "half", copy_mode_F = "full",
-                 hemi_parent = "parent_2", recombines = TRUE) |>
+      define_chromosome("4", offspring_sex = "M",
+                        from_parent_1 = 0, from_parent_2 = 1) |>
       define_founder_haplotypes(n_haplotypes = 30, line_name = "A", method = "uniform")
     pop <- pop |> get_table("founder_haplotypes") |>
       add_founders(n_males = 5, n_females = 5, line_name = "A", batch_size = bs)

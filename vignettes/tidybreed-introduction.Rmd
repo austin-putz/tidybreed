@@ -153,12 +153,15 @@ The **genetic** map lives in its own table, because a genome can have several ma
 pop |> get_table("genome_map")
 ```
 
-Per-chromosome inheritance rules live in `chr_meta`. Every chromosome starts as a
-normal diploid autosome; `define_chr()` is how you would declare an X, Y, or
-mitochondrial chromosome.
+Per-chromosome rules live in two explicit tables: `chr_inheritance` (how many
+copies of a chromosome an offspring of each sex inherits from each parent) and
+`chr_recombination` (whether a parent of each sex recombines it). Every
+chromosome starts as a normal diploid autosome; `define_chromosome()` is how you
+would declare an X, Y, or mitochondrial chromosome.
 
-```{r chr_meta}
-pop |> get_table("chr_meta") |> collect()
+```{r chr_inheritance}
+pop |> get_table("chr_inheritance") |> collect()
+pop |> get_table("chr_recombination") |> collect()
 ```
 
 ## Explore the database
@@ -458,7 +461,8 @@ head(matings)
 ```
 
 `add_offspring()` simulates meiosis — crossovers are drawn from the genetic map in
-`genome_map`, respecting the per-chromosome rules in `chr_meta`.
+`genome_map`, respecting the per-chromosome rules in `chr_inheritance` and
+`chr_recombination`.
 
 ```{r offspring}
 pop <- add_offspring(pop, matings)
@@ -594,7 +598,7 @@ Functions not shown above, with a pointer to their help page:
 | Function | What it does |
 |---|---|
 | `?add_ebv` | Run BLUPF90 (or parent average) and store estimated breeding values |
-| `?define_chr` | Sex chromosomes, organelles, and achiasmatic meiosis |
+| `?define_chromosome` | Sex chromosomes, organelles, and achiasmatic meiosis |
 | `?define_phenotype` | Composite traits: maternal effects and social genetic effects, via `components` |
 | `?define_residual_cov` | Correlated or heterogeneous residual (co)variances |
 | `?define_effect_random` | Named random effects such as pen, litter, or herd-year-season |

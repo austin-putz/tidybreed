@@ -97,13 +97,15 @@ uniform-only inversion sampler. Genetic positions come from the resolved
 genetic map (\code{genome_map}, per the gamete-producing parent's sex/line);
 crossover positions are uniform in cM within each chromosome, and the starting
 haplotype is chosen at random. This
-applies to plain autosomes (\code{chr_meta}'s default \code{copy_mode_M}/\code{copy_mode_F = "full"}, \code{recombines_M}/\code{recombines_F = TRUE}). Sex chromosomes and
-organelles configured via \code{\link[=define_chr]{define_chr()}} follow their own inheritance rule
-instead: the contributing parent's copy recombines via the same Haldane model
-only when that parent carries two copies of the chromosome AND the
-contributor's own-sex \code{chr_meta.recombines_M}/\code{recombines_F} is \code{TRUE};
-otherwise the parent's single stored copy is passed straight through unchanged
-(no recombination, no additional RNG draws).
+applies to plain autosomes (the seeded default: \code{chr_inheritance}
+\code{from_parent_1 = from_parent_2 = 1} for both sexes and \code{chr_recombination}
+\code{recombines = TRUE} for both parent sexes). Sex chromosomes and organelles
+configured via \code{\link[=define_chromosome]{define_chromosome()}} follow their own inheritance rule instead:
+the contributing parent's copy recombines via the same Haldane model only when
+that parent carries two copies of the chromosome AND the producing parent's
+\code{chr_recombination.recombines} resolves \code{TRUE} for its sex; otherwise the
+parent's single stored copy is passed straight through unchanged (no
+recombination, no additional RNG draws).
 
 \strong{Offspring IDs:}
 IDs follow the same \code{"{line_name}_{n}"} format as \code{add_founders()}. Numbering

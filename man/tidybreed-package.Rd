@@ -12,6 +12,7 @@ A next-generation R package for breeding program simulation that uses tidyverse-
 Useful links:
 \itemize{
   \item \url{https://github.com/austin-putz/tidybreed}
+  \item \url{https://austin-putz.github.io/tidybreed/}
   \item Report bugs at \url{https://github.com/austin-putz/tidybreed/issues}
 }
 

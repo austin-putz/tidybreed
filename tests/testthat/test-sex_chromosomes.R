@@ -1,7 +1,7 @@
 # Stage 4 (plans/refactor_haplotype.md) -- sex chromosomes and organelles via
-# chr_meta/define_chr(). Hand-verified row counts and inheritance patterns for
-# X/Y, Z/W, MT, and X0, plus mixed-genome dosage/export and RNG-neutrality of
-# non-recombining inheritance.
+# chr_inheritance/chr_recombination/define_chromosome(). Hand-verified row counts
+# and inheritance patterns for X/Y, Z/W, MT, and X0, plus mixed-genome
+# dosage/export and RNG-neutrality of non-recombining inheritance.
 
 # Row counts of ind_haplotype for one individual on one chromosome, by
 # parent_origin.
@@ -30,10 +30,10 @@ test_that("X/Y: founders get correct copy counts, offspring inherit patrilineal 
   set.seed(101)
   pop <- open_pop(pop_name = "xy", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 3, chr_names = c("1", "X", "Y"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
-               hemi_parent = "parent_2", recombines = TRUE) |>
-    define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
-               hemi_parent = "parent_1", recombines = FALSE) |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
+    define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
+    define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
+    define_chromosome("Y", recombines = FALSE) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 4, n_females = 4, line_name = "A")
@@ -98,10 +98,10 @@ test_that("Z/W: founders get correct copy counts, offspring inherit matrilineal 
   set.seed(111)
   pop <- open_pop(pop_name = "zw", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 3, chr_names = c("1", "Z", "W"), chr_len_Mb = 50) |>
-    define_chr("Z", copy_mode_M = "full", copy_mode_F = "half",
-               hemi_parent = "parent_1", recombines = TRUE) |>
-    define_chr("W", copy_mode_M = "none", copy_mode_F = "half",
-               hemi_parent = "parent_2", recombines = FALSE) |>
+    define_chromosome("Z", offspring_sex = "F", from_parent_1 = 1, from_parent_2 = 0) |>
+    define_chromosome("W", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 0) |>
+    define_chromosome("W", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 1) |>
+    define_chromosome("W", recombines = FALSE) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 4, n_females = 4, line_name = "A")
@@ -163,8 +163,8 @@ test_that("MT: both sexes get 1 copy, strictly maternal, never recombined", {
   set.seed(121)
   pop <- open_pop(pop_name = "mt", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 2, chr_names = c("1", "MT"), chr_len_Mb = 50) |>
-    define_chr("MT", copy_mode_M = "half", copy_mode_F = "half",
-               hemi_parent = "parent_2", recombines = FALSE) |>
+    define_chromosome("MT", from_parent_1 = 0, from_parent_2 = 1) |>
+    define_chromosome("MT", recombines = FALSE) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
@@ -248,8 +248,7 @@ test_that("X0: a hemizygous chromosome works with no partner chromosome defined"
   set.seed(131)
   pop <- open_pop(pop_name = "x0", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 3, chr_names = c("1", "2", "X"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
-               hemi_parent = "parent_2", recombines = TRUE) |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
@@ -284,10 +283,10 @@ test_that("add_dosage()/extract_genotypes() handle a mixed autosome+X/Y genome c
   set.seed(141)
   pop <- open_pop(pop_name = "mixed_export", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 3, chr_names = c("1", "X", "Y"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full",
-               hemi_parent = "parent_2", recombines = TRUE) |>
-    define_chr("Y", copy_mode_M = "half", copy_mode_F = "none",
-               hemi_parent = "parent_1", recombines = FALSE) |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
+    define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
+    define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
+    define_chromosome("Y", recombines = FALSE) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
@@ -341,11 +340,11 @@ test_that("add_dosage()/extract_genotypes() handle a mixed autosome+X/Y genome c
 # Ploidy guard interaction (Stage 4 semantic change)
 # ---------------------------------------------------------------------------
 
-test_that("a sex-linked chr_meta configuration does not trip the ploidy-2 guard", {
+test_that("a sex-linked chr_inheritance configuration does not trip the ploidy-2 guard", {
   set.seed(151)
   pop <- open_pop(pop_name = "guard_interaction", db_name = ":memory:") |>
     define_genome(n_loci = 8, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed") |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")

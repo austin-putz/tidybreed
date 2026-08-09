@@ -17,10 +17,10 @@ Invisible \code{NULL} on success; errors otherwise.
 }
 \description{
 Ploidy-aware dosage and genotype extraction for real polyploidy (ploidy > 2)
-is not yet supported. Sex-linked and organelle \code{chr_meta} rules
-(\code{copy_mode_M}/\code{copy_mode_F}) are fine here — \code{SUM(allele)} over however
-many \code{ind_haplotype} rows exist per locus already produces correct dosage
-regardless of row count, so this guard targets actual organism ploidy, not
-\code{chr_meta} shape.
+is not yet supported. Sex-linked and organelle \code{chr_inheritance} rules
+(reduced \code{from_parent_1}/\code{from_parent_2} copy counts) are fine here —
+\code{SUM(allele)} over however many \code{ind_haplotype} rows exist per locus already
+produces correct dosage regardless of row count, so this guard targets actual
+organism ploidy, not chromosome copy-count shape.
 }
 \keyword{internal}

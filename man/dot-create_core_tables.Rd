@@ -12,6 +12,7 @@
 \description{
 Internal helper called by \code{\link[=open_pop]{open_pop()}}. Creates the \verb{_schema_meta} system
 table and all non-genome metadata tables. Genome tables (\code{genome_meta},
-\code{ind_haplotype}, \code{ind_genotype}, \code{chr_meta}) are created by \code{\link[=define_genome]{define_genome()}}.
+\code{ind_haplotype}, \code{ind_genotype}, \code{chr_inheritance}, \code{chr_recombination}) are
+created by \code{\link[=define_genome]{define_genome()}}.
 }
 \keyword{internal}

@@ -361,7 +361,7 @@ test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no co
   set.seed(7001)
   pop <- open_pop(pop_name = "tbv_x", db_name = ":memory:") |>
     define_genome(n_loci = 10, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed", allele_freq = 0.5)
 
   pop <- pop |> get_table("founder_haplotypes") |>
@@ -394,7 +394,7 @@ test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no co
 test_that("compute_base_allele_freq() is correct (row-count-agnostic) for a mixed autosome+X genome", {
   pop <- open_pop(pop_name = "basefreq_x", db_name = ":memory:") |>
     define_genome(n_loci = 8, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
-    define_chr("X", copy_mode_M = "half", copy_mode_F = "full", hemi_parent = "parent_2") |>
+    define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed", allele_freq = 0.5)
 
   pop <- pop |> get_table("founder_haplotypes") |>

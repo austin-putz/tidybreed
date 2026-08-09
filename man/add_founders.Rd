@@ -74,10 +74,11 @@ the new founders. Founder individuals have \code{NULL} for both parent IDs.
 \item Samples 2 haplotypes per founder from \code{founder_haplotypes} (with replacement)
 \item Creates/updates \code{ind_meta} table with founder metadata
 \item Populates \code{ind_haplotype} (long format; \code{line_origin} set to the founder's
-line and \code{strand = 1}. Row count per chromosome follows
-\code{chr_meta}'s \code{copy_mode_M}/\code{copy_mode_F} for the founder's sex — 2
-rows/locus for \code{"full"} (the default, diploid autosomes), 1 for
-\code{"half"} (e.g. sex chromosomes), 0 for \code{"none"}; see \code{\link[=define_chr]{define_chr()}})
+line and \code{strand = 1}. Row count per chromosome follows the resolved
+\code{chr_inheritance} \code{from_parent_1}/\code{from_parent_2} for the founder's sex — 2
+rows/locus for a plain autosome (\verb{1, 1}, the default), 1 for a hemizygous
+sex chromosome (e.g. \verb{0, 1}), 0 for an absent chromosome (\verb{0, 0}); see
+\code{\link[=define_chromosome]{define_chromosome()}})
 }
 
 \strong{ID Format:}

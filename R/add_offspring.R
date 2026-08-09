@@ -74,14 +74,15 @@
 #' genetic map (`genome_map`, per the gamete-producing parent's sex/line);
 #' crossover positions are uniform in cM within each chromosome, and the starting
 #' haplotype is chosen at random. This
-#' applies to plain autosomes (`chr_meta`'s default `copy_mode_M`/`copy_mode_F
-#' = "full"`, `recombines_M`/`recombines_F = TRUE`). Sex chromosomes and
-#' organelles configured via [define_chr()] follow their own inheritance rule
-#' instead: the contributing parent's copy recombines via the same Haldane model
-#' only when that parent carries two copies of the chromosome AND the
-#' contributor's own-sex `chr_meta.recombines_M`/`recombines_F` is `TRUE`;
-#' otherwise the parent's single stored copy is passed straight through unchanged
-#' (no recombination, no additional RNG draws).
+#' applies to plain autosomes (the seeded default: `chr_inheritance`
+#' `from_parent_1 = from_parent_2 = 1` for both sexes and `chr_recombination`
+#' `recombines = TRUE` for both parent sexes). Sex chromosomes and organelles
+#' configured via [define_chromosome()] follow their own inheritance rule instead:
+#' the contributing parent's copy recombines via the same Haldane model only when
+#' that parent carries two copies of the chromosome AND the producing parent's
+#' `chr_recombination.recombines` resolves `TRUE` for its sex; otherwise the
+#' parent's single stored copy is passed straight through unchanged (no
+#' recombination, no additional RNG draws).
 #'
 #' **Offspring IDs:**
 #' IDs follow the same `"{line_name}_{n}"` format as `add_founders()`. Numbering
@@ -243,7 +244,7 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
 
   # ============================================================================
   # 8. Load genome metadata (once); classify chromosomes as "plain autosome"
-  #    (both sexes full copy, recombines in both sexes — chr_meta's default row) vs.
+  #    (both sexes full copy, recombines in both sexes — the seeded default) vs.
   #    "special" (any sex-linked/organelle rule). Autosomes go through the C++/R
   #    gamete kernel; special chromosomes get their own branch below. The two draw
   #    from INDEPENDENT dqrng sub-streams keyed by kind (autosome kind = 1, special
@@ -265,14 +266,29 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
 
   n_loci     <- nrow(genome_meta_df)
 
-  chr_meta_map   <- get_chr_meta_map(pop$db_conn)
+  # Line-agnostic default rules drive the batch-global chromosome CLASSIFICATION
+  # (plain autosome vs special). Per-individual copy/recombination decisions
+  # resolve at the correct entity's line via chr_rules_for(): inheritance by the
+  # OFFSPRING's line, recombination by the PRODUCING PARENT's line (v5 review #4).
+  # In v1 no line-specific chromosome rules exist, so every line falls back to the
+  # default and resolves identically — the seam is reserved, not yet exercised.
+  chr_rules_map   <- get_chr_rules_map(pop$db_conn)
+  chr_rules_cache <- list()
+  chr_rules_for <- function(line) {
+    key <- if (length(line) == 0L || is.na(line)) "L" else paste0("L", line)
+    if (is.null(chr_rules_cache[[key]])) {
+      chr_rules_cache[[key]] <<- get_chr_rules_map(
+        pop$db_conn, if (identical(key, "L")) NULL else line)
+    }
+    chr_rules_cache[[key]]
+  }
   chr_ids_all    <- sort(unique(genome_meta_df$chr))
   chr_id_keys    <- as.character(chr_ids_all)
   chr_name_by_id <- stats::setNames(
     vapply(chr_ids_all, function(x) genome_meta_df$chr_name[genome_meta_df$chr == x][1], character(1)),
     chr_id_keys
   )
-  is_autosome_id <- vapply(chr_id_keys, function(k) is_plain_autosome(chr_meta_map[[chr_name_by_id[[k]]]]), logical(1))
+  is_autosome_id <- vapply(chr_id_keys, function(k) is_plain_autosome(chr_rules_map[[chr_name_by_id[[k]]]]), logical(1))
 
   autosome_locus_idx <- which(genome_meta_df$chr %in% chr_ids_all[is_autosome_id])
   special_chr_names  <- unname(chr_name_by_id[chr_id_keys[!is_autosome_id]])
@@ -394,13 +410,18 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
       cr <- rows[rows$locus_id %in% chr_locus_ids, ]
       cr <- cr[order(cr$parent_origin, cr$locus_id), ]
 
-      cm_own <- if (parent_sex[[pid]] == "M") chr_meta_map[[cn]]$copy_mode_M else chr_meta_map[[cn]]$copy_mode_F
-      k <- resolve_chr_copy_count(cm_own, ploidy = parent_ploidy[[pid]])
+      # Parent's OWN copies of this chromosome = total copies an individual of the
+      # parent's sex/line inherits (from_parent_1 + from_parent_2), resolved at the
+      # parent's line. Absolute counts (ploidy 2 enforced): 2 = full pair, 1 =
+      # hemizygous, 0 = absent.
+      p_rules <- chr_rules_for(parent_line[[pid]])[[cn]]
+      psx     <- parent_sex[[pid]]
+      k       <- p_rules$from_parent_1[[psx]] + p_rules$from_parent_2[[psx]]
 
       if (nrow(cr) != k * n_chr_loci) {
         stop(
           "Parent '", pid, "' has ", nrow(cr), " ind_haplotype rows for chromosome '",
-          cn, "'; expected ", k * n_chr_loci, " given chr_meta copy_mode rules for sex '",
+          cn, "'; expected ", k * n_chr_loci, " given chr_inheritance rules for sex '",
           parent_sex[[pid]], "'.", call. = FALSE
         )
       }
@@ -586,6 +607,7 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
     b_sire <- matings$id_parent_1[b_idx]
     b_dam  <- matings$id_parent_2[b_idx]
     b_sex  <- matings$sex[b_idx]
+    b_line <- matings$line_name[b_idx]
 
     # --- Autosomes: gamete-flat kernel, grouped by resolved-map key (kind = 1
     # streams). Each gamete owns an independent stream keyed on its global
@@ -672,22 +694,26 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
         sire    <- b_sire[j]
         dam     <- b_dam[j]
         off_sex <- b_sex[j]
+        # Inheritance resolved by the OFFSPRING's sex and line.
+        off_rules <- chr_rules_for(b_line[j])
 
         for (r in c(1L, 2L)) {
           # Which special chromosomes does parent_origin r contribute to this
-          # offspring (given its sex)? Ascending chr order (special_chr_names is
-          # already chr-ascending).
+          # offspring (given its sex)? parent_origin r contributes iff the
+          # offspring inherits >=1 copy from parent_r. Ascending chr order
+          # (special_chr_names is already chr-ascending).
           r_chrs <- character(0)
           for (cn in special_chr_names) {
-            chr_row <- chr_meta_map[[cn]]
-            cm_off  <- if (off_sex == "M") chr_row$copy_mode_M else chr_row$copy_mode_F
-            if (cm_off == "none") next
-            if (cm_off == "full") {
-              r_chrs <- c(r_chrs, cn)                      # both r contribute
-            } else {                                       # "half": hemi side only
-              hemi_po <- if (chr_row$hemi_parent == "parent_1") 1L else 2L
-              if (hemi_po == r) r_chrs <- c(r_chrs, cn)
+            inh   <- off_rules[[cn]]
+            cnt_r <- if (r == 1L) inh$from_parent_1[[off_sex]] else inh$from_parent_2[[off_sex]]
+            if (cnt_r == 0L) next
+            if (cnt_r > 1L) {
+              stop("add_offspring(): chromosome '", cn, "' resolves to ", cnt_r,
+                   " copies from parent_", r, " for offspring sex '", off_sex,
+                   "'; uniparental/non-standard diploid transmission is not ",
+                   "implemented.", call. = FALSE)
             }
+            r_chrs <- c(r_chrs, cn)
           }
           if (length(r_chrs) == 0L) next
 
@@ -695,21 +721,18 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
           .seed_gamete_stream(base_seed, .gamete_stream_id(o, r, 2L))
 
           for (cn in r_chrs) {
-            chr_row <- chr_meta_map[[cn]]
             mats    <- parent_chr_haps[[pid]][[cn]]
             k_p     <- nrow(mats$hap)
             if (k_p == 0L) {
               stop(
-                "chr_meta misconfiguration: parent '", pid,
+                "chromosome-rule misconfiguration: parent '", pid,
                 "' has zero copies of chromosome '", cn,
                 "' to pass on as its designated contribution.", call. = FALSE
               )
             }
-            contrib_recombines <- if (parent_sex[[pid]] == "M") {
-              chr_row$recombines_M
-            } else {
-              chr_row$recombines_F
-            }
+            # Recombination resolved by the PRODUCING PARENT's sex and line.
+            contrib_recombines <-
+              chr_rules_for(parent_line[[pid]])[[cn]]$recombines[[parent_sex[[pid]]]]
 
             xpos <- numeric(0)
             if (k_p == 2L && isTRUE(contrib_recombines)) {

@@ -2,7 +2,8 @@
 #'
 #' @description
 #' Adds genome tables (`genome_meta`, `genome_map`, `ind_haplotype`,
-#' `ind_genotype`, `chr_meta`) to a population opened with [open_pop()].
+#' `ind_genotype`, `chr_inheritance`, `chr_recombination`) to a population opened
+#' with [open_pop()].
 #' Pipe-friendly — accepts a `tidybreed_pop` and returns a `tidybreed_pop`.
 #' Physical position (`pos_bp`, base pairs) lives in `genome_meta`; the genetic
 #' map (`pos_cM`, centiMorgans) lives in the long `genome_map` table. Haplotypes
@@ -35,6 +36,13 @@
 #' @param chr_names Character vector of length `n_chr` or `NULL`. Custom
 #'   chromosome names. When `NULL` (default), chromosomes are numbered
 #'   `1, 2, ..., n_chr`.
+#' @param recombines_M,recombines_F Logical scalar. Genome-wide recombination
+#'   default for **male-parent** and **female-parent** meiosis, seeded into
+#'   `chr_recombination`. Both default `TRUE`. Set one `FALSE` for a genome-wide,
+#'   whole-genome achiasmatic sex (e.g. `recombines_F = FALSE` for silkworm
+#'   females, `recombines_M = FALSE` for *Drosophila* males) instead of writing a
+#'   per-chromosome rule for every chromosome. Per-chromosome overrides (Y, W,
+#'   *Drosophila* chr4) still go through [define_chromosome()].
 #'
 #' @return The input `tidybreed_pop` with genome tables added.
 #'
@@ -62,16 +70,26 @@
 #'   define_founder_haplotypes(n_haplotypes = 100,
 #'                             min_allele_freq = 0.05,
 #'                             max_allele_freq = 0.95)
+#'
+#' # Genome-wide achiasmy — Drosophila males do not recombine (all chromosomes).
+#' # Per-chromosome overrides (e.g. chr4) still go through define_chromosome().
+#' pop <- open_pop(pop_name = "fly", db_name = ":memory:") |>
+#'   define_genome(n_loci = 1000, n_chr = 4, chr_len_Mb = 100,
+#'                 recombines_M = FALSE)
 #' }
 define_genome <- function(pop,
                           n_loci,
                           n_chr,
                           chr_len_Mb,
-                          cM_per_Mb   = 1.0,
-                          locus_names = NULL,
-                          chr_names   = NULL) {
+                          cM_per_Mb    = 1.0,
+                          locus_names  = NULL,
+                          chr_names    = NULL,
+                          recombines_M = TRUE,
+                          recombines_F = TRUE) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(is.logical(recombines_M), length(recombines_M) == 1L, !is.na(recombines_M))
+  stopifnot(is.logical(recombines_F), length(recombines_F) == 1L, !is.na(recombines_F))
   stopifnot(is.numeric(n_loci), length(n_loci) == 1, n_loci > 0)
   stopifnot(is.numeric(n_chr),  length(n_chr)  == 1, n_chr  > 0)
   if (!is.numeric(chr_len_Mb) || !length(chr_len_Mb) %in% c(1, n_chr) ||
@@ -248,41 +266,80 @@ define_genome <- function(pop,
   duckdb::duckdb_unregister(db_conn, "__tmp_genome_map")
   validate_genome_map(db_conn)
 
-  # Create chr_meta with default diploid-autosome rows. copy_mode_M/copy_mode_F
-  # are relative to each individual's own ploidy ("full"/"half"/"none"), not an
-  # absolute copy count — see define_chr() for non-default inheritance rules
-  # (sex chromosomes, organelles). recombines_M/recombines_F are per-sex (matching
-  # copy_mode_M/_F); FALSE gives whole-chromosome achiasmy for that sex.
+  # Chromosome inheritance & recombination live in two explicit long tables (see
+  # define_chromosome()). chr_inheritance says, per offspring sex, how many copies
+  # of a chromosome come from each parent (absolute counts, correct at ploidy 2);
+  # chr_recombination says, per producing-parent sex, whether the chromosome
+  # recombines. Both carry cheap row-local CHECK/NOT NULL constraints; the
+  # NULL-normalized logical key and chr_name FK are enforced by the R validators.
   DBI::dbExecute(db_conn, paste0(
-    "CREATE TABLE chr_meta (",
-    "chr_name VARCHAR PRIMARY KEY, ",
-    "copy_mode_M VARCHAR NOT NULL DEFAULT 'full', ",
-    "copy_mode_F VARCHAR NOT NULL DEFAULT 'full', ",
-    "hemi_parent VARCHAR, ",
-    "recombines_M BOOLEAN NOT NULL DEFAULT TRUE, ",
-    "recombines_F BOOLEAN NOT NULL DEFAULT TRUE)"
+    "CREATE TABLE chr_inheritance (",
+    "chr_name VARCHAR NOT NULL, ",
+    "offspring_sex VARCHAR CHECK (offspring_sex IN ('M','F')), ",   # NULL passes (default row)
+    "line_name VARCHAR, ",
+    "from_parent_1 UTINYINT NOT NULL CHECK (from_parent_1 >= 0), ",
+    "from_parent_2 UTINYINT NOT NULL CHECK (from_parent_2 >= 0), ",
+    "CHECK (from_parent_1 + from_parent_2 <= 2))"                   # diploid-release constraint
   ))
-  chr_meta_df <- tibble::tibble(
-    chr_name     = chr_names,
-    copy_mode_M  = "full",
-    copy_mode_F  = "full",
-    hemi_parent  = NA_character_,
-    recombines_M = TRUE,
-    recombines_F = TRUE
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE chr_recombination (",
+    "chr_name VARCHAR NOT NULL, ",
+    "parent_sex VARCHAR CHECK (parent_sex IN ('M','F')), ",         # NULL passes (both parents)
+    "line_name VARCHAR, ",
+    "recombines BOOLEAN NOT NULL)"
+  ))
+
+  # Seed one offspring_sex = NULL default inheritance row per chromosome
+  # (from_parent_1 = from_parent_2 = 1 — a plain diploid autosome).
+  chr_inh_df <- tibble::tibble(
+    chr_name      = chr_names,
+    offspring_sex = NA_character_,
+    line_name     = NA_character_,
+    from_parent_1 = 1L,
+    from_parent_2 = 1L
   )
+
+  # Seed chr_recombination from the genome-wide recombines_M/recombines_F defaults:
+  # one parent_sex = NULL row per chromosome when both sexes agree, otherwise a
+  # 'M' and an 'F' row per chromosome (genome-wide per-parent-sex achiasmy, e.g.
+  # silkworm females / Drosophila males).
+  if (identical(recombines_M, recombines_F)) {
+    chr_rec_df <- tibble::tibble(
+      chr_name   = chr_names,
+      parent_sex = NA_character_,
+      line_name  = NA_character_,
+      recombines = recombines_M
+    )
+  } else {
+    chr_rec_df <- tibble::tibble(
+      chr_name   = rep(chr_names, each = 2L),
+      parent_sex = rep(c("M", "F"), times = length(chr_names)),
+      line_name  = NA_character_,
+      recombines = rep(c(recombines_M, recombines_F), times = length(chr_names))
+    )
+  }
+
   # Use duckdb_register + INSERT (not dbAppendTable/dbWriteTable, which advance
   # R's RNG via an internal random temp name and would shift the simulation's
   # seeded draw sequence).
-  duckdb::duckdb_register(db_conn, "__tmp_chr_meta", as.data.frame(chr_meta_df))
-  DBI::dbExecute(db_conn, "INSERT INTO chr_meta SELECT * FROM __tmp_chr_meta")
-  duckdb::duckdb_unregister(db_conn, "__tmp_chr_meta")
+  duckdb::duckdb_register(db_conn, "__tmp_chr_inh", as.data.frame(chr_inh_df))
+  DBI::dbExecute(db_conn, "INSERT INTO chr_inheritance SELECT * FROM __tmp_chr_inh")
+  duckdb::duckdb_unregister(db_conn, "__tmp_chr_inh")
+
+  duckdb::duckdb_register(db_conn, "__tmp_chr_rec", as.data.frame(chr_rec_df))
+  DBI::dbExecute(db_conn, "INSERT INTO chr_recombination SELECT * FROM __tmp_chr_rec")
+  duckdb::duckdb_unregister(db_conn, "__tmp_chr_rec")
+
+  validate_chr_inheritance(db_conn)
+  validate_chr_recombination(db_conn)
 
   # Register genome-table schema descriptions
   register_schema_meta(db_conn, .genome_table_descriptions())
 
   # Update pop$tables
   pop$tables <- c(pop$tables, "genome_meta", "genome_map",
-                  "ind_haplotype", "ind_genotype", "ind_crossover", "chr_meta")
+                  "ind_haplotype", "ind_genotype", "ind_crossover",
+                  "chr_inheritance", "chr_recombination")
 
   chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
     paste0("all equal to ", chr_len_Mb[1], " Mb")
@@ -292,7 +349,7 @@ define_genome <- function(pop,
   message(
     "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
     " | chr lengths (Mb): ", chr_len_str,
-    "\n  Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_meta"
+    "\n  Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination"
   )
 
   pop

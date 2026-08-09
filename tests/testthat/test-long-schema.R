@@ -1,11 +1,12 @@
-# Sub-stage 1b checkpoint: the long-format tables and chr_meta exist with the
-# correct shape alongside the (still-authoritative) wide tables.
+# Sub-stage 1b checkpoint: the long-format tables and the chromosome-rule tables
+# exist with the correct shape.
 
-test_that("define_genome creates long ind_haplotype/ind_genotype and chr_meta", {
+test_that("define_genome creates long ind_haplotype/ind_genotype and chr tables", {
   pop <- make_pop_base(n_loci = 10, n_chr = 2, chr_len_Mb = 100)
   on.exit(close_pop(pop), add = TRUE)
 
-  for (tb in c("ind_haplotype", "ind_genotype", "chr_meta")) {
+  for (tb in c("ind_haplotype", "ind_genotype",
+               "chr_inheritance", "chr_recombination")) {
     expect_true(tb %in% pop$tables)
     expect_true(DBI::dbExistsTable(pop$db_conn, tb))
   }
@@ -30,17 +31,24 @@ test_that("define_genome creates long ind_haplotype/ind_genotype and chr_meta", 
     "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0)
 })
 
-test_that("chr_meta is seeded with default diploid-autosome rows", {
+test_that("chr_inheritance/chr_recombination are seeded with default rows", {
   pop <- make_pop_base(n_loci = 12, n_chr = 3, chr_len_Mb = 100)
   on.exit(close_pop(pop), add = TRUE)
 
-  cm <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM chr_meta ORDER BY chr_name")
-  expect_equal(nrow(cm), 3)
-  expect_true(all(cm$copy_mode_M == "full"))
-  expect_true(all(cm$copy_mode_F == "full"))
-  expect_true(all(cm$recombines_M))
-  expect_true(all(cm$recombines_F))
-  expect_true(all(is.na(cm$hemi_parent)))
+  inh <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM chr_inheritance ORDER BY chr_name")
+  expect_equal(nrow(inh), 3)
+  expect_true(all(is.na(inh$offspring_sex)))
+  expect_true(all(is.na(inh$line_name)))
+  expect_true(all(inh$from_parent_1 == 1))
+  expect_true(all(inh$from_parent_2 == 1))
+
+  rec <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM chr_recombination ORDER BY chr_name")
+  expect_equal(nrow(rec), 3)
+  expect_true(all(is.na(rec$parent_sex)))
+  expect_true(all(is.na(rec$line_name)))
+  expect_true(all(rec$recombines))
 })
 
 test_that("genome_meta stores pos_bp (BIGINT) and has no legacy columns", {

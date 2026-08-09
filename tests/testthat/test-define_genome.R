@@ -7,7 +7,8 @@ test_that("define_genome() adds genome tables to pop$tables", {
   expect_true("genome_map"    %in% pop$tables)
   expect_true("ind_haplotype" %in% pop$tables)
   expect_true("ind_genotype"  %in% pop$tables)
-  expect_true("chr_meta"      %in% pop$tables)
+  expect_true("chr_inheritance"   %in% pop$tables)
+  expect_true("chr_recombination" %in% pop$tables)
 })
 
 test_that("define_genome() genome_meta has correct row count and columns", {
@@ -119,7 +120,8 @@ test_that("define_genome() registers genome table descriptions in _schema_meta",
   expect_true("genome_meta"   %in% sm)
   expect_true("ind_haplotype" %in% sm)
   expect_true("ind_genotype"  %in% sm)
-  expect_true("chr_meta"      %in% sm)
+  expect_true("chr_inheritance"   %in% sm)
+  expect_true("chr_recombination" %in% sm)
 })
 
 test_that("define_genome() is pipe-friendly and returns pop", {

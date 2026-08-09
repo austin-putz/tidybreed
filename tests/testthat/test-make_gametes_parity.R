@@ -79,8 +79,8 @@ test_that("add_offspring() is identical under C++ and forced-R, incl. a sex chro
     # Make chromosome 3 an X: males hemizygous (dam-supplied), females diploid.
     x_name <- DBI::dbGetQuery(pop$db_conn,
       "SELECT DISTINCT chr_name FROM genome_meta WHERE chr = 3")$chr_name
-    pop <- define_chr(pop, x_name, copy_mode_M = "half", copy_mode_F = "full",
-                      hemi_parent = "parent_2", recombines = TRUE)
+    pop <- define_chromosome(pop, x_name, offspring_sex = "M",
+                             from_parent_1 = 0, from_parent_2 = 1)
     pop |>
       define_founder_haplotypes(n_haplotypes = 30, line_name = "A", method = "uniform") |>
       get_table("founder_haplotypes") |>

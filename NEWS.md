@@ -1,3 +1,31 @@
+# tidybreed 0.59.0 (2026-08-09)
+
+## Breaking changes
+
+- **Chromosome rules are now two explicit long tables.** The single wide
+  `chr_meta` table (`copy_mode_M`/`copy_mode_F`/`hemi_parent`/`recombines_M`/
+  `recombines_F`) is replaced by `chr_inheritance` (per-parent copy counts
+  `from_parent_1`/`from_parent_2`, keyed by **offspring** sex) and
+  `chr_recombination` (`recombines`, keyed by **producing-parent** sex). This
+  fixes the core confusion that one `sex` column meant two different individuals
+  (the offspring for copy count, the parent for recombination). Copy counts are
+  now **absolute** (correct at ploidy 2) rather than ploidy-relative
+  `"full"`/`"half"`/`"none"`.
+- **`define_chr()` → `define_chromosome()`.** The new function sets exactly one
+  concern per call: `from_parent_1` + `from_parent_2` (inheritance, keyed by
+  `offspring_sex`) or `recombines` (recombination, keyed by `parent_sex`). Writes
+  are transactional with validation and rollback; `overwrite = FALSE` errors on an
+  existing NULL-safe logical key. `resolve_chr_copy_count()` is removed.
+- **`define_genome()` gains `recombines_M`/`recombines_F`** (both `TRUE`) —
+  genome-wide per-parent-sex recombination defaults seeded into
+  `chr_recombination`. Set one `FALSE` for a whole-genome achiasmatic sex (e.g.
+  silkworm females, *Drosophila* males) instead of a per-chromosome rule for every
+  chromosome.
+
+Both tables reserve a nullable `line_name` dimension for future line-specific
+(crossbreeding) rules. Storage-expressible uniparental disomy (`2,0`) errors
+explicitly at the `add_offspring()`/`add_founders()` kernel boundary.
+
 # tidybreed 0.58.2 (2026-07-23)
 
 ## Documentation

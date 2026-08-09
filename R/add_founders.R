@@ -47,10 +47,11 @@
 #' 1. Samples 2 haplotypes per founder from `founder_haplotypes` (with replacement)
 #' 2. Creates/updates `ind_meta` table with founder metadata
 #' 3. Populates `ind_haplotype` (long format; `line_origin` set to the founder's
-#'    line and `strand = 1`. Row count per chromosome follows
-#'    `chr_meta`'s `copy_mode_M`/`copy_mode_F` for the founder's sex — 2
-#'    rows/locus for `"full"` (the default, diploid autosomes), 1 for
-#'    `"half"` (e.g. sex chromosomes), 0 for `"none"`; see [define_chr()])
+#'    line and `strand = 1`. Row count per chromosome follows the resolved
+#'    `chr_inheritance` `from_parent_1`/`from_parent_2` for the founder's sex — 2
+#'    rows/locus for a plain autosome (`1, 1`, the default), 1 for a hemizygous
+#'    sex chromosome (e.g. `0, 1`), 0 for an absent chromosome (`0, 0`); see
+#'    [define_chromosome()])
 #'
 #' **ID Format:**
 #' - Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
@@ -250,11 +251,12 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   # Peak memory is bounded by ~B x n_loci long rows, not the full
   # (2 x n_founders) x n_loci selected matrix (which is never built).
   #
-  # copy_mode_M/copy_mode_F decides which (sex, parent_origin) slots are written
-  # per chromosome — "full" writes both parent_origin slots (diploid-autosome
-  # default), "half" writes only the hemi_parent slot, "none" writes nothing —
-  # the same rule the old per-chr UNPIVOT applied, now emitted directly in long
-  # form. strand = 1 (ploidy 2); line_origin = the founder's own line for every
+  # chr_inheritance decides which (sex, parent_origin) slots are written per
+  # chromosome — a founder is treated as an offspring of its own sex/line, so
+  # slot 1 is written iff it inherits >=1 copy from parent_1 and slot 2 iff >=1
+  # from parent_2 (autosome default: both; a hemizygous sex chromosome: only the
+  # non-zero slot; an absent chromosome: neither). strand = 1 (ploidy 2);
+  # line_origin = the founder's own line for every
   # allele. .write_long_haplotypes() is register+INSERT (RNG-neutral); the single
   # dbWriteTable(ind_meta) advances R's RNG exactly once, matching the pre-Stage-1
   # stream. ind_genotype stays on-demand (add_dosage()); nothing written here.
@@ -265,7 +267,9 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   pat_row <- hap_indices[, 1]
   mat_row <- hap_indices[, 2]
 
-  chr_meta_map  <- get_chr_meta_map(pop$db_conn)
+  # Founders belong to `line_name`; resolve their chromosome rules at that line
+  # (falls back to the line-agnostic default when no line-specific rule exists).
+  chr_rules_map  <- get_chr_rules_map(pop$db_conn, line_name)
   chr_names_uni <- unique(gm$chr_name)
 
   B    <- resolve_batch_size(n_founders, n_loci, batch_size, max_batch_mem)
@@ -295,15 +299,25 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
     for (cn in chr_names_uni) {
       cols    <- which(gm$chr_name == cn)   # column positions (= locus_id)
       nl      <- length(cols)
-      chr_row <- chr_meta_map[[cn]]
+      chr_row <- chr_rules_map[[cn]]
 
-      keep_po_for <- function(cm) {
-        if (cm == "none") integer(0)
-        else if (cm == "full") c(1L, 2L)
-        else if (chr_row$hemi_parent == "parent_1") 1L else 2L
+      # Parent-origin slots written for a founder of sex sx: slot 1 iff it
+      # inherits >=1 copy from parent_1, slot 2 iff >=1 from parent_2. Founders
+      # draw one pool haplotype per non-zero slot, so a per-slot count > 1 (e.g.
+      # uniparental disomy 2,0) has no founder transmission mechanism.
+      keep_po_for <- function(sx) {
+        f1 <- chr_row$from_parent_1[[sx]]
+        f2 <- chr_row$from_parent_2[[sx]]
+        if (f1 > 1L || f2 > 1L) {
+          stop("add_founders(): chromosome '", cn, "' resolves to a per-parent ",
+               "copy count > 1 (from_parent_1=", f1, ", from_parent_2=", f2,
+               ") for sex '", sx, "'; uniparental/non-standard diploid ",
+               "transmission is not implemented.", call. = FALSE)
+        }
+        c(if (f1 >= 1L) 1L, if (f2 >= 1L) 2L)
       }
-      poM <- keep_po_for(chr_row$copy_mode_M)
-      poF <- keep_po_for(chr_row$copy_mode_F)
+      poM <- keep_po_for("M")
+      poF <- keep_po_for("F")
 
       for (po in c(1L, 2L)) {
         emit <- (b_sex == "M" & po %in% poM) | (b_sex == "F" & po %in% poF)
