@@ -9,6 +9,7 @@ inst/doc
 memory/
 .quarto/*
 *.Rcheck/
+GEMINI.md
 
 # markdowns
 

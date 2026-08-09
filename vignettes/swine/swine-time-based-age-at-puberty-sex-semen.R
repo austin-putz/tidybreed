@@ -227,7 +227,29 @@ pop <- pop %>%
 pop %>% get_table("genome_meta")
 pop %>% get_table("genome_map")
 
+#-------------------------------#
+# Verify genome tables
+#-------------------------------#
 
+# verify total counts
+pop |> 
+  get_table("genome_meta") |>
+  count()
+
+# verify chr counts
+pop |> 
+  get_table("genome_meta") |>
+  count(chr_name)
+
+# verify pos_bp locations
+pop |> 
+  get_table("genome_meta") |>
+  collect() |>
+  group_by(chr_name) |>
+  summarize(
+    min_bp = min(pos_bp),
+    max_bp = max(pos_bp)
+  )
 
 #------------------------------------------------------------------------------#
 # Add founder haplotypes
