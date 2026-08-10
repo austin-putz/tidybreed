@@ -45,7 +45,7 @@ warning naming the frequency actually used.}
 \code{0.99}.}
 
 \item{beta_shape1}{\emph{(method = "beta" only)} First Beta shape parameter (α).
-Must be > 0. Default \code{0.5}.}
+Must be finite and > 0. Default \code{0.5}.}
 
 \item{beta_shape2}{\emph{(method = "beta" only)} Second Beta shape parameter (β).
 Must be finite and > 0. Default \code{0.5}.}

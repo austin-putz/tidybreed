@@ -213,9 +213,9 @@ Several methods control the allele-frequency spectrum and linkage disequilibrium
 | `"uniform"` | Frequencies drawn uniformly between `min_allele_freq` and `max_allele_freq` |
 | `"fixed"` | Every locus at the same `allele_freq` |
 | `"beta"` | Beta-distributed frequencies (`beta_shape1`, `beta_shape2`) — U-shaped is realistic |
-| `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_freq`) |
-| `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `switch_rate`) |
-| `"gaussian_copula"` | Correlated frequencies with distance-based decay (`decay_rate`) |
+| `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_allele_freq`) |
+| `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `template_switch_rate`) |
+| `"gaussian_copula"` | Correlated frequencies with distance-based decay (`ld_decay_rate`) |
 
 ## Add founder individuals
 

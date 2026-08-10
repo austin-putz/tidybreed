@@ -295,7 +295,7 @@ pop <- pop %>%
     n_haplotypes     = config$genome$n_haplotypes,
     method           = "balding_nichols",     # Balding-Nichols Method (no LD)
     fst              = 0.1,                   # fst value
-    mean_freq        = 0.5                    # mean allele freq
+    mean_allele_freq = 0.5                    # ancestral mean allele freq
   )
 
 # line E
@@ -305,7 +305,7 @@ pop <- pop %>%
     n_haplotypes     = config$genome$n_haplotypes,
     method           = "mosaic",                       # mosaic generates simple LD
     n_templates      = ceiling(sqrt(config$genome$n_haplotypes)),
-    switch_rate      = 1.0
+    template_switch_rate = 1.0                # template re-draws per cM
   )
 
 # line F
@@ -313,8 +313,8 @@ pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "F",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "gaussian_copula",     # just 1 frequency (default = 0.5)
-    decay_rate       = 0.25                   # beta shape 1 parameter value
+    method           = "gaussian_copula",     # AR(1) latent-normal LD
+    ld_decay_rate    = 0.25                   # LD decay rate per cM
   )
 
 #------------------------------------------------------------------------------#

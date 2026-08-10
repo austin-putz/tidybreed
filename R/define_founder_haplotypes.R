@@ -85,7 +85,7 @@
 #' @param max_allele_freq *(method = "uniform" only)* Upper bound. Default
 #'   `0.99`.
 #' @param beta_shape1 *(method = "beta" only)* First Beta shape parameter (α).
-#'   Must be > 0. Default `0.5`.
+#'   Must be finite and > 0. Default `0.5`.
 #' @param beta_shape2 *(method = "beta" only)* Second Beta shape parameter (β).
 #'   Must be finite and > 0. Default `0.5`.
 #' @param fst *(method = "balding_nichols" only)* Wright's F_ST. Scalar in

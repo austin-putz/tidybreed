@@ -355,17 +355,17 @@ pop <- pop |>
 # Balding-Nichols (FST-based)
 pop <- pop |>
   define_founder_haplotypes(line_name = "D", n_haplotypes = 1000,
-    method = "balding_nichols", fst = 0.1, mean_freq = 0.5)
+    method = "balding_nichols", fst = 0.1, mean_allele_freq = 0.5)
 
 # Mosaic (introduces simple LD)
 pop <- pop |>
   define_founder_haplotypes(line_name = "E", n_haplotypes = 1000,
-    method = "mosaic", n_templates = 32, switch_rate = 1.0)
+    method = "mosaic", n_templates = 32, template_switch_rate = 1.0)
 
 # Gaussian copula
 pop <- pop |>
   define_founder_haplotypes(line_name = "F", n_haplotypes = 1000,
-    method = "gaussian_copula", decay_rate = 0.25)
+    method = "gaussian_copula", ld_decay_rate = 0.25)
 ```
 
 ### 4. Add founder individuals
