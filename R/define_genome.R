@@ -1,3 +1,9 @@
+# The tables define_genome() owns, in creation order. Single source of truth for
+# the preflight check, the pop$tables registration, and the summary message —
+# they must never disagree about what a "defined genome" consists of.
+GENOME_TABLES <- c("genome_meta", "genome_map", "ind_haplotype", "ind_genotype",
+                   "ind_crossover", "chr_inheritance", "chr_recombination")
+
 #' Define the genome structure of a breeding population
 #'
 #' @description
@@ -19,9 +25,16 @@
 #' To create the founder haplotype pool needed by [add_founders()], call
 #' [define_founder_haplotypes()] after this function.
 #'
-#' @param pop A `tidybreed_pop` object from [open_pop()].
-#' @param n_loci Integer scalar. Total number of loci to simulate.
-#' @param n_chr Integer scalar. Number of chromosomes.
+#' The call is **atomic**: every table is created inside a single transaction, so
+#' an error at any point (invalid argument, impossible locus spacing, failed
+#' validation) leaves the database exactly as it was and the population can be
+#' re-used for a corrected call.
+#'
+#' @param pop A `tidybreed_pop` object from [open_pop()]. Must not already have a
+#'   genome defined — `define_genome()` is called once per population.
+#' @param n_loci Integer scalar. Total number of loci to simulate. Must be a
+#'   whole number and at least `n_chr` (every chromosome needs a locus).
+#' @param n_chr Integer scalar. Number of chromosomes. Must be a whole number.
 #' @param chr_len_Mb Numeric scalar or numeric vector of length `n_chr`.
 #'   Chromosome length(s) in megabases. A single scalar applies the same
 #'   length to all chromosomes; a vector specifies each chromosome separately.
@@ -87,11 +100,31 @@ define_genome <- function(pop,
                           recombines_M = TRUE,
                           recombines_F = TRUE) {
 
-  stopifnot(inherits(pop, "tidybreed_pop"))
-  stopifnot(is.logical(recombines_M), length(recombines_M) == 1L, !is.na(recombines_M))
-  stopifnot(is.logical(recombines_F), length(recombines_F) == 1L, !is.na(recombines_F))
-  stopifnot(is.numeric(n_loci), length(n_loci) == 1, n_loci > 0)
-  stopifnot(is.numeric(n_chr),  length(n_chr)  == 1, n_chr  > 0)
+  validate_tidybreed_pop(pop)
+
+  recombines_M <- .check_flag(recombines_M, "recombines_M")
+  recombines_F <- .check_flag(recombines_F, "recombines_F")
+
+  # Whole-number scalars, not just "numeric and > 0". A fractional n_loci used to
+  # slip through and fail ~170 lines later inside tibble() -- seq.int(length.out =
+  # 100.5) yields 101 elements while seq_len(100.5) yields 100 -- after
+  # genome_meta had already been written.
+  n_loci <- .check_scalar(n_loci, "n_loci", min = 1, whole = TRUE)
+  n_chr  <- .check_scalar(n_chr,  "n_chr",  min = 1, whole = TRUE)
+
+  # Loci are split across chromosomes by diff(round(seq(0, n_loci, length.out =
+  # n_chr + 1))). With n_loci < n_chr some chromosomes get zero loci, and the
+  # pos_bp index `[2:(n_chr_loci + 1)]` becomes `[2:1]` -- a reversed 2-element
+  # slice that trips the "chromosome is too short" guard with a nonsense message.
+  # Reject up front instead: n_loci >= n_chr makes the seq step >= 1, so
+  # loci_per_chr can never contain a zero. (Skipping empty chromosomes is not an
+  # option -- chr_inheritance/chr_recombination are seeded from every chr_name,
+  # and a chromosome missing from genome_meta fails their orphan-chr_name check.)
+  if (n_loci < n_chr) {
+    stop("n_loci (", n_loci, ") must be at least n_chr (", n_chr, "): every ",
+         "chromosome needs at least one locus.", call. = FALSE)
+  }
+
   if (!is.numeric(chr_len_Mb) || !length(chr_len_Mb) %in% c(1, n_chr) ||
       any(!is.finite(chr_len_Mb)) || any(chr_len_Mb <= 0)) {
     stop("chr_len_Mb must be a finite, strictly positive numeric scalar or ",
@@ -105,13 +138,15 @@ define_genome <- function(pop,
 
   db_conn <- pop$db_conn
 
-  # Preflight: refuse to re-define a genome. define_genome() replaces genome_meta /
-  # genome_map (CREATE OR REPLACE) but then plain-CREATEs ind_haplotype/ind_genotype
-  # — a second call would partially clobber the genome before failing on the
-  # existing haplotype tables. Fail cleanly up front instead.
-  if (DBI::dbExistsTable(db_conn, "genome_meta") &&
-      DBI::dbGetQuery(db_conn, "SELECT COUNT(*) AS n FROM genome_meta")$n > 0L) {
-    stop("Genome already defined for this population (genome_meta is non-empty). ",
+  # Preflight: refuse to re-define a genome. Check for ANY of the seven genome
+  # tables, not just a non-empty genome_meta — an empty-but-existing genome_meta
+  # used to pass this guard and then die on the plain CREATE of ind_haplotype,
+  # leaving the population unusable. open_pop() creates none of these seven, so
+  # any of them existing means define_genome() has already run here.
+  existing_genome_tables <- intersect(GENOME_TABLES, DBI::dbListTables(db_conn))
+  if (length(existing_genome_tables) > 0L) {
+    stop("Genome already defined for this population (found: ",
+         paste(existing_genome_tables, collapse = ", "), "). ",
          "Call define_genome() once on a fresh population from open_pop().",
          call. = FALSE)
   }
@@ -126,13 +161,24 @@ define_genome <- function(pop,
   if (is.null(locus_names)) {
     locus_names <- paste0("Locus_", seq_len(n_loci))
   } else {
-    stopifnot(length(locus_names) == n_loci)
+    if (length(locus_names) != n_loci) {
+      stop("locus_names must have length n_loci (", n_loci, "), got ",
+           length(locus_names), ".", call. = FALSE)
+    }
+    locus_names <- as.character(locus_names)
   }
 
-  # locus_name must be unique — it is a denormalized key in the long
-  # ind_haplotype/ind_genotype tables, and a duplicate would silently corrupt
-  # joins to genome_effects. Validated in R rather than via a DB-level UNIQUE
-  # constraint (kept simple; genome_meta carries no DB constraints).
+  # locus_name is a denormalized key in genome_map and the long
+  # ind_haplotype/ind_genotype tables. NA or empty names would join to nothing in
+  # genome_effects and silently drop those loci from every downstream query, so
+  # reject them here rather than writing them (mirrors the chr_names guard below).
+  if (anyNA(locus_names) || any(nchar(locus_names) == 0L)) {
+    stop("locus_names must be non-missing, non-empty strings.", call. = FALSE)
+  }
+
+  # locus_name must also be unique — a duplicate would silently corrupt joins to
+  # genome_effects. Validated in R rather than via a DB-level UNIQUE constraint
+  # (kept simple; genome_meta carries no DB constraints).
   if (anyDuplicated(locus_names)) {
     dup <- unique(locus_names[duplicated(locus_names)])
     stop("locus_names must be unique. Duplicated: ",
@@ -144,7 +190,10 @@ define_genome <- function(pop,
   if (is.null(chr_names)) {
     chr_names <- as.character(seq_len(n_chr))
   } else {
-    stopifnot(length(chr_names) == n_chr)
+    if (length(chr_names) != n_chr) {
+      stop("chr_names must have length n_chr (", n_chr, "), got ",
+           length(chr_names), ".", call. = FALSE)
+    }
     chr_names <- as.character(chr_names)
   }
 
@@ -194,13 +243,33 @@ define_genome <- function(pop,
     pos_cM[chr_loci] <- (pos_bp_i / 1e6) * cM_per_Mb[i]
   }
 
+  # ---- Everything below is one transaction --------------------------------
+  # Seven CREATEs, four INSERTs, three validators and a _schema_meta write. Any
+  # failure among them used to leave a half-built genome that the preflight then
+  # refused to overwrite — an unrecoverable population. DuckDB DDL is
+  # transactional, so a ROLLBACK removes the created tables outright.
+  #
+  # duckdb_register() is a SESSION-level view registration and is NOT undone by
+  # ROLLBACK, so the temp views must be unregistered in the exit handler too
+  # (same pattern as define_chromosome()).
+  tmp_views <- c("__tmp_genome_meta", "__tmp_genome_map",
+                 "__tmp_chr_inh", "__tmp_chr_rec")
+  DBI::dbExecute(db_conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit({
+    for (v in tmp_views) try(duckdb::duckdb_unregister(db_conn, v), silent = TRUE)
+    if (!committed) try(DBI::dbExecute(db_conn, "ROLLBACK"), silent = TRUE)
+  }, add = TRUE)
+
   # ---- genome_meta (physical only) ---------------------------------------
   # Explicit typed CREATE so pos_bp is BIGINT (bulletproof for any genome size;
   # dbWriteTable would infer DOUBLE/INTEGER). Populate via duckdb_register +
   # INSERT (NOT dbWriteTable, which advances R's RNG via a random temp name and
-  # would shift the seeded draw sequence).
+  # would shift the seeded draw sequence). Plain CREATE, not CREATE OR REPLACE:
+  # the preflight guarantees the table does not exist, so OR REPLACE could only
+  # ever silently clobber a genome.
   DBI::dbExecute(db_conn, paste0(
-    "CREATE OR REPLACE TABLE genome_meta (",
+    "CREATE TABLE genome_meta (",
     "locus_id INTEGER, locus_name VARCHAR, chr INTEGER, chr_name VARCHAR, ",
     "pos_bp BIGINT)"
   ))
@@ -259,7 +328,7 @@ define_genome <- function(pop,
   # writes a single default map (sex NULL = both sexes, line_name NULL = all
   # lines, map_name = "default"). Explicit typed CREATE; populate RNG-safely.
   DBI::dbExecute(db_conn, paste0(
-    "CREATE OR REPLACE TABLE genome_map (",
+    "CREATE TABLE genome_map (",
     "id_genome_map INTEGER, locus_id INTEGER, locus_name VARCHAR, ",
     "sex VARCHAR, line_name VARCHAR, map_name VARCHAR, pos_cM DOUBLE)"
   ))
@@ -353,10 +422,12 @@ define_genome <- function(pop,
   # Register genome-table schema descriptions
   register_schema_meta(db_conn, .genome_table_descriptions())
 
-  # Update pop$tables
-  pop$tables <- c(pop$tables, "genome_meta", "genome_map",
-                  "ind_haplotype", "ind_genotype", "ind_crossover",
-                  "chr_inheritance", "chr_recombination")
+  DBI::dbExecute(db_conn, "COMMIT")
+  committed <- TRUE
+
+  # Update pop$tables (union, not append — never let the registry drift or
+  # accumulate duplicates)
+  pop$tables <- unique(c(pop$tables, GENOME_TABLES))
 
   chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
     paste0("all equal to ", chr_len_Mb[1], " Mb")
@@ -366,8 +437,9 @@ define_genome <- function(pop,
   message(
     "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
     " | chr lengths (Mb): ", chr_len_str,
-    "\n  Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination"
+    "\n  Tables written: ", paste(GENOME_TABLES, collapse = ", ")
   )
 
+  validate_tidybreed_pop(pop)
   pop
 }

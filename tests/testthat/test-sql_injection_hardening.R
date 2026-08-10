@@ -131,3 +131,35 @@ test_that("extract_genotypes() with a real quote-embedded locus_name still retur
   locus_cols <- grep("^locus_", names(geno), value = TRUE)
   expect_equal(length(locus_cols), 3L)  # still all 3 QTL loci present
 })
+
+
+# ---------------------------------------------------------------------------
+# line_name identifier validation (define_founder_haplotypes)
+# ---------------------------------------------------------------------------
+
+test_that("define_founder_haplotypes() rejects a malicious line_name", {
+  pop <- make_pop_base(n_loci = 10, n_chr = 2, chr_len_Mb = 100)
+  on.exit(close_pop(pop), add = TRUE)
+
+  # The line-collision lookup is parameterized, but line_name is also validated
+  # up front, so a quoting payload never reaches the query at all.
+  expect_error(
+    define_founder_haplotypes(pop, n_haplotypes = 10,
+                              line_name = "A'; DROP TABLE genome_meta; --"),
+    "must start with a letter"
+  )
+  expect_error(
+    define_founder_haplotypes(pop, n_haplotypes = 10, line_name = "A' OR '1'='1"),
+    "must start with a letter"
+  )
+
+  # genome_meta survived, and a legitimate line still works.
+  expect_true(DBI::dbExistsTable(pop$db_conn, "genome_meta"))
+  pop <- define_founder_haplotypes(pop, n_haplotypes = 10, line_name = "LineA")
+  expect_equal(
+    DBI::dbGetQuery(pop$db_conn,
+      "SELECT COUNT(DISTINCT haplotype_id) AS n FROM founder_haplotypes
+         WHERE line_name = 'LineA'")$n,
+    10L
+  )
+})

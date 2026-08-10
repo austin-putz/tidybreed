@@ -89,9 +89,14 @@ membership is determined from existing rows in \code{genome_effects}.
 
 The \code{base} argument controls which allele frequencies are used:
 \itemize{
-\item \code{"founder_haplotypes"} (default) — uses \code{founder_allele_freq} from
-\code{genome_meta} (requires \code{define_founder_haplotypes()} was called to
-populate it).
+\item \code{"founder_haplotypes"} (default) — computes allele frequencies directly
+from the \code{founder_haplotypes} table (requires \code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}}
+was called). Note this pools \strong{all} lines: when the table holds more than
+one \code{line_name}, the resulting frequency is the pool-size-weighted average
+across lines, which overstates within-line heterozygosity (Wahlund effect)
+and under-scales \code{target_add_var}. Use \code{base = "current_pop"} with a
+line-filtered \code{base_tbl} for per-line centering. (This does \strong{not} read
+\code{genome_meta.founder_allele_freq}, which is informational only.)
 \item \code{"current_pop"} — computes allele frequencies from the current
 \code{ind_haplotype} table. Pass a filtered \code{tidybreed_table} via
 \code{base_tbl} to restrict which individuals define the base population.

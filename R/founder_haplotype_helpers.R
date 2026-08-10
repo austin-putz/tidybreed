@@ -1,4 +1,8 @@
 # Internal helpers for define_founder_haplotypes(). None are exported.
+#
+# Scalar argument validation (`.check_scalar()` / `.check_flag()`) lives in
+# R/arg_checks.R -- it is shared with define_genome() and is not specific to
+# founder haplotypes.
 
 # ---------------------------------------------------------------------------
 # Allele frequency generators (independent methods)
@@ -16,16 +20,11 @@
   stats::rbeta(n_loci, shape1 = shape1, shape2 = shape2)
 }
 
-.gen_allele_freqs_balding_nichols <- function(n_loci, fst, mean_freq) {
-  shape1 <- mean_freq * (1 - fst) / fst
-  shape2 <- (1 - mean_freq) * (1 - fst) / fst
-  if (shape1 <= 0 || shape2 <= 0) {
-    stop(
-      "Balding-Nichols parameterization produced invalid Beta shape parameters. ",
-      "Ensure fst is in (0, 1) and mean_freq is in (0, 1).",
-      call. = FALSE
-    )
-  }
+# The caller validates fst and mean_allele_freq to the open interval (0, 1),
+# which makes both shape parameters strictly positive -- no guard needed here.
+.gen_allele_freqs_balding_nichols <- function(n_loci, fst, mean_allele_freq) {
+  shape1 <- mean_allele_freq * (1 - fst) / fst
+  shape2 <- (1 - mean_allele_freq) * (1 - fst) / fst
   stats::rbeta(n_loci, shape1 = shape1, shape2 = shape2)
 }
 
@@ -65,12 +64,12 @@
 }
 
 .gen_haplotypes_mosaic <- function(n_haplotypes, n_loci, locus_map,
-                                    n_templates, switch_rate) {
+                                    n_templates, template_switch_rate) {
   chrs <- sort(unique(locus_map$chr))
 
   # Build traversal order (loci in chr/pos order) and d_cM (genetic distance from
   # previous locus within the same chromosome; 0 at each chromosome's start).
-  # switch_rate is per cM; locus_map is the resolved default genetic map.
+  # template_switch_rate is per cM; locus_map is the resolved default genetic map.
   traversal_order <- integer(n_loci)
   d_cM            <- numeric(n_loci)
   k <- 0L
@@ -92,7 +91,7 @@
   }
 
   # Per-locus switch probability (Haldane-like), per cM
-  p_switch <- 1 - exp(-switch_rate * d_cM)
+  p_switch <- 1 - exp(-template_switch_rate * d_cM)
 
   # Identify the first locus of each chromosome (template resets here)
   chr_first_loci <- vapply(chrs, function(chr_id) {
@@ -116,10 +115,13 @@
   U <- matrix(stats::runif(n_haplotypes * n_loci),
                nrow = n_haplotypes, ncol = n_loci)
 
-  # Build each haplotype as a mosaic of templates
+  # Build each haplotype as a mosaic of templates.
+  # `current_template` needs no initial draw: step 1 always lands on the first
+  # locus of the first chromosome, which is always in `is_chr_first`, so the
+  # branch below re-draws unconditionally before the value is ever read.
   haplotype_matrix <- matrix(0L, nrow = n_haplotypes, ncol = n_loci)
   for (i in seq_len(n_haplotypes)) {
-    current_template <- sample.int(n_templates, 1L)
+    current_template <- NA_integer_
     for (step in seq_len(n_loci)) {
       j <- traversal_order[step]
       if (is_chr_first[j]) {
@@ -135,7 +137,7 @@
 }
 
 .gen_haplotypes_gaussian_copula <- function(n_haplotypes, n_loci, locus_map,
-                                             decay_rate) {
+                                             ld_decay_rate) {
   chrs <- sort(unique(locus_map$chr))
 
   # Sample per-locus allele frequencies and convert to latent thresholds
@@ -143,7 +145,7 @@
   thresholds   <- stats::qnorm(allele_freqs)
 
   # Build traversal order, d_cM (genetic distance), and rho per locus.
-  # decay_rate is per cM; locus_map is the resolved default genetic map.
+  # ld_decay_rate is per cM; locus_map is the resolved default genetic map.
   traversal_order <- integer(n_loci)
   d_cM            <- numeric(n_loci)
   k <- 0L
@@ -164,7 +166,7 @@
     k <- k + n_chr_loci
   }
 
-  rho <- exp(-decay_rate * d_cM)
+  rho <- exp(-ld_decay_rate * d_cM)
 
   # Force rho = 0 at each chromosome's first locus so the AR(1) restarts
   # independently (z_curr = eps ~ N(0,1) when rho = 0)
@@ -193,8 +195,10 @@
     z_prev <- z_curr
   }
 
-  list(haplotype_matrix = haplotype_matrix,
-       allele_freqs     = allele_freqs)
+  # Returns a bare matrix, matching .gen_haplotypes_mosaic(). The target
+  # `allele_freqs` used to build the thresholds are deliberately not returned:
+  # the caller stores the *realised* column means for LD methods.
+  haplotype_matrix
 }
 
 # ---------------------------------------------------------------------------
@@ -218,6 +222,12 @@
   # positionally to the sorted locus_id list.
   lid <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_id FROM genome_meta ORDER BY locus_id")$locus_id
+  # Without this, a length mismatch would silently recycle whenever one length
+  # divides the other, writing a shifted frequency vector with no error.
+  if (length(lid) != length(allele_freqs)) {
+    stop("Internal error: ", length(allele_freqs), " allele frequencies for ",
+         length(lid), " loci.", call. = FALSE)
+  }
   freq_df <- data.frame(locus_id = lid, founder_allele_freq = allele_freqs)
   duckdb::duckdb_register(pop$db_conn, "__tmp_founder_freq", freq_df)
   DBI::dbExecute(pop$db_conn,

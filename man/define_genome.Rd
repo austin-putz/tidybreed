@@ -17,11 +17,13 @@ define_genome(
 )
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object from \code{\link[=open_pop]{open_pop()}}.}
+\item{pop}{A \code{tidybreed_pop} object from \code{\link[=open_pop]{open_pop()}}. Must not already have a
+genome defined — \code{define_genome()} is called once per population.}
 
-\item{n_loci}{Integer scalar. Total number of loci to simulate.}
+\item{n_loci}{Integer scalar. Total number of loci to simulate. Must be a
+whole number and at least \code{n_chr} (every chromosome needs a locus).}
 
-\item{n_chr}{Integer scalar. Number of chromosomes.}
+\item{n_chr}{Integer scalar. Number of chromosomes. Must be a whole number.}
 
 \item{chr_len_Mb}{Numeric scalar or numeric vector of length \code{n_chr}.
 Chromosome length(s) in megabases. A single scalar applies the same
@@ -69,6 +71,11 @@ This is the second step in setting up a simulation:
 
 To create the founder haplotype pool needed by \code{\link[=add_founders]{add_founders()}}, call
 \code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} after this function.
+
+The call is \strong{atomic}: every table is created inside a single transaction, so
+an error at any point (invalid argument, impossible locus spacing, failed
+validation) leaves the database exactly as it was and the population can be
+re-used for a corrected call.
 }
 \examples{
 \dontrun{

@@ -26,9 +26,14 @@
 #'
 #' The `base` argument controls which allele frequencies are used:
 #'
-#' * `"founder_haplotypes"` (default) — uses `founder_allele_freq` from
-#'   `genome_meta` (requires `define_founder_haplotypes()` was called to
-#'   populate it).
+#' * `"founder_haplotypes"` (default) — computes allele frequencies directly
+#'   from the `founder_haplotypes` table (requires [define_founder_haplotypes()]
+#'   was called). Note this pools **all** lines: when the table holds more than
+#'   one `line_name`, the resulting frequency is the pool-size-weighted average
+#'   across lines, which overstates within-line heterozygosity (Wahlund effect)
+#'   and under-scales `target_add_var`. Use `base = "current_pop"` with a
+#'   line-filtered `base_tbl` for per-line centering. (This does **not** read
+#'   `genome_meta.founder_allele_freq`, which is informational only.)
 #' * `"current_pop"` — computes allele frequencies from the current
 #'   `ind_haplotype` table. Pass a filtered `tidybreed_table` via
 #'   `base_tbl` to restrict which individuals define the base population.
@@ -482,6 +487,20 @@ compute_base_allele_freq <- function(pop, base, base_ids = NULL) {
         "founder_haplotypes table not found. ",
         "Did you call define_founder_haplotypes()? ",
         "Use base = 'current_pop' instead.",
+        call. = FALSE
+      )
+    }
+    # This pools every line's haplotypes. With divergent lines the pooled
+    # frequency overstates within-line heterozygosity (Wahlund), so 2pq is too
+    # large and scale_to_target under-scales the effects.
+    n_lines <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT COUNT(DISTINCT line_name) AS n FROM founder_haplotypes")$n
+    if (isTRUE(n_lines > 1L)) {
+      warning(
+        "founder_haplotypes contains ", n_lines, " lines; base allele ",
+        "frequencies are pooled across all of them, which overstates ",
+        "within-line heterozygosity. For per-line centering use ",
+        "base = 'current_pop' with a line-filtered base_tbl.",
         call. = FALSE
       )
     }

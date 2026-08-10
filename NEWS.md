@@ -1,3 +1,171 @@
+# tidybreed 0.60.1 (2026-08-09)
+
+## Bug fixes
+
+- **`define_genome()` is now atomic.** It creates seven tables (`genome_meta`,
+  `genome_map`, `ind_haplotype`, `ind_genotype`, `ind_crossover`,
+  `chr_inheritance`, `chr_recombination`) plus a `_schema_meta` write, and did so
+  under autocommit with no transaction. Any mid-flight failure left a half-built
+  genome that the "genome already defined" preflight then refused to overwrite,
+  so the population was **unrecoverable** — the only fix was deleting the
+  database file. All table creation, inserts, validators and the `_schema_meta`
+  write now run inside one transaction with a rollback guard, so a failed call
+  leaves the database exactly as it found it and the same `pop` can be reused for
+  a corrected call. The exit handler also unregisters the temporary DuckDB views,
+  which are session-level registrations that `ROLLBACK` does not undo.
+
+- **The preflight only checked `genome_meta`.** An empty-but-existing genome
+  table passed the `COUNT(*) > 0` guard and the plain `CREATE TABLE
+  ind_haplotype` then failed mid-flight, leaving a populated `genome_meta`
+  behind. The check now covers all seven genome tables and names the ones it
+  found. `genome_meta` and `genome_map` are created with plain `CREATE TABLE`
+  rather than `CREATE OR REPLACE` — with the preflight and the transaction in
+  place, `OR REPLACE` could only ever silently clobber an existing genome.
+
+- **`locus_names` accepted `NA` and `""`.** Both were written straight into
+  `genome_meta` and `genome_map`. `locus_name` is the denormalized join key into
+  `genome_effects` / `ind_haplotype` / `genome_map`, so those loci silently
+  vanished from every downstream join. They are now rejected up front, matching
+  the guard `chr_names` already had.
+
+- **A nonsense error when `n_loci < n_chr`.** Empty chromosomes made the
+  position index `[2:(n_chr_loci + 1)]` collapse to the reversed `[2:1]`, and the
+  failure surfaced as *"chromosome 2: physical span 100000000 bp is too short to
+  place 0 loci"*. `n_loci < n_chr` is now rejected with a message that says what
+  is actually wrong.
+
+## Breaking changes
+
+Consistent with the 0.60.0 tightening of `define_founder_haplotypes()`, several
+`define_genome()` arguments that were silently accepted are now hard errors:
+
+- `n_loci` and `n_chr` must be **whole numbers**. `n_loci = 100.5` previously
+  passed the `is.numeric(...) && > 0` check and died ~170 lines later inside
+  `tibble()` (`seq.int(length.out = 100.5)` yields 101 elements while
+  `seq_len(100.5)` yields 100) — after `genome_meta` had already been written.
+  `NA`, `NaN`, `Inf`, character input and length ≠ 1 are also rejected now, each
+  with a message naming the argument and the value passed.
+- `n_loci` must be **at least `n_chr`** — every chromosome needs a locus.
+- `locus_names` may not contain `NA` or `""`, and a length mismatch now reports
+  the expected and actual lengths instead of a bare `stopifnot()` expression.
+- `recombines_M` / `recombines_F` go through the shared flag validator.
+
+## Internal
+
+- `pop` is validated with `validate_tidybreed_pop()` at entry (the convention in
+  20+ other functions) instead of a bare `inherits()` check, so a closed
+  connection reports itself rather than failing later as a DBI error, and again
+  before return so `pop$tables` cannot drift from the database.
+- `pop$tables` is updated with `unique(c(...))`, matching `define_table()` and
+  `define_effect_cov_matrix()`. The seven table names live in one
+  `GENOME_TABLES` constant shared by the preflight, the registration and the
+  summary message.
+- `.check_scalar()` / `.check_flag()` moved from `R/founder_haplotype_helpers.R`
+  to a new `R/arg_checks.R` — they are now shared with `define_genome()` and are
+  not specific to founder haplotypes. No behavior change.
+
+# tidybreed 0.60.0 (2026-08-09)
+
+## Breaking changes
+
+- **`define_founder_haplotypes()` argument renames.** Three method arguments
+  were ambiguous standalone or inconsistent with their own siblings. Per the
+  pre-1.0 policy the old names are removed outright, with no aliases:
+  - `mean_freq` → **`mean_allele_freq`** (its siblings are already
+    `min_allele_freq`/`max_allele_freq`)
+  - `switch_rate` → **`template_switch_rate`** (pairs with `n_templates`)
+  - `decay_rate` → **`ld_decay_rate`**
+
+  `fst` is deliberately kept — it is standard population-genetics notation.
+
+- **Invalid arguments are now hard errors instead of being silently accepted.**
+  Several nonsense inputs previously produced valid-looking pools:
+  `beta_shape1 = Inf` returned exactly 0.5 at every locus; `n_haplotypes = 2.7`
+  silently became 2; `n_templates = "5"` was accepted because `as.integer()` ran
+  *before* the `is.numeric()` check, making that check tautological. All scalar
+  arguments now go through a shared validator that rejects wrong types,
+  non-finite values, `NA`, fractional counts, and out-of-range values, and names
+  the offending argument and value. Per-method validation also runs *before* the
+  "Generating ..." progress message.
+
+- **`n_templates` may no longer exceed `n_haplotypes`** (extra templates add no
+  variation and over-allocate the template matrix).
+
+## New features
+
+- **`exact_freq` argument** for `"fixed"`, `"uniform"`, `"beta"`, and
+  `"balding_nichols"`. When `TRUE`, each locus receives exactly
+  `round(p * n_haplotypes)` copies of the 1-allele on an independently drawn
+  random subset of haplotypes, so the realized pool frequency equals the target
+  with no binomial fluctuation and no induced LD. Defaults to `TRUE` for
+  `"fixed"` and `FALSE` for the distribution-based methods, where drawing a
+  frequency and then sampling alleles binomially is the correct generative
+  model. Use it when you want `founder_allele_freq` to be an exact,
+  drift-free base for Falconer centering.
+
+## Bug fixes
+
+- **`n_haplotypes` between 0 and 1 no longer fails with an opaque error.** The
+  `> 0` check ran before `as.integer()`, so e.g. `0.5` coerced to `0L` and died
+  three frames down inside `.write_founder_haplotypes()` with
+  `invalid '(to - from)/by'`. Values are now validated as whole numbers `>= 1`
+  before coercion, and integer overflow (`1e10`) is caught rather than becoming
+  a silent `NA`.
+- **The LD methods ignored line-specific genetic maps.** `"mosaic"` and
+  `"gaussian_copula"` called `resolve_genome_map()` without a `line_name` even
+  when one was passed, so founder LD was built on the default map while every
+  later meiosis for that line used the line-specific map (`add_offspring()`
+  resolves per-parent). They now resolve the map for their own line.
+- **`ld_decay_rate = 0` is now allowed**, matching `template_switch_rate = 0`.
+  Both are the same well-defined maximum-LD limit (complete LD within a
+  chromosome) and `0` was already accepted — and tested — for the mosaic method.
+- `define_additive_effects()`'s documentation claimed `base = "founder_haplotypes"`
+  reads `genome_meta.founder_allele_freq`. It does not — it recomputes from the
+  `founder_haplotypes` table, **pooling all lines with no `line_name` filter**.
+  The doc is corrected, and a warning now fires when the table holds more than
+  one line, since the pooled frequency overstates within-line heterozygosity
+  (Wahlund) and silently under-scales `target_add_var`. Per-line base
+  frequencies remain a follow-up; use `base = "current_pop"` with a
+  line-filtered `base_tbl` in the meantime.
+
+## Documentation
+
+- Documented two easy-to-miss properties of `"mosaic"`: observable template
+  changes occur at `template_switch_rate * (n_templates - 1) / n_templates`
+  (the self-redraw is deliberate — it is the Li-Stephens kernel, and it is what
+  makes realized LD invariant to marker density), and `n_templates` controls the
+  **MAF spectrum**, not just block length. Because templates are the only source
+  of variation, roughly `2 / (n_templates + 1)` of loci are monomorphic
+  *regardless of `n_haplotypes`* — verified at 600 loci: `n_templates = 2` → 66.5%
+  (predicted 66.7%), `5` → 34.5% (33.3%), `15` → 12.3% (12.5%), versus 0.5% for
+  `"gaussian_copula"`. A warning now fires when more than 10% of loci come out
+  monomorphic, because QTL placed there contribute nothing to `sum(2pq a^2)`.
+- Documented that `genome_meta.founder_allele_freq` is informational only (no
+  other function reads it) and, in multi-line setups, describes only the pool
+  written most recently.
+
+## Internal
+
+- The wrong-method argument check now uses a single `ARG_METHODS` map
+  (argument → accepting methods) with values read back via `mget()`, replacing
+  two hand-synced lists that could drift. This also lets one argument belong to
+  several methods, which `exact_freq` requires.
+- The line-collision lookup is parameterized instead of `sprintf`-interpolated.
+  It was never exploitable (the `line_name` regex admits no quoting character),
+  but the safety no longer depends on a check 70 lines away. Added a
+  `line_name` injection case to `test-sql_injection_hardening.R`.
+- The `genome_meta` existence guard now asks the database rather than the
+  in-memory `pop$tables` registry, matching the adjacent check.
+- Removed dead code: the unreachable Balding-Nichols shape guard, the
+  Gaussian-copula helper's discarded `allele_freqs` return element, and a wasted
+  per-haplotype RNG draw in the mosaic generator that was always overwritten at
+  step 1. **The last one changes seeded `"mosaic"` output** relative to 0.59.x —
+  permitted pre-1.0, and within-version reproducibility is unaffected (and
+  tested).
+- `.write_founder_haplotypes()` now errors on an allele-frequency/locus length
+  mismatch instead of silently recycling.
+
+
 # tidybreed 0.59.2 (2026-08-09)
 
 ## Bug fixes
