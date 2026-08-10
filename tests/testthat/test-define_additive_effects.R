@@ -42,10 +42,24 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   idx <- match(eff$locus_name, locus_order$locus_name)
   a[idx] <- eff$genome_value
 
+  # The rescaler's actual contract: the Falconer expected additive variance
+  # under the base allele frequencies, sum(2 p q a^2), equals target_add_var.
+  # This is deterministic given the effects, so it is asserted tightly.
+  p <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT base_allele_freq AS p, genome_value AS a
+       FROM genome_effects WHERE trait_name = 'ADG'")
+  expect_equal(sum(2 * p$p * (1 - p$p) * p$a^2), 0.5, tolerance = 1e-8)
+
+  # The variance *realised* in the sampled founders is a noisy estimate of that
+  # expectation: 600 individuals drawn from a 200-haplotype pool carry drift and
+  # LD, so per-locus realised 2pq deviates from the base p. Measured spread
+  # across seeds is roughly +/-25% of target, so this bound is a sanity check on
+  # the order of magnitude, not a precision test -- do not tighten it to chase a
+  # lucky seed.
   X <- .dosage_matrix(pop)
   realised <- var(as.numeric(X %*% a))
 
-  expect_equal(realised, 0.5, tolerance = 0.15)
+  expect_equal(realised, 0.5, tolerance = 0.35)
   close_pop(pop)
 })
 

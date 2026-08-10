@@ -1,3 +1,44 @@
+# tidybreed 0.59.1 (2026-08-09)
+
+## Bug fixes
+
+- **`define_founder_haplotypes(method = "fixed")` now realizes `allele_freq`
+  exactly.** It previously drew each allele as an independent
+  `Bernoulli(allele_freq)` trial, so the *realized* pool frequency fluctuated
+  binomially around the target (with `allele_freq = 0.5` and 100 haplotypes,
+  per-locus frequencies ranged roughly 0.34–0.63 — sd ≈ 0.05). The method now
+  allocates exactly `round(allele_freq * n_haplotypes)` 1-alleles per locus to a
+  randomly drawn subset of haplotypes, with an independent draw per locus so no
+  LD is induced. `genome_meta.founder_allele_freq` is therefore the true pool
+  frequency, not just the requested parameter.
+
+  Frequencies live on a `1 / n_haplotypes` grid. When
+  `allele_freq * n_haplotypes` is not a whole number the count is rounded and a
+  warning names the frequency actually used (e.g. `allele_freq = 0.5` with 7
+  haplotypes gives `4/7`).
+
+  Only `method = "fixed"` changed. The distribution-based methods
+  (`"uniform"`, `"beta"`, `"balding_nichols"`) still draw per-locus frequencies
+  from their distribution and then sample alleles binomially, which is the
+  correct sampling model for them. Seeded output for `method = "fixed"` differs
+  from 0.59.0.
+
+## Tests
+
+- Added a reproducibility test asserting that all six
+  `define_founder_haplotypes()` methods produce byte-identical haplotype pools,
+  `founder_allele_freq` values, **and** RNG stream position from the same seed
+  (the last matters because `add_founders()`/`add_offspring()` draw from the
+  stream afterwards).
+- The `define_additive_effects()` rescaling test now asserts the rescaler's
+  actual contract — the Falconer expected variance `sum(2pq a^2)` under the base
+  allele frequencies equals `target_add_var` exactly — instead of relying solely
+  on a tight tolerance around the variance realized in a sampled founder set.
+  That realized value carries genuine drift/LD noise (roughly ±25% of target at
+  600 individuals drawn from a 200-haplotype pool), so its bound was widened to
+  match the measured spread and kept only as an order-of-magnitude sanity check.
+
+
 # tidybreed 0.59.0 (2026-08-09)
 
 ## Breaking changes

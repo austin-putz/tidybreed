@@ -32,7 +32,10 @@ generate.}
 Passing an argument that belongs to a different method raises an error.}
 
 \item{allele_freq}{\emph{(method = "fixed" only)} Numeric scalar in [0, 1].
-Allele frequency applied to every locus. Default \code{0.5}.}
+Allele frequency realized \emph{exactly} at every locus. Default \code{0.5}.
+Frequencies live on a \code{1 / n_haplotypes} grid; if
+\verb{allele_freq × n_haplotypes} is not a whole number it is rounded, with a
+warning naming the frequency actually used.}
 
 \item{min_allele_freq}{\emph{(method = "uniform" only)} Lower bound. Default
 \code{0.01}.}
@@ -99,8 +102,12 @@ per-line Falconer centering, use \code{base = "current_pop"} in
 \describe{
 \item{\code{"uniform"} (default)}{Per-locus allele frequency sampled from
 Uniform(\code{min_allele_freq}, \code{max_allele_freq}). No LD structure.}
-\item{\code{"fixed"}}{Every locus gets the same \code{allele_freq} (default 0.5).
-No LD structure. Useful for quick sanity checks.}
+\item{\code{"fixed"}}{Every locus gets the same \code{allele_freq} (default 0.5),
+\strong{exactly}. Rather than drawing each allele as a Bernoulli(\code{allele_freq})
+trial — which leaves the realized pool frequency fluctuating binomially
+around the target — exactly \verb{round(allele_freq × n_haplotypes)} of the
+haplotypes carry the 1-allele at each locus, on an independently drawn
+random subset per locus (so no LD is induced). No LD structure.}
 \item{\code{"beta"}}{Per-locus allele frequency sampled from
 Beta(\code{beta_shape1}, \code{beta_shape2}). Default \code{shape1 = shape2 = 0.5}
 (Jeffreys prior) gives a U-shaped MAF distribution with many rare and

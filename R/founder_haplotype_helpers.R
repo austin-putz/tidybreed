@@ -43,6 +43,27 @@
   haplotype_matrix
 }
 
+# Exact-frequency sampling: each locus gets exactly round(p * n_haplotypes)
+# 1-alleles, placed on a random subset of haplotypes. This is *allocation*, not
+# Bernoulli sampling -- the realized pool frequency equals the target (up to the
+# 1/n_haplotypes grid), with no binomial fluctuation. Each locus draws its own
+# independent permutation, so no LD is induced between loci.
+.gen_haplotypes_exact_freqs <- function(n_haplotypes, allele_freqs) {
+  n_loci <- length(allele_freqs)
+  n_ones <- as.integer(round(allele_freqs * n_haplotypes))
+  haplotype_matrix <- matrix(0L, nrow = n_haplotypes, ncol = n_loci)
+  for (j in seq_len(n_loci)) {
+    k <- n_ones[j]
+    if (k == 0L) next
+    if (k >= n_haplotypes) {
+      haplotype_matrix[, j] <- 1L
+    } else {
+      haplotype_matrix[sample.int(n_haplotypes, k), j] <- 1L
+    }
+  }
+  haplotype_matrix
+}
+
 .gen_haplotypes_mosaic <- function(n_haplotypes, n_loci, locus_map,
                                     n_templates, switch_rate) {
   chrs <- sort(unique(locus_map$chr))

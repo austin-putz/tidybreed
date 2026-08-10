@@ -21,8 +21,12 @@
 #' \describe{
 #'   \item{`"uniform"` (default)}{Per-locus allele frequency sampled from
 #'     Uniform(`min_allele_freq`, `max_allele_freq`). No LD structure.}
-#'   \item{`"fixed"`}{Every locus gets the same `allele_freq` (default 0.5).
-#'     No LD structure. Useful for quick sanity checks.}
+#'   \item{`"fixed"`}{Every locus gets the same `allele_freq` (default 0.5),
+#'     **exactly**. Rather than drawing each allele as a Bernoulli(`allele_freq`)
+#'     trial — which leaves the realized pool frequency fluctuating binomially
+#'     around the target — exactly `round(allele_freq × n_haplotypes)` of the
+#'     haplotypes carry the 1-allele at each locus, on an independently drawn
+#'     random subset per locus (so no LD is induced). No LD structure.}
 #'   \item{`"beta"`}{Per-locus allele frequency sampled from
 #'     Beta(`beta_shape1`, `beta_shape2`). Default `shape1 = shape2 = 0.5`
 #'     (Jeffreys prior) gives a U-shaped MAF distribution with many rare and
@@ -54,7 +58,10 @@
 #'   `"beta"`, `"balding_nichols"`, `"mosaic"`, or `"gaussian_copula"`.
 #'   Passing an argument that belongs to a different method raises an error.
 #' @param allele_freq *(method = "fixed" only)* Numeric scalar in \[0, 1\].
-#'   Allele frequency applied to every locus. Default `0.5`.
+#'   Allele frequency realized *exactly* at every locus. Default `0.5`.
+#'   Frequencies live on a `1 / n_haplotypes` grid; if
+#'   `allele_freq × n_haplotypes` is not a whole number it is rounded, with a
+#'   warning naming the frequency actually used.
 #' @param min_allele_freq *(method = "uniform" only)* Lower bound. Default
 #'   `0.01`.
 #' @param max_allele_freq *(method = "uniform" only)* Upper bound. Default
@@ -272,8 +279,20 @@ define_founder_haplotypes <- function(
     if (is.null(allele_freq)) allele_freq <- 0.5
     stopifnot(is.numeric(allele_freq), length(allele_freq) == 1L,
               allele_freq >= 0, allele_freq <= 1)
-    allele_freqs     <- .gen_allele_freqs_fixed(n_loci, allele_freq)
-    haplotype_matrix <- .gen_haplotypes_from_freqs(n_haplotypes, allele_freqs)
+    # Exact allocation, not Bernoulli sampling: the realized pool frequency at
+    # every locus is allele_freq itself, with no binomial fluctuation.
+    n_ones <- round(allele_freq * n_haplotypes)
+    if (!isTRUE(all.equal(n_ones, allele_freq * n_haplotypes))) {
+      warning(
+        "allele_freq = ", allele_freq, " is not exactly representable with ",
+        n_haplotypes, " haplotypes. Using ", n_ones, "/", n_haplotypes,
+        " = ", format(n_ones / n_haplotypes), " at every locus.",
+        call. = FALSE
+      )
+    }
+    allele_freqs     <- .gen_allele_freqs_fixed(n_loci, n_ones / n_haplotypes)
+    haplotype_matrix <- .gen_haplotypes_exact_freqs(
+      n_haplotypes, .gen_allele_freqs_fixed(n_loci, allele_freq))
 
   } else if (method == "uniform") {
     if (is.null(min_allele_freq)) min_allele_freq <- 0.01

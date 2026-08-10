@@ -81,14 +81,108 @@ test_that("method = 'fixed' creates haplotypes with uniform allele frequency", {
 })
 
 
+test_that("method = 'fixed' realizes the target frequency exactly at every locus", {
+  set.seed(11)
+  pop <- make_fh_pop("fh_fixed_exact", n_loci = 200) |>
+    define_founder_haplotypes(
+      n_haplotypes = 100,
+      method       = "fixed",
+      allele_freq  = 0.3
+    )
+
+  m <- fh_wide(pop)
+  expect_equal(nrow(m), 100L)
+  # Exact allocation: every column carries exactly 30 one-alleles.
+  expect_true(all(colSums(m) == 30L))
+  expect_true(all(colMeans(m) == 0.3))
+
+  # Independent per-locus permutations, so loci are not carbon copies of
+  # each other (that would be perfect LD).
+  expect_gt(length(unique(apply(m, 2, paste0, collapse = ""))), 1L)
+
+  close_pop(pop)
+})
+
+
+test_that("method = 'fixed' handles the 0 and 1 boundaries exactly", {
+  pop0 <- make_fh_pop("fh_fixed_0", n_loci = 20) |>
+    define_founder_haplotypes(n_haplotypes = 10, method = "fixed",
+                              allele_freq = 0)
+  expect_true(all(fh_wide(pop0) == 0L))
+  close_pop(pop0)
+
+  pop1 <- make_fh_pop("fh_fixed_1", n_loci = 20) |>
+    define_founder_haplotypes(n_haplotypes = 10, method = "fixed",
+                              allele_freq = 1)
+  expect_true(all(fh_wide(pop1) == 1L))
+  close_pop(pop1)
+})
+
+
+test_that("method = 'fixed' warns when allele_freq is off the 1/n_haplotypes grid", {
+  pop <- make_fh_pop("fh_fixed_grid", n_loci = 20)
+  expect_warning(
+    pop <- define_founder_haplotypes(pop, n_haplotypes = 7, method = "fixed",
+                                     allele_freq = 0.5),
+    regexp = "not exactly representable"
+  )
+
+  m <- fh_wide(pop)
+  # round(0.5 * 7) = 4 (R rounds half to even at .5 -> 4 here)
+  expect_true(all(colSums(m) == 4L))
+  gm <- get_table(pop, "genome_meta") |> dplyr::collect()
+  expect_true(all(gm$founder_allele_freq == 4 / 7))
+
+  close_pop(pop)
+})
+
+
 test_that("method = 'fixed' defaults allele_freq to 0.5", {
   pop <- make_fh_pop("fh_fixed_default", n_loci = 20) |>
     define_founder_haplotypes(n_haplotypes = 10, method = "fixed")
 
   gm <- get_table(pop, "genome_meta") |> dplyr::collect()
   expect_true(all(gm$founder_allele_freq == 0.5))
+  expect_true(all(colSums(fh_wide(pop)) == 5L))
 
   close_pop(pop)
+})
+
+
+test_that("every method reproduces byte-identically from the same seed", {
+  methods <- list(
+    fixed           = list(method = "fixed"),
+    uniform         = list(method = "uniform"),
+    beta            = list(method = "beta"),
+    balding_nichols = list(method = "balding_nichols"),
+    mosaic          = list(method = "mosaic"),
+    gaussian_copula = list(method = "gaussian_copula")
+  )
+
+  run_one <- function(nm, args) {
+    set.seed(4242)
+    pop <- do.call(
+      define_founder_haplotypes,
+      c(list(make_fh_pop(paste0("fh_seed_", nm), n_loci = 60, n_chr = 3),
+             n_haplotypes = 40), args)
+    )
+    out <- list(
+      hap  = fh_wide(pop),
+      freq = get_table(pop, "genome_meta") |> dplyr::collect() |>
+               dplyr::arrange(locus_id) |> dplyr::pull(founder_allele_freq),
+      # The RNG stream position after the call must also be seed-determined,
+      # or downstream add_founders()/add_offspring() would not reproduce.
+      tail = stats::runif(3)
+    )
+    close_pop(pop)
+    out
+  }
+
+  for (nm in names(methods)) {
+    a <- run_one(nm, methods[[nm]])
+    b <- run_one(nm, methods[[nm]])
+    expect_identical(a, b, info = nm)
+  }
 })
 
 
