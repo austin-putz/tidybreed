@@ -171,6 +171,18 @@ test_that("a failed validation rolls back, preserving the prior valid row", {
   expect_equal(after$from_parent_2, before$from_parent_2)
 })
 
+test_that("define_chromosome() rejects non-finite / non-integer copy counts cleanly", {
+  pop <- make_pop_base(n_loci = 10, n_chr = 2, chr_len_Mb = 100)
+  on.exit(close_pop(pop), add = TRUE)
+
+  for (bad in list(Inf, -Inf, NaN, 1.5, -1)) {
+    expect_error(
+      define_chromosome(pop, "1", offspring_sex = "M",
+                        from_parent_1 = bad, from_parent_2 = 1),
+      "single non-negative integer")
+  }
+})
+
 test_that("define_chromosome() does not perturb the RNG stream", {
   pop <- make_pop_base(n_loci = 10, n_chr = 2, chr_len_Mb = 100)
   on.exit(close_pop(pop), add = TRUE)

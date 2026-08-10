@@ -145,6 +145,23 @@ define_genome <- function(pop,
     chr_names <- as.character(seq_len(n_chr))
   } else {
     stopifnot(length(chr_names) == n_chr)
+    chr_names <- as.character(chr_names)
+  }
+
+  # chr_name is the logical key of chr_inheritance / chr_recombination and the
+  # chromosome identity in genome_meta. Duplicate, NA, or empty names would
+  # corrupt those tables and only surface late in validate_chr_inheritance() —
+  # after genome_meta is already populated, which then blocks a clean re-run of
+  # define_genome(). Validate up front, before any table is written (mirrors the
+  # locus_names uniqueness check above).
+  if (anyNA(chr_names) || any(nchar(chr_names) == 0L)) {
+    stop("chr_names must be non-missing, non-empty strings.", call. = FALSE)
+  }
+  if (anyDuplicated(chr_names)) {
+    dup <- unique(chr_names[duplicated(chr_names)])
+    stop("chr_names must be unique. Duplicated: ",
+         paste(utils::head(dup, 5L), collapse = ", "),
+         if (length(dup) > 5L) ", ..." else "", call. = FALSE)
   }
 
   # Assign loci to chromosomes (evenly distributed)

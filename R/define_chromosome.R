@@ -145,7 +145,7 @@ define_chromosome <- function(pop, chr_name,
            call. = FALSE)
     }
     ok_count <- function(v) is.numeric(v) && length(v) == 1L && !is.na(v) &&
-      v >= 0 && v == as.integer(v)
+      is.finite(v) && v >= 0 && v == as.integer(v)
     if (!ok_count(from_parent_1) || !ok_count(from_parent_2)) {
       stop("from_parent_1 and from_parent_2 must each be a single non-negative ",
            "integer.", call. = FALSE)

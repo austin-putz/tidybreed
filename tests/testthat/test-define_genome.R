@@ -131,3 +131,31 @@ test_that("define_genome() is pipe-friendly and returns pop", {
 
   expect_s3_class(pop, "tidybreed_pop")
 })
+
+test_that("define_genome() rejects duplicate/NA/empty chr_names before writing genome_meta", {
+  pop <- open_pop(db_name = ":memory:")
+  on.exit(close_pop(pop))
+
+  # Duplicate names error, and the failure is EARLY — genome_meta is never
+  # created, so a corrected re-run on the same pop succeeds (no half-genome that
+  # trips the "genome already defined" guard).
+  expect_error(
+    define_genome(pop, n_loci = 30, n_chr = 3, chr_len_Mb = 10,
+                  chr_names = c("1", "1", "X")),
+    "chr_names must be unique")
+  expect_false(DBI::dbExistsTable(pop$db_conn, "genome_meta"))
+
+  expect_error(
+    define_genome(pop, n_loci = 20, n_chr = 2, chr_len_Mb = 10,
+                  chr_names = c("1", "")),
+    "non-missing, non-empty")
+  expect_error(
+    define_genome(pop, n_loci = 20, n_chr = 2, chr_len_Mb = 10,
+                  chr_names = c("1", NA_character_)),
+    "non-missing, non-empty")
+
+  # Corrected re-run on the SAME pop works — nothing was left behind.
+  expect_no_error(suppressMessages(
+    define_genome(pop, n_loci = 30, n_chr = 3, chr_len_Mb = 10,
+                  chr_names = c("1", "2", "X"))))
+})

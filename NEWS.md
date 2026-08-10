@@ -1,3 +1,20 @@
+# tidybreed 0.59.2 (2026-08-09)
+
+## Bug fixes
+
+- **`define_genome()` now validates `chr_names` before writing any table.**
+  Duplicate, `NA`, or empty chromosome names were previously caught only late by
+  `validate_chr_inheritance()` — after `genome_meta` had already been populated —
+  which left a half-defined genome that tripped the "genome already defined"
+  guard and blocked a corrected re-run on the same population. Names are now
+  checked (and coerced to character) up front, mirroring the existing
+  `locus_names` uniqueness check.
+
+- **`define_chromosome()` rejects non-finite copy counts cleanly.**
+  `from_parent_1` / `from_parent_2 = Inf` previously produced a cryptic
+  "missing value where TRUE/FALSE needed" error; it now returns the standard
+  "single non-negative integer" validation message.
+
 # tidybreed 0.59.1 (2026-08-09)
 
 ## Bug fixes
