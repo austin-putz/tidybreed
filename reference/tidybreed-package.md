@@ -12,6 +12,8 @@ Useful links:
 
 - <https://github.com/austin-putz/tidybreed>
 
+- <https://austin-putz.github.io/tidybreed/>
+
 - Report bugs at <https://github.com/austin-putz/tidybreed/issues>
 
 ## Author

@@ -1,5 +1,382 @@
 # Changelog
 
+## tidybreed 0.60.2 (2026-08-10)
+
+### Bug fixes
+
+- **The pkgdown site has been failing to build since the `chr_meta`
+  split.** `_pkgdown.yml` still listed `define_chr` in its reference
+  index, but that function was renamed to
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  — and, per the pre-1.0 policy, the old name was removed outright
+  rather than aliased. Every pkgdown run since
+  `refactor(chr): split chr_meta into chr_inheritance + chr_recombination`
+  died with *“reference\[2\].contents\[2\] (define_chr) must be a known
+  topic name or alias”*, so the published documentation site has been
+  stuck at v0.58.0.
+
+  The stale entry broke the build in **both** directions: `define_chr`
+  resolved to nothing, and `define_chromosome` was consequently absent
+  from the index, which pkgdown also rejects because it requires every
+  public topic to be listed. Renaming the single entry fixes both. The
+  section description now mentions recombination as well as inheritance,
+  since
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  covers both concerns.
+
+  `R-CMD-check` passed on every one of the affected commits — it does
+  not validate `_pkgdown.yml` — which is why the rename slipped through.
+  Verified with
+  [`pkgdown::check_pkgdown()`](https://pkgdown.r-lib.org/reference/check_pkgdown.html)
+  (clean) and a full local
+  [`pkgdown::build_site()`](https://pkgdown.r-lib.org/reference/build_site.html)
+  against an installed 0.60.1.
+
+### Documentation
+
+- **`README.md` —
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md).**
+  Documents `cM_per_Mb` (and shows `genome_map` alongside
+  `genome_meta`), the physical/genetic coordinate split and how
+  `cM_per_Mb` sets the crossover rate, the seven-table single
+  transaction with rollback, the optional `locus_names` / `chr_names` /
+  `recombines_M` / `recombines_F` arguments, and the one-shot
+  restriction plus the up-front argument validation added in 0.60.1.
+- **`README.md` —
+  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md).**
+  Reorganised around the no-LD / LD split, with a method-to-argument
+  table. Adds the `exact_freq` argument from 0.60.0 (including why it
+  defaults to `TRUE` only for `"fixed"`), the wrong-method argument
+  error, the 0.60.0 fix that LD methods resolve the genetic map for
+  their own `line_name`, the `"mosaic"` `n_templates` MAF-spectrum
+  caveat and monomorphic-locus warning, the `line_name = NULL` fallback
+  and collision rules, and the `founder_allele_freq` caveat
+  (informational only; describes only the pool written last).
+- **`README.md` — Function Overview.** Reworded the
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  and
+  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
+  rows and added the missing
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  row.
+- **`vignettes/tidybreed-introduction.Rmd`.** Adds `cM_per_Mb` to the
+  genome example with an explanation of the default map and crossover
+  rate, notes that
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  is one-shot and transactional, and documents `exact_freq` and the
+  `"mosaic"` `n_templates` MAF caveat.
+- **`vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R`.**
+  Expanded the
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  and
+  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
+  blocks to cover the same ground, corrected the `cM_per_Mb` comment
+  (`pos_bp/1e6`, not `pos_Mb`), fixed a duplicated `beta_shape` comment,
+  and noted that line B’s `allele_freq` is now realized exactly.
+
+## tidybreed 0.60.1 (2026-08-09)
+
+### Bug fixes
+
+- **[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  is now atomic.** It creates seven tables (`genome_meta`, `genome_map`,
+  `ind_haplotype`, `ind_genotype`, `ind_crossover`, `chr_inheritance`,
+  `chr_recombination`) plus a `_schema_meta` write, and did so under
+  autocommit with no transaction. Any mid-flight failure left a
+  half-built genome that the “genome already defined” preflight then
+  refused to overwrite, so the population was **unrecoverable** — the
+  only fix was deleting the database file. All table creation, inserts,
+  validators and the `_schema_meta` write now run inside one transaction
+  with a rollback guard, so a failed call leaves the database exactly as
+  it found it and the same `pop` can be reused for a corrected call. The
+  exit handler also unregisters the temporary DuckDB views, which are
+  session-level registrations that `ROLLBACK` does not undo.
+
+- **The preflight only checked `genome_meta`.** An empty-but-existing
+  genome table passed the `COUNT(*) > 0` guard and the plain
+  `CREATE TABLE ind_haplotype` then failed mid-flight, leaving a
+  populated `genome_meta` behind. The check now covers all seven genome
+  tables and names the ones it found. `genome_meta` and `genome_map` are
+  created with plain `CREATE TABLE` rather than `CREATE OR REPLACE` —
+  with the preflight and the transaction in place, `OR REPLACE` could
+  only ever silently clobber an existing genome.
+
+- **`locus_names` accepted `NA` and `""`.** Both were written straight
+  into `genome_meta` and `genome_map`. `locus_name` is the denormalized
+  join key into `genome_effects` / `ind_haplotype` / `genome_map`, so
+  those loci silently vanished from every downstream join. They are now
+  rejected up front, matching the guard `chr_names` already had.
+
+- **A nonsense error when `n_loci < n_chr`.** Empty chromosomes made the
+  position index `[2:(n_chr_loci + 1)]` collapse to the reversed
+  `[2:1]`, and the failure surfaced as *“chromosome 2: physical span
+  100000000 bp is too short to place 0 loci”*. `n_loci < n_chr` is now
+  rejected with a message that says what is actually wrong.
+
+### Breaking changes
+
+Consistent with the 0.60.0 tightening of
+[`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md),
+several
+[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+arguments that were silently accepted are now hard errors:
+
+- `n_loci` and `n_chr` must be **whole numbers**. `n_loci = 100.5`
+  previously passed the `is.numeric(...) && > 0` check and died ~170
+  lines later inside
+  [`tibble()`](https://tibble.tidyverse.org/reference/tibble.html)
+  (`seq.int(length.out = 100.5)` yields 101 elements while
+  `seq_len(100.5)` yields 100) — after `genome_meta` had already been
+  written. `NA`, `NaN`, `Inf`, character input and length ≠ 1 are also
+  rejected now, each with a message naming the argument and the value
+  passed.
+- `n_loci` must be **at least `n_chr`** — every chromosome needs a
+  locus.
+- `locus_names` may not contain `NA` or `""`, and a length mismatch now
+  reports the expected and actual lengths instead of a bare
+  [`stopifnot()`](https://rdrr.io/r/base/stopifnot.html) expression.
+- `recombines_M` / `recombines_F` go through the shared flag validator.
+
+### Internal
+
+- `pop` is validated with
+  [`validate_tidybreed_pop()`](https://austin-putz.github.io/tidybreed/reference/validate_tidybreed_pop.md)
+  at entry (the convention in 20+ other functions) instead of a bare
+  [`inherits()`](https://rdrr.io/r/base/class.html) check, so a closed
+  connection reports itself rather than failing later as a DBI error,
+  and again before return so `pop$tables` cannot drift from the
+  database.
+- `pop$tables` is updated with `unique(c(...))`, matching
+  [`define_table()`](https://austin-putz.github.io/tidybreed/reference/define_table.md)
+  and
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md).
+  The seven table names live in one `GENOME_TABLES` constant shared by
+  the preflight, the registration and the summary message.
+- `.check_scalar()` / `.check_flag()` moved from
+  `R/founder_haplotype_helpers.R` to a new `R/arg_checks.R` — they are
+  now shared with
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  and are not specific to founder haplotypes. No behavior change.
+
+## tidybreed 0.60.0 (2026-08-09)
+
+### Breaking changes
+
+- **[`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
+  argument renames.** Three method arguments were ambiguous standalone
+  or inconsistent with their own siblings. Per the pre-1.0 policy the
+  old names are removed outright, with no aliases:
+
+  - `mean_freq` → **`mean_allele_freq`** (its siblings are already
+    `min_allele_freq`/`max_allele_freq`)
+  - `switch_rate` → **`template_switch_rate`** (pairs with
+    `n_templates`)
+  - `decay_rate` → **`ld_decay_rate`**
+
+  `fst` is deliberately kept — it is standard population-genetics
+  notation.
+
+- **Invalid arguments are now hard errors instead of being silently
+  accepted.** Several nonsense inputs previously produced valid-looking
+  pools: `beta_shape1 = Inf` returned exactly 0.5 at every locus;
+  `n_haplotypes = 2.7` silently became 2; `n_templates = "5"` was
+  accepted because [`as.integer()`](https://rdrr.io/r/base/integer.html)
+  ran *before* the [`is.numeric()`](https://rdrr.io/r/base/numeric.html)
+  check, making that check tautological. All scalar arguments now go
+  through a shared validator that rejects wrong types, non-finite
+  values, `NA`, fractional counts, and out-of-range values, and names
+  the offending argument and value. Per-method validation also runs
+  *before* the “Generating …” progress message.
+
+- **`n_templates` may no longer exceed `n_haplotypes`** (extra templates
+  add no variation and over-allocate the template matrix).
+
+### New features
+
+- **`exact_freq` argument** for `"fixed"`, `"uniform"`, `"beta"`, and
+  `"balding_nichols"`. When `TRUE`, each locus receives exactly
+  `round(p * n_haplotypes)` copies of the 1-allele on an independently
+  drawn random subset of haplotypes, so the realized pool frequency
+  equals the target with no binomial fluctuation and no induced LD.
+  Defaults to `TRUE` for `"fixed"` and `FALSE` for the
+  distribution-based methods, where drawing a frequency and then
+  sampling alleles binomially is the correct generative model. Use it
+  when you want `founder_allele_freq` to be an exact, drift-free base
+  for Falconer centering.
+
+### Bug fixes
+
+- **`n_haplotypes` between 0 and 1 no longer fails with an opaque
+  error.** The `> 0` check ran before
+  [`as.integer()`](https://rdrr.io/r/base/integer.html), so e.g. `0.5`
+  coerced to `0L` and died three frames down inside
+  `.write_founder_haplotypes()` with `invalid '(to - from)/by'`. Values
+  are now validated as whole numbers `>= 1` before coercion, and integer
+  overflow (`1e10`) is caught rather than becoming a silent `NA`.
+- **The LD methods ignored line-specific genetic maps.** `"mosaic"` and
+  `"gaussian_copula"` called `resolve_genome_map()` without a
+  `line_name` even when one was passed, so founder LD was built on the
+  default map while every later meiosis for that line used the
+  line-specific map
+  ([`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  resolves per-parent). They now resolve the map for their own line.
+- **`ld_decay_rate = 0` is now allowed**, matching
+  `template_switch_rate = 0`. Both are the same well-defined maximum-LD
+  limit (complete LD within a chromosome) and `0` was already accepted —
+  and tested — for the mosaic method.
+- [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)’s
+  documentation claimed `base = "founder_haplotypes"` reads
+  `genome_meta.founder_allele_freq`. It does not — it recomputes from
+  the `founder_haplotypes` table, **pooling all lines with no
+  `line_name` filter**. The doc is corrected, and a warning now fires
+  when the table holds more than one line, since the pooled frequency
+  overstates within-line heterozygosity (Wahlund) and silently
+  under-scales `target_add_var`. Per-line base frequencies remain a
+  follow-up; use `base = "current_pop"` with a line-filtered `base_tbl`
+  in the meantime.
+
+### Documentation
+
+- Documented two easy-to-miss properties of `"mosaic"`: observable
+  template changes occur at
+  `template_switch_rate * (n_templates - 1) / n_templates` (the
+  self-redraw is deliberate — it is the Li-Stephens kernel, and it is
+  what makes realized LD invariant to marker density), and `n_templates`
+  controls the **MAF spectrum**, not just block length. Because
+  templates are the only source of variation, roughly
+  `2 / (n_templates + 1)` of loci are monomorphic *regardless of
+  `n_haplotypes`* — verified at 600 loci: `n_templates = 2` → 66.5%
+  (predicted 66.7%), `5` → 34.5% (33.3%), `15` → 12.3% (12.5%), versus
+  0.5% for `"gaussian_copula"`. A warning now fires when more than 10%
+  of loci come out monomorphic, because QTL placed there contribute
+  nothing to `sum(2pq a^2)`.
+- Documented that `genome_meta.founder_allele_freq` is informational
+  only (no other function reads it) and, in multi-line setups, describes
+  only the pool written most recently.
+
+### Internal
+
+- The wrong-method argument check now uses a single `ARG_METHODS` map
+  (argument → accepting methods) with values read back via
+  [`mget()`](https://rdrr.io/r/base/get.html), replacing two hand-synced
+  lists that could drift. This also lets one argument belong to several
+  methods, which `exact_freq` requires.
+- The line-collision lookup is parameterized instead of
+  `sprintf`-interpolated. It was never exploitable (the `line_name`
+  regex admits no quoting character), but the safety no longer depends
+  on a check 70 lines away. Added a `line_name` injection case to
+  `test-sql_injection_hardening.R`.
+- The `genome_meta` existence guard now asks the database rather than
+  the in-memory `pop$tables` registry, matching the adjacent check.
+- Removed dead code: the unreachable Balding-Nichols shape guard, the
+  Gaussian-copula helper’s discarded `allele_freqs` return element, and
+  a wasted per-haplotype RNG draw in the mosaic generator that was
+  always overwritten at step 1. **The last one changes seeded `"mosaic"`
+  output** relative to 0.59.x — permitted pre-1.0, and within-version
+  reproducibility is unaffected (and tested).
+- `.write_founder_haplotypes()` now errors on an allele-frequency/locus
+  length mismatch instead of silently recycling.
+
+## tidybreed 0.59.2 (2026-08-09)
+
+### Bug fixes
+
+- **[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  now validates `chr_names` before writing any table.** Duplicate, `NA`,
+  or empty chromosome names were previously caught only late by
+  `validate_chr_inheritance()` — after `genome_meta` had already been
+  populated — which left a half-defined genome that tripped the “genome
+  already defined” guard and blocked a corrected re-run on the same
+  population. Names are now checked (and coerced to character) up front,
+  mirroring the existing `locus_names` uniqueness check.
+
+- **[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  rejects non-finite copy counts cleanly.** `from_parent_1` /
+  `from_parent_2 = Inf` previously produced a cryptic “missing value
+  where TRUE/FALSE needed” error; it now returns the standard “single
+  non-negative integer” validation message.
+
+## tidybreed 0.59.1 (2026-08-09)
+
+### Bug fixes
+
+- **`define_founder_haplotypes(method = "fixed")` now realizes
+  `allele_freq` exactly.** It previously drew each allele as an
+  independent `Bernoulli(allele_freq)` trial, so the *realized* pool
+  frequency fluctuated binomially around the target (with
+  `allele_freq = 0.5` and 100 haplotypes, per-locus frequencies ranged
+  roughly 0.34–0.63 — sd ≈ 0.05). The method now allocates exactly
+  `round(allele_freq * n_haplotypes)` 1-alleles per locus to a randomly
+  drawn subset of haplotypes, with an independent draw per locus so no
+  LD is induced. `genome_meta.founder_allele_freq` is therefore the true
+  pool frequency, not just the requested parameter.
+
+  Frequencies live on a `1 / n_haplotypes` grid. When
+  `allele_freq * n_haplotypes` is not a whole number the count is
+  rounded and a warning names the frequency actually used
+  (e.g. `allele_freq = 0.5` with 7 haplotypes gives `4/7`).
+
+  Only `method = "fixed"` changed. The distribution-based methods
+  (`"uniform"`, `"beta"`, `"balding_nichols"`) still draw per-locus
+  frequencies from their distribution and then sample alleles
+  binomially, which is the correct sampling model for them. Seeded
+  output for `method = "fixed"` differs from 0.59.0.
+
+### Tests
+
+- Added a reproducibility test asserting that all six
+  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
+  methods produce byte-identical haplotype pools, `founder_allele_freq`
+  values, **and** RNG stream position from the same seed (the last
+  matters because
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)/[`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  draw from the stream afterwards).
+- The
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  rescaling test now asserts the rescaler’s actual contract — the
+  Falconer expected variance `sum(2pq a^2)` under the base allele
+  frequencies equals `target_add_var` exactly — instead of relying
+  solely on a tight tolerance around the variance realized in a sampled
+  founder set. That realized value carries genuine drift/LD noise
+  (roughly ±25% of target at 600 individuals drawn from a 200-haplotype
+  pool), so its bound was widened to match the measured spread and kept
+  only as an order-of-magnitude sanity check.
+
+## tidybreed 0.59.0 (2026-08-09)
+
+### Breaking changes
+
+- **Chromosome rules are now two explicit long tables.** The single wide
+  `chr_meta` table
+  (`copy_mode_M`/`copy_mode_F`/`hemi_parent`/`recombines_M`/
+  `recombines_F`) is replaced by `chr_inheritance` (per-parent copy
+  counts `from_parent_1`/`from_parent_2`, keyed by **offspring** sex)
+  and `chr_recombination` (`recombines`, keyed by **producing-parent**
+  sex). This fixes the core confusion that one `sex` column meant two
+  different individuals (the offspring for copy count, the parent for
+  recombination). Copy counts are now **absolute** (correct at ploidy 2)
+  rather than ploidy-relative `"full"`/`"half"`/`"none"`.
+- **`define_chr()` →
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md).**
+  The new function sets exactly one concern per call: `from_parent_1` +
+  `from_parent_2` (inheritance, keyed by `offspring_sex`) or
+  `recombines` (recombination, keyed by `parent_sex`). Writes are
+  transactional with validation and rollback; `overwrite = FALSE` errors
+  on an existing NULL-safe logical key. `resolve_chr_copy_count()` is
+  removed.
+- **[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  gains `recombines_M`/`recombines_F`** (both `TRUE`) — genome-wide
+  per-parent-sex recombination defaults seeded into `chr_recombination`.
+  Set one `FALSE` for a whole-genome achiasmatic sex (e.g. silkworm
+  females, *Drosophila* males) instead of a per-chromosome rule for
+  every chromosome.
+
+Both tables reserve a nullable `line_name` dimension for future
+line-specific (crossbreeding) rules. Storage-expressible uniparental
+disomy (`2,0`) errors explicitly at the
+[`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)/[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+kernel boundary.
+
 ## tidybreed 0.58.2 (2026-07-23)
 
 ### Documentation
@@ -368,9 +745,8 @@ TBV and `index_names`/`type = "both"` in
 [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
 `economic_wts` in
 [`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
-sex-chromosome/organelle usage in
-[`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md),
-composite/SGE phenotype scenarios in
+sex-chromosome/organelle usage in `define_chr()`, composite/SGE
+phenotype scenarios in
 [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)).
 Fixed pervasive stale references to the deprecated `initialize_genome()`
 (superseded by `open_pop() |> define_genome()`), resolved all `Rd`
@@ -396,24 +772,22 @@ Two real (non-doc) bugs surfaced and fixed along the way:
 
 ### New features — sex chromosomes and organelles (Stage 4)
 
-`chr_meta`/[`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)
-now support non-diploid inheritance rules: sex chromosomes (X/Y, Z/W,
-X0/Z0) and organelles (mitochondria, plastids). Real polyploidy (ploidy
-\> 2, uneven-ploidy crosses) remains out of scope — an `ind_meta.ploidy`
-column is added for forward schema compatibility, but every individual
-must be `ploidy = 2` in this version.
+`chr_meta`/`define_chr()` now support non-diploid inheritance rules: sex
+chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids).
+Real polyploidy (ploidy \> 2, uneven-ploidy crosses) remains out of
+scope — an `ind_meta.ploidy` column is added for forward schema
+compatibility, but every individual must be `ploidy = 2` in this
+version.
 
 - **Schema**: `chr_meta.copies_M`/`copies_F` (absolute integers) renamed
   to `copy_mode_M`/`copy_mode_F` (`"full"`/`"half"`/`"none"`, relative
   to an individual’s own ploidy) — resolves the terminology clash
   flagged during Stage 4 planning. New `ind_meta.ploidy` column
   (`UTINYINT`, default `2`, reserved).
-- **New
-  [`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)**
-  (`R/define_chr.R`) — upserts a chromosome’s inheritance rule
-  (`copy_mode_M`, `copy_mode_F`, `hemi_parent`, `recombines`) into
-  `chr_meta`, with validation for the enum values and the
-  `hemi_parent`/copy_mode consistency requirement.
+- **New `define_chr()`** (`R/define_chr.R`) — upserts a chromosome’s
+  inheritance rule (`copy_mode_M`, `copy_mode_F`, `hemi_parent`,
+  `recombines`) into `chr_meta`, with validation for the enum values and
+  the `hemi_parent`/copy_mode consistency requirement.
 - **[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)**
   gains a `ploidy` argument (must be `2`) and now writes `ind_haplotype`
   rows per chromosome according to `chr_meta`: both `parent_origin`
@@ -484,8 +858,7 @@ two gaps found when reviewing them against the Stage 3 exit criteria in
 - New internal `assert_diploid_only()` guard (`R/ploidy_helpers.R`)
   makes both functions error clearly if `chr_meta` ever contains a
   non-diploid chromosome, rather than silently computing wrong dosage —
-  forward defense ahead of Stage 4
-  ([`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)).
+  forward defense ahead of Stage 4 (`define_chr()`).
 - Added test coverage for: cache-vs-direct extraction parity, partial
   `ind_genotype` cache population never affecting
   [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)/
@@ -574,9 +947,8 @@ before/after).
   parental segment during recombination). It is not yet *used* in TBV —
   that is Stage 2.
 - New `chr_meta` table with default diploid-autosome rows
-  (per-chromosome inheritance rules;
-  [`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)
-  and non-default rules are Stage 4).
+  (per-chromosome inheritance rules; `define_chr()` and non-default
+  rules are Stage 4).
 
 ## tidybreed 0.46.2 (2026-07-01)
 

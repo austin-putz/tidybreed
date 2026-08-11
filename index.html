@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -424,19 +424,54 @@
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_genome.html">define_genome</a></span><span class="op">(</span></span>
-<span>    n_loci     <span class="op">=</span> <span class="fl">10000</span>,  <span class="co"># total number of loci (SNP + QTL)</span></span>
-<span>    n_chr      <span class="op">=</span> <span class="fl">18</span>,     <span class="co"># number of chromosomes</span></span>
-<span>    chr_len_Mb <span class="op">=</span> <span class="fl">50</span>      <span class="co"># length of each chromosome in megabases</span></span>
+<span>    n_loci      <span class="op">=</span> <span class="fl">10000</span>,  <span class="co"># total number of loci (SNP + QTL)</span></span>
+<span>    n_chr       <span class="op">=</span> <span class="fl">18</span>,     <span class="co"># number of chromosomes</span></span>
+<span>    chr_len_Mb  <span class="op">=</span> <span class="fl">50</span>,     <span class="co"># physical length per chromosome, Mb (scalar or length n_chr)</span></span>
+<span>    cM_per_Mb   <span class="op">=</span> <span class="fl">1.0</span>     <span class="co"># genetic-map rate (scalar or length n_chr)</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
-<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span>   <span class="co"># 1 row per locus</span></span></code></pre></div>
+<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span>   <span class="co"># 1 row per locus — physical map (pos_bp)</span></span>
+<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_map"</span><span class="op">)</span>    <span class="co"># 1 row per locus — genetic map (pos_cM)</span></span></code></pre></div>
+<p><code><a href="reference/define_genome.html">define_genome()</a></code> is the single call that builds the genome. It writes seven tables in <strong>one transaction</strong> — <code>genome_meta</code>, <code>genome_map</code>, <code>ind_haplotype</code>, <code>ind_genotype</code>, <code>ind_crossover</code>, <code>chr_inheritance</code>, and <code>chr_recombination</code> — and rolls all of them back if anything fails, so a bad call leaves the database exactly as it found it and the same <code>pop</code> can be reused for a corrected call.</p>
+<p>Physical and genetic coordinates live in separate tables. <code>genome_meta.pos_bp</code> is the single physical source of truth (<code>BIGINT</code>, 1-based, VCF/PLINK convention); <code>pos_cM = pos_bp / 1e6 * cM_per_Mb</code> is written to <code>genome_map</code> as the <strong>default map</strong> (<code>sex = NULL</code>, <code>line_name = NULL</code>, <code>map_name = "default"</code>). Sex- and line-specific maps are added later as extra <code>genome_map</code> rows — rows, never a schema change. Everything distance-driven (founder LD, recombination) reads the resolved map, so <code>cM_per_Mb</code> sets the crossover rate: a 50 Mb chromosome at <code>cM_per_Mb = 1.0</code> is 50 cM, i.e. ~0.5 crossovers per meiosis.</p>
+<p>Optional arguments:</p>
+<table class="table">
+<colgroup>
+<col width="52%">
+<col width="47%">
+</colgroup>
+<thead><tr>
+<th>Argument</th>
+<th>Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>locus_names</code></td>
+<td>Custom locus names (length <code>n_loci</code>). Must be unique, non-<code>NA</code>, non-empty. Default <code>Locus_1 … Locus_n</code>.</td>
+</tr>
+<tr>
+<td><code>chr_names</code></td>
+<td>Custom chromosome names (length <code>n_chr</code>), same rules. Default <code>"1" … "n"</code>.</td>
+</tr>
+<tr>
+<td>
+<code>recombines_M</code> / <code>recombines_F</code>
+</td>
+<td>Genome-wide per-<strong>parent</strong>-sex recombination defaults (both <code>TRUE</code>). Set one to <code>FALSE</code> for a whole-genome achiasmatic sex (e.g. <em>Drosophila</em> males). Seeded into <code>chr_recombination</code>.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>[!IMPORTANT] <code><a href="reference/define_genome.html">define_genome()</a></code> may be called <strong>once</strong> per population. It errors if any of the seven genome tables already exists — there is no partial re-definition. <code>n_loci</code> and <code>n_chr</code> must be whole numbers with <code>n_loci &gt;= n_chr</code>, and <code>chr_len_Mb</code> / <code>cM_per_Mb</code> must be finite and strictly positive. All of these are checked <em>before</em> anything is written.</p>
+</blockquote>
+<p>Per-chromosome exceptions (sex chromosomes, organelles) are set afterwards with <code><a href="reference/define_chromosome.html">define_chromosome()</a></code>, which writes <code>chr_inheritance</code> rows (keyed by <strong>offspring</strong> sex) or <code>chr_recombination</code> rows (keyed by <strong>producing-parent</strong> sex) — one concern per call.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3-define-founder-haplotypes">3. Define founder haplotypes<a class="anchor" aria-label="anchor" href="#id_3-define-founder-haplotypes"></a>
 </h3>
-<p>Generate haplotype pools for each genetic line. Multiple methods are available to control allele frequency distributions.</p>
+<p>Generate haplotype pools for each genetic line. Six methods are available: four that draw a per-locus allele frequency and sample alleles independently (<strong>no LD</strong>), and two that build <strong>LD</strong> along the genetic map.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Uniform allele frequencies between min and max</span></span>
+<code class="sourceCode R"><span><span class="co"># Uniform allele frequencies between min and max (no LD)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span></span>
 <span>    line_name       <span class="op">=</span> <span class="st">"A"</span>,</span>
@@ -446,36 +481,104 @@
 <span>    max_allele_freq <span class="op">=</span> <span class="fl">0.99</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Fixed frequency (all loci p = 0.5)</span></span>
+<span><span class="co"># Fixed frequency — realized exactly at every locus (no LD)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"B"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>    method <span class="op">=</span> <span class="st">"fixed"</span>, allele_freq <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Beta distribution</span></span>
+<span><span class="co"># Beta(0.5, 0.5) — U-shaped MAF spectrum, biologically realistic (no LD)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"C"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>    method <span class="op">=</span> <span class="st">"beta"</span>, beta_shape1 <span class="op">=</span> <span class="fl">0.5</span>, beta_shape2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Balding-Nichols (FST-based)</span></span>
+<span><span class="co"># Balding-Nichols (FST-based drift around an ancestral mean; no LD)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"D"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>    method <span class="op">=</span> <span class="st">"balding_nichols"</span>, fst <span class="op">=</span> <span class="fl">0.1</span>, mean_freq <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
+<span>    method <span class="op">=</span> <span class="st">"balding_nichols"</span>, fst <span class="op">=</span> <span class="fl">0.1</span>, mean_allele_freq <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Mosaic (introduces simple LD)</span></span>
+<span><span class="co"># Mosaic — LD via Li-Stephens haplotype-block copying</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"E"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>    method <span class="op">=</span> <span class="st">"mosaic"</span>, n_templates <span class="op">=</span> <span class="fl">32</span>, switch_rate <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span></span>
+<span>    method <span class="op">=</span> <span class="st">"mosaic"</span>, n_templates <span class="op">=</span> <span class="fl">32</span>, template_switch_rate <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Gaussian copula</span></span>
+<span><span class="co"># Gaussian copula — LD via AR(1) latent normal (fast, unquantized MAF)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"F"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>    method <span class="op">=</span> <span class="st">"gaussian_copula"</span>, decay_rate <span class="op">=</span> <span class="fl">0.25</span><span class="op">)</span></span></code></pre></div>
+<span>    method <span class="op">=</span> <span class="st">"gaussian_copula"</span>, ld_decay_rate <span class="op">=</span> <span class="fl">0.25</span><span class="op">)</span></span></code></pre></div>
+<p>Each method owns its own arguments, and passing one to the wrong method is a hard error naming the method it belongs to:</p>
+<table class="table">
+<colgroup>
+<col width="34%">
+<col width="47%">
+<col width="17%">
+</colgroup>
+<thead><tr>
+<th>Method</th>
+<th>Arguments</th>
+<th>LD</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+<code>"uniform"</code> (default)</td>
+<td>
+<code>min_allele_freq</code> (0.01), <code>max_allele_freq</code> (0.99)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>"fixed"</code></td>
+<td>
+<code>allele_freq</code> (0.5)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>"beta"</code></td>
+<td>
+<code>beta_shape1</code> (0.5), <code>beta_shape2</code> (0.5)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>"balding_nichols"</code></td>
+<td>
+<code>fst</code> (0.1), <code>mean_allele_freq</code> (0.5)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>"mosaic"</code></td>
+<td>
+<code>n_templates</code>, <code>template_switch_rate</code> (1.0 per cM)</td>
+<td>blocks</td>
+</tr>
+<tr>
+<td><code>"gaussian_copula"</code></td>
+<td>
+<code>ld_decay_rate</code> (1.0; ρ = exp(−λ·d_cM))</td>
+<td>AR(1) decay</td>
+</tr>
+</tbody>
+</table>
+<p>All four frequency-based methods also accept <strong><code>exact_freq</code></strong>. When <code>TRUE</code>, each locus gets exactly <code>round(p × n_haplotypes)</code> copies of the 1-allele on an independently drawn random subset of haplotypes, so the <em>realized</em> pool frequency equals the target with no binomial scatter (and still no LD — each locus draws its own subset). When <code>FALSE</code>, alleles are independent <code>Bernoulli(p)</code> draws and realized frequencies scatter around <code>p</code> with sd <code>sqrt(p(1-p)/n_haplotypes)</code>.</p>
+<p><code>exact_freq</code> defaults to <code>TRUE</code> for <code>method = "fixed"</code> (a “fixed” frequency that drifts is not fixed) and <code>FALSE</code> for the distribution-based methods, where drawing a frequency and then sampling binomially is the correct generative model. Set it <code>TRUE</code> on those methods when you want a drift-free base frequency. Frequencies live on a <code>1 / n_haplotypes</code> grid; for <code>"fixed"</code> an off-grid request warns and names the frequency actually used.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Beta frequencies, realized exactly (no binomial scatter around the draw)</span></span>
+<span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>line_name <span class="op">=</span> <span class="st">"G"</span>, n_haplotypes <span class="op">=</span> <span class="fl">1000</span>,</span>
+<span>    method <span class="op">=</span> <span class="st">"beta"</span>, exact_freq <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>Both LD methods read the <strong>genetic map</strong> (<code>genome_map</code>) resolved for that pool’s own <code>line_name</code>, so founder LD is built on the same map that later drives recombination for that line.</p>
+<blockquote>
+<p>[!TIP] In <code>"mosaic"</code>, <code>n_templates</code> controls the <strong>MAF spectrum</strong>, not just block length. Templates are the only source of allelic variation, so a locus where all templates agree is monomorphic <em>regardless of <code>n_haplotypes</code></em> — roughly <code>2 / (n_templates + 1)</code> of loci, with MAF quantized to multiples of <code>1 / n_templates</code>. A warning fires when more than 10% of loci come out monomorphic, because QTL placed there contribute nothing to <code>sum(2pq a²)</code>. Raise <code>n_templates</code>, or use <code>"gaussian_copula"</code> for a dense, unquantized MAF spectrum. Note also that the template re-draw is uniform over <em>all</em> templates including the current one (the standard Li-Stephens kernel — it makes realized LD invariant to marker density), so observable template <em>changes</em> occur at <code>template_switch_rate × (n_templates − 1) / n_templates</code>.</p>
+</blockquote>
+<p>Calling with <code>line_name = NULL</code> (the default) stores one shared pool that <code><a href="reference/add_founders.html">add_founders()</a></code> falls back to when no named pool exists for the line it is building. Calling again with a <code>line_name</code> that already has a pool — or again with <code>NULL</code> once a <code>NULL</code>-line pool exists — is an error.</p>
+<p>Every call also writes a <code>founder_allele_freq</code> column to <code>genome_meta</code> holding the per-locus frequency of the pool <strong>written most recently</strong>.</p>
+<blockquote>
+<p>[!NOTE] <code>founder_allele_freq</code> is informational only — no other tidybreed function reads it, and each call rewrites it for every locus, so in a multi-line setup it describes only the last pool written. For per-line Falconer centering use <code>base = "current_pop"</code> with a line-filtered <code>base_tbl</code> in <code><a href="reference/define_additive_effects.html">define_additive_effects()</a></code>; <code>base = "founder_haplotypes"</code> recomputes the base frequency by pooling <strong>all</strong> lines together (which overstates within-line heterozygosity — Wahlund — and under-scales <code>target_add_var</code>).</p>
+</blockquote>
 </div>
 <div class="section level3">
 <h3 id="id_4-add-founder-individuals">4. Add founder individuals<a class="anchor" aria-label="anchor" href="#id_4-add-founder-individuals"></a>
 </h3>
 <p>Sample haplotypes for founders. Pass any custom <code>ind_meta</code> column as <code>...</code> arguments — they are written atomically with the new rows.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"founder_haplotypes"</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># pass this table only</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">line_name</span> <span class="op">==</span> <span class="st">"A"</span><span class="op">)</span> <span class="op">|&gt;</span>       <span class="co"># neat way to filter and pass only haplotypes related to founder line "A"</span></span>
@@ -493,7 +596,7 @@
 <a class="anchor" aria-label="anchor" href="#id_5-add-custom-columns-with-mutate_table"></a>
 </h3>
 <p>The real power of <code>tidybreed</code> is freely adding columns to any table so your simulation state is stored in the database — no parallel R objects to maintain.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Add user-defined fields to ind_meta (declare schema before data arrives)</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span>     <span class="co"># stores 1 row / individual to store pedigree (sire/dam) and sex</span></span>
@@ -552,7 +655,7 @@
 </tbody>
 </table>
 <p>Users can then update the ‘status’ of an animal to closely mimic a real program</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> </span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span>     <span class="co"># stores 1 row / individual to store pedigree (sire/dam) and sex</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span></span>
@@ -564,7 +667,7 @@
 <span>  <span class="op">)</span> </span></code></pre></div>
 <p>Which now replaces the old ‘status’ of “on-test” perhaps. The next filter you set can filter out “after-test-boar” animals only to perform selection in any way you want.</p>
 <p>Add descriptions to columns for documentation:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_schema_description.html">define_schema_description</a></span><span class="op">(</span><span class="st">"status"</span>,     <span class="st">"Production status (e.g. gestation, lactation)"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -573,17 +676,17 @@
 <blockquote>
 <p>[!TIP] <strong>If you get lost with tables</strong> (and you will…) please use <code>schema(pop)</code>, <code>summary(pop)</code>, and <code>pop |&gt; describe_table("table_name")</code> to get your feet back.</p>
 </blockquote>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span>       <span class="co"># info and name of all tables</span></span></code></pre></div>
 <p>Pick out one table to focus on:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/describe_table.html">describe_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span>    <span class="co"># view all column descriptions</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="id_6-define-a-snp-chip">6. Define a SNP chip<a class="anchor" aria-label="anchor" href="#id_6-define-a-snp-chip"></a>
 </h3>
 <p>Filter <code>genome_meta</code> to the loci you want, then call <code><a href="reference/define_chip.html">define_chip()</a></code>. Adds an <code>is_&lt;chip_name&gt;</code> boolean column to <code>genome_meta</code>.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Random 9,000-locus chip</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -601,7 +704,7 @@
 <h3 id="id_7-define-variance-components">7. Define variance components<a class="anchor" aria-label="anchor" href="#id_7-define-variance-components"></a>
 </h3>
 <p>Use a single entry point for all variance/covariance matrices. <code>effect_name = "gen_add"</code> routes to <code>trait_var_comp</code>; <code>"residual"</code> and named random effects (e.g. <code>"pen"</code>) route to <code>phenotype_var_comp</code>.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Additive genetic (co)variance — 3 traits (ADG, WWD, WWM)</span></span>
 <span><span class="va">vars.mat.add</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fl">0.0045</span>, <span class="fl">0.00</span>, <span class="fl">0.00</span>,</span>
@@ -639,7 +742,7 @@
 <h3 id="id_8-define-traits-and-phenotypes-two-layer-design">8. Define traits and phenotypes (two-layer design)<a class="anchor" aria-label="anchor" href="#id_8-define-traits-and-phenotypes-two-layer-design"></a>
 </h3>
 <p><strong>Genetic layer</strong> (<code>define_trait</code>) — one row per underlying genetic “trait”:</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_trait.html">define_trait</a></span><span class="op">(</span></span>
 <span>    trait_name      <span class="op">=</span> <span class="st">"ADG"</span>,</span>
@@ -649,7 +752,7 @@
 <span>    overwrite       <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
 <p><strong>Observation layer</strong> (<code>define_phenotype</code>) — what animals actually receive records for:</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_phenotype.html">define_phenotype</a></span><span class="op">(</span></span>
 <span>    phenotype_name <span class="op">=</span> <span class="st">"ADG"</span>,</span>
@@ -661,7 +764,7 @@
 <span>  <span class="op">)</span></span></code></pre></div>
 <p><strong>Why the split?</strong> - composite traits exist that can be made up of multiple underlying “traits”, while the phenotype is physically observed. Some phenotypes are actually a combination of 3 “traits” such as the direct/maternal/nurse dam model from Egbert Knols research. Or social genetic effects where the phenotype is a combination of individual genetics but also the effects from different pen mates genetics.</p>
 <p>For composite phenotypes (e.g. weaning weight = direct + maternal):</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_trait.html">define_trait</a></span><span class="op">(</span></span>
 <span>    trait_name      <span class="op">=</span> <span class="st">"WWD"</span>,</span>
@@ -689,7 +792,7 @@
 <span>    overwrite                <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
 <p>Derived phenotypes computed from other phenotypes:</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_phenotype.html">define_phenotype</a></span><span class="op">(</span></span>
 <span>    phenotype_name <span class="op">=</span> <span class="st">"FCR"</span>,</span>
@@ -699,7 +802,7 @@
 <span>    overwrite      <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
 <p>Add QTL effects for a trait (or multiple correlated traits at once):</p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Single trait</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -722,7 +825,7 @@
 <span>    base            <span class="op">=</span> <span class="st">"current_pop"</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
 <p>Add fixed effects:</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_effect_fixed_class.html">define_effect_fixed_class</a></span><span class="op">(</span></span>
 <span>    phenotype_name <span class="op">=</span> <span class="st">"ADG"</span>,</span>
@@ -736,13 +839,13 @@
 <div class="section level3">
 <h3 id="id_9-calculate-true-breeding-values">9. Calculate True Breeding Values<a class="anchor" aria-label="anchor" href="#id_9-calculate-true-breeding-values"></a>
 </h3>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># All animals in ind_meta</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span>      <span class="co"># pass table with no filter, so "select all" </span></span>
 <span>  <span class="fu"><a href="reference/add_tbv.html">add_tbv</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"ADG"</span><span class="op">)</span>     <span class="co"># calculate TBV for all individuals (notice we use "traitn_name" here)</span></span></code></pre></div>
 <p>Then the real great part of the package is to simply extract any table, and utilize the functions you already know to verify it worked (or didn’t…).</p>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check means by trait</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -750,7 +853,7 @@
 <span>  <span class="fu">group_by</span><span class="op">(</span><span class="va">trait_name</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">summarise</span><span class="op">(</span>MeanTBV <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">tbv_value</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Define a selection index first, then compute true index values from TBVs (ground truth for monitoring genetic trend):</p>
-<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Define the index weights (must exist before add_tbv uses index_names)</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_index.html">define_index</a></span><span class="op">(</span></span>
@@ -772,7 +875,7 @@
 <div class="section level3">
 <h3 id="id_10-add-genotypes">10. Add Genotypes<a class="anchor" aria-label="anchor" href="#id_10-add-genotypes"></a>
 </h3>
-<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Add 9k genotypes to ONLY CURRENT MALES</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -803,7 +906,7 @@
 </ul>
 </blockquote>
 <p>This allows us to separate something like <strong>weaning weight</strong> into <span class="emoji" data-emoji="two">2️⃣</span> components <strong>weaning weight direct</strong> and <strong>weaning weight maternal</strong>.</p>
-<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Phenotype male animals that reached off-test today</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -822,7 +925,7 @@
 <span>    <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">sex</span> <span class="op">==</span> <span class="st">"F"</span><span class="op">)</span> <span class="op">|&gt;</span>              <span class="co"># only females get age at puberty</span></span>
 <span>  <span class="fu"><a href="reference/add_phenotype.html">add_phenotype</a></span><span class="op">(</span>phenotype_name <span class="op">=</span> <span class="st">"AP"</span><span class="op">)</span></span></code></pre></div>
 <p>Check counts:</p>
-<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> </span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span><span class="op">)</span> <span class="op">|&gt;</span> </span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phenotype_name</span> <span class="op">==</span> <span class="st">"ADG"</span><span class="op">)</span> <span class="op">|&gt;</span> </span>
@@ -836,7 +939,7 @@
 <p>[!WARNING] This is probably the sketchiest part of any simulation software as it’s nearly impossible to accurately solve all models you can simulate. Simulation is far easier than solving equations. If users define a very complex structure to simulation, we cannot guarantee there is a solver out there for it. BLUPF90 is nice and easy, however extremely limited and we get what we get from it. Safest always to run user defined parameter files and programs. PLEASE BE CAREFUL!</p>
 </blockquote>
 <p>Run <a href="https://nce.ads.uga.edu/wiki/doku.php" class="external-link">BLUPF90</a> to estimate breeding values:</p>
-<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/add_ebv.html">add_ebv</a></span><span class="op">(</span></span>
@@ -854,7 +957,7 @@
 <div class="section level3">
 <h3 id="id_13-define-and-calculate-a-selection-index">13. Define and Calculate a Selection Index<a class="anchor" aria-label="anchor" href="#id_13-define-and-calculate-a-selection-index"></a>
 </h3>
-<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Define a multi-trait selection index</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_index.html">define_index</a></span><span class="op">(</span></span>
@@ -880,7 +983,7 @@
 </h3>
 <p>Pull candidate IDs and then select from any table:</p>
 <p><code>pull()</code> may be new to you, it pulls a vector back into the R object to use within <code><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter()</a></code> downstream</p>
-<div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb37"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Step 1: identify candidates</span></span>
 <span><span class="va">male_candidates</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -911,7 +1014,7 @@
 </h3>
 <p>Build a mating plan as a <code>tibble</code> (one row per offspring), then call <code><a href="reference/add_offspring.html">add_offspring()</a></code>:</p>
 <p>(again I hate helper functions as I cannot imagine the infinite ways all these combinations could arise, for now just use the full tibble and learn how to use <code>rep</code> and <code>samle</code> yourself)</p>
-<div class="sourceCode" id="cb37"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb38"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">data.matings</span> <span class="op">&lt;-</span> <span class="fu">tibble</span><span class="op">(</span></span>
 <span>  id_parent_1   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">sampled_sires</span>, times <span class="op">=</span> <span class="va">nw_per_dam</span><span class="op">)</span>,  <span class="co"># sire IDs</span></span>
 <span>  id_parent_2   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">selected_dams</span>, times <span class="op">=</span> <span class="va">nw_per_dam</span><span class="op">)</span>,  <span class="co"># dam IDs</span></span>
@@ -931,7 +1034,7 @@
 </h3>
 <p>I made a few exceptions to my “I hate helper functions” mentality, you can use some <code>mutate_group_*()</code> functions to create groups.</p>
 <p>Add sequence numbers, named labels, or concatenated strings within groups:</p>
-<div class="sourceCode" id="cb38"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb39"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Sequential number within each litter (group by dam ID)</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -954,13 +1057,13 @@
 <h3 id="id_17-archive-and-restore">17. Archive and Restore<a class="anchor" aria-label="anchor" href="#id_17-archive-and-restore"></a>
 </h3>
 <p>Save a replicate’s DuckDB to an archive database for multi-replicate analysis:</p>
-<div class="sourceCode" id="cb39"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/archive_replicate.html">archive_replicate</a></span><span class="op">(</span><span class="va">pop</span>, rep <span class="op">=</span> <span class="fl">1L</span><span class="op">)</span></span></code></pre></div>
 <blockquote>
 <p>[!IMPORTANT] <code>options(tidybreed.replicate)</code> will increase by 1 automatically after each successful <code><a href="reference/archive_replicate.html">archive_replicate()</a></code> call.</p>
 </blockquote>
 <p>Restore a population from an existing DuckDB file (e.g. to resume a run):</p>
-<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb41"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/restore_pop.html">restore_pop</a></span><span class="op">(</span>db_path <span class="op">=</span> <span class="st">"~/path/to/project/tidybreed_output/sim.duckdb"</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
@@ -1100,12 +1203,15 @@
 </tr>
 <tr>
 <td><code><a href="reference/define_genome.html">define_genome()</a></code></td>
-<td>Define loci, chromosomes, and positions in <code>genome_meta</code>
-</td>
+<td>Build the genome in one transaction: physical map (<code>genome_meta</code>), genetic map (<code>genome_map</code>), and default chromosome rules (<code>chr_inheritance</code>, <code>chr_recombination</code>)</td>
+</tr>
+<tr>
+<td><code><a href="reference/define_chromosome.html">define_chromosome()</a></code></td>
+<td>Override inheritance (by offspring sex) or recombination (by parent sex) for one chromosome — sex chromosomes, organelles</td>
 </tr>
 <tr>
 <td><code><a href="reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code></td>
-<td>Generate haplotype pools per line (<code>uniform</code>, <code>fixed</code>, <code>beta</code>, <code>balding_nichols</code>, <code>mosaic</code>, <code>gaussian_copula</code>)</td>
+<td>Generate haplotype pools per line (<code>uniform</code>, <code>fixed</code>, <code>beta</code>, <code>balding_nichols</code>, <code>mosaic</code>, <code>gaussian_copula</code>; <code>exact_freq</code> for drift-free frequencies)</td>
 </tr>
 <tr>
 <td><code><a href="reference/restore_pop.html">restore_pop()</a></code></td>

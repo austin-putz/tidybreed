@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpO3BNQl/duckdb
+#> ℹ /tmp/RtmpUyYDUZ/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -157,10 +157,11 @@ pop <- pop |>
   define_genome(
     n_loci     = 500,   # total loci (SNP and QTL both come from this pool)
     n_chr      = 5,     # chromosomes
-    chr_len_Mb = 100    # length of each chromosome in megabases
+    chr_len_Mb = 100,   # physical length of each chromosome in megabases
+    cM_per_Mb  = 1.0    # genetic-map rate (the default)
   )
 #> Defined genome: 500 loci across 5 chromosomes | chr lengths (Mb): all equal to 100 Mb
-#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_meta
+#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination
 
 pop |> get_table("genome_meta")
 #> <tidybreed_table: genome_meta>  [500 rows × 5 fields]
@@ -202,22 +203,47 @@ pop |> get_table("genome_map")
 #> 10            10       10 Locus_10   NA    NA        default   9.90
 ```
 
-Per-chromosome inheritance rules live in `chr_meta`. Every chromosome
-starts as a normal diploid autosome;
-[`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)
+`cM_per_Mb` is what turns physical distance into genetic distance
+(`pos_cM = pos_bp / 1e6 * cM_per_Mb`), and it is written here as the
+*default* map — `sex` and `line_name` both `NULL`,
+`map_name = "default"`. Everything distance-driven reads that map, so
+this one number sets the crossover rate: a 100 Mb chromosome at
+`cM_per_Mb = 1.0` is 100 cM, or ~1 crossover per meiosis.
+
+[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+is a one-shot call. It writes seven tables in a single transaction and
+rolls all of them back if anything fails, so a bad call leaves the
+database untouched and you can simply call it again with corrected
+arguments. Calling it on a population that already has a genome is an
+error.
+
+Per-chromosome rules live in two explicit tables: `chr_inheritance` (how
+many copies of a chromosome an offspring of each sex inherits from each
+parent) and `chr_recombination` (whether a parent of each sex recombines
+it). Every chromosome starts as a normal diploid autosome;
+[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
 is how you would declare an X, Y, or mitochondrial chromosome.
 
 ``` r
 
-pop |> get_table("chr_meta") |> collect()
-#> # A tibble: 5 × 6
-#>   chr_name copy_mode_M copy_mode_F hemi_parent recombines_M recombines_F
-#>   <chr>    <chr>       <chr>       <chr>       <lgl>        <lgl>       
-#> 1 1        full        full        NA          TRUE         TRUE        
-#> 2 2        full        full        NA          TRUE         TRUE        
-#> 3 3        full        full        NA          TRUE         TRUE        
-#> 4 4        full        full        NA          TRUE         TRUE        
-#> 5 5        full        full        NA          TRUE         TRUE
+pop |> get_table("chr_inheritance") |> collect()
+#> # A tibble: 5 × 5
+#>   chr_name offspring_sex line_name from_parent_1 from_parent_2
+#>   <chr>    <chr>         <chr>             <int>         <int>
+#> 1 1        NA            NA                    1             1
+#> 2 2        NA            NA                    1             1
+#> 3 3        NA            NA                    1             1
+#> 4 4        NA            NA                    1             1
+#> 5 5        NA            NA                    1             1
+pop |> get_table("chr_recombination") |> collect()
+#> # A tibble: 5 × 4
+#>   chr_name parent_sex line_name recombines
+#>   <chr>    <chr>      <chr>     <lgl>     
+#> 1 1        NA         NA        TRUE      
+#> 2 2        NA         NA        TRUE      
+#> 3 3        NA         NA        TRUE      
+#> 4 4        NA         NA        TRUE      
+#> 5 5        NA         NA        TRUE
 ```
 
 ## Explore the database
@@ -253,7 +279,8 @@ schema(pop)
 #>   ind_haplotype            0     7  Phased haplotypes in long format. One row...
 #>   ind_genotype             0     4  Genotype dosage cache in long format. One...
 #>   ind_crossover            0     6  Crossover events in long format, one row ...
-#>   chr_meta                 5     6  Per-chromosome inheritance rules. One row...
+#>   chr_inheritance          5     5  Per-chromosome copy counts, keyed by offs...
+#>   chr_recombination        5     4  Per-chromosome recombination, keyed by pr...
 ```
 
 [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md)
@@ -321,9 +348,32 @@ disequilibrium:
 | `"uniform"` | Frequencies drawn uniformly between `min_allele_freq` and `max_allele_freq` |
 | `"fixed"` | Every locus at the same `allele_freq` |
 | `"beta"` | Beta-distributed frequencies (`beta_shape1`, `beta_shape2`) — U-shaped is realistic |
-| `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_freq`) |
-| `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `switch_rate`) |
-| `"gaussian_copula"` | Correlated frequencies with distance-based decay (`decay_rate`) |
+| `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_allele_freq`) |
+| `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `template_switch_rate`) |
+| `"gaussian_copula"` | Correlated frequencies with distance-based decay (`ld_decay_rate`) |
+
+Each argument belongs to exactly one method — passing one to the wrong
+method is an error that names where it belongs. The two LD methods walk
+the genetic map you defined above, resolved for this pool’s own
+`line_name`.
+
+The first four methods also take **`exact_freq`**. By default they draw
+a frequency `p` per locus and then sample each allele as an independent
+`Bernoulli(p)`, so the *realized* pool frequency scatters around `p`.
+With `exact_freq = TRUE` each locus instead gets exactly
+`round(p * n_haplotypes)` copies of the 1-allele, on an independently
+drawn subset of haplotypes — so the realized frequency **is** `p`, and
+still no LD is induced. It defaults to `TRUE` for `"fixed"` (a fixed
+frequency that drifts is not fixed) and `FALSE` elsewhere; turn it on
+when you want a drift-free base frequency.
+
+One caveat worth knowing early: in `"mosaic"`, templates are the only
+source of variation, so `n_templates` sets the MAF spectrum, not just
+the block length. Roughly `2 / (n_templates + 1)` of loci come out
+monomorphic no matter how many haplotypes you ask for, and you get a
+warning past 10% — QTL landing there contribute no genetic variance.
+Raise `n_templates`, or use `"gaussian_copula"`, which gives an
+unquantized spectrum.
 
 ## Add founder individuals
 
@@ -546,12 +596,12 @@ pop |> get_table("ind_tbv") |> collect() |> head()
 #> # A tibble: 6 × 4
 #>   id_tbv id_ind trait_name tbv_value
 #>    <int> <chr>  <chr>          <dbl>
-#> 1      2 A_2    ADG         -0.00505
-#> 2     19 A_19   ADG         -0.124  
-#> 3     21 A_21   ADG          0.458  
-#> 4     27 A_27   ADG          0.165  
-#> 5     30 A_30   ADG         -0.416  
-#> 6     32 A_32   ADG          0.136
+#> 1      5 A_5    ADG          -0.137 
+#> 2     13 A_13   ADG           0.119 
+#> 3     16 A_16   ADG           0.115 
+#> 4     22 A_22   ADG           0.321 
+#> 5     25 A_25   ADG           0.127 
+#> 6     31 A_31   ADG          -0.0346
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -710,7 +760,8 @@ head(matings)
 
 [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
 simulates meiosis — crossovers are drawn from the genetic map in
-`genome_map`, respecting the per-chromosome rules in `chr_meta`.
+`genome_map`, respecting the per-chromosome rules in `chr_inheritance`
+and `chr_recombination`.
 
 ``` r
 
@@ -940,7 +991,7 @@ Functions not shown above, with a pointer to their help page:
 | Function | What it does |
 |----|----|
 | [`?add_ebv`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md) | Run BLUPF90 (or parent average) and store estimated breeding values |
-| [`?define_chr`](https://austin-putz.github.io/tidybreed/reference/define_chr.md) | Sex chromosomes, organelles, and achiasmatic meiosis |
+| [`?define_chromosome`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md) | Sex chromosomes, organelles, and achiasmatic meiosis |
 | [`?define_phenotype`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | Composite traits: maternal effects and social genetic effects, via `components` |
 | [`?define_residual_cov`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md) | Correlated or heterogeneous residual (co)variances |
 | [`?define_effect_random`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md) | Named random effects such as pen, litter, or herd-year-season |

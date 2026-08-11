@@ -408,22 +408,67 @@ print(pop)
 
 pop <- pop |>
   define_genome(
-    n_loci     = 10000,  # total number of loci (SNP + QTL)
-    n_chr      = 18,     # number of chromosomes
-    chr_len_Mb = 50      # length of each chromosome in megabases
+    n_loci      = 10000,  # total number of loci (SNP + QTL)
+    n_chr       = 18,     # number of chromosomes
+    chr_len_Mb  = 50,     # physical length per chromosome, Mb (scalar or length n_chr)
+    cM_per_Mb   = 1.0     # genetic-map rate (scalar or length n_chr)
   )
 
-pop |> get_table("genome_meta")   # 1 row per locus
+pop |> get_table("genome_meta")   # 1 row per locus — physical map (pos_bp)
+pop |> get_table("genome_map")    # 1 row per locus — genetic map (pos_cM)
 ```
+
+[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+is the single call that builds the genome. It writes seven tables in
+**one transaction** — `genome_meta`, `genome_map`, `ind_haplotype`,
+`ind_genotype`, `ind_crossover`, `chr_inheritance`, and
+`chr_recombination` — and rolls all of them back if anything fails, so a
+bad call leaves the database exactly as it found it and the same `pop`
+can be reused for a corrected call.
+
+Physical and genetic coordinates live in separate tables.
+`genome_meta.pos_bp` is the single physical source of truth (`BIGINT`,
+1-based, VCF/PLINK convention); `pos_cM = pos_bp / 1e6 * cM_per_Mb` is
+written to `genome_map` as the **default map** (`sex = NULL`,
+`line_name = NULL`, `map_name = "default"`). Sex- and line-specific maps
+are added later as extra `genome_map` rows — rows, never a schema
+change. Everything distance-driven (founder LD, recombination) reads the
+resolved map, so `cM_per_Mb` sets the crossover rate: a 50 Mb chromosome
+at `cM_per_Mb = 1.0` is 50 cM, i.e. ~0.5 crossovers per meiosis.
+
+Optional arguments:
+
+| Argument | Purpose |
+|----|----|
+| `locus_names` | Custom locus names (length `n_loci`). Must be unique, non-`NA`, non-empty. Default `Locus_1 … Locus_n`. |
+| `chr_names` | Custom chromosome names (length `n_chr`), same rules. Default `"1" … "n"`. |
+| `recombines_M` / `recombines_F` | Genome-wide per-**parent**-sex recombination defaults (both `TRUE`). Set one to `FALSE` for a whole-genome achiasmatic sex (e.g. *Drosophila* males). Seeded into `chr_recombination`. |
+
+> \[!IMPORTANT\]
+> [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+> may be called **once** per population. It errors if any of the seven
+> genome tables already exists — there is no partial re-definition.
+> `n_loci` and `n_chr` must be whole numbers with `n_loci >= n_chr`, and
+> `chr_len_Mb` / `cM_per_Mb` must be finite and strictly positive. All
+> of these are checked *before* anything is written.
+
+Per-chromosome exceptions (sex chromosomes, organelles) are set
+afterwards with
+[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md),
+which writes `chr_inheritance` rows (keyed by **offspring** sex) or
+`chr_recombination` rows (keyed by **producing-parent** sex) — one
+concern per call.
 
 ### 3. Define founder haplotypes
 
-Generate haplotype pools for each genetic line. Multiple methods are
-available to control allele frequency distributions.
+Generate haplotype pools for each genetic line. Six methods are
+available: four that draw a per-locus allele frequency and sample
+alleles independently (**no LD**), and two that build **LD** along the
+genetic map.
 
 ``` r
 
-# Uniform allele frequencies between min and max
+# Uniform allele frequencies between min and max (no LD)
 pop <- pop |>
   define_founder_haplotypes(
     line_name       = "A",
@@ -433,31 +478,105 @@ pop <- pop |>
     max_allele_freq = 0.99
   )
 
-# Fixed frequency (all loci p = 0.5)
+# Fixed frequency — realized exactly at every locus (no LD)
 pop <- pop |>
   define_founder_haplotypes(line_name = "B", n_haplotypes = 1000,
     method = "fixed", allele_freq = 0.5)
 
-# Beta distribution
+# Beta(0.5, 0.5) — U-shaped MAF spectrum, biologically realistic (no LD)
 pop <- pop |>
   define_founder_haplotypes(line_name = "C", n_haplotypes = 1000,
     method = "beta", beta_shape1 = 0.5, beta_shape2 = 0.5)
 
-# Balding-Nichols (FST-based)
+# Balding-Nichols (FST-based drift around an ancestral mean; no LD)
 pop <- pop |>
   define_founder_haplotypes(line_name = "D", n_haplotypes = 1000,
-    method = "balding_nichols", fst = 0.1, mean_freq = 0.5)
+    method = "balding_nichols", fst = 0.1, mean_allele_freq = 0.5)
 
-# Mosaic (introduces simple LD)
+# Mosaic — LD via Li-Stephens haplotype-block copying
 pop <- pop |>
   define_founder_haplotypes(line_name = "E", n_haplotypes = 1000,
-    method = "mosaic", n_templates = 32, switch_rate = 1.0)
+    method = "mosaic", n_templates = 32, template_switch_rate = 1.0)
 
-# Gaussian copula
+# Gaussian copula — LD via AR(1) latent normal (fast, unquantized MAF)
 pop <- pop |>
   define_founder_haplotypes(line_name = "F", n_haplotypes = 1000,
-    method = "gaussian_copula", decay_rate = 0.25)
+    method = "gaussian_copula", ld_decay_rate = 0.25)
 ```
+
+Each method owns its own arguments, and passing one to the wrong method
+is a hard error naming the method it belongs to:
+
+| Method | Arguments | LD |
+|----|----|----|
+| `"uniform"` (default) | `min_allele_freq` (0.01), `max_allele_freq` (0.99) | none |
+| `"fixed"` | `allele_freq` (0.5) | none |
+| `"beta"` | `beta_shape1` (0.5), `beta_shape2` (0.5) | none |
+| `"balding_nichols"` | `fst` (0.1), `mean_allele_freq` (0.5) | none |
+| `"mosaic"` | `n_templates`, `template_switch_rate` (1.0 per cM) | blocks |
+| `"gaussian_copula"` | `ld_decay_rate` (1.0; ρ = exp(−λ·d_cM)) | AR(1) decay |
+
+All four frequency-based methods also accept **`exact_freq`**. When
+`TRUE`, each locus gets exactly `round(p × n_haplotypes)` copies of the
+1-allele on an independently drawn random subset of haplotypes, so the
+*realized* pool frequency equals the target with no binomial scatter
+(and still no LD — each locus draws its own subset). When `FALSE`,
+alleles are independent `Bernoulli(p)` draws and realized frequencies
+scatter around `p` with sd `sqrt(p(1-p)/n_haplotypes)`.
+
+`exact_freq` defaults to `TRUE` for `method = "fixed"` (a “fixed”
+frequency that drifts is not fixed) and `FALSE` for the
+distribution-based methods, where drawing a frequency and then sampling
+binomially is the correct generative model. Set it `TRUE` on those
+methods when you want a drift-free base frequency. Frequencies live on a
+`1 / n_haplotypes` grid; for `"fixed"` an off-grid request warns and
+names the frequency actually used.
+
+``` r
+
+# Beta frequencies, realized exactly (no binomial scatter around the draw)
+pop <- pop |>
+  define_founder_haplotypes(line_name = "G", n_haplotypes = 1000,
+    method = "beta", exact_freq = TRUE)
+```
+
+Both LD methods read the **genetic map** (`genome_map`) resolved for
+that pool’s own `line_name`, so founder LD is built on the same map that
+later drives recombination for that line.
+
+> \[!TIP\] In `"mosaic"`, `n_templates` controls the **MAF spectrum**,
+> not just block length. Templates are the only source of allelic
+> variation, so a locus where all templates agree is monomorphic
+> *regardless of `n_haplotypes`* — roughly `2 / (n_templates + 1)` of
+> loci, with MAF quantized to multiples of `1 / n_templates`. A warning
+> fires when more than 10% of loci come out monomorphic, because QTL
+> placed there contribute nothing to `sum(2pq a²)`. Raise `n_templates`,
+> or use `"gaussian_copula"` for a dense, unquantized MAF spectrum. Note
+> also that the template re-draw is uniform over *all* templates
+> including the current one (the standard Li-Stephens kernel — it makes
+> realized LD invariant to marker density), so observable template
+> *changes* occur at
+> `template_switch_rate × (n_templates − 1) / n_templates`.
+
+Calling with `line_name = NULL` (the default) stores one shared pool
+that
+[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+falls back to when no named pool exists for the line it is building.
+Calling again with a `line_name` that already has a pool — or again with
+`NULL` once a `NULL`-line pool exists — is an error.
+
+Every call also writes a `founder_allele_freq` column to `genome_meta`
+holding the per-locus frequency of the pool **written most recently**.
+
+> \[!NOTE\] `founder_allele_freq` is informational only — no other
+> tidybreed function reads it, and each call rewrites it for every
+> locus, so in a multi-line setup it describes only the last pool
+> written. For per-line Falconer centering use `base = "current_pop"`
+> with a line-filtered `base_tbl` in
+> [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md);
+> `base = "founder_haplotypes"` recomputes the base frequency by pooling
+> **all** lines together (which overstates within-line heterozygosity —
+> Wahlund — and under-scales `target_add_var`).
 
 ### 4. Add founder individuals
 
@@ -1086,8 +1205,9 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | Function | Purpose |
 |----|----|
 | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | Open (or create) a DuckDB-backed population object |
-| [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md) | Define loci, chromosomes, and positions in `genome_meta` |
-| [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md) | Generate haplotype pools per line (`uniform`, `fixed`, `beta`, `balding_nichols`, `mosaic`, `gaussian_copula`) |
+| [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md) | Build the genome in one transaction: physical map (`genome_meta`), genetic map (`genome_map`), and default chromosome rules (`chr_inheritance`, `chr_recombination`) |
+| [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md) | Override inheritance (by offspring sex) or recombination (by parent sex) for one chromosome — sex chromosomes, organelles |
+| [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md) | Generate haplotype pools per line (`uniform`, `fixed`, `beta`, `balding_nichols`, `mosaic`, `gaussian_copula`; `exact_freq` for drift-free frequencies) |
 | [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md) | Reopen an existing population from a DuckDB file |
 | [`close_pop()`](https://austin-putz.github.io/tidybreed/reference/close_pop.md) | Safely close the DuckDB connection |
 | [`print.tidybreed_pop()`](https://austin-putz.github.io/tidybreed/reference/print.tidybreed_pop.md) | Print population summary |

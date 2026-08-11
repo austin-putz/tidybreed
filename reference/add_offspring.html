@@ -11,7 +11,7 @@ control over the mating design."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -144,13 +144,15 @@ uniform-only inversion sampler. Genetic positions come from the resolved
 genetic map (<code>genome_map</code>, per the gamete-producing parent's sex/line);
 crossover positions are uniform in cM within each chromosome, and the starting
 haplotype is chosen at random. This
-applies to plain autosomes (<code>chr_meta</code>'s default <code>copy_mode_M</code>/<code>copy_mode_F = "full"</code>, <code>recombines_M</code>/<code>recombines_F = TRUE</code>). Sex chromosomes and
-organelles configured via <code><a href="define_chr.html">define_chr()</a></code> follow their own inheritance rule
-instead: the contributing parent's copy recombines via the same Haldane model
-only when that parent carries two copies of the chromosome AND the
-contributor's own-sex <code>chr_meta.recombines_M</code>/<code>recombines_F</code> is <code>TRUE</code>;
-otherwise the parent's single stored copy is passed straight through unchanged
-(no recombination, no additional RNG draws).</p>
+applies to plain autosomes (the seeded default: <code>chr_inheritance</code>
+<code>from_parent_1 = from_parent_2 = 1</code> for both sexes and <code>chr_recombination</code>
+<code>recombines = TRUE</code> for both parent sexes). Sex chromosomes and organelles
+configured via <code><a href="define_chromosome.html">define_chromosome()</a></code> follow their own inheritance rule instead:
+the contributing parent's copy recombines via the same Haldane model only when
+that parent carries two copies of the chromosome AND the producing parent's
+<code>chr_recombination.recombines</code> resolves <code>TRUE</code> for its sex; otherwise the
+parent's single stored copy is passed straight through unchanged (no
+recombination, no additional RNG draws).</p>
 <p><strong>Offspring IDs:</strong>
 IDs follow the same <code>"{line_name}_{n}"</code> format as <code><a href="add_founders.html">add_founders()</a></code>. Numbering
 continues from the current maximum for each line.</p>

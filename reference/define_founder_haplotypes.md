@@ -18,10 +18,15 @@ argument.
 
 Also writes a `founder_allele_freq` column to `genome_meta` recording
 the per-locus allele frequency of the most recently generated pool (the
-empirical column mean for LD methods). For multi-line setups needing
-accurate per-line Falconer centering, use `base = "current_pop"` in
+empirical column mean for LD methods and for `exact_freq = TRUE`; the
+sampled target otherwise). This column is **informational only** — no
+other tidybreed function reads it, and because each call rewrites it for
+every locus, in a multi-line setup it describes only the pool written
+last. For multi-line setups needing accurate per-line Falconer
+centering, use `base = "current_pop"` in
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-instead.
+instead: with `base = "founder_haplotypes"` the base frequency is
+recomputed by pooling **all** lines' haplotypes together.
 
 ## Usage
 
@@ -36,10 +41,11 @@ define_founder_haplotypes(
   beta_shape1 = NULL,
   beta_shape2 = NULL,
   fst = NULL,
-  mean_freq = NULL,
+  mean_allele_freq = NULL,
   n_templates = NULL,
-  switch_rate = NULL,
-  decay_rate = NULL,
+  template_switch_rate = NULL,
+  ld_decay_rate = NULL,
+  exact_freq = NULL,
   line_name = NULL
 )
 ```
@@ -64,7 +70,10 @@ define_founder_haplotypes(
 - allele_freq:
 
   *(method = "fixed" only)* Numeric scalar in \[0, 1\]. Allele frequency
-  applied to every locus. Default `0.5`.
+  realized *exactly* at every locus. Default `0.5`. Frequencies live on
+  a `1 / n_haplotypes` grid; if `allele_freq × n_haplotypes` is not a
+  whole number it is rounded, with a warning naming the frequency
+  actually used.
 
 - min_allele_freq:
 
@@ -76,41 +85,69 @@ define_founder_haplotypes(
 
 - beta_shape1:
 
-  *(method = "beta" only)* First Beta shape parameter (α). Must be \> 0.
-  Default `0.5`.
+  *(method = "beta" only)* First Beta shape parameter (α). Must be
+  finite and \> 0. Default `0.5`.
 
 - beta_shape2:
 
   *(method = "beta" only)* Second Beta shape parameter (β). Must be
-  \> 0. Default `0.5`.
+  finite and \> 0. Default `0.5`.
 
 - fst:
 
   *(method = "balding_nichols" only)* Wright's F_ST. Scalar in (0, 1).
-  Controls spread of frequencies around `mean_freq`; larger values
-  produce more extreme frequencies. Default `0.1`.
+  Controls spread of frequencies around `mean_allele_freq`; larger
+  values produce more extreme frequencies. Default `0.1`.
 
-- mean_freq:
+- mean_allele_freq:
 
   *(method = "balding_nichols" only)* Ancestral mean allele frequency.
   Scalar in (0, 1). Default `0.5`.
 
 - n_templates:
 
-  *(method = "mosaic" only)* Number of template haplotypes. Must be
-  \>= 2. Default `max(2, ceiling(sqrt(n_haplotypes)))`.
+  *(method = "mosaic" only)* Number of template haplotypes. Must be a
+  whole number in `[2, n_haplotypes]`. Also controls the MAF spectrum —
+  see the `"mosaic"` entry above. Default
+  `max(2, ceiling(sqrt(n_haplotypes)))`.
 
-- switch_rate:
+- template_switch_rate:
 
-  *(method = "mosaic" only)* Expected template switches per cM (genetic
-  distance). Higher values create shorter LD blocks. Default `1.0`. (At
-  the default `cM_per_Mb = 1`, per-cM equals per-Mb.)
+  *(method = "mosaic" only)* Template re-draw rate per cM (genetic
+  distance). Higher values create shorter LD blocks. `0` means never
+  switch (complete LD within a chromosome). Note that observable
+  template *changes* occur at
+  `template_switch_rate × (n_templates − 1) / n_templates` — see the
+  `"mosaic"` entry above. Default `1.0`. (At the default
+  `cM_per_Mb = 1`, per-cM equals per-Mb.)
 
-- decay_rate:
+- ld_decay_rate:
 
   *(method = "gaussian_copula" only)* LD decay rate λ in ρ = exp(−λ ×
-  d_cM). Higher values → faster LD decay. Default `1.0` gives ρ ≈ 0.37
-  at 1 cM.
+  d_cM). Higher values → faster LD decay. `0` means no decay (complete
+  LD within a chromosome). Default `1.0` gives ρ ≈ 0.37 at 1 cM.
+
+- exact_freq:
+
+  *(methods "fixed", "uniform", "beta", "balding_nichols")* Logical.
+  When `TRUE`, each locus receives exactly `round(p × n_haplotypes)`
+  copies of the 1-allele on an independently drawn random subset of
+  haplotypes, so the **realized** pool frequency equals the per-locus
+  target `p` with no binomial fluctuation (no LD is induced — each locus
+  draws its own subset). When `FALSE`, alleles are drawn as independent
+  `Bernoulli(p)` trials, so realized frequencies scatter around `p` with
+  sd `sqrt(p(1-p)/n_haplotypes)`.
+
+  Defaults to `TRUE` for `method = "fixed"` (a "fixed" frequency that
+  drifts is not fixed) and `FALSE` for the distribution-based methods,
+  where drawing a frequency and then sampling alleles binomially is the
+  correct generative model. Set `TRUE` on those methods when you want
+  `founder_allele_freq` to be the exact base frequency for Falconer
+  centering. Frequencies are snapped to the `1 / n_haplotypes` grid; for
+  `method = "fixed"` a warning names the frequency actually used when
+  the requested one is off-grid (for the distribution methods a
+  continuous draw is essentially never on the grid, so rounding is
+  silent).
 
 - line_name:
 
@@ -139,8 +176,12 @@ registered in `pop$tables` and `founder_allele_freq` added to
 
 - `"fixed"`:
 
-  Every locus gets the same `allele_freq` (default 0.5). No LD
-  structure. Useful for quick sanity checks.
+  Every locus gets the same `allele_freq` (default 0.5), **exactly**.
+  Rather than drawing each allele as a Bernoulli(`allele_freq`) trial —
+  which leaves the realized pool frequency fluctuating binomially around
+  the target — exactly `round(allele_freq × n_haplotypes)` of the
+  haplotypes carry the 1-allele at each locus, on an independently drawn
+  random subset per locus (so no LD is induced). No LD structure.
 
 - `"beta"`:
 
@@ -152,29 +193,43 @@ registered in `pop$tables` and `founder_allele_freq` added to
 - `"balding_nichols"`:
 
   Balding-Nichols model: per-locus frequency from Beta(α, β) where α =
-  `mean_freq` × (1 − `fst`) / `fst` and β = (1 − `mean_freq`) × (1 −
-  `fst`) / `fst`. Models allele frequency drift around a mean. No LD
-  structure.
+  `mean_allele_freq` × (1 − `fst`) / `fst` and β = (1 −
+  `mean_allele_freq`) × (1 − `fst`) / `fst`. Models allele frequency
+  drift around a mean. No LD structure.
 
 - `"mosaic"`:
 
   Quick LD via haplotype block copying. Generates `n_templates` template
   haplotypes, then builds each new haplotype as a mosaic: copies from a
-  template and switches templates with probability
-  `1 - exp(-switch_rate × d_cM)` at each locus. Creates realistic LD
-  blocks without external software. Uses the resolved default genetic
-  map (`genome_map`) for adjacent-locus genetic distances. Performance
-  is O(n_haplotypes × n_loci); use `"gaussian_copula"` for very large
-  simulations.
+  template and re-draws a template with probability
+  `1 - exp(-template_switch_rate × d_cM)` at each locus. Creates
+  realistic LD blocks without external software. Uses the genetic map
+  (`genome_map`) resolved for this pool's `line_name` for adjacent-locus
+  distances. Performance is O(n_haplotypes × n_loci); use
+  `"gaussian_copula"` for very large simulations.
+
+  Two properties of this model are easy to miss. First, the re-draw is
+  uniform over **all** templates including the current one, so the rate
+  of *observable* template changes is
+  `template_switch_rate × (n_templates − 1) / n_templates`. This is
+  deliberate — it is the standard Li-Stephens copying kernel, and it is
+  what makes realized LD invariant to marker density. Second, templates
+  are the only source of allelic variation, so a locus where all
+  `n_templates` templates agree is monomorphic **regardless of
+  `n_haplotypes`**; roughly `2 / (n_templates + 1)` of loci are
+  monomorphic, and the MAF spectrum is quantized to multiples of
+  `1 / n_templates`. Raise `n_templates` if you need rare variants or a
+  dense MAF spectrum.
 
 - `"gaussian_copula"`:
 
   Fast LD via AR(1) latent normal. A latent Gaussian AR(1) process runs
   along each chromosome; adjacent-locus correlation decays as ρ =
-  exp(−`decay_rate` × d_cM). Haplotypes are generated by thresholding
+  exp(−`ld_decay_rate` × d_cM). Haplotypes are generated by thresholding
   latent values at each locus's target allele frequency. Fully
-  vectorised over haplotypes. Uses the resolved default genetic map
-  (`genome_map`).
+  vectorised over haplotypes, and unlike `"mosaic"` it produces an
+  unquantized MAF spectrum. Uses the genetic map (`genome_map`) resolved
+  for this pool's `line_name`.
 
 ## See also
 
@@ -206,18 +261,22 @@ pop <- new_pop() |> define_founder_haplotypes(n_haplotypes = 200, method = "beta
 pop <- new_pop() |> define_founder_haplotypes(n_haplotypes = 200,
                                  method = "balding_nichols", fst = 0.05)
 
+# Beta frequencies, realized exactly (no binomial scatter around the draw)
+pop <- new_pop() |> define_founder_haplotypes(n_haplotypes = 200,
+                                 method = "beta", exact_freq = TRUE)
+
 # Quick LD via mosaic block copying
 pop <- new_pop() |> define_founder_haplotypes(n_haplotypes = 200, method = "mosaic")
 
 # Fast LD via Gaussian copula AR(1)
 pop <- new_pop() |> define_founder_haplotypes(n_haplotypes = 200,
-                                 method = "gaussian_copula", decay_rate = 0.5)
+                                 method = "gaussian_copula", ld_decay_rate = 0.5)
 
 # Two lines with different LD structures (same pop, distinct line_name)
 pop <- new_pop()
 pop <- pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "A",
                                  method = "mosaic")
 pop <- pop |> define_founder_haplotypes(n_haplotypes = 200, line_name = "B",
-                                 method = "gaussian_copula", decay_rate = 0.5)
+                                 method = "gaussian_copula", ld_decay_rate = 0.5)
 } # }
 ```

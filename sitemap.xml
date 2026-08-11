@@ -25,7 +25,6 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/archive_replicate.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/arrange.tidybreed_table.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/assert_ploidy_2.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/assert_qtl_autosomal.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/blupf90_helpers.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/build_chr_info.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/build_data_file.html</loc></url>
@@ -39,7 +38,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/decode_levels_json.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_additive_effects.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_chip.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/define_chr.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/define_chromosome.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.html</loc></url>
@@ -102,7 +101,6 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/filter.tidybreed_table.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/find_blupf90_binary.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/format_sql_value.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/get_chr_meta_map.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/get_phenotype_var.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/get_residual_cov.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/get_table.html</loc></url>
@@ -110,7 +108,6 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/haplotype_write_helpers.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/index.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/infer_duckdb_type.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/is_plain_autosome.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/liability_to_categorical.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/load_phenotype_cov.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/load_trait_cov.html</loc></url>
@@ -147,7 +144,6 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/remove_rows.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/rescale_effects_to_target.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/resolve_batch_size.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/resolve_chr_copy_count.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/restore_pop.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/run_blupf90_plus.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/run_renumf90.html</loc></url>

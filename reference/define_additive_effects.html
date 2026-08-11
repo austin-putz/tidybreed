@@ -22,9 +22,14 @@ membership is determined from existing rows in genome_effects.
 
 
 The base argument controls which allele frequencies are used:
-"founder_haplotypes" (default) — uses founder_allele_freq from
-genome_meta (requires define_founder_haplotypes() was called to
-populate it).
+"founder_haplotypes" (default) — computes allele frequencies directly
+from the founder_haplotypes table (requires define_founder_haplotypes()
+was called). Note this pools all lines: when the table holds more than
+one line_name, the resulting frequency is the pool-size-weighted average
+across lines, which overstates within-line heterozygosity (Wahlund effect)
+and under-scales target_add_var. Use base = "current_pop" with a
+line-filtered base_tbl for per-line centering. (This does not read
+genome_meta.founder_allele_freq, which is informational only.)
 "current_pop" — computes allele frequencies from the current
 ind_haplotype table. Pass a filtered tidybreed_table via
 base_tbl to restrict which individuals define the base population.
@@ -53,9 +58,14 @@ membership is determined from existing rows in genome_effects.
 
 
 The base argument controls which allele frequencies are used:
-"founder_haplotypes" (default) — uses founder_allele_freq from
-genome_meta (requires define_founder_haplotypes() was called to
-populate it).
+"founder_haplotypes" (default) — computes allele frequencies directly
+from the founder_haplotypes table (requires define_founder_haplotypes()
+was called). Note this pools all lines: when the table holds more than
+one line_name, the resulting frequency is the pool-size-weighted average
+across lines, which overstates within-line heterozygosity (Wahlund effect)
+and under-scales target_add_var. Use base = "current_pop" with a
+line-filtered base_tbl for per-line centering. (This does not read
+genome_meta.founder_allele_freq, which is informational only.)
 "current_pop" — computes allele frequencies from the current
 ind_haplotype table. Pass a filtered tidybreed_table via
 base_tbl to restrict which individuals define the base population.
@@ -69,7 +79,7 @@ Calling this function again for the same (trait_name, genome_effect_type, line_n
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -115,9 +125,14 @@ all traits. Loci that are QTL for only a subset of traits in
 variance of <code>G</code> for that trait).</p></li>
 <li><p><code>method = "union"</code> — the loci in <code>tbl</code> form the candidate pool; per-trait
 membership is determined from existing rows in <code>genome_effects</code>.</p></li>
-</ul><p>The <code>base</code> argument controls which allele frequencies are used:</p><ul><li><p><code>"founder_haplotypes"</code> (default) — uses <code>founder_allele_freq</code> from
-<code>genome_meta</code> (requires <code><a href="define_founder_haplotypes.html">define_founder_haplotypes()</a></code> was called to
-populate it).</p></li>
+</ul><p>The <code>base</code> argument controls which allele frequencies are used:</p><ul><li><p><code>"founder_haplotypes"</code> (default) — computes allele frequencies directly
+from the <code>founder_haplotypes</code> table (requires <code><a href="define_founder_haplotypes.html">define_founder_haplotypes()</a></code>
+was called). Note this pools <strong>all</strong> lines: when the table holds more than
+one <code>line_name</code>, the resulting frequency is the pool-size-weighted average
+across lines, which overstates within-line heterozygosity (Wahlund effect)
+and under-scales <code>target_add_var</code>. Use <code>base = "current_pop"</code> with a
+line-filtered <code>base_tbl</code> for per-line centering. (This does <strong>not</strong> read
+<code>genome_meta.founder_allele_freq</code>, which is informational only.)</p></li>
 <li><p><code>"current_pop"</code> — computes allele frequencies from the current
 <code>ind_haplotype</code> table. Pass a filtered <code>tidybreed_table</code> via
 <code>base_tbl</code> to restrict which individuals define the base population.</p></li>

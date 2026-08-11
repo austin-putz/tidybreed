@@ -1,7 +1,8 @@
 # Define the genome structure of a breeding population
 
 Adds genome tables (`genome_meta`, `genome_map`, `ind_haplotype`,
-`ind_genotype`, `chr_meta`) to a population opened with
+`ind_genotype`, `chr_inheritance`, `chr_recombination`) to a population
+opened with
 [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md).
 Pipe-friendly — accepts a `tidybreed_pop` and returns a `tidybreed_pop`.
 Physical position (`pos_bp`, base pairs) lives in `genome_meta`; the
@@ -21,6 +22,11 @@ call
 [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
 after this function.
 
+The call is **atomic**: every table is created inside a single
+transaction, so an error at any point (invalid argument, impossible
+locus spacing, failed validation) leaves the database exactly as it was
+and the population can be re-used for a corrected call.
+
 ## Usage
 
 ``` r
@@ -31,7 +37,9 @@ define_genome(
   chr_len_Mb,
   cM_per_Mb = 1,
   locus_names = NULL,
-  chr_names = NULL
+  chr_names = NULL,
+  recombines_M = TRUE,
+  recombines_F = TRUE
 )
 ```
 
@@ -41,14 +49,17 @@ define_genome(
 
   A `tidybreed_pop` object from
   [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md).
+  Must not already have a genome defined — `define_genome()` is called
+  once per population.
 
 - n_loci:
 
-  Integer scalar. Total number of loci to simulate.
+  Integer scalar. Total number of loci to simulate. Must be a whole
+  number and at least `n_chr` (every chromosome needs a locus).
 
 - n_chr:
 
-  Integer scalar. Number of chromosomes.
+  Integer scalar. Number of chromosomes. Must be a whole number.
 
 - chr_len_Mb:
 
@@ -74,6 +85,17 @@ define_genome(
 
   Character vector of length `n_chr` or `NULL`. Custom chromosome names.
   When `NULL` (default), chromosomes are numbered `1, 2, ..., n_chr`.
+
+- recombines_M, recombines_F:
+
+  Logical scalar. Genome-wide recombination default for **male-parent**
+  and **female-parent** meiosis, seeded into `chr_recombination`. Both
+  default `TRUE`. Set one `FALSE` for a genome-wide, whole-genome
+  achiasmatic sex (e.g. `recombines_F = FALSE` for silkworm females,
+  `recombines_M = FALSE` for *Drosophila* males) instead of writing a
+  per-chromosome rule for every chromosome. Per-chromosome overrides (Y,
+  W, *Drosophila* chr4) still go through
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md).
 
 ## Value
 
@@ -103,5 +125,11 @@ pop <- open_pop(pop_name = "B", db_name = ":memory:") |>
   define_founder_haplotypes(n_haplotypes = 100,
                             min_allele_freq = 0.05,
                             max_allele_freq = 0.95)
+
+# Genome-wide achiasmy — Drosophila males do not recombine (all chromosomes).
+# Per-chromosome overrides (e.g. chr4) still go through define_chromosome().
+pop <- open_pop(pop_name = "fly", db_name = ":memory:") |>
+  define_genome(n_loci = 1000, n_chr = 4, chr_len_Mb = 100,
+                recombines_M = FALSE)
 } # }
 ```

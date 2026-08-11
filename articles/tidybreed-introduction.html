@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -221,7 +221,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpO3BNQl/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpUyYDUZ/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -247,10 +247,11 @@ almost nothing in it — sections appear as you add data.</p>
 <span>  <span class="fu"><a href="../reference/define_genome.html">define_genome</a></span><span class="op">(</span></span>
 <span>    n_loci     <span class="op">=</span> <span class="fl">500</span>,   <span class="co"># total loci (SNP and QTL both come from this pool)</span></span>
 <span>    n_chr      <span class="op">=</span> <span class="fl">5</span>,     <span class="co"># chromosomes</span></span>
-<span>    chr_len_Mb <span class="op">=</span> <span class="fl">100</span>    <span class="co"># length of each chromosome in megabases</span></span>
+<span>    chr_len_Mb <span class="op">=</span> <span class="fl">100</span>,   <span class="co"># physical length of each chromosome in megabases</span></span>
+<span>    cM_per_Mb  <span class="op">=</span> <span class="fl">1.0</span>    <span class="co"># genetic-map rate (the default)</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="co">#&gt; Defined genome: 500 loci across 5 chromosomes | chr lengths (Mb): all equal to 100 Mb</span></span>
-<span><span class="co">#&gt;   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_meta</span></span>
+<span><span class="co">#&gt;   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; &lt;tidybreed_table: genome_meta&gt;  [500 rows × 5 fields]</span></span>
@@ -287,20 +288,44 @@ can have several maps — male vs female, or line-specific:</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 8</span>             8        8 Locus_8    <span style="color: #BB0000;">NA</span>    <span style="color: #BB0000;">NA</span>        default   7.92 </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span>             9        9 Locus_9    <span style="color: #BB0000;">NA</span>    <span style="color: #BB0000;">NA</span>        default   8.91 </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span>            10       10 Locus_10   <span style="color: #BB0000;">NA</span>    <span style="color: #BB0000;">NA</span>        default   9.90</span></span></code></pre></div>
-<p>Per-chromosome inheritance rules live in <code>chr_meta</code>. Every
-chromosome starts as a normal diploid autosome;
-<code><a href="../reference/define_chr.html">define_chr()</a></code> is how you would declare an X, Y, or
+<p><code>cM_per_Mb</code> is what turns physical distance into genetic
+distance (<code>pos_cM = pos_bp / 1e6 * cM_per_Mb</code>), and it is
+written here as the <em>default</em> map — <code>sex</code> and
+<code>line_name</code> both <code>NULL</code>,
+<code>map_name = "default"</code>. Everything distance-driven reads that
+map, so this one number sets the crossover rate: a 100 Mb chromosome at
+<code>cM_per_Mb = 1.0</code> is 100 cM, or ~1 crossover per meiosis.</p>
+<p><code><a href="../reference/define_genome.html">define_genome()</a></code> is a one-shot call. It writes seven
+tables in a single transaction and rolls all of them back if anything
+fails, so a bad call leaves the database untouched and you can simply
+call it again with corrected arguments. Calling it on a population that
+already has a genome is an error.</p>
+<p>Per-chromosome rules live in two explicit tables:
+<code>chr_inheritance</code> (how many copies of a chromosome an
+offspring of each sex inherits from each parent) and
+<code>chr_recombination</code> (whether a parent of each sex recombines
+it). Every chromosome starts as a normal diploid autosome;
+<code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> is how you would declare an X, Y, or
 mitochondrial chromosome.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"chr_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 6</span></span></span>
-<span><span class="co">#&gt;   chr_name copy_mode_M copy_mode_F hemi_parent recombines_M recombines_F</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>       </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> 1        full        full        <span style="color: #BB0000;">NA</span>          TRUE         TRUE        </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> 2        full        full        <span style="color: #BB0000;">NA</span>          TRUE         TRUE        </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> 3        full        full        <span style="color: #BB0000;">NA</span>          TRUE         TRUE        </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> 4        full        full        <span style="color: #BB0000;">NA</span>          TRUE         TRUE        </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> 5        full        full        <span style="color: #BB0000;">NA</span>          TRUE         TRUE</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"chr_inheritance"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 5</span></span></span>
+<span><span class="co">#&gt;   chr_name offspring_sex line_name from_parent_1 from_parent_2</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>             <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> 1        <span style="color: #BB0000;">NA</span>            <span style="color: #BB0000;">NA</span>                    1             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> 2        <span style="color: #BB0000;">NA</span>            <span style="color: #BB0000;">NA</span>                    1             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> 3        <span style="color: #BB0000;">NA</span>            <span style="color: #BB0000;">NA</span>                    1             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> 4        <span style="color: #BB0000;">NA</span>            <span style="color: #BB0000;">NA</span>                    1             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> 5        <span style="color: #BB0000;">NA</span>            <span style="color: #BB0000;">NA</span>                    1             1</span></span>
+<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"chr_recombination"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 4</span></span></span>
+<span><span class="co">#&gt;   chr_name parent_sex line_name recombines</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>     </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> 1        <span style="color: #BB0000;">NA</span>         <span style="color: #BB0000;">NA</span>        TRUE      </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> 2        <span style="color: #BB0000;">NA</span>         <span style="color: #BB0000;">NA</span>        TRUE      </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> 3        <span style="color: #BB0000;">NA</span>         <span style="color: #BB0000;">NA</span>        TRUE      </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> 4        <span style="color: #BB0000;">NA</span>         <span style="color: #BB0000;">NA</span>        TRUE      </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> 5        <span style="color: #BB0000;">NA</span>         <span style="color: #BB0000;">NA</span>        TRUE</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="explore-the-database">Explore the database<a class="anchor" aria-label="anchor" href="#explore-the-database"></a>
@@ -334,7 +359,8 @@ mitochondrial chromosome.</p>
 <span><span class="co">#&gt;   ind_haplotype            0     7  Phased haplotypes in long format. One row...</span></span>
 <span><span class="co">#&gt;   ind_genotype             0     4  Genotype dosage cache in long format. One...</span></span>
 <span><span class="co">#&gt;   ind_crossover            0     6  Crossover events in long format, one row ...</span></span>
-<span><span class="co">#&gt;   chr_meta                 5     6  Per-chromosome inheritance rules. One row...</span></span></code></pre></div>
+<span><span class="co">#&gt;   chr_inheritance          5     5  Per-chromosome copy counts, keyed by offs...</span></span>
+<span><span class="co">#&gt;   chr_recombination        5     4  Per-chromosome recombination, keyed by pr...</span></span></code></pre></div>
 <p><code><a href="../reference/describe_table.html">describe_table()</a></code> explains one table’s columns:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/describe_table.html">describe_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span></span>
@@ -410,20 +436,44 @@ disequilibrium:</p>
 <tr class="even">
 <td><code>"balding_nichols"</code></td>
 <td>FST-based divergence between lines (<code>fst</code>,
-<code>mean_freq</code>)</td>
+<code>mean_allele_freq</code>)</td>
 </tr>
 <tr class="odd">
 <td><code>"mosaic"</code></td>
 <td>Haplotypes built from templates, producing simple LD
-(<code>n_templates</code>, <code>switch_rate</code>)</td>
+(<code>n_templates</code>, <code>template_switch_rate</code>)</td>
 </tr>
 <tr class="even">
 <td><code>"gaussian_copula"</code></td>
 <td>Correlated frequencies with distance-based decay
-(<code>decay_rate</code>)</td>
+(<code>ld_decay_rate</code>)</td>
 </tr>
 </tbody>
 </table>
+<p>Each argument belongs to exactly one method — passing one to the
+wrong method is an error that names where it belongs. The two LD methods
+walk the genetic map you defined above, resolved for this pool’s own
+<code>line_name</code>.</p>
+<p>The first four methods also take
+<strong><code>exact_freq</code></strong>. By default they draw a
+frequency <code>p</code> per locus and then sample each allele as an
+independent <code>Bernoulli(p)</code>, so the <em>realized</em> pool
+frequency scatters around <code>p</code>. With
+<code>exact_freq = TRUE</code> each locus instead gets exactly
+<code>round(p * n_haplotypes)</code> copies of the 1-allele, on an
+independently drawn subset of haplotypes — so the realized frequency
+<strong>is</strong> <code>p</code>, and still no LD is induced. It
+defaults to <code>TRUE</code> for <code>"fixed"</code> (a fixed
+frequency that drifts is not fixed) and <code>FALSE</code> elsewhere;
+turn it on when you want a drift-free base frequency.</p>
+<p>One caveat worth knowing early: in <code>"mosaic"</code>, templates
+are the only source of variation, so <code>n_templates</code> sets the
+MAF spectrum, not just the block length. Roughly
+<code>2 / (n_templates + 1)</code> of loci come out monomorphic no
+matter how many haplotypes you ask for, and you get a warning past 10% —
+QTL landing there contribute no genetic variance. Raise
+<code>n_templates</code>, or use <code>"gaussian_copula"</code>, which
+gives an unquantized spectrum.</p>
 </div>
 <div class="section level2">
 <h2 id="add-founder-individuals">Add founder individuals<a class="anchor" aria-label="anchor" href="#add-founder-individuals"></a>
@@ -621,12 +671,12 @@ population.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 4</span></span></span>
 <span><span class="co">#&gt;   id_tbv id_ind trait_name tbv_value</span></span>
 <span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      2 A_2    ADG         -<span style="color: #BB0000;">0.005</span><span style="color: #BB0000; text-decoration: underline;">05</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     19 A_19   ADG         -<span style="color: #BB0000;">0.124</span>  </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     21 A_21   ADG          0.458  </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     27 A_27   ADG          0.165  </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     30 A_30   ADG         -<span style="color: #BB0000;">0.416</span>  </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     32 A_32   ADG          0.136</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      5 A_5    ADG          -<span style="color: #BB0000;">0.137</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     13 A_13   ADG           0.119 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     16 A_16   ADG           0.115 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     22 A_22   ADG           0.321 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     25 A_25   ADG           0.127 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     31 A_31   ADG          -<span style="color: #BB0000;">0.034</span><span style="color: #BB0000; text-decoration: underline;">6</span></span></span></code></pre></div>
 <p><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> builds the observed record: intercept,
 plus fixed and random effects, plus the breeding value, plus a sampled
 residual. It calls <code><a href="../reference/add_tbv.html">add_tbv()</a></code> internally, so you can go
@@ -765,7 +815,8 @@ with <code>id_parent_1</code>, <code>id_parent_2</code>,
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> A_2         A_256       F     A             1</span></span></code></pre></div>
 <p><code><a href="../reference/add_offspring.html">add_offspring()</a></code> simulates meiosis — crossovers are drawn
 from the genetic map in <code>genome_map</code>, respecting the
-per-chromosome rules in <code>chr_meta</code>.</p>
+per-chromosome rules in <code>chr_inheritance</code> and
+<code>chr_recombination</code>.</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_offspring.html">add_offspring</a></span><span class="op">(</span><span class="va">pop</span>, <span class="va">matings</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Added 20 offspring (base_seed = 409472004)</span></span>
@@ -1000,7 +1051,7 @@ prefix:</p>
 values</td>
 </tr>
 <tr class="even">
-<td><code><a href="../reference/define_chr.html">?define_chr</a></code></td>
+<td><code><a href="../reference/define_chromosome.html">?define_chromosome</a></code></td>
 <td>Sex chromosomes, organelles, and achiasmatic meiosis</td>
 </tr>
 <tr class="odd">

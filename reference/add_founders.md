@@ -104,10 +104,11 @@ the result back to update your object: `pop <- add_founders(pop, ...)`
 
 3.  Populates `ind_haplotype` (long format; `line_origin` set to the
     founder's line and `strand = 1`. Row count per chromosome follows
-    `chr_meta`'s `copy_mode_M`/`copy_mode_F` for the founder's sex — 2
-    rows/locus for `"full"` (the default, diploid autosomes), 1 for
-    `"half"` (e.g. sex chromosomes), 0 for `"none"`; see
-    [`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md))
+    the resolved `chr_inheritance` `from_parent_1`/`from_parent_2` for
+    the founder's sex — 2 rows/locus for a plain autosome (`1, 1`, the
+    default), 1 for a hemizygous sex chromosome (e.g. `0, 1`), 0 for an
+    absent chromosome (`0, 0`); see
+    [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md))
 
 **ID Format:**
 

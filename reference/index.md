@@ -16,13 +16,14 @@ table.
 
 ## Genome and genetic map
 
-Define loci, chromosomes, per-chromosome inheritance rules, and the
-founder haplotype pools that individuals are sampled from.
+Define loci, chromosomes, per-chromosome inheritance and recombination
+rules, and the founder haplotype pools that individuals are sampled
+from.
 
 - [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
   : Define the genome structure of a breeding population
-- [`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)
-  : Define a chromosome's inheritance rule
+- [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  : Define a chromosome's inheritance or recombination rule
 - [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
   : Define founder haplotypes for a tidybreed population
 

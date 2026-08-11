@@ -17,7 +17,7 @@ the new founders. Founder individuals have NULL for both parent IDs."></head><bo
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -134,10 +134,11 @@ detected available system memory (conservative fallback if unavailable).</p></dd
 </ul><p><strong>What it does:</strong></p><ol><li><p>Samples 2 haplotypes per founder from <code>founder_haplotypes</code> (with replacement)</p></li>
 <li><p>Creates/updates <code>ind_meta</code> table with founder metadata</p></li>
 <li><p>Populates <code>ind_haplotype</code> (long format; <code>line_origin</code> set to the founder's
-line and <code>strand = 1</code>. Row count per chromosome follows
-<code>chr_meta</code>'s <code>copy_mode_M</code>/<code>copy_mode_F</code> for the founder's sex — 2
-rows/locus for <code>"full"</code> (the default, diploid autosomes), 1 for
-<code>"half"</code> (e.g. sex chromosomes), 0 for <code>"none"</code>; see <code><a href="define_chr.html">define_chr()</a></code>)</p></li>
+line and <code>strand = 1</code>. Row count per chromosome follows the resolved
+<code>chr_inheritance</code> <code>from_parent_1</code>/<code>from_parent_2</code> for the founder's sex — 2
+rows/locus for a plain autosome (<code>1, 1</code>, the default), 1 for a hemizygous
+sex chromosome (e.g. <code>0, 1</code>), 0 for an absent chromosome (<code>0, 0</code>); see
+<code><a href="define_chromosome.html">define_chromosome()</a></code>)</p></li>
 </ol><p><strong>ID Format:</strong></p><ul><li><p>Individual IDs: <code>"{line_name}_{number}"</code> (e.g., "A_1", "A_2", "B_1")</p></li>
 <li><p>Numbers are sequential within each line</p></li>
 <li><p>If founders already exist for a line, numbering continues from max ID</p></li>

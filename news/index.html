@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,147 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.60.2" id="tidybreed-0602-2026-08-10">tidybreed 0.60.2 (2026-08-10)<a class="anchor" aria-label="anchor" href="#tidybreed-0602-2026-08-10"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-60-2">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-60-2"></a></h3>
+<ul><li>
+<p><strong>The pkgdown site has been failing to build since the <code>chr_meta</code> split.</strong> <code>_pkgdown.yml</code> still listed <code>define_chr</code> in its reference index, but that function was renamed to <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> — and, per the pre-1.0 policy, the old name was removed outright rather than aliased. Every pkgdown run since <code>refactor(chr): split chr_meta into chr_inheritance + chr_recombination</code> died with <em>“reference[2].contents[2] (define_chr) must be a known topic name or alias”</em>, so the published documentation site has been stuck at v0.58.0.</p>
+<p>The stale entry broke the build in <strong>both</strong> directions: <code>define_chr</code> resolved to nothing, and <code>define_chromosome</code> was consequently absent from the index, which pkgdown also rejects because it requires every public topic to be listed. Renaming the single entry fixes both. The section description now mentions recombination as well as inheritance, since <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> covers both concerns.</p>
+<p><code>R-CMD-check</code> passed on every one of the affected commits — it does not validate <code>_pkgdown.yml</code> — which is why the rename slipped through. Verified with <code><a href="https://pkgdown.r-lib.org/reference/check_pkgdown.html" class="external-link">pkgdown::check_pkgdown()</a></code> (clean) and a full local <code><a href="https://pkgdown.r-lib.org/reference/build_site.html" class="external-link">pkgdown::build_site()</a></code> against an installed 0.60.1.</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-60-2">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-60-2"></a></h3>
+<ul><li>
+<strong><code>README.md</code> — <code><a href="../reference/define_genome.html">define_genome()</a></code>.</strong> Documents <code>cM_per_Mb</code> (and shows <code>genome_map</code> alongside <code>genome_meta</code>), the physical/genetic coordinate split and how <code>cM_per_Mb</code> sets the crossover rate, the seven-table single transaction with rollback, the optional <code>locus_names</code> / <code>chr_names</code> / <code>recombines_M</code> / <code>recombines_F</code> arguments, and the one-shot restriction plus the up-front argument validation added in 0.60.1.</li>
+<li>
+<strong><code>README.md</code> — <code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code>.</strong> Reorganised around the no-LD / LD split, with a method-to-argument table. Adds the <code>exact_freq</code> argument from 0.60.0 (including why it defaults to <code>TRUE</code> only for <code>"fixed"</code>), the wrong-method argument error, the 0.60.0 fix that LD methods resolve the genetic map for their own <code>line_name</code>, the <code>"mosaic"</code> <code>n_templates</code> MAF-spectrum caveat and monomorphic-locus warning, the <code>line_name = NULL</code> fallback and collision rules, and the <code>founder_allele_freq</code> caveat (informational only; describes only the pool written last).</li>
+<li>
+<strong><code>README.md</code> — Function Overview.</strong> Reworded the <code><a href="../reference/define_genome.html">define_genome()</a></code> and <code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code> rows and added the missing <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> row.</li>
+<li>
+<strong><code>vignettes/tidybreed-introduction.Rmd</code>.</strong> Adds <code>cM_per_Mb</code> to the genome example with an explanation of the default map and crossover rate, notes that <code><a href="../reference/define_genome.html">define_genome()</a></code> is one-shot and transactional, and documents <code>exact_freq</code> and the <code>"mosaic"</code> <code>n_templates</code> MAF caveat.</li>
+<li>
+<strong><code>vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R</code>.</strong> Expanded the <code><a href="../reference/define_genome.html">define_genome()</a></code> and <code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code> blocks to cover the same ground, corrected the <code>cM_per_Mb</code> comment (<code>pos_bp/1e6</code>, not <code>pos_Mb</code>), fixed a duplicated <code>beta_shape</code> comment, and noted that line B’s <code>allele_freq</code> is now realized exactly.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.60.1" id="tidybreed-0601-2026-08-09">tidybreed 0.60.1 (2026-08-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0601-2026-08-09"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-60-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-60-1"></a></h3>
+<ul><li><p><strong><code><a href="../reference/define_genome.html">define_genome()</a></code> is now atomic.</strong> It creates seven tables (<code>genome_meta</code>, <code>genome_map</code>, <code>ind_haplotype</code>, <code>ind_genotype</code>, <code>ind_crossover</code>, <code>chr_inheritance</code>, <code>chr_recombination</code>) plus a <code>_schema_meta</code> write, and did so under autocommit with no transaction. Any mid-flight failure left a half-built genome that the “genome already defined” preflight then refused to overwrite, so the population was <strong>unrecoverable</strong> — the only fix was deleting the database file. All table creation, inserts, validators and the <code>_schema_meta</code> write now run inside one transaction with a rollback guard, so a failed call leaves the database exactly as it found it and the same <code>pop</code> can be reused for a corrected call. The exit handler also unregisters the temporary DuckDB views, which are session-level registrations that <code>ROLLBACK</code> does not undo.</p></li>
+<li><p><strong>The preflight only checked <code>genome_meta</code>.</strong> An empty-but-existing genome table passed the <code>COUNT(*) &gt; 0</code> guard and the plain <code>CREATE TABLE ind_haplotype</code> then failed mid-flight, leaving a populated <code>genome_meta</code> behind. The check now covers all seven genome tables and names the ones it found. <code>genome_meta</code> and <code>genome_map</code> are created with plain <code>CREATE TABLE</code> rather than <code>CREATE OR REPLACE</code> — with the preflight and the transaction in place, <code>OR REPLACE</code> could only ever silently clobber an existing genome.</p></li>
+<li><p><strong><code>locus_names</code> accepted <code>NA</code> and <code>""</code>.</strong> Both were written straight into <code>genome_meta</code> and <code>genome_map</code>. <code>locus_name</code> is the denormalized join key into <code>genome_effects</code> / <code>ind_haplotype</code> / <code>genome_map</code>, so those loci silently vanished from every downstream join. They are now rejected up front, matching the guard <code>chr_names</code> already had.</p></li>
+<li><p><strong>A nonsense error when <code>n_loci &lt; n_chr</code>.</strong> Empty chromosomes made the position index <code>[2:(n_chr_loci + 1)]</code> collapse to the reversed <code>[2:1]</code>, and the failure surfaced as <em>“chromosome 2: physical span 100000000 bp is too short to place 0 loci”</em>. <code>n_loci &lt; n_chr</code> is now rejected with a message that says what is actually wrong.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="breaking-changes-0-60-1">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-60-1"></a></h3>
+<p>Consistent with the 0.60.0 tightening of <code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code>, several <code><a href="../reference/define_genome.html">define_genome()</a></code> arguments that were silently accepted are now hard errors:</p>
+<ul><li>
+<code>n_loci</code> and <code>n_chr</code> must be <strong>whole numbers</strong>. <code>n_loci = 100.5</code> previously passed the <code>is.numeric(...) &amp;&amp; &gt; 0</code> check and died ~170 lines later inside <code><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble()</a></code> (<code>seq.int(length.out = 100.5)</code> yields 101 elements while <code>seq_len(100.5)</code> yields 100) — after <code>genome_meta</code> had already been written. <code>NA</code>, <code>NaN</code>, <code>Inf</code>, character input and length ≠ 1 are also rejected now, each with a message naming the argument and the value passed.</li>
+<li>
+<code>n_loci</code> must be <strong>at least <code>n_chr</code></strong> — every chromosome needs a locus.</li>
+<li>
+<code>locus_names</code> may not contain <code>NA</code> or <code>""</code>, and a length mismatch now reports the expected and actual lengths instead of a bare <code><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot()</a></code> expression.</li>
+<li>
+<code>recombines_M</code> / <code>recombines_F</code> go through the shared flag validator.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-60-1">Internal<a class="anchor" aria-label="anchor" href="#internal-0-60-1"></a></h3>
+<ul><li>
+<code>pop</code> is validated with <code><a href="../reference/validate_tidybreed_pop.html">validate_tidybreed_pop()</a></code> at entry (the convention in 20+ other functions) instead of a bare <code><a href="https://rdrr.io/r/base/class.html" class="external-link">inherits()</a></code> check, so a closed connection reports itself rather than failing later as a DBI error, and again before return so <code>pop$tables</code> cannot drift from the database.</li>
+<li>
+<code>pop$tables</code> is updated with <code>unique(c(...))</code>, matching <code><a href="../reference/define_table.html">define_table()</a></code> and <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>. The seven table names live in one <code>GENOME_TABLES</code> constant shared by the preflight, the registration and the summary message.</li>
+<li>
+<code>.check_scalar()</code> / <code>.check_flag()</code> moved from <code>R/founder_haplotype_helpers.R</code> to a new <code>R/arg_checks.R</code> — they are now shared with <code><a href="../reference/define_genome.html">define_genome()</a></code> and are not specific to founder haplotypes. No behavior change.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.60.0" id="tidybreed-0600-2026-08-09">tidybreed 0.60.0 (2026-08-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0600-2026-08-09"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-60-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-60-0"></a></h3>
+<ul><li>
+<p><strong><code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code> argument renames.</strong> Three method arguments were ambiguous standalone or inconsistent with their own siblings. Per the pre-1.0 policy the old names are removed outright, with no aliases:</p>
+<ul><li>
+<code>mean_freq</code> → <strong><code>mean_allele_freq</code></strong> (its siblings are already <code>min_allele_freq</code>/<code>max_allele_freq</code>)</li>
+<li>
+<code>switch_rate</code> → <strong><code>template_switch_rate</code></strong> (pairs with <code>n_templates</code>)</li>
+<li>
+<code>decay_rate</code> → <strong><code>ld_decay_rate</code></strong>
+</li>
+</ul><p><code>fst</code> is deliberately kept — it is standard population-genetics notation.</p>
+</li>
+<li><p><strong>Invalid arguments are now hard errors instead of being silently accepted.</strong> Several nonsense inputs previously produced valid-looking pools: <code>beta_shape1 = Inf</code> returned exactly 0.5 at every locus; <code>n_haplotypes = 2.7</code> silently became 2; <code>n_templates = "5"</code> was accepted because <code><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer()</a></code> ran <em>before</em> the <code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">is.numeric()</a></code> check, making that check tautological. All scalar arguments now go through a shared validator that rejects wrong types, non-finite values, <code>NA</code>, fractional counts, and out-of-range values, and names the offending argument and value. Per-method validation also runs <em>before</em> the “Generating …” progress message.</p></li>
+<li><p><strong><code>n_templates</code> may no longer exceed <code>n_haplotypes</code></strong> (extra templates add no variation and over-allocate the template matrix).</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-60-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-60-0"></a></h3>
+<ul><li>
+<strong><code>exact_freq</code> argument</strong> for <code>"fixed"</code>, <code>"uniform"</code>, <code>"beta"</code>, and <code>"balding_nichols"</code>. When <code>TRUE</code>, each locus receives exactly <code>round(p * n_haplotypes)</code> copies of the 1-allele on an independently drawn random subset of haplotypes, so the realized pool frequency equals the target with no binomial fluctuation and no induced LD. Defaults to <code>TRUE</code> for <code>"fixed"</code> and <code>FALSE</code> for the distribution-based methods, where drawing a frequency and then sampling alleles binomially is the correct generative model. Use it when you want <code>founder_allele_freq</code> to be an exact, drift-free base for Falconer centering.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-60-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-60-0"></a></h3>
+<ul><li>
+<strong><code>n_haplotypes</code> between 0 and 1 no longer fails with an opaque error.</strong> The <code>&gt; 0</code> check ran before <code><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer()</a></code>, so e.g. <code>0.5</code> coerced to <code>0L</code> and died three frames down inside <code>.write_founder_haplotypes()</code> with <code>invalid '(to - from)/by'</code>. Values are now validated as whole numbers <code>&gt;= 1</code> before coercion, and integer overflow (<code>1e10</code>) is caught rather than becoming a silent <code>NA</code>.</li>
+<li>
+<strong>The LD methods ignored line-specific genetic maps.</strong> <code>"mosaic"</code> and <code>"gaussian_copula"</code> called <code>resolve_genome_map()</code> without a <code>line_name</code> even when one was passed, so founder LD was built on the default map while every later meiosis for that line used the line-specific map (<code><a href="../reference/add_offspring.html">add_offspring()</a></code> resolves per-parent). They now resolve the map for their own line.</li>
+<li>
+<strong><code>ld_decay_rate = 0</code> is now allowed</strong>, matching <code>template_switch_rate = 0</code>. Both are the same well-defined maximum-LD limit (complete LD within a chromosome) and <code>0</code> was already accepted — and tested — for the mosaic method.</li>
+<li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>’s documentation claimed <code>base = "founder_haplotypes"</code> reads <code>genome_meta.founder_allele_freq</code>. It does not — it recomputes from the <code>founder_haplotypes</code> table, <strong>pooling all lines with no <code>line_name</code> filter</strong>. The doc is corrected, and a warning now fires when the table holds more than one line, since the pooled frequency overstates within-line heterozygosity (Wahlund) and silently under-scales <code>target_add_var</code>. Per-line base frequencies remain a follow-up; use <code>base = "current_pop"</code> with a line-filtered <code>base_tbl</code> in the meantime.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-60-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-60-0"></a></h3>
+<ul><li>Documented two easy-to-miss properties of <code>"mosaic"</code>: observable template changes occur at <code>template_switch_rate * (n_templates - 1) / n_templates</code> (the self-redraw is deliberate — it is the Li-Stephens kernel, and it is what makes realized LD invariant to marker density), and <code>n_templates</code> controls the <strong>MAF spectrum</strong>, not just block length. Because templates are the only source of variation, roughly <code>2 / (n_templates + 1)</code> of loci are monomorphic <em>regardless of <code>n_haplotypes</code></em> — verified at 600 loci: <code>n_templates = 2</code> → 66.5% (predicted 66.7%), <code>5</code> → 34.5% (33.3%), <code>15</code> → 12.3% (12.5%), versus 0.5% for <code>"gaussian_copula"</code>. A warning now fires when more than 10% of loci come out monomorphic, because QTL placed there contribute nothing to <code>sum(2pq a^2)</code>.</li>
+<li>Documented that <code>genome_meta.founder_allele_freq</code> is informational only (no other function reads it) and, in multi-line setups, describes only the pool written most recently.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-60-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-60-0"></a></h3>
+<ul><li>The wrong-method argument check now uses a single <code>ARG_METHODS</code> map (argument → accepting methods) with values read back via <code><a href="https://rdrr.io/r/base/get.html" class="external-link">mget()</a></code>, replacing two hand-synced lists that could drift. This also lets one argument belong to several methods, which <code>exact_freq</code> requires.</li>
+<li>The line-collision lookup is parameterized instead of <code>sprintf</code>-interpolated. It was never exploitable (the <code>line_name</code> regex admits no quoting character), but the safety no longer depends on a check 70 lines away. Added a <code>line_name</code> injection case to <code>test-sql_injection_hardening.R</code>.</li>
+<li>The <code>genome_meta</code> existence guard now asks the database rather than the in-memory <code>pop$tables</code> registry, matching the adjacent check.</li>
+<li>Removed dead code: the unreachable Balding-Nichols shape guard, the Gaussian-copula helper’s discarded <code>allele_freqs</code> return element, and a wasted per-haplotype RNG draw in the mosaic generator that was always overwritten at step 1. <strong>The last one changes seeded <code>"mosaic"</code> output</strong> relative to 0.59.x — permitted pre-1.0, and within-version reproducibility is unaffected (and tested).</li>
+<li>
+<code>.write_founder_haplotypes()</code> now errors on an allele-frequency/locus length mismatch instead of silently recycling.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.59.2" id="tidybreed-0592-2026-08-09">tidybreed 0.59.2 (2026-08-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0592-2026-08-09"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-59-2">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-59-2"></a></h3>
+<ul><li><p><strong><code><a href="../reference/define_genome.html">define_genome()</a></code> now validates <code>chr_names</code> before writing any table.</strong> Duplicate, <code>NA</code>, or empty chromosome names were previously caught only late by <code>validate_chr_inheritance()</code> — after <code>genome_meta</code> had already been populated — which left a half-defined genome that tripped the “genome already defined” guard and blocked a corrected re-run on the same population. Names are now checked (and coerced to character) up front, mirroring the existing <code>locus_names</code> uniqueness check.</p></li>
+<li><p><strong><code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> rejects non-finite copy counts cleanly.</strong> <code>from_parent_1</code> / <code>from_parent_2 = Inf</code> previously produced a cryptic “missing value where TRUE/FALSE needed” error; it now returns the standard “single non-negative integer” validation message.</p></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.59.1" id="tidybreed-0591-2026-08-09">tidybreed 0.59.1 (2026-08-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0591-2026-08-09"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-59-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-59-1"></a></h3>
+<ul><li>
+<p><strong><code>define_founder_haplotypes(method = "fixed")</code> now realizes <code>allele_freq</code> exactly.</strong> It previously drew each allele as an independent <code>Bernoulli(allele_freq)</code> trial, so the <em>realized</em> pool frequency fluctuated binomially around the target (with <code>allele_freq = 0.5</code> and 100 haplotypes, per-locus frequencies ranged roughly 0.34–0.63 — sd ≈ 0.05). The method now allocates exactly <code>round(allele_freq * n_haplotypes)</code> 1-alleles per locus to a randomly drawn subset of haplotypes, with an independent draw per locus so no LD is induced. <code>genome_meta.founder_allele_freq</code> is therefore the true pool frequency, not just the requested parameter.</p>
+<p>Frequencies live on a <code>1 / n_haplotypes</code> grid. When <code>allele_freq * n_haplotypes</code> is not a whole number the count is rounded and a warning names the frequency actually used (e.g. <code>allele_freq = 0.5</code> with 7 haplotypes gives <code>4/7</code>).</p>
+<p>Only <code>method = "fixed"</code> changed. The distribution-based methods (<code>"uniform"</code>, <code>"beta"</code>, <code>"balding_nichols"</code>) still draw per-locus frequencies from their distribution and then sample alleles binomially, which is the correct sampling model for them. Seeded output for <code>method = "fixed"</code> differs from 0.59.0.</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="tests-0-59-1">Tests<a class="anchor" aria-label="anchor" href="#tests-0-59-1"></a></h3>
+<ul><li>Added a reproducibility test asserting that all six <code><a href="../reference/define_founder_haplotypes.html">define_founder_haplotypes()</a></code> methods produce byte-identical haplotype pools, <code>founder_allele_freq</code> values, <strong>and</strong> RNG stream position from the same seed (the last matters because <code><a href="../reference/add_founders.html">add_founders()</a></code>/<code><a href="../reference/add_offspring.html">add_offspring()</a></code> draw from the stream afterwards).</li>
+<li>The <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> rescaling test now asserts the rescaler’s actual contract — the Falconer expected variance <code>sum(2pq a^2)</code> under the base allele frequencies equals <code>target_add_var</code> exactly — instead of relying solely on a tight tolerance around the variance realized in a sampled founder set. That realized value carries genuine drift/LD noise (roughly ±25% of target at 600 individuals drawn from a 200-haplotype pool), so its bound was widened to match the measured spread and kept only as an order-of-magnitude sanity check.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.59.0" id="tidybreed-0590-2026-08-09">tidybreed 0.59.0 (2026-08-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0590-2026-08-09"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-59-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-59-0"></a></h3>
+<ul><li>
+<strong>Chromosome rules are now two explicit long tables.</strong> The single wide <code>chr_meta</code> table (<code>copy_mode_M</code>/<code>copy_mode_F</code>/<code>hemi_parent</code>/<code>recombines_M</code>/ <code>recombines_F</code>) is replaced by <code>chr_inheritance</code> (per-parent copy counts <code>from_parent_1</code>/<code>from_parent_2</code>, keyed by <strong>offspring</strong> sex) and <code>chr_recombination</code> (<code>recombines</code>, keyed by <strong>producing-parent</strong> sex). This fixes the core confusion that one <code>sex</code> column meant two different individuals (the offspring for copy count, the parent for recombination). Copy counts are now <strong>absolute</strong> (correct at ploidy 2) rather than ploidy-relative <code>"full"</code>/<code>"half"</code>/<code>"none"</code>.</li>
+<li>
+<strong><code>define_chr()</code> → <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code>.</strong> The new function sets exactly one concern per call: <code>from_parent_1</code> + <code>from_parent_2</code> (inheritance, keyed by <code>offspring_sex</code>) or <code>recombines</code> (recombination, keyed by <code>parent_sex</code>). Writes are transactional with validation and rollback; <code>overwrite = FALSE</code> errors on an existing NULL-safe logical key. <code>resolve_chr_copy_count()</code> is removed.</li>
+<li>
+<strong><code><a href="../reference/define_genome.html">define_genome()</a></code> gains <code>recombines_M</code>/<code>recombines_F</code></strong> (both <code>TRUE</code>) — genome-wide per-parent-sex recombination defaults seeded into <code>chr_recombination</code>. Set one <code>FALSE</code> for a whole-genome achiasmatic sex (e.g. silkworm females, <em>Drosophila</em> males) instead of a per-chromosome rule for every chromosome.</li>
+</ul><p>Both tables reserve a nullable <code>line_name</code> dimension for future line-specific (crossbreeding) rules. Storage-expressible uniparental disomy (<code>2,0</code>) errors explicitly at the <code><a href="../reference/add_offspring.html">add_offspring()</a></code>/<code><a href="../reference/add_founders.html">add_founders()</a></code> kernel boundary.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.58.2" id="tidybreed-0582-2026-07-23">tidybreed 0.58.2 (2026-07-23)<a class="anchor" aria-label="anchor" href="#tidybreed-0582-2026-07-23"></a></h2>
 <div class="section level3">
@@ -201,7 +342,7 @@
 <h2 class="pkg-version" data-toc-text="0.49.1" id="tidybreed-0491-2026-07-03">tidybreed 0.49.1 (2026-07-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0491-2026-07-03"></a></h2>
 <div class="section level3">
 <h3 id="documentation-audit-0-49-1">Documentation audit<a class="anchor" aria-label="anchor" href="#documentation-audit-0-49-1"></a></h3>
-<p>Full pass over every <code>man/</code> page’s roxygen source: verified <code>@param</code>/<code>@return</code> against actual function signatures, executed every runnable <code>@examples</code> block against a live in-memory pop, and added examples for previously-undemonstrated key arguments (e.g. crossbreeding TBV and <code>index_names</code>/<code>type = "both"</code> in <code><a href="../reference/add_tbv.html">add_tbv()</a></code>, <code>economic_wts</code> in <code><a href="../reference/define_index.html">define_index()</a></code>, sex-chromosome/organelle usage in <code><a href="../reference/define_chr.html">define_chr()</a></code>, composite/SGE phenotype scenarios in <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code>). Fixed pervasive stale references to the deprecated <code>initialize_genome()</code> (superseded by <code>open_pop() |&gt; define_genome()</code>), resolved all <code>Rd</code> cross-reference warnings, and cleaned up numerous docs that had drifted from the current schema/column names.</p>
+<p>Full pass over every <code>man/</code> page’s roxygen source: verified <code>@param</code>/<code>@return</code> against actual function signatures, executed every runnable <code>@examples</code> block against a live in-memory pop, and added examples for previously-undemonstrated key arguments (e.g. crossbreeding TBV and <code>index_names</code>/<code>type = "both"</code> in <code><a href="../reference/add_tbv.html">add_tbv()</a></code>, <code>economic_wts</code> in <code><a href="../reference/define_index.html">define_index()</a></code>, sex-chromosome/organelle usage in <code>define_chr()</code>, composite/SGE phenotype scenarios in <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code>). Fixed pervasive stale references to the deprecated <code>initialize_genome()</code> (superseded by <code>open_pop() |&gt; define_genome()</code>), resolved all <code>Rd</code> cross-reference warnings, and cleaned up numerous docs that had drifted from the current schema/column names.</p>
 <p>Two real (non-doc) bugs surfaced and fixed along the way:</p>
 <ul><li>
 <code>TABLE_RESERVED_COLS[["ind_phenotype"]]</code> protected a nonexistent <code>trait_name</code> column instead of the actual <code>phenotype_name</code> column, so <code><a href="../reference/mutate_table.html">mutate_table()</a></code>/<code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> custom-column writes did not correctly block overwriting <code>phenotype_name</code>.</li>
@@ -213,11 +354,11 @@
 <h2 class="pkg-version" data-toc-text="0.49.0" id="tidybreed-0490-2026-07-03">tidybreed 0.49.0 (2026-07-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0490-2026-07-03"></a></h2>
 <div class="section level3">
 <h3 id="new-features--sex-chromosomes-and-organelles-stage-0-49-0">New features — sex chromosomes and organelles (Stage 4)<a class="anchor" aria-label="anchor" href="#new-features--sex-chromosomes-and-organelles-stage-0-49-0"></a></h3>
-<p><code>chr_meta</code>/<code><a href="../reference/define_chr.html">define_chr()</a></code> now support non-diploid inheritance rules: sex chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids). Real polyploidy (ploidy &gt; 2, uneven-ploidy crosses) remains out of scope — an <code>ind_meta.ploidy</code> column is added for forward schema compatibility, but every individual must be <code>ploidy = 2</code> in this version.</p>
+<p><code>chr_meta</code>/<code>define_chr()</code> now support non-diploid inheritance rules: sex chromosomes (X/Y, Z/W, X0/Z0) and organelles (mitochondria, plastids). Real polyploidy (ploidy &gt; 2, uneven-ploidy crosses) remains out of scope — an <code>ind_meta.ploidy</code> column is added for forward schema compatibility, but every individual must be <code>ploidy = 2</code> in this version.</p>
 <ul><li>
 <strong>Schema</strong>: <code>chr_meta.copies_M</code>/<code>copies_F</code> (absolute integers) renamed to <code>copy_mode_M</code>/<code>copy_mode_F</code> (<code>"full"</code>/<code>"half"</code>/<code>"none"</code>, relative to an individual’s own ploidy) — resolves the terminology clash flagged during Stage 4 planning. New <code>ind_meta.ploidy</code> column (<code>UTINYINT</code>, default <code>2</code>, reserved).</li>
 <li>
-<strong>New <code><a href="../reference/define_chr.html">define_chr()</a></code></strong> (<code>R/define_chr.R</code>) — upserts a chromosome’s inheritance rule (<code>copy_mode_M</code>, <code>copy_mode_F</code>, <code>hemi_parent</code>, <code>recombines</code>) into <code>chr_meta</code>, with validation for the enum values and the <code>hemi_parent</code>/copy_mode consistency requirement.</li>
+<strong>New <code>define_chr()</code></strong> (<code>R/define_chr.R</code>) — upserts a chromosome’s inheritance rule (<code>copy_mode_M</code>, <code>copy_mode_F</code>, <code>hemi_parent</code>, <code>recombines</code>) into <code>chr_meta</code>, with validation for the enum values and the <code>hemi_parent</code>/copy_mode consistency requirement.</li>
 <li>
 <strong><code><a href="../reference/add_founders.html">add_founders()</a></code></strong> gains a <code>ploidy</code> argument (must be <code>2</code>) and now writes <code>ind_haplotype</code> rows per chromosome according to <code>chr_meta</code>: both <code>parent_origin</code> slots for <code>"full"</code>, only the <code>hemi_parent</code>-designated slot for <code>"half"</code>, none for <code>"none"</code>. The founder haplotype-pool sampling draw itself is unchanged (still one flat <code><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample()</a></code> call), preserving byte-exact parity for existing diploid-autosome simulations.</li>
 <li>
@@ -239,7 +380,7 @@
 <p><code><a href="../reference/add_dosage.html">add_dosage()</a></code> and <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> already shipped ahead of schedule in Stage 1; this release closes the two gaps found when reviewing them against the Stage 3 exit criteria in <code>plans/refactor_haplotype_stage_3.md</code>.</p>
 <ul><li>Both functions now reject a <code>chip_name</code> whose constructed <code>is_&lt;chip_name&gt;</code>/ <code>has_&lt;chip_name&gt;</code> column identifier is unsafe (quotes, semicolons, spaces), closing a SQL-injection gap. Digit-leading, industry-standard chip names (e.g. <code>"50k"</code>, <code>"770k"</code>) continue to work unchanged, since the constructed identifier is always prefixed with a letter.</li>
 <li>All <code>IN (...)</code> list construction (<code>locus_names</code>, QTL/loci-filter names, individual IDs) now goes through a new internal <code><a href="../reference/sql_in_list.html">sql_in_list()</a></code> helper (<code>R/sql_utils.R</code>) that escapes embedded single quotes instead of interpolating raw values.</li>
-<li>New internal <code>assert_diploid_only()</code> guard (<code>R/ploidy_helpers.R</code>) makes both functions error clearly if <code>chr_meta</code> ever contains a non-diploid chromosome, rather than silently computing wrong dosage — forward defense ahead of Stage 4 (<code><a href="../reference/define_chr.html">define_chr()</a></code>).</li>
+<li>New internal <code>assert_diploid_only()</code> guard (<code>R/ploidy_helpers.R</code>) makes both functions error clearly if <code>chr_meta</code> ever contains a non-diploid chromosome, rather than silently computing wrong dosage — forward defense ahead of Stage 4 (<code>define_chr()</code>).</li>
 <li>Added test coverage for: cache-vs-direct extraction parity, partial <code>ind_genotype</code> cache population never affecting <code><a href="../reference/add_tbv.html">add_tbv()</a></code>/ <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> results, <code>extract_genotypes(loci_tbl = ...)</code>, the above hardening, and the new diploid guard.</li>
 </ul></div>
 </div>
@@ -280,7 +421,7 @@
 <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> gains a <code>loci_tbl</code> argument — a general locus filter via <code>get_table("genome_meta")</code> (e.g. autosomes only), unioned with <code>chip_name</code>/<code>effects_tbl</code>.</li>
 <li>
 <code>line_origin</code> is populated on every allele from the start (founders: their own line; offspring: inherited per-locus from the contributing parental segment during recombination). It is not yet <em>used</em> in TBV — that is Stage 2.</li>
-<li>New <code>chr_meta</code> table with default diploid-autosome rows (per-chromosome inheritance rules; <code><a href="../reference/define_chr.html">define_chr()</a></code> and non-default rules are Stage 4).</li>
+<li>New <code>chr_meta</code> table with default diploid-autosome rows (per-chromosome inheritance rules; <code>define_chr()</code> and non-default rules are Stage 4).</li>
 </ul></div>
 </div>
     <div class="section level2">

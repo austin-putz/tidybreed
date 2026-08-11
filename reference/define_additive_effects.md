@@ -28,10 +28,16 @@ additive-genetic covariance matrix `G`. Two locus-selection methods:
 
 The `base` argument controls which allele frequencies are used:
 
-- `"founder_haplotypes"` (default) — uses `founder_allele_freq` from
-  `genome_meta` (requires
+- `"founder_haplotypes"` (default) — computes allele frequencies
+  directly from the `founder_haplotypes` table (requires
   [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
-  was called to populate it).
+  was called). Note this pools **all** lines: when the table holds more
+  than one `line_name`, the resulting frequency is the
+  pool-size-weighted average across lines, which overstates within-line
+  heterozygosity (Wahlund effect) and under-scales `target_add_var`. Use
+  `base = "current_pop"` with a line-filtered `base_tbl` for per-line
+  centering. (This does **not** read `genome_meta.founder_allele_freq`,
+  which is informational only.)
 
 - `"current_pop"` — computes allele frequencies from the current
   `ind_haplotype` table. Pass a filtered `tidybreed_table` via

@@ -119,16 +119,16 @@ in Morgans) since 1 Morgan = 100 cM, drawn by a uniform-only inversion
 sampler. Genetic positions come from the resolved genetic map
 (`genome_map`, per the gamete-producing parent's sex/line); crossover
 positions are uniform in cM within each chromosome, and the starting
-haplotype is chosen at random. This applies to plain autosomes
-(`chr_meta`'s default `copy_mode_M`/`copy_mode_F = "full"`,
-`recombines_M`/`recombines_F = TRUE`). Sex chromosomes and organelles
-configured via
-[`define_chr()`](https://austin-putz.github.io/tidybreed/reference/define_chr.md)
+haplotype is chosen at random. This applies to plain autosomes (the
+seeded default: `chr_inheritance` `from_parent_1 = from_parent_2 = 1`
+for both sexes and `chr_recombination` `recombines = TRUE` for both
+parent sexes). Sex chromosomes and organelles configured via
+[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
 follow their own inheritance rule instead: the contributing parent's
 copy recombines via the same Haldane model only when that parent carries
-two copies of the chromosome AND the contributor's own-sex
-`chr_meta.recombines_M`/`recombines_F` is `TRUE`; otherwise the parent's
-single stored copy is passed straight through unchanged (no
+two copies of the chromosome AND the producing parent's
+`chr_recombination.recombines` resolves `TRUE` for its sex; otherwise
+the parent's single stored copy is passed straight through unchanged (no
 recombination, no additional RNG draws).
 
 **Offspring IDs:** IDs follow the same `"{line_name}_{n}"` format as
