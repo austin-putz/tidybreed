@@ -40,7 +40,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: |
+            any::rcmdcheck
+            any::pkgdown
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
@@ -51,3 +53,22 @@ jobs:
           error-on: '"error"'
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
+
+      # R CMD check does not look at _pkgdown.yml, so renaming an exported
+      # function can pass every test here and still break the docs site. That is
+      # exactly what happened when define_chr() became define_chromosome(): the
+      # pkgdown workflow failed on every push for five days while this job stayed
+      # green. check_pkgdown() verifies that every topic named in the reference
+      # index exists AND that no public topic is missing from it — the two ways
+      # that file drifts out of sync with the package.
+      #
+      # It reads man/*.Rd straight from the source tree, so it needs pkgdown but
+      # not an installed tidybreed, and runs in seconds.
+      #
+      # Linux only: the config is OS-independent, so checking it twice adds
+      # nothing. always() so a failing R CMD check above cannot hide a broken
+      # reference index — both problems surface in the same run.
+      - name: Validate _pkgdown.yml reference index
+        if: always() && runner.os == 'Linux'
+        run: pkgdown::check_pkgdown()
+        shell: Rscript {0}

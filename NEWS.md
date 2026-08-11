@@ -1,3 +1,22 @@
+# tidybreed 0.60.3 (2026-08-11)
+
+## Internal
+
+- **`R-CMD-check` now validates `_pkgdown.yml`.** A new
+  `pkgdown::check_pkgdown()` step guards the failure mode that broke the docs
+  site in 0.60.2: `R CMD check` never looks at `_pkgdown.yml`, so renaming an
+  exported function passed every test while the pkgdown workflow failed on each
+  push for five days. The check catches both ways that file drifts — a reference
+  entry naming a topic that no longer exists, and a public topic missing from the
+  index entirely.
+
+  It reads `man/*.Rd` from the source tree, so it needs `pkgdown` but not an
+  installed `tidybreed`, and finishes in seconds. It runs on Linux only (the
+  config is OS-independent, so checking it on both matrix legs adds nothing) and
+  is guarded with `always()`, so a failing `R CMD check` cannot mask a broken
+  reference index — both surface in the same run. Verified by reintroducing the
+  `define_chr` regression and confirming a non-zero exit.
+
 # tidybreed 0.60.2 (2026-08-10)
 
 ## Bug fixes
