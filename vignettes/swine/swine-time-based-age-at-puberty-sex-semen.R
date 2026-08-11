@@ -210,17 +210,37 @@ schema(pop)
 #------------------------------------------------------------------------------#
 
 # start population by building a genome
+#
+# define_genome() is a ONE-SHOT call: it writes seven tables (genome_meta,
+# genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance,
+# chr_recombination) inside a SINGLE transaction. If anything fails, everything
+# rolls back and this same `pop` can be reused for a corrected call. Calling it
+# a second time on a population that already has any of those tables is an
+# error -- there is no partial re-definition.
+#
+# Arguments are validated BEFORE anything is written: n_loci / n_chr must be
+# whole numbers with n_loci >= n_chr, and chr_len_Mb / cM_per_Mb must be finite
+# and strictly positive (each may be a scalar or a vector of length n_chr).
 pop <- pop %>%
   define_genome(
 		n_loci       = config$genome$n_loci,  # number of loci (all* -> SNP/QTL/etc)
 		n_chr        = config$genome$n_chr,   # number of chromosomes
 		chr_len_Mb   = config$genome$chr_len, # length in Mb (1,000,000 bp) (e.g. 1.20 and not 1_200_000)
-		cM_per_Mb    = 1.0                     # genetic-map rate: pos_cM = pos_Mb * cM_per_Mb.
+		cM_per_Mb    = 1.0                     # genetic-map rate: pos_cM = pos_bp/1e6 * cM_per_Mb.
 		                                       #   Writes the DEFAULT map to the new `genome_map`
 		                                       #   table. 50 Mb chr * 1.0 = 50 cM -> ~0.5 crossovers
 		                                       #   per chromosome per meiosis (lambda = cM/100).
 		                                       #   Sex-/line-specific maps can be layered in later as
 		                                       #   extra `genome_map` rows without a schema change.
+
+		# Optional arguments not used here:
+		#   locus_names  = ...   # length n_loci; must be unique, non-NA, non-empty
+		#                        #   (default "Locus_1" ... "Locus_n")
+		#   chr_names    = ...   # length n_chr, same rules (default "1" ... "18")
+		#   recombines_M = TRUE  # genome-wide per-PARENT-sex recombination defaults;
+		#   recombines_F = TRUE  #   set one FALSE for a whole-genome achiasmatic sex.
+		#                        #   Seeded into `chr_recombination`. Per-chromosome
+		#                        #   exceptions (X/Y, MT) go through define_chromosome().
 	)
 
 # print genome info table (1 row per locus)
@@ -255,6 +275,38 @@ pop |>
 # Add founder haplotypes
 #------------------------------------------------------------------------------#
 
+# define_founder_haplotypes() fills the `founder_haplotypes` pool that
+# add_founders() samples from. Six methods, in two families:
+#
+#   NO LD -- draw a per-locus allele frequency p, then sample alleles at each
+#   locus independently:
+#     "uniform"          min_allele_freq (0.01), max_allele_freq (0.99)
+#     "fixed"            allele_freq (0.5)
+#     "beta"             beta_shape1 (0.5), beta_shape2 (0.5)
+#     "balding_nichols"  fst (0.1), mean_allele_freq (0.5)
+#
+#   LD -- build correlation along the GENETIC MAP (genome_map), resolved for
+#   this pool's own line_name, so founder LD is built on the same map that will
+#   later drive recombination for that line:
+#     "mosaic"           n_templates, template_switch_rate (1.0 per cM)
+#     "gaussian_copula"  ld_decay_rate (1.0; rho = exp(-lambda * d_cM))
+#
+# Each argument belongs to exactly one method (except exact_freq, below) --
+# passing one to the wrong method is a hard error naming the method it belongs
+# to. Scalars are validated strictly: no NA/Inf, no fractional counts,
+# n_templates must be a whole number in [2, n_haplotypes].
+#
+# Calling with line_name = NULL stores ONE shared pool that add_founders() falls
+# back to when no named pool exists for the line it is building. Re-using a
+# line_name that already has a pool (or NULL twice) is an error.
+#
+# Every call also (re)writes genome_meta.founder_allele_freq with the per-locus
+# frequency of the pool written MOST RECENTLY. It is informational only -- no
+# other tidybreed function reads it -- so with six lines below it describes only
+# line F. For per-line Falconer centering use
+#   define_additive_effects(..., base = "current_pop", base_tbl = <line-filtered>)
+# rather than base = "founder_haplotypes", which pools ALL lines together.
+
 # line A
 pop <- pop %>%
   define_founder_haplotypes(
@@ -269,13 +321,23 @@ pop <- pop %>%
 pop %>% get_table("founder_haplotypes")
 pop %>% get_table("founder_haplotypes") |> collect() |> count(locus_name)
 
+# per-locus frequency of the pool written most recently (informational)
+pop %>% get_table("genome_meta") |> select(locus_name, founder_allele_freq)
+
 # line B
 pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "B",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "fixed",     # just 1 frequency (default = 0.5)
-    allele_freq      = 0.5          # all p=0.50 
+    method           = "fixed",     # one frequency at every locus (default = 0.5)
+    allele_freq      = 0.5          # all p = 0.50, realized EXACTLY: exactly
+                                    #   round(0.5 * n_haplotypes) haplotypes carry
+                                    #   the 1-allele at each locus, on an
+                                    #   independently drawn subset per locus (so no
+                                    #   LD is induced). This is exact_freq = TRUE,
+                                    #   the default for method = "fixed". Frequencies
+                                    #   live on a 1/n_haplotypes grid; an off-grid
+                                    #   request warns and names what was used.
   )
 
 # line C
@@ -283,9 +345,11 @@ pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "C",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "beta",       # just 1 frequency (default = 0.5)
+    method           = "beta",       # Beta(shape1, shape2) per-locus freq, no LD
     beta_shape1      = 0.5,          # beta shape 1 parameter value
-    beta_shape2      = 0.5           # beta shape 1 parameter value
+    beta_shape2      = 0.5           # beta shape 2 parameter value
+                                     #   0.5/0.5 = Jeffreys prior -> U-shaped MAF
+                                     #   spectrum (many rare + many common alleles)
   )
 
 # line D
@@ -294,18 +358,56 @@ pop <- pop %>%
     line_name        = "D",
     n_haplotypes     = config$genome$n_haplotypes,
     method           = "balding_nichols",     # Balding-Nichols Method (no LD)
-    fst              = 0.1,                   # fst value
+    fst              = 0.1,                   # fst value (larger -> more extreme freqs)
     mean_allele_freq = 0.5                    # ancestral mean allele freq
   )
+
+# exact_freq: shared by all four frequency-based methods above.
+#   TRUE  -> each locus gets exactly round(p * n_haplotypes) 1-alleles on an
+#            independently drawn random subset, so the REALIZED pool frequency
+#            equals the target p (no binomial scatter, still no LD).
+#   FALSE -> alleles are independent Bernoulli(p) draws, so realized frequencies
+#            scatter around p with sd = sqrt(p(1-p)/n_haplotypes).
+# Defaults: TRUE for "fixed" (a fixed frequency that drifts is not fixed),
+# FALSE for "uniform"/"beta"/"balding_nichols" (drawing p and then sampling
+# binomially is their correct generative model). Set TRUE on those when you want
+# a drift-free base frequency.
+#
+# pop <- pop %>%
+#   define_founder_haplotypes(
+#     line_name    = "G",
+#     n_haplotypes = config$genome$n_haplotypes,
+#     method       = "beta",
+#     beta_shape1  = 0.5,
+#     beta_shape2  = 0.5,
+#     exact_freq   = TRUE                     # realize each drawn p exactly
+#   )
 
 # line E
 pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "E",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "mosaic",                       # mosaic generates simple LD
+    method           = "mosaic",              # Li-Stephens block copying -> LD blocks
     n_templates      = ceiling(sqrt(config$genome$n_haplotypes)),
-    template_switch_rate = 1.0                # template re-draws per cM
+                                              #   n_templates also controls the MAF
+                                              #   SPECTRUM, not just block length:
+                                              #   templates are the only source of
+                                              #   variation, so ~2/(n_templates + 1) of
+                                              #   loci are monomorphic REGARDLESS of
+                                              #   n_haplotypes, and MAF is quantized to
+                                              #   multiples of 1/n_templates. A warning
+                                              #   fires above 10% monomorphic -- QTL
+                                              #   placed there add nothing to sum(2pq a^2).
+                                              #   Raise it, or use "gaussian_copula".
+    template_switch_rate = 1.0                # template re-draws per cM. The re-draw is
+                                              #   uniform over ALL templates including the
+                                              #   current one (the standard Li-Stephens
+                                              #   kernel -- it makes realized LD invariant
+                                              #   to marker density), so OBSERVABLE changes
+                                              #   occur at rate
+                                              #   template_switch_rate * (n_templates-1)/n_templates.
+                                              #   0 = never switch (complete LD within a chr).
   )
 
 # line F
@@ -313,8 +415,13 @@ pop <- pop %>%
   define_founder_haplotypes(
     line_name        = "F",
     n_haplotypes     = config$genome$n_haplotypes,
-    method           = "gaussian_copula",     # AR(1) latent-normal LD
-    ld_decay_rate    = 0.25                   # LD decay rate per cM
+    method           = "gaussian_copula",     # AR(1) latent-normal LD; fully vectorized
+                                              #   and, unlike "mosaic", gives an
+                                              #   UNQUANTIZED MAF spectrum
+    ld_decay_rate    = 0.25                   # LD decay rate per cM: rho = exp(-0.25 * d_cM)
+                                              #   -> rho ~ 0.78 at 1 cM (slow decay / long
+                                              #   LD blocks). 0 = no decay (complete LD
+                                              #   within a chromosome).
   )
 
 #------------------------------------------------------------------------------#

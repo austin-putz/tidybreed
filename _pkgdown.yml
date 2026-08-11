@@ -33,11 +33,11 @@ reference:
 
 - title: Genome and genetic map
   desc: >
-    Define loci, chromosomes, per-chromosome inheritance rules, and the founder
-    haplotype pools that individuals are sampled from.
+    Define loci, chromosomes, per-chromosome inheritance and recombination rules,
+    and the founder haplotype pools that individuals are sampled from.
   contents:
   - define_genome
-  - define_chr
+  - define_chromosome
   - define_founder_haplotypes
 
 - title: Individuals

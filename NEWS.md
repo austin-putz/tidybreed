@@ -1,3 +1,56 @@
+# tidybreed 0.60.2 (2026-08-10)
+
+## Bug fixes
+
+- **The pkgdown site has been failing to build since the `chr_meta` split.**
+  `_pkgdown.yml` still listed `define_chr` in its reference index, but that
+  function was renamed to `define_chromosome()` — and, per the pre-1.0 policy,
+  the old name was removed outright rather than aliased. Every pkgdown run since
+  `refactor(chr): split chr_meta into chr_inheritance + chr_recombination` died
+  with *"reference[2].contents[2] (define_chr) must be a known topic name or
+  alias"*, so the published documentation site has been stuck at v0.58.0.
+
+  The stale entry broke the build in **both** directions: `define_chr` resolved
+  to nothing, and `define_chromosome` was consequently absent from the index,
+  which pkgdown also rejects because it requires every public topic to be
+  listed. Renaming the single entry fixes both. The section description now
+  mentions recombination as well as inheritance, since `define_chromosome()`
+  covers both concerns.
+
+  `R-CMD-check` passed on every one of the affected commits — it does not
+  validate `_pkgdown.yml` — which is why the rename slipped through. Verified
+  with `pkgdown::check_pkgdown()` (clean) and a full local `pkgdown::build_site()`
+  against an installed 0.60.1.
+
+## Documentation
+
+- **`README.md` — `define_genome()`.** Documents `cM_per_Mb` (and shows
+  `genome_map` alongside `genome_meta`), the physical/genetic coordinate split
+  and how `cM_per_Mb` sets the crossover rate, the seven-table single
+  transaction with rollback, the optional `locus_names` / `chr_names` /
+  `recombines_M` / `recombines_F` arguments, and the one-shot restriction plus
+  the up-front argument validation added in 0.60.1.
+- **`README.md` — `define_founder_haplotypes()`.** Reorganised around the
+  no-LD / LD split, with a method-to-argument table. Adds the `exact_freq`
+  argument from 0.60.0 (including why it defaults to `TRUE` only for `"fixed"`),
+  the wrong-method argument error, the 0.60.0 fix that LD methods resolve the
+  genetic map for their own `line_name`, the `"mosaic"` `n_templates` MAF-spectrum
+  caveat and monomorphic-locus warning, the `line_name = NULL` fallback and
+  collision rules, and the `founder_allele_freq` caveat (informational only;
+  describes only the pool written last).
+- **`README.md` — Function Overview.** Reworded the `define_genome()` and
+  `define_founder_haplotypes()` rows and added the missing `define_chromosome()`
+  row.
+- **`vignettes/tidybreed-introduction.Rmd`.** Adds `cM_per_Mb` to the genome
+  example with an explanation of the default map and crossover rate, notes that
+  `define_genome()` is one-shot and transactional, and documents `exact_freq`
+  and the `"mosaic"` `n_templates` MAF caveat.
+- **`vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R`.** Expanded
+  the `define_genome()` and `define_founder_haplotypes()` blocks to cover the
+  same ground, corrected the `cM_per_Mb` comment (`pos_bp/1e6`, not `pos_Mb`),
+  fixed a duplicated `beta_shape` comment, and noted that line B's `allele_freq`
+  is now realized exactly.
+
 # tidybreed 0.60.1 (2026-08-09)
 
 ## Bug fixes

@@ -139,7 +139,8 @@ pop <- pop |>
   define_genome(
     n_loci     = 500,   # total loci (SNP and QTL both come from this pool)
     n_chr      = 5,     # chromosomes
-    chr_len_Mb = 100    # length of each chromosome in megabases
+    chr_len_Mb = 100,   # physical length of each chromosome in megabases
+    cM_per_Mb  = 1.0    # genetic-map rate (the default)
   )
 
 pop |> get_table("genome_meta")
@@ -152,6 +153,17 @@ The **genetic** map lives in its own table, because a genome can have several ma
 ```{r genome_map}
 pop |> get_table("genome_map")
 ```
+
+`cM_per_Mb` is what turns physical distance into genetic distance
+(`pos_cM = pos_bp / 1e6 * cM_per_Mb`), and it is written here as the *default*
+map — `sex` and `line_name` both `NULL`, `map_name = "default"`. Everything
+distance-driven reads that map, so this one number sets the crossover rate: a
+100 Mb chromosome at `cM_per_Mb = 1.0` is 100 cM, or ~1 crossover per meiosis.
+
+`define_genome()` is a one-shot call. It writes seven tables in a single
+transaction and rolls all of them back if anything fails, so a bad call leaves
+the database untouched and you can simply call it again with corrected
+arguments. Calling it on a population that already has a genome is an error.
 
 Per-chromosome rules live in two explicit tables: `chr_inheritance` (how many
 copies of a chromosome an offspring of each sex inherits from each parent) and
@@ -216,6 +228,26 @@ Several methods control the allele-frequency spectrum and linkage disequilibrium
 | `"balding_nichols"` | FST-based divergence between lines (`fst`, `mean_allele_freq`) |
 | `"mosaic"` | Haplotypes built from templates, producing simple LD (`n_templates`, `template_switch_rate`) |
 | `"gaussian_copula"` | Correlated frequencies with distance-based decay (`ld_decay_rate`) |
+
+Each argument belongs to exactly one method — passing one to the wrong method is
+an error that names where it belongs. The two LD methods walk the genetic map
+you defined above, resolved for this pool's own `line_name`.
+
+The first four methods also take **`exact_freq`**. By default they draw a
+frequency `p` per locus and then sample each allele as an independent
+`Bernoulli(p)`, so the *realized* pool frequency scatters around `p`. With
+`exact_freq = TRUE` each locus instead gets exactly `round(p * n_haplotypes)`
+copies of the 1-allele, on an independently drawn subset of haplotypes — so the
+realized frequency **is** `p`, and still no LD is induced. It defaults to `TRUE`
+for `"fixed"` (a fixed frequency that drifts is not fixed) and `FALSE`
+elsewhere; turn it on when you want a drift-free base frequency.
+
+One caveat worth knowing early: in `"mosaic"`, templates are the only source of
+variation, so `n_templates` sets the MAF spectrum, not just the block length.
+Roughly `2 / (n_templates + 1)` of loci come out monomorphic no matter how many
+haplotypes you ask for, and you get a warning past 10% — QTL landing there
+contribute no genetic variance. Raise `n_templates`, or use
+`"gaussian_copula"`, which gives an unquantized spectrum.
 
 ## Add founder individuals
 
