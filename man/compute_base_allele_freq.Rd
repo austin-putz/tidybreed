@@ -4,7 +4,7 @@
 \alias{compute_base_allele_freq}
 \title{Compute per-locus allele frequencies from the base population}
 \usage{
-compute_base_allele_freq(pop, base, base_ids = NULL)
+compute_base_allele_freq(pop, base, base_ids = NULL, line_name = NULL)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}

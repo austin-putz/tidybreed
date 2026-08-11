@@ -96,7 +96,9 @@
 #' @param n_templates *(method = "mosaic" only)* Number of template haplotypes.
 #'   Must be a whole number in `[2, n_haplotypes]`. Also controls the MAF
 #'   spectrum — see the `"mosaic"` entry above. Default
-#'   `max(2, ceiling(sqrt(n_haplotypes)))`.
+#'   `max(20, ceiling(sqrt(n_haplotypes)))`, clamped to `n_haplotypes`. The
+#'   floor of 20 keeps the expected monomorphic fraction near 10%; lower it only
+#'   if you deliberately want long, coarse LD blocks.
 #' @param template_switch_rate *(method = "mosaic" only)* Template re-draw rate
 #'   per cM (genetic distance). Higher values create shorter LD blocks. `0`
 #'   means never switch (complete LD within a chromosome). Note that observable
@@ -365,7 +367,13 @@ define_founder_haplotypes <- function(
 
   } else if (method == "mosaic") {
     if (is.null(n_templates)) {
-      n_templates <- max(2L, as.integer(ceiling(sqrt(n_haplotypes))))
+      # Floor of 20 rather than 2: templates are the only source of allelic
+      # variation, so ~2/(K+1) of loci come out monomorphic regardless of
+      # n_haplotypes. The old sqrt-only default gave K = 10 at 100 haplotypes
+      # (~17% dead loci); a floor of 20 halves that. Clamped to n_haplotypes so
+      # a small pool cannot trip the n_templates <= n_haplotypes check below.
+      n_templates <- max(2L, min(as.integer(n_haplotypes),
+                                 max(20L, as.integer(ceiling(sqrt(n_haplotypes))))))
     }
     if (is.null(template_switch_rate)) template_switch_rate <- 1.0
     # Validate BEFORE as.integer(): coercing first would make the type check

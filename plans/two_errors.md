@@ -1,12 +1,24 @@
 # Two outstanding errors from the `define_founder_haplotypes()` audit
 
-Status: **not fixed.** Both were found during the v0.60.x audit of
-`define_founder_haplotypes()`. Neither is fixed in that release — the first is a
-real correctness bug deliberately deferred because the fix changes
-`define_additive_effects()`'s API; the second is currently only documented and
-warned about, not structurally addressed.
+Status: **both resolved.** Found during the v0.60.x audit of
+`define_founder_haplotypes()`, fixed in v0.61.0. The measurements and reasoning
+below are kept because they justify the design; see *Resolution* under each.
 
 Everything below was reproduced empirically, not inferred.
+
+## Resolution summary
+
+- **Error 1 — fixed.** `define_additive_effects()` gained `base_line_name`,
+  which **defaults to `line_name`**, so a line-specific effect is centered on
+  its own founder pool and a population-wide effect on the pooled base. The
+  open question below resolved *in favor* of the fix: `add_tbv()`'s centering is
+  already per-haplotype-row, so per-line base frequencies make the two layers
+  agree rather than diverge.
+- **Error 2 — addressed by the chosen option (raise the default).** The mosaic
+  `n_templates` default went from `max(2, sqrt(n_hap))` to
+  `max(20, sqrt(n_hap))`, clamped to `n_haplotypes`. Measured monomorphic
+  fraction at 100 haplotypes: **17% → 7.2%**. The Li-Stephens model itself is
+  unchanged, so quantization remains — just finer.
 
 ---
 
@@ -72,31 +84,47 @@ Thread a line into the base-frequency computation:
    that is a semantic decision worth making explicitly rather than by default.
 4. Downgrade the multi-line warning to fire only when neither is set.
 
-**Open question to resolve first:** for a crossbred animal whose alleles trace to
-two lines via `ind_haplotype.line_origin`, which base frequency should center its
-TBV? `add_tbv()` already joins `genome_effects` on `(locus_name, line_origin)`
-and prefers a line-specific effect row over the population-wide one, so the
-machinery for per-line centering partly exists — the gap is that
-`base_allele_freq` is computed once, pooled, at effect-definition time. Fixing
-`compute_base_allele_freq()` without checking this against `add_tbv()`'s join
-risks making the two layers disagree.
+**Open question — RESOLVED, in favor of the fix.** The worry was that per-line
+base frequencies might disagree with `add_tbv()`'s per-`line_origin` join. Reading
+the actual SQL (`R/add_tbv.R:205-226`) settles it: `base_allele_freq` is selected
+from the **same joined row** that supplies `genome_value`, and the `NOT EXISTS`
+fallback is correlated on both `h.locus_name` *and* `h.line_origin`. So precedence
+is per haplotype row, and the consumption layer was **already** fully per-line —
+only the producer was pooled. An F1's line-A alleles are centered on line A's
+stored frequency and its line-B alleles on line B's, automatically. Existing test
+`tests/testthat/test-add_tbv.R:184` already asserted this.
 
-### Interim workaround
+Residual asymmetry, inherent to the fallback rather than to the fix: where a locus
+has a line-specific row for A but only a population-wide row for B, the B allele
+is centered on the population-wide frequency.
 
-Use `base = "current_pop"` with a line-filtered `base_tbl`:
+### Resolution (v0.61.0)
 
-```r
-line_a <- get_table(pop, "ind_meta") |> dplyr::filter(line_name == "A")
-pop |> get_table("genome_meta") |> dplyr::filter(...) |>
-  define_additive_effects("ADG", base = "current_pop", base_tbl = line_a)
-```
+`base_line_name` added to `define_additive_effects()`, defaulting to `line_name`.
+`compute_base_allele_freq()` gained a `line_name` parameter and applies
+`WHERE fh.line_name = ?` as a **bound** parameter, with the name checked by the
+existing `validate_sql_identifier()`. A named line with no `founder_haplotypes`
+rows is a hard error, not a silent zero — `out` is zero-initialised, so a typo
+would otherwise center every allele at 0 and contribute nothing to `V_A` while
+still passing a `[0,1]` range assertion. The multi-line warning now fires only for
+a population-wide effect, where the ambiguity is real.
 
-### Verification when fixed
+The former workaround (`base = "current_pop"` with a line-filtered `base_tbl`)
+still works and remains right when you want the *realized* founder-sample
+frequency rather than the founder-pool frequency.
 
-Two lines fixed for opposite alleles at a set of QTL. Assert that per-line
-`var(TBV)` matches `target_add_var` within sampling tolerance, which it does not
-today. Also assert the pooled path still reproduces the old numbers when
-`base_line_name` is unset.
+### Verification (implemented)
+
+`tests/testthat/test-define_additive_effects.R` — two lines fixed for opposite
+alleles: line A stores `p = 0`, line B `p = 1`, a population-wide effect `p = 0.5`.
+A second test with A at `p ≈ 0.1` and B at `p ≈ 0.9` shows the payoff: with
+per-line centering, within-line realized variance hits `target_add_var = 2`
+exactly; with `base_line_name = NULL` forcing the old pooled behaviour, the
+Falconer bookkeeping still "hits" 2 while the variance actually realized within
+line A is **below 1.0**. Plus: unknown line errors, `base_line_name` with
+`base = "current_pop"` errors, an injection payload is rejected, and a new test
+covers the previously untested guarantee that per-line calls don't clobber each
+other's rows.
 
 ---
 
@@ -164,6 +192,26 @@ quantized spectrum.
 
 **Recommendation: 2 as a cheap default improvement, and leave 3/4 alone unless a
 concrete simulation need appears.** Option 1 is a legitimate outcome.
+
+### Resolution (v0.61.0) — option 2 chosen
+
+Default is now `max(20, ceiling(sqrt(n_haplotypes)))`, clamped to `n_haplotypes`
+so a small pool cannot trip the function's own `n_templates <= n_haplotypes`
+check with a default the user never chose. Measured monomorphic fraction at
+600 loci:
+
+| `n_haplotypes` | K before → after | monomorphic after |
+|---|---|---|
+| 5 | 3 → 5 (clamped) | 47.5% |
+| 30 | 6 → 20 | 9.5% |
+| 100 | 10 → 20 | 7.2% |
+| 400 | 20 → 20 | 7.2% |
+| 1000 | 32 → 32 (unchanged) | 4.3% |
+
+Above ~400 haplotypes `sqrt` dominates and nothing changes. Options 3 and 4 were
+**not** taken: quantization to multiples of `1/K` remains, and `gaussian_copula`
+is still the method to reach for when an unquantized MAF spectrum matters.
+**This changes seeded `"mosaic"` output.**
 
 ### Do NOT "fix" the related switch-rate discrepancy
 

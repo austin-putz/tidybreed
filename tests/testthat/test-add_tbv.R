@@ -98,8 +98,11 @@ test_that("add_tbv() falls back to population-wide effect when line_origin is NU
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
 
   # Population-wide effect only (line_name IS NULL) -- no line-specific rows.
-  pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)))
+  # suppressWarnings: a population-wide effect on a two-line founder pool is
+  # exactly the ambiguous case compute_base_allele_freq() warns about. That is
+  # the intended setup here -- the fallback is what's under test.
+  pop <- suppressWarnings(pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1.0, length(loci))))
 
   # Simulate untracked line origin for this individual's haplotypes.
   DBI::dbExecute(pop$db_conn,
@@ -126,8 +129,11 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
 
   # Population-wide effect at ALL loci ...
-  pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)))
+  # suppressWarnings: a population-wide effect on a two-line founder pool is
+  # exactly the ambiguous case compute_base_allele_freq() warns about. That is
+  # the intended setup here -- the fallback is what's under test.
+  pop <- suppressWarnings(pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1.0, length(loci))))
   # ... and a DIFFERENT line-specific effect at the SAME loci for "Duroc".
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(5.0, length(loci)), line_name = "Duroc")
@@ -165,8 +171,11 @@ test_that("add_tbv() falls back per-locus when a line has effects at only some l
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
   half_loci <- all_loci[1:5]
 
-  pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(all_loci)))
+  # suppressWarnings: a population-wide effect on a two-line founder pool is
+  # exactly the ambiguous case compute_base_allele_freq() warns about. That is
+  # the intended setup here -- the fallback is what's under test.
+  pop <- suppressWarnings(pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1.0, length(all_loci))))
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(locus_name %in% half_loci) |>
     define_additive_effects("ADG", effects = rep(3.0, length(half_loci)), line_name = "Duroc")
 

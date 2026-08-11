@@ -319,3 +319,201 @@ test_that("scale_to_target = TRUE still works for purely autosomal QTL on a geno
       define_additive_effects("ADG", scale_to_target = TRUE)
   )
 })
+
+
+# ============================================================
+# base_line_name / per-line Falconer centering
+# ============================================================
+
+# Two lines fixed for OPPOSITE alleles at every locus. Within-line 2pq is 0 at
+# every locus; pooling them gives p = 0.5 and an apparent 2pq = 0.5. This is the
+# sharpest possible statement of the Wahlund effect.
+make_two_line_pop <- function(pop_name, n_loci = 40, n_hap = 20) {
+  pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 2, chr_len_Mb = 50)
+  gm <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_name FROM genome_meta ORDER BY locus_id")
+  for (ln in c("A", "B")) {
+    fh <- data.frame(
+      line_name    = ln,
+      haplotype_id = rep(seq_len(n_hap), times = nrow(gm)),
+      locus_name   = rep(gm$locus_name, each = n_hap),
+      allele       = if (ln == "A") 0L else 1L,
+      stringsAsFactors = FALSE
+    )
+    DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, append = TRUE)
+  }
+  pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
+  pop
+}
+
+test_that("base_line_name inherits line_name so each line centers on its own pool", {
+  pop <- make_two_line_pop("bln_inherit")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  stored <- function(ln) {
+    DBI::dbGetQuery(pop$db_conn, paste0(
+      "SELECT DISTINCT base_allele_freq FROM genome_effects ",
+      "WHERE trait_name = 'ADG' AND line_name ",
+      if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$base_allele_freq
+  }
+
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1, 40), line_name = "B")
+
+  # Line A is fixed at allele 0, line B at allele 1 -- each sees its own.
+  expect_equal(stored("A"), 0)
+  expect_equal(stored("B"), 1)
+
+  # A population-wide effect is still centered on the pooled base, which is the
+  # right answer for an effect that applies to the whole founder base.
+  expect_warning(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 40)),
+    "pooled across"
+  )
+  expect_equal(stored(NULL), 0.5)
+
+  close_pop(pop)
+})
+
+
+test_that("base_line_name = NULL forces pooling even for a line-specific effect", {
+  pop <- make_two_line_pop("bln_forced")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  suppressWarnings(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 40), line_name = "A",
+                              base_line_name = NULL))
+
+  expect_equal(
+    DBI::dbGetQuery(pop$db_conn,
+      "SELECT DISTINCT base_allele_freq FROM genome_effects
+         WHERE trait_name = 'ADG' AND line_name = 'A'")$base_allele_freq,
+    0.5
+  )
+
+  close_pop(pop)
+})
+
+
+test_that("per-line centering recovers target_add_var that pooling misses", {
+  # Line A: allele 0 fixed at half the loci, polymorphic at the rest, so the
+  # within-line and pooled frequencies genuinely differ.
+  set.seed(404)
+  pop <- open_pop(pop_name = "bln_var", db_name = ":memory:") |>
+    define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 50)
+  gm <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_name FROM genome_meta ORDER BY locus_id")
+  n_hap <- 40
+  mk_line <- function(ln, p) {
+    alle <- as.integer(stats::runif(nrow(gm) * n_hap) < p)
+    DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", data.frame(
+      line_name    = ln,
+      haplotype_id = rep(seq_len(n_hap), times = nrow(gm)),
+      locus_name   = rep(gm$locus_name, each = n_hap),
+      allele       = alle,
+      stringsAsFactors = FALSE
+    ), append = TRUE)
+  }
+  mk_line("A", 0.1)   # rare allele in A
+  mk_line("B", 0.9)   # common allele in B -- pooled sits near 0.5
+  pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
+  pop <- define_trait(pop, "ADG", target_add_var = 2)
+
+  falconer <- function(ln) {
+    e <- DBI::dbGetQuery(pop$db_conn, paste0(
+      "SELECT base_allele_freq p, genome_value a FROM genome_effects ",
+      "WHERE trait_name = 'ADG' AND line_name = '", ln, "'"))
+    sum(2 * e$p * (1 - e$p) * e$a^2)
+  }
+  # Realized within-line variance implied by the stored effects and the line's
+  # OWN allele frequencies -- what the simulation actually delivers.
+  realised <- function(ln) {
+    e <- DBI::dbGetQuery(pop$db_conn, paste0(
+      "SELECT e.locus_name, e.genome_value a, f.p FROM genome_effects e ",
+      "JOIN (SELECT locus_name, AVG(CAST(allele AS DOUBLE)) p ",
+      "        FROM founder_haplotypes WHERE line_name = '", ln, "' ",
+      "        GROUP BY locus_name) f ON f.locus_name = e.locus_name ",
+      "WHERE e.trait_name = 'ADG' AND e.line_name = '", ln, "'"))
+    sum(2 * e$p * (1 - e$p) * e$a^2)
+  }
+
+  set.seed(1)
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", line_name = "A", seed = 1)
+  expect_equal(falconer("A"), 2, tolerance = 1e-8)
+  expect_equal(realised("A"), 2, tolerance = 1e-8)
+
+  # Now force the old pooled behaviour: the Falconer bookkeeping still "hits"
+  # the target, but the variance actually realised within line A does not.
+  set.seed(1)
+  suppressWarnings(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", line_name = "A", base_line_name = NULL,
+                              seed = 1))
+  expect_equal(falconer("A"), 2, tolerance = 1e-8)
+  expect_lt(realised("A"), 1.0)   # pooling under-scales: well short of 2
+
+  close_pop(pop)
+})
+
+
+test_that("base_line_name validates its input", {
+  pop <- make_two_line_pop("bln_valid")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  on.exit(close_pop(pop), add = TRUE)
+
+  # A typo must be loud: base frequencies are zero-initialised, so a silent
+  # miss would center every allele at 0 and contribute nothing to V_A.
+  expect_error(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 40), base_line_name = "NOPE"),
+    "No founder_haplotypes rows for line"
+  )
+  expect_error(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 40),
+                              base = "current_pop", base_line_name = "A"),
+    "applies only to base"
+  )
+  expect_error(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 40),
+                              base_line_name = "A'; DROP TABLE genome_meta; --"),
+    "Invalid line name"
+  )
+  expect_true(DBI::dbExistsTable(pop$db_conn, "genome_meta"))
+})
+
+
+test_that("defining effects for one line does not clobber another line's rows", {
+  pop <- make_two_line_pop("bln_clobber")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(2, 40), line_name = "B")
+  expect_warning(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(3, 40)),
+    "pooled across"
+  )
+
+  counts <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT line_name, COUNT(*) AS n, MIN(genome_value) AS v
+       FROM genome_effects WHERE trait_name = 'ADG'
+       GROUP BY line_name ORDER BY line_name NULLS LAST")
+
+  expect_equal(nrow(counts), 3L)
+  expect_true(all(counts$n == 40L))
+  expect_equal(counts$v[counts$line_name == "A" & !is.na(counts$line_name)], 1)
+  expect_equal(counts$v[counts$line_name == "B" & !is.na(counts$line_name)], 2)
+  expect_equal(counts$v[is.na(counts$line_name)], 3)
+
+  close_pop(pop)
+})

@@ -13,6 +13,7 @@ define_additive_effects(
   method = c("shared", "union"),
   base = c("founder_haplotypes", "current_pop"),
   base_tbl = NULL,
+  base_line_name = NULL,
   line_name = NULL,
   scale_to_target = TRUE,
   seed = NULL
@@ -47,10 +48,20 @@ rows, restricted to the filtered loci.}
 \item{base_tbl}{Optional \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} on any table
 with an \code{id_ind} column) used when \code{base = "current_pop"} to restrict
 which individuals define the base allele frequencies. When \code{NULL}, all
-individuals in \code{ind_haplotype} are used.}
+individuals in \code{ind_haplotype} are used. Ignored (with a warning) when
+\code{base = "founder_haplotypes"} — use \code{base_line_name} there.}
+
+\item{base_line_name}{Optional character, \code{base = "founder_haplotypes"} only.
+Which founder pool defines the base allele frequencies. \strong{Defaults to
+\code{line_name}}, so line-specific effects are centered on their own line;
+pass \code{NULL} explicitly to pool every line instead. Errors if no
+\code{founder_haplotypes} rows carry that line. See \emph{Which population centers
+the effects} above.}
 
 \item{line_name}{Optional character. When set, effects are tagged to this
-genetic line (for future line-specific TBV). \code{NULL} (default) means
+genetic line: \code{\link[=add_tbv]{add_tbv()}} then prefers these rows for alleles whose
+\code{line_origin} matches, falling back per-locus to the population-wide rows.
+Also becomes the default for \code{base_line_name}. \code{NULL} (default) means
 population-wide effects.}
 
 \item{scale_to_target}{Logical. If \code{TRUE}, rescale effects using the Falconer
@@ -91,19 +102,38 @@ The \code{base} argument controls which allele frequencies are used:
 \itemize{
 \item \code{"founder_haplotypes"} (default) — computes allele frequencies directly
 from the \code{founder_haplotypes} table (requires \code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}}
-was called). Note this pools \strong{all} lines: when the table holds more than
-one \code{line_name}, the resulting frequency is the pool-size-weighted average
-across lines, which overstates within-line heterozygosity (Wahlund effect)
-and under-scales \code{target_add_var}. Use \code{base = "current_pop"} with a
-line-filtered \code{base_tbl} for per-line centering. (This does \strong{not} read
-\code{genome_meta.founder_allele_freq}, which is informational only.)
+was called). Restrict to one founder pool with \code{base_line_name}. (This does
+\strong{not} read \code{genome_meta.founder_allele_freq}, which is informational only.)
 \item \code{"current_pop"} — computes allele frequencies from the current
 \code{ind_haplotype} table. Pass a filtered \code{tidybreed_table} via
 \code{base_tbl} to restrict which individuals define the base population.
 }
+}
+\section{Which population centers the effects}{
+
+Base allele frequencies center the true breeding value (the Falconer
+\code{allele - p} term) and set the \verb{2pq} denominator used by \code{scale_to_target}.
+By default they come from \strong{the population the effect applies to}:
+\code{base_line_name} inherits \code{line_name}, so a line-specific effect is centered
+on that line's own founder pool and a population-wide effect
+(\code{line_name = NULL}) on the whole founder base.
+
+This matters because pooling divergent lines overstates within-line
+heterozygosity — the Wahlund effect. Two lines fixed for opposite alleles
+each have zero within-line variance, but pool to \code{p = 0.5} and an apparent
+\verb{2pq = 0.5}; the inflated denominator then makes \code{scale_to_target} \strong{under}-scale
+the effects, and realized within-line additive variance falls short of
+\code{target_add_var}. Pass \code{base_line_name = NULL} explicitly to force pooling
+anyway.
+
+The centering constant is stored per row in \code{genome_effects.base_allele_freq}
+and travels with its \code{genome_value}, so \code{\link[=add_tbv]{add_tbv()}} applies each allele's own
+line's centering — a crossbred animal's line-A alleles are centered on line A
+and its line-B alleles on line B.
 
 Calling this function again for the same \verb{(trait_name, genome_effect_type, line_name)} replaces the existing rows in \code{genome_effects}.
 }
+
 \examples{
 \dontrun{
 # Single trait — all loci on chr 1-5 become QTL; scale to target variance
@@ -128,6 +158,20 @@ pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr \%in\% 1:5) |>
   define_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
+
+# Crossbreeding: each line's effects centered on its own founder pool.
+# base_line_name inherits line_name, so nothing extra is needed.
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
+  define_additive_effects("ADG", line_name = "Duroc")
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
+  define_additive_effects("ADG", line_name = "Landrace")
+
+# Line-specific effects, but deliberately centered on the pooled base
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
+  define_additive_effects("ADG", line_name = "Duroc", base_line_name = NULL)
 }
 }
 \seealso{

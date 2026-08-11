@@ -771,3 +771,33 @@ test_that("LD methods resolve the genetic map for their own line_name", {
   # Same seed, same parameters -- the only difference is which map was resolved.
   expect_false(identical(hap_a, hap_b))
 })
+
+
+test_that("the default n_templates keeps the monomorphic fraction near 10%", {
+  # Templates are the only source of allelic variation, so ~2/(K+1) of loci come
+  # out monomorphic regardless of n_haplotypes. The default floor of 20 exists to
+  # keep that fraction low; the old sqrt-only default gave K = 10 at 100
+  # haplotypes (~17% dead loci).
+  set.seed(9)
+  pop <- make_fh_pop("fh_default_k", n_loci = 600, n_chr = 3) |>
+    define_founder_haplotypes(n_haplotypes = 100, method = "mosaic")
+
+  f <- colMeans(fh_wide(pop))
+  expect_lt(mean(f == 0 | f == 1), 0.12)
+
+  close_pop(pop)
+})
+
+
+test_that("the default n_templates is clamped to n_haplotypes for a small pool", {
+  # max(20, ...) alone would exceed n_haplotypes and trip the function's own
+  # n_templates <= n_haplotypes check with a default the user never chose.
+  set.seed(3)
+  expect_no_error(
+    pop <- suppressWarnings(
+      make_fh_pop("fh_small_k", n_loci = 40, n_chr = 1) |>
+        define_founder_haplotypes(n_haplotypes = 5, method = "mosaic"))
+  )
+  expect_equal(fh_n_haps(pop), 5L)
+  close_pop(pop)
+})

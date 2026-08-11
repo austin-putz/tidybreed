@@ -60,7 +60,9 @@ allele frequency. Scalar in (0, 1). Default \code{0.5}.}
 \item{n_templates}{\emph{(method = "mosaic" only)} Number of template haplotypes.
 Must be a whole number in \verb{[2, n_haplotypes]}. Also controls the MAF
 spectrum — see the \code{"mosaic"} entry above. Default
-\code{max(2, ceiling(sqrt(n_haplotypes)))}.}
+\code{max(20, ceiling(sqrt(n_haplotypes)))}, clamped to \code{n_haplotypes}. The
+floor of 20 keeps the expected monomorphic fraction near 10\%; lower it only
+if you deliberately want long, coarse LD blocks.}
 
 \item{template_switch_rate}{\emph{(method = "mosaic" only)} Template re-draw rate
 per cM (genetic distance). Higher values create shorter LD blocks. \code{0}
