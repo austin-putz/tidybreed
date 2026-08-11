@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -221,7 +221,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpUyYDUZ/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/Rtmp8tfvJh/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -671,12 +671,12 @@ population.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 4</span></span></span>
 <span><span class="co">#&gt;   id_tbv id_ind trait_name tbv_value</span></span>
 <span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      5 A_5    ADG          -<span style="color: #BB0000;">0.137</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     13 A_13   ADG           0.119 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     16 A_16   ADG           0.115 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     22 A_22   ADG           0.321 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     25 A_25   ADG           0.127 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     31 A_31   ADG          -<span style="color: #BB0000;">0.034</span><span style="color: #BB0000; text-decoration: underline;">6</span></span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      2 A_2    ADG         -<span style="color: #BB0000;">0.005</span><span style="color: #BB0000; text-decoration: underline;">05</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     19 A_19   ADG         -<span style="color: #BB0000;">0.124</span>  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     21 A_21   ADG          0.458  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     27 A_27   ADG          0.165  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     30 A_30   ADG         -<span style="color: #BB0000;">0.416</span>  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     32 A_32   ADG          0.136</span></span></code></pre></div>
 <p><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> builds the observed record: intercept,
 plus fixed and random effects, plus the breeding value, plus a sampled
 residual. It calls <code><a href="../reference/add_tbv.html">add_tbv()</a></code> internally, so you can go

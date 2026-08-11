@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,16 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.60.3" id="tidybreed-0603-2026-08-11">tidybreed 0.60.3 (2026-08-11)<a class="anchor" aria-label="anchor" href="#tidybreed-0603-2026-08-11"></a></h2>
+<div class="section level3">
+<h3 id="internal-0-60-3">Internal<a class="anchor" aria-label="anchor" href="#internal-0-60-3"></a></h3>
+<ul><li>
+<p><strong><code>R-CMD-check</code> now validates <code>_pkgdown.yml</code>.</strong> A new <code><a href="https://pkgdown.r-lib.org/reference/check_pkgdown.html" class="external-link">pkgdown::check_pkgdown()</a></code> step guards the failure mode that broke the docs site in 0.60.2: <code>R CMD check</code> never looks at <code>_pkgdown.yml</code>, so renaming an exported function passed every test while the pkgdown workflow failed on each push for five days. The check catches both ways that file drifts — a reference entry naming a topic that no longer exists, and a public topic missing from the index entirely.</p>
+<p>It reads <code>man/*.Rd</code> from the source tree, so it needs <code>pkgdown</code> but not an installed <code>tidybreed</code>, and finishes in seconds. It runs on Linux only (the config is OS-independent, so checking it on both matrix legs adds nothing) and is guarded with <code>always()</code>, so a failing <code>R CMD check</code> cannot mask a broken reference index — both surface in the same run. Verified by reintroducing the <code>define_chr</code> regression and confirming a non-zero exit.</p>
+</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.60.2" id="tidybreed-0602-2026-08-10">tidybreed 0.60.2 (2026-08-10)<a class="anchor" aria-label="anchor" href="#tidybreed-0602-2026-08-10"></a></h2>
 <div class="section level3">
