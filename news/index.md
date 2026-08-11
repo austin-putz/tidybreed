@@ -1,5 +1,91 @@
 # Changelog
 
+## tidybreed 0.61.0 (2026-08-11)
+
+Fixes both issues recorded in `plans/two_errors.md`.
+
+### Breaking changes
+
+- **Line-specific additive effects are now centered on their own line’s
+  founder pool.**
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  gains `base_line_name`, which **defaults to `line_name`**. Previously
+  the Falconer base allele frequency was computed by pooling *every*
+  founder line regardless of which line the effects were tagged to.
+  Pooling divergent lines overstates within-line heterozygosity (the
+  Wahlund effect): two lines fixed for opposite alleles each have zero
+  within-line variance but pool to `p = 0.5` and an apparent
+  `2pq = 0.5`. The inflated denominator made `scale_to_target`
+  **under**-scale the effects, so realized within-line additive variance
+  fell short of `target_add_var` — silently.
+
+  The new rule is “center on whatever population the effect applies to”:
+  a line-specific effect uses that line’s founder pool, a
+  population-wide effect (`line_name = NULL`) stays pooled, which is
+  correct for it. Pass `base_line_name = NULL` explicitly to force the
+  old pooled behavior.
+
+  This changes stored `base_allele_freq` values, and hence TBVs, for
+  existing calls that combine `line_name` with the default
+  `base = "founder_haplotypes"`.
+
+  No change was needed in
+  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md):
+  `base_allele_freq` travels on the same `genome_effects` row as its
+  `genome_value`, and the line-precedence fallback is correlated on
+  `line_origin` per haplotype row, so a crossbred animal’s line-A
+  alleles were always going to be centered with line A’s frequency. The
+  consumption layer was already per-line; only the producer was pooled.
+
+- **The mosaic `n_templates` default rose** from
+  `max(2, ceiling(sqrt(n_haplotypes)))` to
+  `max(20, ceiling(sqrt(n_haplotypes)))`, clamped to `n_haplotypes`.
+  Templates are the only source of allelic variation, so roughly
+  `2/(n_templates + 1)` of loci are monomorphic *regardless of
+  `n_haplotypes`*. Measured at 600 loci and 100 haplotypes, the
+  monomorphic fraction drops from **17% to 7.2%**; at 30 haplotypes from
+  ~29% to 9.5%. Above ~400 haplotypes `sqrt` dominates and nothing
+  changes. **This changes seeded `"mosaic"` output.**
+
+  The Li-Stephens model is unchanged, so the MAF spectrum is still
+  quantized to multiples of `1/n_templates` — use `"gaussian_copula"`
+  when that matters.
+
+### Bug fixes
+
+- A typo’d or unknown `base_line_name` is a hard error naming the
+  available lines. Base frequencies are zero-initialised, so a silent
+  miss would have centered every allele at 0 and contributed nothing to
+  the Falconer `V_A` while still passing a `[0, 1]` range check.
+- `base_tbl` was silently ignored when `base = "founder_haplotypes"`;
+  that combination now warns and points at `base_line_name`.
+
+### Internal
+
+- [`compute_base_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/compute_base_allele_freq.md)
+  gains a `line_name` parameter, applied as a **bound** SQL parameter
+  and validated with the existing
+  [`validate_sql_identifier()`](https://austin-putz.github.io/tidybreed/reference/validate_sql_identifier.md).
+- Its `current_pop` branch now builds the `id_ind` list with the
+  existing
+  [`sql_in_list()`](https://austin-putz.github.io/tidybreed/reference/sql_in_list.md)
+  helper instead of raw [`paste0()`](https://rdrr.io/r/base/paste.html)
+  quoting.
+- `assert_qtl_autosomal()` is deliberately left line-agnostic — that is
+  a documented design decision, and threading a line through it is a
+  separate change.
+
+### Tests
+
+- The headline case: with per-line centering, within-line realized
+  variance hits `target_add_var` exactly; with pooling forced, the
+  Falconer bookkeeping still reports the target while variance realized
+  within the line is under half of it.
+- Filled a pre-existing coverage gap — nothing previously tested that
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  calls for different `line_name` values do not clobber each other’s
+  `genome_effects` rows.
+
 ## tidybreed 0.60.3 (2026-08-11)
 
 ### Internal

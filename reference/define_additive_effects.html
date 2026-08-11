@@ -24,18 +24,13 @@ membership is determined from existing rows in genome_effects.
 The base argument controls which allele frequencies are used:
 "founder_haplotypes" (default) — computes allele frequencies directly
 from the founder_haplotypes table (requires define_founder_haplotypes()
-was called). Note this pools all lines: when the table holds more than
-one line_name, the resulting frequency is the pool-size-weighted average
-across lines, which overstates within-line heterozygosity (Wahlund effect)
-and under-scales target_add_var. Use base = "current_pop" with a
-line-filtered base_tbl for per-line centering. (This does not read
-genome_meta.founder_allele_freq, which is informational only.)
+was called). Restrict to one founder pool with base_line_name. (This does
+not read genome_meta.founder_allele_freq, which is informational only.)
 "current_pop" — computes allele frequencies from the current
 ind_haplotype table. Pass a filtered tidybreed_table via
 base_tbl to restrict which individuals define the base population.
 
-
-Calling this function again for the same (trait_name, genome_effect_type, line_name) replaces the existing rows in genome_effects.'><meta property="og:description" content='Selects QTL from a filtered genome_meta table and writes additive effects
+'><meta property="og:description" content='Selects QTL from a filtered genome_meta table and writes additive effects
 to the genome_effects table.
 Single trait (trait_name length 1) — two modes:
 Manual: pass effects, a numeric vector of length n_qtl (number of
@@ -60,18 +55,13 @@ membership is determined from existing rows in genome_effects.
 The base argument controls which allele frequencies are used:
 "founder_haplotypes" (default) — computes allele frequencies directly
 from the founder_haplotypes table (requires define_founder_haplotypes()
-was called). Note this pools all lines: when the table holds more than
-one line_name, the resulting frequency is the pool-size-weighted average
-across lines, which overstates within-line heterozygosity (Wahlund effect)
-and under-scales target_add_var. Use base = "current_pop" with a
-line-filtered base_tbl for per-line centering. (This does not read
-genome_meta.founder_allele_freq, which is informational only.)
+was called). Restrict to one founder pool with base_line_name. (This does
+not read genome_meta.founder_allele_freq, which is informational only.)
 "current_pop" — computes allele frequencies from the current
 ind_haplotype table. Pass a filtered tidybreed_table via
 base_tbl to restrict which individuals define the base population.
 
-
-Calling this function again for the same (trait_name, genome_effect_type, line_name) replaces the existing rows in genome_effects.'></head><body>
+'></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -79,7 +69,7 @@ Calling this function again for the same (trait_name, genome_effect_type, line_n
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.61.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -127,17 +117,12 @@ variance of <code>G</code> for that trait).</p></li>
 membership is determined from existing rows in <code>genome_effects</code>.</p></li>
 </ul><p>The <code>base</code> argument controls which allele frequencies are used:</p><ul><li><p><code>"founder_haplotypes"</code> (default) — computes allele frequencies directly
 from the <code>founder_haplotypes</code> table (requires <code><a href="define_founder_haplotypes.html">define_founder_haplotypes()</a></code>
-was called). Note this pools <strong>all</strong> lines: when the table holds more than
-one <code>line_name</code>, the resulting frequency is the pool-size-weighted average
-across lines, which overstates within-line heterozygosity (Wahlund effect)
-and under-scales <code>target_add_var</code>. Use <code>base = "current_pop"</code> with a
-line-filtered <code>base_tbl</code> for per-line centering. (This does <strong>not</strong> read
-<code>genome_meta.founder_allele_freq</code>, which is informational only.)</p></li>
+was called). Restrict to one founder pool with <code>base_line_name</code>. (This does
+<strong>not</strong> read <code>genome_meta.founder_allele_freq</code>, which is informational only.)</p></li>
 <li><p><code>"current_pop"</code> — computes allele frequencies from the current
 <code>ind_haplotype</code> table. Pass a filtered <code>tidybreed_table</code> via
 <code>base_tbl</code> to restrict which individuals define the base population.</p></li>
-</ul><p>Calling this function again for the same <code>(trait_name, genome_effect_type, line_name)</code> replaces the existing rows in <code>genome_effects</code>.</p>
-    </div>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
@@ -150,6 +135,7 @@ line-filtered <code>base_tbl</code> for per-line centering. (This does <strong>n
 <span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"shared"</span>, <span class="st">"union"</span><span class="op">)</span>,</span>
 <span>  base <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"founder_haplotypes"</span>, <span class="st">"current_pop"</span><span class="op">)</span>,</span>
 <span>  base_tbl <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  base_line_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  line_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  scale_to_target <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -203,12 +189,24 @@ rows, restricted to the filtered loci.</p></dd>
 <dd><p>Optional <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> on any table
 with an <code>id_ind</code> column) used when <code>base = "current_pop"</code> to restrict
 which individuals define the base allele frequencies. When <code>NULL</code>, all
-individuals in <code>ind_haplotype</code> are used.</p></dd>
+individuals in <code>ind_haplotype</code> are used. Ignored (with a warning) when
+<code>base = "founder_haplotypes"</code> — use <code>base_line_name</code> there.</p></dd>
+
+
+<dt id="arg-base-line-name">base_line_name<a class="anchor" aria-label="anchor" href="#arg-base-line-name"></a></dt>
+<dd><p>Optional character, <code>base = "founder_haplotypes"</code> only.
+Which founder pool defines the base allele frequencies. <strong>Defaults to
+<code>line_name</code></strong>, so line-specific effects are centered on their own line;
+pass <code>NULL</code> explicitly to pool every line instead. Errors if no
+<code>founder_haplotypes</code> rows carry that line. See <em>Which population centers
+the effects</em> above.</p></dd>
 
 
 <dt id="arg-line-name">line_name<a class="anchor" aria-label="anchor" href="#arg-line-name"></a></dt>
 <dd><p>Optional character. When set, effects are tagged to this
-genetic line (for future line-specific TBV). <code>NULL</code> (default) means
+genetic line: <code><a href="add_tbv.html">add_tbv()</a></code> then prefers these rows for alleles whose
+<code>line_origin</code> matches, falling back per-locus to the population-wide rows.
+Also becomes the default for <code>base_line_name</code>. <code>NULL</code> (default) means
 population-wide effects.</p></dd>
 
 
@@ -224,6 +222,29 @@ formula so the expected additive variance equals the stored <code>target_add_var
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The modified <code>tidybreed_pop</code> (invisibly).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="which-population-centers-the-effects">Which population centers the effects<a class="anchor" aria-label="anchor" href="#which-population-centers-the-effects"></a></h2>
+
+
+<p>Base allele frequencies center the true breeding value (the Falconer
+<code>allele - p</code> term) and set the <code>2pq</code> denominator used by <code>scale_to_target</code>.
+By default they come from <strong>the population the effect applies to</strong>:
+<code>base_line_name</code> inherits <code>line_name</code>, so a line-specific effect is centered
+on that line's own founder pool and a population-wide effect
+(<code>line_name = NULL</code>) on the whole founder base.</p>
+<p>This matters because pooling divergent lines overstates within-line
+heterozygosity — the Wahlund effect. Two lines fixed for opposite alleles
+each have zero within-line variance, but pool to <code>p = 0.5</code> and an apparent
+<code>2pq = 0.5</code>; the inflated denominator then makes <code>scale_to_target</code> <strong>under</strong>-scale
+the effects, and realized within-line additive variance falls short of
+<code>target_add_var</code>. Pass <code>base_line_name = NULL</code> explicitly to force pooling
+anyway.</p>
+<p>The centering constant is stored per row in <code>genome_effects.base_allele_freq</code>
+and travels with its <code>genome_value</code>, so <code><a href="add_tbv.html">add_tbv()</a></code> applies each allele's own
+line's centering — a crossbred animal's line-A alleles are centered on line A
+and its line-B alleles on line B.</p>
+<p>Calling this function again for the same <code>(trait_name, genome_effect_type, line_name)</code> replaces the existing rows in <code>genome_effects</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -255,6 +276,20 @@ formula so the expected additive variance equals the stored <code>target_add_var
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, base <span class="op">=</span> <span class="st">"current_pop"</span>, base_tbl <span class="op">=</span> <span class="va">gen0_tbl</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Crossbreeding: each line's effects centered on its own founder pool.</span></span></span>
+<span class="r-in"><span><span class="co"># base_line_name inherits line_name, so nothing extra is needed.</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, line_name <span class="op">=</span> <span class="st">"Landrace"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Line-specific effects, but deliberately centered on the pooled base</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span>, base_line_name <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

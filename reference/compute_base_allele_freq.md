@@ -5,7 +5,7 @@ Compute per-locus allele frequencies from the base population
 ## Usage
 
 ``` r
-compute_base_allele_freq(pop, base, base_ids = NULL)
+compute_base_allele_freq(pop, base, base_ids = NULL, line_name = NULL)
 ```
 
 ## Arguments

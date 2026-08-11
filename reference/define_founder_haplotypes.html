@@ -41,7 +41,7 @@ all lines' haplotypes together."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.61.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -174,7 +174,9 @@ allele frequency. Scalar in (0, 1). Default <code>0.5</code>.</p></dd>
 <dd><p><em>(method = "mosaic" only)</em> Number of template haplotypes.
 Must be a whole number in <code>[2, n_haplotypes]</code>. Also controls the MAF
 spectrum — see the <code>"mosaic"</code> entry above. Default
-<code>max(2, ceiling(sqrt(n_haplotypes)))</code>.</p></dd>
+<code>max(20, ceiling(sqrt(n_haplotypes)))</code>, clamped to <code>n_haplotypes</code>. The
+floor of 20 keeps the expected monomorphic fraction near 10%; lower it only
+if you deliberately want long, coarse LD blocks.</p></dd>
 
 
 <dt id="arg-template-switch-rate">template_switch_rate<a class="anchor" aria-label="anchor" href="#arg-template-switch-rate"></a></dt>

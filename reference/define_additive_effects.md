@@ -31,21 +31,13 @@ The `base` argument controls which allele frequencies are used:
 - `"founder_haplotypes"` (default) — computes allele frequencies
   directly from the `founder_haplotypes` table (requires
   [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
-  was called). Note this pools **all** lines: when the table holds more
-  than one `line_name`, the resulting frequency is the
-  pool-size-weighted average across lines, which overstates within-line
-  heterozygosity (Wahlund effect) and under-scales `target_add_var`. Use
-  `base = "current_pop"` with a line-filtered `base_tbl` for per-line
-  centering. (This does **not** read `genome_meta.founder_allele_freq`,
-  which is informational only.)
+  was called). Restrict to one founder pool with `base_line_name`. (This
+  does **not** read `genome_meta.founder_allele_freq`, which is
+  informational only.)
 
 - `"current_pop"` — computes allele frequencies from the current
   `ind_haplotype` table. Pass a filtered `tidybreed_table` via
   `base_tbl` to restrict which individuals define the base population.
-
-Calling this function again for the same
-`(trait_name, genome_effect_type, line_name)` replaces the existing rows
-in `genome_effects`.
 
 ## Usage
 
@@ -59,6 +51,7 @@ define_additive_effects(
   method = c("shared", "union"),
   base = c("founder_haplotypes", "current_pop"),
   base_tbl = NULL,
+  base_line_name = NULL,
   line_name = NULL,
   scale_to_target = TRUE,
   seed = NULL
@@ -116,12 +109,26 @@ define_additive_effects(
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
   on any table with an `id_ind` column) used when `base = "current_pop"`
   to restrict which individuals define the base allele frequencies. When
-  `NULL`, all individuals in `ind_haplotype` are used.
+  `NULL`, all individuals in `ind_haplotype` are used. Ignored (with a
+  warning) when `base = "founder_haplotypes"` — use `base_line_name`
+  there.
+
+- base_line_name:
+
+  Optional character, `base = "founder_haplotypes"` only. Which founder
+  pool defines the base allele frequencies. **Defaults to `line_name`**,
+  so line-specific effects are centered on their own line; pass `NULL`
+  explicitly to pool every line instead. Errors if no
+  `founder_haplotypes` rows carry that line. See *Which population
+  centers the effects* above.
 
 - line_name:
 
-  Optional character. When set, effects are tagged to this genetic line
-  (for future line-specific TBV). `NULL` (default) means population-wide
+  Optional character. When set, effects are tagged to this genetic line:
+  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+  then prefers these rows for alleles whose `line_origin` matches,
+  falling back per-locus to the population-wide rows. Also becomes the
+  default for `base_line_name`. `NULL` (default) means population-wide
   effects.
 
 - scale_to_target:
@@ -136,6 +143,34 @@ define_additive_effects(
 ## Value
 
 The modified `tidybreed_pop` (invisibly).
+
+## Which population centers the effects
+
+Base allele frequencies center the true breeding value (the Falconer
+`allele - p` term) and set the `2pq` denominator used by
+`scale_to_target`. By default they come from **the population the effect
+applies to**: `base_line_name` inherits `line_name`, so a line-specific
+effect is centered on that line's own founder pool and a population-wide
+effect (`line_name = NULL`) on the whole founder base.
+
+This matters because pooling divergent lines overstates within-line
+heterozygosity — the Wahlund effect. Two lines fixed for opposite
+alleles each have zero within-line variance, but pool to `p = 0.5` and
+an apparent `2pq = 0.5`; the inflated denominator then makes
+`scale_to_target` **under**-scale the effects, and realized within-line
+additive variance falls short of `target_add_var`. Pass
+`base_line_name = NULL` explicitly to force pooling anyway.
+
+The centering constant is stored per row in
+`genome_effects.base_allele_freq` and travels with its `genome_value`,
+so
+[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+applies each allele's own line's centering — a crossbred animal's line-A
+alleles are centered on line A and its line-B alleles on line B.
+
+Calling this function again for the same
+`(trait_name, genome_effect_type, line_name)` replaces the existing rows
+in `genome_effects`.
 
 ## See also
 
@@ -168,5 +203,19 @@ pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr %in% 1:5) |>
   define_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
+
+# Crossbreeding: each line's effects centered on its own founder pool.
+# base_line_name inherits line_name, so nothing extra is needed.
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
+  define_additive_effects("ADG", line_name = "Duroc")
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
+  define_additive_effects("ADG", line_name = "Landrace")
+
+# Line-specific effects, but deliberately centered on the pooled base
+pop <- pop |>
+  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
+  define_additive_effects("ADG", line_name = "Duroc", base_line_name = NULL)
 } # }
 ```

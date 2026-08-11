@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.61.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,42 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.61.0" id="tidybreed-0610-2026-08-11">tidybreed 0.61.0 (2026-08-11)<a class="anchor" aria-label="anchor" href="#tidybreed-0610-2026-08-11"></a></h2>
+<p>Fixes both issues recorded in <code>plans/two_errors.md</code>.</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-61-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-61-0"></a></h3>
+<ul><li>
+<p><strong>Line-specific additive effects are now centered on their own line’s founder pool.</strong> <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> gains <code>base_line_name</code>, which <strong>defaults to <code>line_name</code></strong>. Previously the Falconer base allele frequency was computed by pooling <em>every</em> founder line regardless of which line the effects were tagged to. Pooling divergent lines overstates within-line heterozygosity (the Wahlund effect): two lines fixed for opposite alleles each have zero within-line variance but pool to <code>p = 0.5</code> and an apparent <code>2pq = 0.5</code>. The inflated denominator made <code>scale_to_target</code> <strong>under</strong>-scale the effects, so realized within-line additive variance fell short of <code>target_add_var</code> — silently.</p>
+<p>The new rule is “center on whatever population the effect applies to”: a line-specific effect uses that line’s founder pool, a population-wide effect (<code>line_name = NULL</code>) stays pooled, which is correct for it. Pass <code>base_line_name = NULL</code> explicitly to force the old pooled behavior.</p>
+<p>This changes stored <code>base_allele_freq</code> values, and hence TBVs, for existing calls that combine <code>line_name</code> with the default <code>base = "founder_haplotypes"</code>.</p>
+<p>No change was needed in <code><a href="../reference/add_tbv.html">add_tbv()</a></code>: <code>base_allele_freq</code> travels on the same <code>genome_effects</code> row as its <code>genome_value</code>, and the line-precedence fallback is correlated on <code>line_origin</code> per haplotype row, so a crossbred animal’s line-A alleles were always going to be centered with line A’s frequency. The consumption layer was already per-line; only the producer was pooled.</p>
+</li>
+<li>
+<p><strong>The mosaic <code>n_templates</code> default rose</strong> from <code>max(2, ceiling(sqrt(n_haplotypes)))</code> to <code>max(20, ceiling(sqrt(n_haplotypes)))</code>, clamped to <code>n_haplotypes</code>. Templates are the only source of allelic variation, so roughly <code>2/(n_templates + 1)</code> of loci are monomorphic <em>regardless of <code>n_haplotypes</code></em>. Measured at 600 loci and 100 haplotypes, the monomorphic fraction drops from <strong>17% to 7.2%</strong>; at 30 haplotypes from ~29% to 9.5%. Above ~400 haplotypes <code>sqrt</code> dominates and nothing changes. <strong>This changes seeded <code>"mosaic"</code> output.</strong></p>
+<p>The Li-Stephens model is unchanged, so the MAF spectrum is still quantized to multiples of <code>1/n_templates</code> — use <code>"gaussian_copula"</code> when that matters.</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-61-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-61-0"></a></h3>
+<ul><li>A typo’d or unknown <code>base_line_name</code> is a hard error naming the available lines. Base frequencies are zero-initialised, so a silent miss would have centered every allele at 0 and contributed nothing to the Falconer <code>V_A</code> while still passing a <code>[0, 1]</code> range check.</li>
+<li>
+<code>base_tbl</code> was silently ignored when <code>base = "founder_haplotypes"</code>; that combination now warns and points at <code>base_line_name</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-61-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-61-0"></a></h3>
+<ul><li>
+<code><a href="../reference/compute_base_allele_freq.html">compute_base_allele_freq()</a></code> gains a <code>line_name</code> parameter, applied as a <strong>bound</strong> SQL parameter and validated with the existing <code><a href="../reference/validate_sql_identifier.html">validate_sql_identifier()</a></code>.</li>
+<li>Its <code>current_pop</code> branch now builds the <code>id_ind</code> list with the existing <code><a href="../reference/sql_in_list.html">sql_in_list()</a></code> helper instead of raw <code><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0()</a></code> quoting.</li>
+<li>
+<code>assert_qtl_autosomal()</code> is deliberately left line-agnostic — that is a documented design decision, and threading a line through it is a separate change.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="tests-0-61-0">Tests<a class="anchor" aria-label="anchor" href="#tests-0-61-0"></a></h3>
+<ul><li>The headline case: with per-line centering, within-line realized variance hits <code>target_add_var</code> exactly; with pooling forced, the Falconer bookkeeping still reports the target while variance realized within the line is under half of it.</li>
+<li>Filled a pre-existing coverage gap — nothing previously tested that <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> calls for different <code>line_name</code> values do not clobber each other’s <code>genome_effects</code> rows.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.60.3" id="tidybreed-0603-2026-08-11">tidybreed 0.60.3 (2026-08-11)<a class="anchor" aria-label="anchor" href="#tidybreed-0603-2026-08-11"></a></h2>
 <div class="section level3">

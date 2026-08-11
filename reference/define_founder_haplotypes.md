@@ -109,7 +109,9 @@ define_founder_haplotypes(
   *(method = "mosaic" only)* Number of template haplotypes. Must be a
   whole number in `[2, n_haplotypes]`. Also controls the MAF spectrum —
   see the `"mosaic"` entry above. Default
-  `max(2, ceiling(sqrt(n_haplotypes)))`.
+  `max(20, ceiling(sqrt(n_haplotypes)))`, clamped to `n_haplotypes`. The
+  floor of 20 keeps the expected monomorphic fraction near 10%; lower it
+  only if you deliberately want long, coarse LD blocks.
 
 - template_switch_rate:
 
