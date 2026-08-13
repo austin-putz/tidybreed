@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpDmMsQQ/duckdb
+#> ℹ /tmp/Rtmpbn15yA/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
