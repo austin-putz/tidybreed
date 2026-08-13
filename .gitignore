@@ -10,6 +10,7 @@ memory/
 .quarto/*
 *.Rcheck/
 GEMINI.md
+.vscode
 
 # markdowns
 
