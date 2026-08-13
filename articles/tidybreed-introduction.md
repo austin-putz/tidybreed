@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmpbn15yA/duckdb
+#> ℹ /tmp/RtmpXnWByT/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -838,8 +838,8 @@ pop |> get_table("ind_meta") |> count(has_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   has_50K     n
 #>   <lgl>   <dbl>
-#> 1 FALSE     500
-#> 2 TRUE       20
+#> 1 TRUE       20
+#> 2 FALSE     500
 ```
 
 [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)

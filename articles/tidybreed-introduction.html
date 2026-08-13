@@ -221,7 +221,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/Rtmpbn15yA/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpXnWByT/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -881,8 +881,8 @@ genotyped</em> — here, only the offspring:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   has_50K     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE     500</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE       20</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> TRUE       20</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> FALSE     500</span></span></code></pre></div>
 <p><code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> returns the familiar wide 0/1/2
 dosage matrix, ready for GBLUP or export:</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
