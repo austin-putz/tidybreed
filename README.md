@@ -1,10 +1,21 @@
 # `tidybreed` R Package
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/austin-putz/tidybreed/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/austin-putz/tidybreed/actions/workflows/pkgdown.yaml)
-[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+<div align="center">
+
+[![R-CMD-check](https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&style=for-the-badge&label=R-CMD-check&logo=githubactions&logoColor=white)](https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&style=for-the-badge&label=pkgdown&logo=githubactions&logoColor=white)](https://austin-putz.github.io/tidybreed/)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![Version](https://img.shields.io/badge/version-0.61.0-4ecdc4.svg?style=for-the-badge)](https://github.com/austin-putz/tidybreed/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+[![R](https://img.shields.io/badge/R-%3E%3D%204.1-276DC3.svg?style=for-the-badge&logo=r&logoColor=white)](https://www.r-project.org)
+[![DuckDB](https://img.shields.io/badge/database-DuckDB-FFF000.svg?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=for-the-badge&logo=cplusplus&logoColor=white)](https://isocpp.org)
+[![tidyverse](https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&logo=tidyverse&logoColor=white)](https://www.tidyverse.org)
+[![Testing: testthat](https://img.shields.io/badge/testing-testthat-1f9c5a.svg?style=for-the-badge)](https://testthat.r-lib.org)
+
+</div>
 <!-- badges: end -->
 
 📖 **Documentation:** <https://austin-putz.github.io/tidybreed/>
