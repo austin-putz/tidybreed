@@ -51,10 +51,6 @@ add_genotypes <- function(tbl,
          "Call define_chip() first.", call. = FALSE)
   }
 
-  if (!"ind_meta" %in% pop$tables) {
-    stop("ind_meta does not exist. Call add_founders() first.", call. = FALSE)
-  }
-
   if (length(tbl$pending_filter) == 0) {
     subset_ids <- NULL
   } else {

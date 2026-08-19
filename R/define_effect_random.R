@@ -82,11 +82,6 @@ define_effect_random <- function(pop,
                                     as.numeric(variance))
   }
 
-  if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call define_trait() / define_phenotype() first.",
-         call. = FALSE)
-  }
-
   .check_phenotype_exists(pop, phenotype_name)
   .handle_effect_overwrite(pop, phenotype_name, effect_name, overwrite)
 

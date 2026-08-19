@@ -67,11 +67,6 @@ define_effect_fixed_cov <- function(pop,
     stop("`poly_order` must be an integer >= 1.", call. = FALSE)
   }
 
-  if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call define_trait() / define_phenotype() first.",
-         call. = FALSE)
-  }
-
   .check_phenotype_exists(pop, phenotype_name)
 
   if (!source_table %in% DBI::dbListTables(pop$db_conn)) {

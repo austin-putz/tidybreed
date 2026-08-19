@@ -548,18 +548,11 @@ schema <- function(pop) {
 
   user_tables <- setdiff(pop$tables, "_schema_meta")
 
-  has_meta <- "_schema_meta" %in% pop$tables
-
-  # Pull descriptions from _schema_meta when available
-  if (has_meta) {
-    desc_df <- DBI::dbGetQuery(
-      pop$db_conn,
-      "SELECT table_name, description FROM _schema_meta WHERE object_type = 'table'"
-    )
-  } else {
-    desc_df <- data.frame(table_name = character(), description = character(),
-                          stringsAsFactors = FALSE)
-  }
+  # Pull table descriptions from _schema_meta
+  desc_df <- DBI::dbGetQuery(
+    pop$db_conn,
+    "SELECT table_name, description FROM _schema_meta WHERE object_type = 'table'"
+  )
 
   # Build result row by row
   rows <- lapply(user_tables, function(tbl) {
@@ -706,26 +699,19 @@ describe_table <- function(pop, table_name) {
   }
 
   # Pull column descriptions from _schema_meta
-  has_meta <- "_schema_meta" %in% pop$tables
-  if (has_meta) {
-    tbl_esc  <- gsub("'", "''", table_name)
-    meta_rows <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT column_name, description, notes FROM _schema_meta ",
-             "WHERE object_type = 'column' AND table_name = '", tbl_esc, "'")
-    )
-    tbl_desc_row <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT description FROM _schema_meta ",
-             "WHERE object_type = 'table' AND table_name = '", tbl_esc, "' ",
-             "AND column_name IS NULL")
-    )
-    tbl_desc <- if (nrow(tbl_desc_row) > 0) tbl_desc_row$description[1] else ""
-  } else {
-    meta_rows <- data.frame(column_name = character(), description = character(),
-                            notes = character(), stringsAsFactors = FALSE)
-    tbl_desc  <- ""
-  }
+  tbl_esc  <- gsub("'", "''", table_name)
+  meta_rows <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT column_name, description, notes FROM _schema_meta ",
+           "WHERE object_type = 'column' AND table_name = '", tbl_esc, "'")
+  )
+  tbl_desc_row <- DBI::dbGetQuery(
+    pop$db_conn,
+    paste0("SELECT description FROM _schema_meta ",
+           "WHERE object_type = 'table' AND table_name = '", tbl_esc, "' ",
+           "AND column_name IS NULL")
+  )
+  tbl_desc <- if (nrow(tbl_desc_row) > 0) tbl_desc_row$description[1] else ""
 
   # Join: all actual columns left-joined with metadata
   result_rows <- lapply(seq_len(nrow(desc_rows)), function(i) {
@@ -751,7 +737,7 @@ describe_table <- function(pop, table_name) {
   }
 
   # Flag stale _schema_meta rows (column described but not in table)
-  if (has_meta && nrow(meta_rows) > 0) {
+  if (nrow(meta_rows) > 0) {
     stale <- setdiff(meta_rows$column_name, all_cols)
     if (length(stale) > 0) {
       stale_rows <- meta_rows[meta_rows$column_name %in% stale, , drop = FALSE]
@@ -911,15 +897,6 @@ define_schema_description <- function(tbl, column_name = NULL, description,
         call. = FALSE
       )
     }
-  }
-
-  if (!"_schema_meta" %in% pop$tables) {
-    warning(
-      "This database does not have a _schema_meta table; ",
-      "it predates the _schema_meta system table. Descriptions cannot be stored.",
-      call. = FALSE
-    )
-    return(invisible(tbl))
   }
 
   entry <- data.frame(

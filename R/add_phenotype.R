@@ -453,7 +453,7 @@ add_phenotype <- function(tbl,
 
   # ── 7.5. Pre-draw correlated random effects (joint MVN across phenotypes) ──
 
-  if ("phenotype_var_comp" %in% pop$tables && length(phenos) >= 2) {
+  if (length(phenos) >= 2) {
     phenos_sql  <- paste0("'", gsub("'", "''", phenos), "'", collapse = ", ")
     cov_effects <- DBI::dbGetQuery(
       pop$db_conn,

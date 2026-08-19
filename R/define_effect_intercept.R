@@ -30,10 +30,6 @@ define_effect_intercept <- function(pop, phenotype_name, mean) {
   validate_sql_identifier(phenotype_name, what = "phenotype name")
   stopifnot(is.numeric(mean), length(mean) == 1, !is.na(mean))
 
-  if (!"phenotype_meta" %in% pop$tables) {
-    stop("No phenotype tables exist. Call define_phenotype() first.", call. = FALSE)
-  }
-
   pn_safe <- gsub("'", "''", phenotype_name)
   existing <- DBI::dbGetQuery(
     pop$db_conn,

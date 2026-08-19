@@ -57,11 +57,6 @@ define_effect_fixed_class <- function(pop,
   stopifnot(is.character(source_table), nzchar(source_table))
   null_class_action <- match.arg(null_class_action)
 
-  if (!"trait_effects" %in% pop$tables) {
-    stop("No trait tables exist. Call define_trait() / define_phenotype() first.",
-         call. = FALSE)
-  }
-
   .check_phenotype_exists(pop, phenotype_name)
 
   if (is.null(levels) || !is.numeric(levels) || is.null(names(levels))) {

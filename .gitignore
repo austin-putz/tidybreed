@@ -41,6 +41,11 @@ test_results.txt
 # Compiled Rcpp artifacts (Stage 3)
 src/*.o
 src/*.so
+
+# covr / gcov coverage artifacts
+src/*.gcno
+src/*.gcda
+*.gcov
 src/*.dll
 src/*.rds
 /doc/

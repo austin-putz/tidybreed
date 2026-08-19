@@ -1082,6 +1082,60 @@ Performance work must start from a small reproducible benchmark or profiling
 script under `dev/benchmarks/`. Keep benchmarks deterministic, small enough to
 run during development, and scalable enough to expose the intended bottleneck.
 
+### Test Coverage (`covr`)
+
+`covr` is in `Suggests` and is run **locally only** — there is no
+`test-coverage.yaml` workflow and no Codecov integration or badge. Coverage is a
+diagnostic for finding untested and dead code, not a metric to publish or chase.
+
+Coverage measures which lines *execute* during the suite, not whether anything is
+asserted about them. Treat a low number as reliable bad news and a high number as
+weak good news.
+
+**The invocation that works** (both deviations from the obvious call are load-bearing):
+
+```r
+cov <- covr::package_coverage(
+  path = ".",
+  type = "none",
+  code = 'testthat::test_dir("tests/testthat", package = "tidybreed",
+                             load_package = "installed", reporter = "summary")'
+)
+covr::report(cov)   # interactive HTML, uncovered lines in red
+```
+
+- **Keep `type = "none"` and scope explicitly to `tests/testthat`.** `covr`
+  installs from source (`R CMD INSTALL` ignores `.Rbuildignore`), so anything
+  parked in `tests/` gets executed even when `R CMD check` would skip it. The
+  `.Rbuildignore` entry `^tests/test_[^/]*\.R$` still guards that slot — do not
+  add unassertive demo scripts there again. The formal suite in `tests/testthat/`
+  is the only test surface.
+- **Do not use `testthat::test_local()`.** It calls `pkgload::load_all()`
+  internally, which replaces `covr`'s instrumented package and silently reports
+  **0% for every R file** while the C++ still reads ~99% (gcov instrumentation
+  lives in the `.so` and survives). This fails silently as a plausible-looking
+  result, not as an error. `test_dir(load_package = "installed")` uses the
+  instrumented install.
+
+A full instrumented run takes **~12 minutes** (the suite is DuckDB file-backed
+and instrumentation adds 2–5×). Do not put it in a fast edit-test loop.
+
+**Baseline at v0.62.0** — 78.8% across R code; `src/make_gametes.cpp` 98.8%
+(measured separately — deleting `src/*.gcno` between runs discards the C++ data).
+Remaining gaps:
+
+| File | Coverage | Why |
+|------|----------|-----|
+| `blupf90_helpers.R` | 22% | Needs the external BLUPF90 binary |
+| `add_ebv.R` | 29% | Same — external solver dependency |
+| `add_tbv.R` | 37% | Core function; index/imprinting branches untested |
+| `define_effect_cov_matrix.R` | 54% | Routing branches per `effect_name` |
+
+`add_tbv.R` at 37% is the most concerning entry given how central it is — the
+line-precedence crossbreeding join and the `index_names` / `weight_type` paths
+are the likely dark spots. The BLUPF90 paths are expected to stay low without a
+CI solver; do not chase them.
+
 ## Development Environment
 
 ### Running R Commands
