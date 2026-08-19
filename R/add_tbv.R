@@ -32,8 +32,10 @@
 #' to `ind_true_index`.
 #'
 #' Pipe a `tidybreed_table` (from [get_table()] and optionally [dplyr::filter()]) as
-#' the first argument to select individuals. The `expressed_sex` rule from
-#' `trait_meta` is applied on top.
+#' the first argument to select individuals. Every individual in that subset
+#' receives a TBV for every requested trait — unlike [add_phenotype()], no
+#' sex-expression rule is applied here (`expressed_sex` is an observation-layer
+#' property of `phenotype_meta`, not of a genetic component trait).
 #'
 #' Useful for tracking genetic trend across generations without collecting
 #' phenotypes.
@@ -168,7 +170,6 @@ add_tbv <- function(tbl, trait_name = NULL,
   for (t in trait) {
     m     <- meta_rows[meta_rows$trait_name == t, ]
     ids_t <- ind_meta_subset$id_ind
-    if (length(ids_t) == 0) next
 
     effect_count <- DBI::dbGetQuery(
       pop$db_conn,
@@ -233,8 +234,15 @@ add_tbv <- function(tbl, trait_name = NULL,
         "' for individual(s): ",
         paste(utils::head(missing_ids, 5), collapse = ", "),
         if (length(missing_ids) > 5) ", ..." else "",
-        ". This indicates missing ind_haplotype rows (v1 storage is fully ",
-        "dense, so every individual should have a row at every QTL locus).",
+        ". Those individuals carry no ind_haplotype row at any locus with an ",
+        "additive effect for this trait. Usual causes: (a) every QTL for the ",
+        "trait sits on a chromosome the individual does not inherit (",
+        "chr_inheritance from_parent_1 = 0 and from_parent_2 = 0, e.g. Y in ",
+        "females) -- see define_chromosome(); or (b) the trait is imprinted (",
+        "trait_meta.expressed_parent = 'parent_1'/'parent_2') and restricts to ",
+        "a parent_origin the individual has no copies of (a male's X is ",
+        "from_parent_1 = 0). Place the trait's QTL on a chromosome these ",
+        "individuals carry, or exclude them from the subset.",
         call. = FALSE
       )
     }
@@ -327,6 +335,20 @@ add_tbv <- function(tbl, trait_name = NULL,
 
         # Build n_ind × n_traits matrix in consistent column order
         ind_order <- sort(unique(tbv_data$id_ind))
+
+        # An individual with no ind_tbv row for *any* index trait never reaches
+        # tbv_mat at all, so the anyNA() check below cannot see it -- it would
+        # be dropped silently (zero rows written, no error). Catch that here.
+        dropped <- setdiff(target_ids, ind_order)
+        if (length(dropped) > 0) {
+          stop("No TBVs found for index '", idx_name, "' trait(s) (",
+               paste(idx_traits, collapse = ", "), ") for individual(s): ",
+               paste(utils::head(sort(dropped), 5), collapse = ", "),
+               if (length(dropped) > 5) ", ..." else "",
+               ". Ensure those traits are included in the trait_name argument ",
+               "of this add_tbv() call.", call. = FALSE)
+        }
+
         tbv_mat <- matrix(
           unlist(lapply(idx_traits, function(t) {
             sub <- tbv_data[tbv_data$trait_name == t, , drop = FALSE]
@@ -378,7 +400,6 @@ add_tbv <- function(tbl, trait_name = NULL,
 
 
 upsert_ind_true_index <- function(pop, df) {
-  if (nrow(df) == 0L) return(invisible(NULL))
   start <- next_int_id(pop$db_conn, "ind_true_index", "id_true_index")
   df <- tibble::add_column(
     df,

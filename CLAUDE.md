@@ -1120,21 +1120,23 @@ covr::report(cov)   # interactive HTML, uncovered lines in red
 A full instrumented run takes **~12 minutes** (the suite is DuckDB file-backed
 and instrumentation adds 2–5×). Do not put it in a fast edit-test loop.
 
-**Baseline at v0.62.0** — 78.8% across R code; `src/make_gametes.cpp` 98.8%
-(measured separately — deleting `src/*.gcno` between runs discards the C++ data).
+**Baseline at v0.63.0** — 80.7% across R code; `src/make_gametes.cpp` 98.9%.
 Remaining gaps:
 
 | File | Coverage | Why |
 |------|----------|-----|
 | `blupf90_helpers.R` | 22% | Needs the external BLUPF90 binary |
 | `add_ebv.R` | 29% | Same — external solver dependency |
-| `add_tbv.R` | 37% | Core function; index/imprinting branches untested |
 | `define_effect_cov_matrix.R` | 54% | Routing branches per `effect_name` |
+| `tidybreed-package.R` | 67% | Mostly `.onLoad`/startup paths |
+| `restore_pop.R` | 68% | Reopen-and-resume paths |
+| `add_phenotype.R` | 71% | Composite/SGE and distribution branches |
 
-`add_tbv.R` at 37% is the most concerning entry given how central it is — the
-line-precedence crossbreeding join and the `index_names` / `weight_type` paths
-are the likely dark spots. The BLUPF90 paths are expected to stay low without a
-CI solver; do not chase them.
+The BLUPF90 paths are expected to stay low without a CI solver; do not chase
+them. `add_tbv.R` was the standing concern at 37% and is now 99.6% — see
+`tests/testthat/test-add_tbv_index.R`, which covers the `index_names` /
+`weight_type` block, and `test-add_tbv.R`, which covers the line-precedence
+crossbreeding join.
 
 ## Development Environment
 

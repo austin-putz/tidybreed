@@ -1,3 +1,67 @@
+# tidybreed 0.63.0 (2026-08-19)
+
+Coverage for `add_tbv()`'s true-index feature, one real bug fix found while
+writing those tests, and removal of two pieces of stale text.
+
+## Fixed
+
+- **`add_tbv(index_names = ...)` no longer silently writes nothing when an index
+  trait has no TBVs.** The true-index block built its individual list from
+  whatever rows came back from `ind_tbv`, so an individual with no row for *any*
+  index trait was dropped before the existing `NA` check could see it. With
+  every target individual dropped, the result was a 0-row matrix, no error, and
+  a misleading `"Computed true index ... for 0 individuals."` message — the
+  documented contract ("all index traits must be included in `trait_name`") was
+  violated silently. Reproduced by `define_index(pop, "sel", "BW", 1)` followed
+  by `add_tbv("ADG", index_names = "sel")`. It now errors, naming up to five of
+  the affected individuals. Partial coverage (some traits present, some not)
+  already errored and is unchanged.
+
+## Removed
+
+- **`add_tbv()`: the unreachable `if (length(ids_t) == 0) next` guard deleted.**
+  The function returns early when the subset is empty, and `ids_t` is
+  loop-invariant, so `length(ids_t) >= 1` always held at that point. Same class
+  as the nine guards removed in 0.62.0.
+- **`upsert_ind_true_index()`: the `nrow(df) == 0` early return deleted.** It was
+  the last line in `add_tbv.R` that no test could reach, and the fix above is why:
+  with the missing-TBV guard in place, the only caller either `next`s before
+  reaching it (no target individuals left) or passes a frame with at least one
+  row. Its former purpose — quietly absorbing the empty case — is now exactly the
+  condition that errors.
+
+## Documentation
+
+- **`add_tbv()`'s "no haplotype rows" error message rewritten.** It blamed
+  *"missing ind_haplotype rows (v1 storage is fully dense …)"*, describing a
+  storage model the package no longer uses. Under long-format `ind_haplotype`
+  plus `chr_inheritance`, zero rows at a locus is a supported, documented state
+  (an absent chromosome — Y in females). The old text sent readers hunting for a
+  storage bug that does not exist. The guard itself is correct and unchanged;
+  the message now names the two real causes (QTL on a chromosome the individual
+  does not inherit, or an imprinted trait restricting to an absent
+  `parent_origin`) and points at `define_chromosome()`.
+- **`add_tbv()`'s stale `expressed_sex` claim removed.** The roxygen said the
+  `expressed_sex` rule "from `trait_meta`" is applied on top. `trait_meta` has
+  had no such column since 0.31.0 moved it to `phenotype_meta`, and `add_tbv()`
+  applies no sex filter at all — only `add_phenotype()` does.
+
+## Testing
+
+- **New `tests/testthat/test-add_tbv_index.R`** (22 tests) — `add_tbv.R` was the
+  lowest-covered core function at 37.3%, with 105 of its 143 uncovered lines in
+  the `index_names` / true-index block. No test in the suite passed
+  `index_names` or read `ind_true_index`, despite the feature being exported,
+  documented, and owner of its own table. The new file covers all three `type`
+  values and the `match.arg` default, both `overwrite_index` paths, multiple
+  indices per call, subset filtering, the `NA` `economic_weight` guard, unknown
+  and malformed index names, the two missing-TBV guards, and the eight scattered
+  input guards (including the absent-chromosome error, reproduced with a
+  Y-linked QTL set). Index arithmetic is asserted exactly against `ind_tbv`, not
+  by tolerance — the index is a plain weighted sum of values read back from the
+  database. `add_tbv.R` is now at **99.6%** and overall R coverage rose from
+  78.8% to **80.7%**.
+
 # tidybreed 0.62.0 (2026-08-19)
 
 Test-coverage tooling, coverage for two previously untested exported functions,

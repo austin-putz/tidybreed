@@ -75,8 +75,10 @@ by weights from named indices defined with \code{\link[=define_index]{define_ind
 to \code{ind_true_index}.
 
 Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as
-the first argument to select individuals. The \code{expressed_sex} rule from
-\code{trait_meta} is applied on top.
+the first argument to select individuals. Every individual in that subset
+receives a TBV for every requested trait — unlike \code{\link[=add_phenotype]{add_phenotype()}}, no
+sex-expression rule is applied here (\code{expressed_sex} is an observation-layer
+property of \code{phenotype_meta}, not of a genetic component trait).
 
 Useful for tracking genetic trend across generations without collecting
 phenotypes.
