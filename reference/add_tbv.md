@@ -36,8 +36,12 @@ Pipe a `tidybreed_table` (from
 [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
 and optionally
 [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html))
-as the first argument to select individuals. The `expressed_sex` rule
-from `trait_meta` is applied on top.
+as the first argument to select individuals. Every individual in that
+subset receives a TBV for every requested trait — unlike
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+no sex-expression rule is applied here (`expressed_sex` is an
+observation-layer property of `phenotype_meta`, not of a genetic
+component trait).
 
 Useful for tracking genetic trend across generations without collecting
 phenotypes.

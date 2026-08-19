@@ -26,8 +26,10 @@ Optionally computes true selection index values by multiplying per-trait TBVs
 by weights from named indices defined with define_index(), and writes them
 to ind_true_index.
 Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as
-the first argument to select individuals. The expressed_sex rule from
-trait_meta is applied on top.
+the first argument to select individuals. Every individual in that subset
+receives a TBV for every requested trait — unlike add_phenotype(), no
+sex-expression rule is applied here (expressed_sex is an observation-layer
+property of phenotype_meta, not of a genetic component trait).
 Useful for tracking genetic trend across generations without collecting
 phenotypes."><meta property="og:description" content="Computes the true breeding value (TBV) for each individual in the current
 subset and each requested trait, and writes them to ind_tbv. This is the
@@ -56,8 +58,10 @@ Optionally computes true selection index values by multiplying per-trait TBVs
 by weights from named indices defined with define_index(), and writes them
 to ind_true_index.
 Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as
-the first argument to select individuals. The expressed_sex rule from
-trait_meta is applied on top.
+the first argument to select individuals. Every individual in that subset
+receives a TBV for every requested trait — unlike add_phenotype(), no
+sex-expression rule is applied here (expressed_sex is an observation-layer
+property of phenotype_meta, not of a genetic component trait).
 Useful for tracking genetic trend across generations without collecting
 phenotypes."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -67,7 +71,7 @@ phenotypes."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.61.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,8 +128,10 @@ same line-matching logic applies.</p>
 by weights from named indices defined with <code><a href="define_index.html">define_index()</a></code>, and writes them
 to <code>ind_true_index</code>.</p>
 <p>Pipe a <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> and optionally <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>) as
-the first argument to select individuals. The <code>expressed_sex</code> rule from
-<code>trait_meta</code> is applied on top.</p>
+the first argument to select individuals. Every individual in that subset
+receives a TBV for every requested trait — unlike <code><a href="add_phenotype.html">add_phenotype()</a></code>, no
+sex-expression rule is applied here (<code>expressed_sex</code> is an observation-layer
+property of <code>phenotype_meta</code>, not of a genetic component trait).</p>
 <p>Useful for tracking genetic trend across generations without collecting
 phenotypes.</p>
     </div>

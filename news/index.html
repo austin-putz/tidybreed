@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.61.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,73 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.63.0" id="tidybreed-0630-2026-08-19">tidybreed 0.63.0 (2026-08-19)<a class="anchor" aria-label="anchor" href="#tidybreed-0630-2026-08-19"></a></h2>
+<p>Coverage for <code><a href="../reference/add_tbv.html">add_tbv()</a></code>’s true-index feature, one real bug fix found while writing those tests, and removal of two pieces of stale text.</p>
+<div class="section level3">
+<h3 id="fixed-0-63-0">Fixed<a class="anchor" aria-label="anchor" href="#fixed-0-63-0"></a></h3>
+<ul><li>
+<strong><code>add_tbv(index_names = ...)</code> no longer silently writes nothing when an index trait has no TBVs.</strong> The true-index block built its individual list from whatever rows came back from <code>ind_tbv</code>, so an individual with no row for <em>any</em> index trait was dropped before the existing <code>NA</code> check could see it. With every target individual dropped, the result was a 0-row matrix, no error, and a misleading <code>"Computed true index ... for 0 individuals."</code> message — the documented contract (“all index traits must be included in <code>trait_name</code>”) was violated silently. Reproduced by <code>define_index(pop, "sel", "BW", 1)</code> followed by <code>add_tbv("ADG", index_names = "sel")</code>. It now errors, naming up to five of the affected individuals. Partial coverage (some traits present, some not) already errored and is unchanged.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="removed-0-63-0">Removed<a class="anchor" aria-label="anchor" href="#removed-0-63-0"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/add_tbv.html">add_tbv()</a></code>: the unreachable <code>if (length(ids_t) == 0) next</code> guard deleted.</strong> The function returns early when the subset is empty, and <code>ids_t</code> is loop-invariant, so <code>length(ids_t) &gt;= 1</code> always held at that point. Same class as the nine guards removed in 0.62.0.</li>
+<li>
+<strong><code>upsert_ind_true_index()</code>: the <code>nrow(df) == 0</code> early return deleted.</strong> It was the last line in <code>add_tbv.R</code> that no test could reach, and the fix above is why: with the missing-TBV guard in place, the only caller either <code><a href="https://rdrr.io/r/base/Control.html" class="external-link">next</a></code>s before reaching it (no target individuals left) or passes a frame with at least one row. Its former purpose — quietly absorbing the empty case — is now exactly the condition that errors.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-63-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-63-0"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/add_tbv.html">add_tbv()</a></code>’s “no haplotype rows” error message rewritten.</strong> It blamed <em>“missing ind_haplotype rows (v1 storage is fully dense …)”</em>, describing a storage model the package no longer uses. Under long-format <code>ind_haplotype</code> plus <code>chr_inheritance</code>, zero rows at a locus is a supported, documented state (an absent chromosome — Y in females). The old text sent readers hunting for a storage bug that does not exist. The guard itself is correct and unchanged; the message now names the two real causes (QTL on a chromosome the individual does not inherit, or an imprinted trait restricting to an absent <code>parent_origin</code>) and points at <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code>.</li>
+<li>
+<strong><code><a href="../reference/add_tbv.html">add_tbv()</a></code>’s stale <code>expressed_sex</code> claim removed.</strong> The roxygen said the <code>expressed_sex</code> rule “from <code>trait_meta</code>” is applied on top. <code>trait_meta</code> has had no such column since 0.31.0 moved it to <code>phenotype_meta</code>, and <code><a href="../reference/add_tbv.html">add_tbv()</a></code> applies no sex filter at all — only <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> does.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="testing-0-63-0">Testing<a class="anchor" aria-label="anchor" href="#testing-0-63-0"></a></h3>
+<ul><li>
+<strong>New <code>tests/testthat/test-add_tbv_index.R</code></strong> (22 tests) — <code>add_tbv.R</code> was the lowest-covered core function at 37.3%, with 105 of its 143 uncovered lines in the <code>index_names</code> / true-index block. No test in the suite passed <code>index_names</code> or read <code>ind_true_index</code>, despite the feature being exported, documented, and owner of its own table. The new file covers all three <code>type</code> values and the <code>match.arg</code> default, both <code>overwrite_index</code> paths, multiple indices per call, subset filtering, the <code>NA</code> <code>economic_weight</code> guard, unknown and malformed index names, the two missing-TBV guards, and the eight scattered input guards (including the absent-chromosome error, reproduced with a Y-linked QTL set). Index arithmetic is asserted exactly against <code>ind_tbv</code>, not by tolerance — the index is a plain weighted sum of values read back from the database. <code>add_tbv.R</code> is now at <strong>99.6%</strong> and overall R coverage rose from 78.8% to <strong>80.7%</strong>.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.62.0" id="tidybreed-0620-2026-08-19">tidybreed 0.62.0 (2026-08-19)<a class="anchor" aria-label="anchor" href="#tidybreed-0620-2026-08-19"></a></h2>
+<p>Test-coverage tooling, coverage for two previously untested exported functions, and removal of unreachable defensive code.</p>
+<div class="section level3">
+<h3 id="removed-0-62-0">Removed<a class="anchor" aria-label="anchor" href="#removed-0-62-0"></a></h3>
+<ul><li>
+<p><strong>Nine unreachable <code>pop$tables</code> guards deleted.</strong> <code><a href="../reference/open_pop.html">open_pop()</a></code> unconditionally calls <code><a href="../reference/dot-create_core_tables.html">.create_core_tables()</a></code> then <code><a href="../reference/ensure_trait_tables.html">ensure_trait_tables()</a></code>, so all 16 core tables exist before it returns, and <code><a href="../reference/restore_pop.html">restore_pop()</a></code> reads its table list from a database that itself came from <code><a href="../reference/open_pop.html">open_pop()</a></code>. Every guard below was therefore dead on all supported paths:</p>
+<ul><li>
+<code><a href="../reference/define_effect_intercept.html">define_effect_intercept()</a></code> — <code>phenotype_meta</code> existence check</li>
+<li>
+<code><a href="../reference/define_effect_fixed_cov.html">define_effect_fixed_cov()</a></code>, <code><a href="../reference/define_effect_fixed_class.html">define_effect_fixed_class()</a></code>, <code><a href="../reference/define_effect_random.html">define_effect_random()</a></code> — <code>trait_effects</code> existence checks</li>
+<li>
+<code><a href="../reference/add_genotypes.html">add_genotypes()</a></code> — <code>ind_meta</code> existence check</li>
+<li>
+<code>schema.R</code> — the <code>has_meta</code> conditional and its <code>else</code> fallback in both <code><a href="../reference/schema.html">schema()</a></code> and <code><a href="../reference/describe_table.html">describe_table()</a></code>, plus the downstream <code>has_meta &amp;&amp;</code> clause</li>
+<li>
+<code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> — the always-true <code>"phenotype_var_comp" %in% pop$tables</code> clause in the correlated-random-effect condition</li>
+</ul><p>These functions still reject bad input; the checks that actually fire (<code><a href="../reference/dot-check_phenotype_exists.html">.check_phenotype_exists()</a></code>, the per-row <code>COUNT(*)</code> lookups) are unchanged.</p>
+</li>
+<li><p><strong>The <code>schema.R</code> legacy-database branch is gone.</strong> <code><a href="../reference/define_schema_description.html">define_schema_description()</a></code> warned and returned early for databases “predating the <code>_schema_meta</code> system table”. No such database can be produced by current code.</p></li>
+<li><p><strong>All nine legacy <code>tests/test_*.R</code> dev scripts deleted</strong>, along with the tracked <code>tests/test_sge_adg_selection.pdf</code> artifact. None loaded the package, so none ran standalone; none ran under <code>R CMD check</code> (they are <code>.Rbuildignore</code>’d); they carried almost no assertions; <code>test_dynamic_genome.R</code> called the removed <code>add_locus()</code> and <code>test_formula_phenotype.R</code> the removed <code>add_offspring_gen()</code>. Every topic they demonstrated is covered by <code>tests/testthat/</code>. The PDF was <strong>not</strong> <code>.Rbuildignore</code>’d and had been shipping inside the package tarball.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="testing-0-62-0">Testing<a class="anchor" aria-label="anchor" href="#testing-0-62-0"></a></h3>
+<ul><li>
+<strong><code>covr</code> added to <code>Suggests</code></strong> with a documented local-only workflow in <code>CLAUDE.md</code>. There is no <code>test-coverage.yaml</code> and no Codecov badge; coverage is a diagnostic for finding untested and dead code, not a published metric.</li>
+<li>
+<strong>New <code>tests/testthat/test-define_effect_fixed_cov.R</code></strong> (9 tests) — takes <code><a href="../reference/define_effect_fixed_cov.html">define_effect_fixed_cov()</a></code> from 0% to 100%. Asserts the contribution model <code>slope * (x - center)^poly_order</code> by exact arithmetic: with <code>residual_var = 0</code> and no other effects, <code>pheno_value == mean + tbv + contribution</code> exactly, so linear, centered, quadratic, auto-centered, and multi-covariate-additivity cases are all checked to full precision rather than by tolerance.</li>
+<li>
+<strong>New <code>tests/testthat/test-define_effect_intercept.R</code></strong> (7 tests) — takes <code><a href="../reference/define_effect_intercept.html">define_effect_intercept()</a></code> from 0% to 100%. Covers update semantics, that the stored mean is what <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> applies, phenotype scoping, sign handling, input validation, and an SQL-injection attempt on the phenotype name.</li>
+<li>
+<code>effect_helpers.R</code> rose from 53% to 100% as a side effect. Overall R coverage is 78.8%.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-62-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-62-0"></a></h3>
+<ul><li>
+<code>.gitignore</code> now excludes <code>src/*.gcno</code>, <code>src/*.gcda</code>, and <code>*.gcov</code> — gcov artifacts regenerated by every <code>covr</code> run.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.61.0" id="tidybreed-0610-2026-08-11">tidybreed 0.61.0 (2026-08-11)<a class="anchor" aria-label="anchor" href="#tidybreed-0610-2026-08-11"></a></h2>
 <p>Fixes both issues recorded in <code>plans/two_errors.md</code>.</p>

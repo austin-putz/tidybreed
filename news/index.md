@@ -1,5 +1,170 @@
 # Changelog
 
+## tidybreed 0.63.0 (2026-08-19)
+
+Coverage for
+[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
+true-index feature, one real bug fix found while writing those tests,
+and removal of two pieces of stale text.
+
+### Fixed
+
+- **`add_tbv(index_names = ...)` no longer silently writes nothing when
+  an index trait has no TBVs.** The true-index block built its
+  individual list from whatever rows came back from `ind_tbv`, so an
+  individual with no row for *any* index trait was dropped before the
+  existing `NA` check could see it. With every target individual
+  dropped, the result was a 0-row matrix, no error, and a misleading
+  `"Computed true index ... for 0 individuals."` message — the
+  documented contract (“all index traits must be included in
+  `trait_name`”) was violated silently. Reproduced by
+  `define_index(pop, "sel", "BW", 1)` followed by
+  `add_tbv("ADG", index_names = "sel")`. It now errors, naming up to
+  five of the affected individuals. Partial coverage (some traits
+  present, some not) already errored and is unchanged.
+
+### Removed
+
+- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md):
+  the unreachable `if (length(ids_t) == 0) next` guard deleted.** The
+  function returns early when the subset is empty, and `ids_t` is
+  loop-invariant, so `length(ids_t) >= 1` always held at that point.
+  Same class as the nine guards removed in 0.62.0.
+- **`upsert_ind_true_index()`: the `nrow(df) == 0` early return
+  deleted.** It was the last line in `add_tbv.R` that no test could
+  reach, and the fix above is why: with the missing-TBV guard in place,
+  the only caller either [`next`](https://rdrr.io/r/base/Control.html)s
+  before reaching it (no target individuals left) or passes a frame with
+  at least one row. Its former purpose — quietly absorbing the empty
+  case — is now exactly the condition that errors.
+
+### Documentation
+
+- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
+  “no haplotype rows” error message rewritten.** It blamed *“missing
+  ind_haplotype rows (v1 storage is fully dense …)”*, describing a
+  storage model the package no longer uses. Under long-format
+  `ind_haplotype` plus `chr_inheritance`, zero rows at a locus is a
+  supported, documented state (an absent chromosome — Y in females). The
+  old text sent readers hunting for a storage bug that does not exist.
+  The guard itself is correct and unchanged; the message now names the
+  two real causes (QTL on a chromosome the individual does not inherit,
+  or an imprinted trait restricting to an absent `parent_origin`) and
+  points at
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md).
+- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
+  stale `expressed_sex` claim removed.** The roxygen said the
+  `expressed_sex` rule “from `trait_meta`” is applied on top.
+  `trait_meta` has had no such column since 0.31.0 moved it to
+  `phenotype_meta`, and
+  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+  applies no sex filter at all — only
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  does.
+
+### Testing
+
+- **New `tests/testthat/test-add_tbv_index.R`** (22 tests) — `add_tbv.R`
+  was the lowest-covered core function at 37.3%, with 105 of its 143
+  uncovered lines in the `index_names` / true-index block. No test in
+  the suite passed `index_names` or read `ind_true_index`, despite the
+  feature being exported, documented, and owner of its own table. The
+  new file covers all three `type` values and the `match.arg` default,
+  both `overwrite_index` paths, multiple indices per call, subset
+  filtering, the `NA` `economic_weight` guard, unknown and malformed
+  index names, the two missing-TBV guards, and the eight scattered input
+  guards (including the absent-chromosome error, reproduced with a
+  Y-linked QTL set). Index arithmetic is asserted exactly against
+  `ind_tbv`, not by tolerance — the index is a plain weighted sum of
+  values read back from the database. `add_tbv.R` is now at **99.6%**
+  and overall R coverage rose from 78.8% to **80.7%**.
+
+## tidybreed 0.62.0 (2026-08-19)
+
+Test-coverage tooling, coverage for two previously untested exported
+functions, and removal of unreachable defensive code.
+
+### Removed
+
+- **Nine unreachable `pop$tables` guards deleted.**
+  [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+  unconditionally calls
+  [`.create_core_tables()`](https://austin-putz.github.io/tidybreed/reference/dot-create_core_tables.md)
+  then
+  [`ensure_trait_tables()`](https://austin-putz.github.io/tidybreed/reference/ensure_trait_tables.md),
+  so all 16 core tables exist before it returns, and
+  [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  reads its table list from a database that itself came from
+  [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md).
+  Every guard below was therefore dead on all supported paths:
+
+  - [`define_effect_intercept()`](https://austin-putz.github.io/tidybreed/reference/define_effect_intercept.md)
+    — `phenotype_meta` existence check
+  - [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md),
+    [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md),
+    [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md)
+    — `trait_effects` existence checks
+  - [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)
+    — `ind_meta` existence check
+  - `schema.R` — the `has_meta` conditional and its `else` fallback in
+    both
+    [`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+    and
+    [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md),
+    plus the downstream `has_meta &&` clause
+  - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+    — the always-true `"phenotype_var_comp" %in% pop$tables` clause in
+    the correlated-random-effect condition
+
+  These functions still reject bad input; the checks that actually fire
+  ([`.check_phenotype_exists()`](https://austin-putz.github.io/tidybreed/reference/dot-check_phenotype_exists.md),
+  the per-row `COUNT(*)` lookups) are unchanged.
+
+- **The `schema.R` legacy-database branch is gone.**
+  [`define_schema_description()`](https://austin-putz.github.io/tidybreed/reference/define_schema_description.md)
+  warned and returned early for databases “predating the `_schema_meta`
+  system table”. No such database can be produced by current code.
+
+- **All nine legacy `tests/test_*.R` dev scripts deleted**, along with
+  the tracked `tests/test_sge_adg_selection.pdf` artifact. None loaded
+  the package, so none ran standalone; none ran under `R CMD check`
+  (they are `.Rbuildignore`’d); they carried almost no assertions;
+  `test_dynamic_genome.R` called the removed `add_locus()` and
+  `test_formula_phenotype.R` the removed `add_offspring_gen()`. Every
+  topic they demonstrated is covered by `tests/testthat/`. The PDF was
+  **not** `.Rbuildignore`’d and had been shipping inside the package
+  tarball.
+
+### Testing
+
+- **`covr` added to `Suggests`** with a documented local-only workflow
+  in `CLAUDE.md`. There is no `test-coverage.yaml` and no Codecov badge;
+  coverage is a diagnostic for finding untested and dead code, not a
+  published metric.
+- **New `tests/testthat/test-define_effect_fixed_cov.R`** (9 tests) —
+  takes
+  [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md)
+  from 0% to 100%. Asserts the contribution model
+  `slope * (x - center)^poly_order` by exact arithmetic: with
+  `residual_var = 0` and no other effects,
+  `pheno_value == mean + tbv + contribution` exactly, so linear,
+  centered, quadratic, auto-centered, and multi-covariate-additivity
+  cases are all checked to full precision rather than by tolerance.
+- **New `tests/testthat/test-define_effect_intercept.R`** (7 tests) —
+  takes
+  [`define_effect_intercept()`](https://austin-putz.github.io/tidybreed/reference/define_effect_intercept.md)
+  from 0% to 100%. Covers update semantics, that the stored mean is what
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  applies, phenotype scoping, sign handling, input validation, and an
+  SQL-injection attempt on the phenotype name.
+- `effect_helpers.R` rose from 53% to 100% as a side effect. Overall R
+  coverage is 78.8%.
+
+### Internal
+
+- `.gitignore` now excludes `src/*.gcno`, `src/*.gcda`, and `*.gcov` —
+  gcov artifacts regenerated by every `covr` run.
+
 ## tidybreed 0.61.0 (2026-08-11)
 
 Fixes both issues recorded in `plans/two_errors.md`.
