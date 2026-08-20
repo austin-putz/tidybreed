@@ -1,3 +1,39 @@
+# tidybreed 0.63.1 (2026-08-20)
+
+Repairs drift between the schema registries in `R/sql_utils.R` and the columns
+`trait_effects` actually has, plus a regression test that prevents the same class
+of drift from returning silently.
+
+## Fixed
+
+- **`remove_rows()` could never delete from `trait_effects`.**
+  `TABLE_ROW_KEYS$trait_effects` still listed `trait_name`, but the column was
+  renamed to `phenotype_name` when the two-layer phenotype model landed. Every
+  single-table deletion against `trait_effects` aborted with
+  `"collected data is missing key column(s): trait_name"`.
+- **`mutate_table()` was not protecting three `trait_effects` columns.**
+  `TABLE_RESERVED_COLS$trait_effects` listed the same stale `trait_name` and
+  omitted `poly_order` and `null_class_action` entirely, so a user could
+  overwrite the `phenotype_name` foreign key — silently detaching effect rows
+  from their phenotype — or clobber either of the two newer columns.
+
+## Documentation
+
+- **`CLAUDE.md`: the `trait_effects` schema table matches the database again.**
+  It documented a `trait_name` column and was missing `poly_order` and
+  `null_class_action`. It now records the real primary key
+  `(phenotype_name, effect_name)` and notes that, despite the `trait_` prefix,
+  the table is keyed to `phenotype_meta` and belongs to the observation layer.
+
+## Testing
+
+- **`test-schema-registries.R`** checks every column named in
+  `TABLE_RESERVED_COLS`, `TABLE_ROW_KEYS`, and `TABLE_PRIMARY_KEYS` against the
+  live schema, so a renamed column fails loudly at test time rather than at a
+  distance inside `remove_rows()` or `mutate_table()`. Columns added later by
+  `ALTER TABLE` (`replicate`, `liability_value`, `cat_name`) are listed as
+  deliberate forward declarations rather than treated as drift.
+
 # tidybreed 0.63.0 (2026-08-19)
 
 Coverage for `add_tbv()`'s true-index feature, one real bug fix found while

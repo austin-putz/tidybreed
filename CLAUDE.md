@@ -411,20 +411,26 @@ Observation-layer metadata lives in `phenotype_meta`.
 ### `trait_effects`
 
 Non-additive-genetic, non-residual terms in the phenotype model (fixed and
-random effects). One row per (trait × effect).
+random effects). One row per (phenotype × effect). Despite the `trait_` name,
+this is an **observation-layer** table: it is keyed by `phenotype_name` (FK to
+`phenotype_meta`), not by `trait_name`.
 
-| Column        | Type    | Notes                                                    |
-|---------------|---------|----------------------------------------------------------|
-| trait_name    | VARCHAR |                                                          |
-| effect_name   | VARCHAR | e.g. "sex", "gen", "litter"                              |
-| effect_class  | VARCHAR | `"fixed_class"`, `"fixed_cov"`, or `"random"`            |
-| source_column | VARCHAR | Column in source table used as grouping variable         |
-| source_table  | VARCHAR | Table containing `source_column` (default `"ind_meta"`)  |
-| distribution  | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
-| levels_json   | VARCHAR | For fixed_class effects: JSON `{"M":30,"F":0}`           |
-| slope         | DOUBLE  | For fixed_cov effects: regression coefficient            |
-| center        | DOUBLE  | For fixed_cov effects: centering value                   |
-| value         | DOUBLE  | Rarely used scalar                                       |
+| Column            | Type    | Notes                                                    |
+|-------------------|---------|----------------------------------------------------------|
+| phenotype_name    | VARCHAR | FK to `phenotype_meta.phenotype_name`; PK part           |
+| effect_name       | VARCHAR | e.g. "sex", "gen", "litter"; PK part                     |
+| effect_class      | VARCHAR | `"fixed_class"`, `"fixed_cov"`, or `"random"`            |
+| source_column     | VARCHAR | Column in source table used as grouping variable         |
+| source_table      | VARCHAR | Table containing `source_column` (default `"ind_meta"`)  |
+| distribution      | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
+| levels_json       | VARCHAR | For fixed_class effects: JSON `{"M":30,"F":0}`           |
+| slope             | DOUBLE  | For fixed_cov effects: regression coefficient            |
+| center            | DOUBLE  | For fixed_cov effects: centering value                   |
+| value             | DOUBLE  | Rarely used scalar                                       |
+| poly_order        | INTEGER | Polynomial order for covariate effects; default 1        |
+| null_class_action | VARCHAR | Behavior when the grouping column is NULL; default `"skip"` |
+
+**Primary key**: `(phenotype_name, effect_name)`.
 
 ### `trait_var_comp`
 
