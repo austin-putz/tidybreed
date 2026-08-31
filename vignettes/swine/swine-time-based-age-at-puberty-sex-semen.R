@@ -1187,8 +1187,8 @@ pop %>%
   )
 
 # trait effects
-pop |> get_table("trait_effects")            # fixed effects
-pop |> get_table("trait_random_effects")     # random effects sampled
+pop |> get_table("phenotype_effects")            # fixed effects
+pop |> get_table("phenotype_random_effects")     # random effects sampled
 pop |> get_table("phenotype_components")     # for special cases but I forget now why we left it
 
 # test `add_phenotype()` function

@@ -65,50 +65,90 @@ test_that("every column in TABLE_ROW_KEYS and TABLE_PRIMARY_KEYS exists on its t
   }
 })
 
-test_that("trait_effects is registered against phenotype_name, not trait_name", {
+test_that("phenotype_effects is registered against phenotype_name, not trait_name", {
   # Regression: both registries listed trait_name after the column was renamed
-  # to phenotype_name, so remove_rows() on trait_effects could never work.
-  expect_true("phenotype_name" %in% TABLE_RESERVED_COLS$trait_effects)
-  expect_false("trait_name"    %in% TABLE_RESERVED_COLS$trait_effects)
-  expect_identical(TABLE_ROW_KEYS$trait_effects,
+  # to phenotype_name, so remove_rows() on phenotype_effects could never work.
+  expect_true("phenotype_name" %in% TABLE_RESERVED_COLS$phenotype_effects)
+  expect_false("trait_name"    %in% TABLE_RESERVED_COLS$phenotype_effects)
+  expect_identical(TABLE_ROW_KEYS$phenotype_effects,
                    c("phenotype_name", "effect_name"))
 })
 
-test_that("TABLE_RESERVED_COLS$trait_effects covers the whole table", {
+test_that("TABLE_RESERVED_COLS$phenotype_effects covers the whole table", {
   pop <- make_pop_all_tables()
   on.exit(close_pop(pop), add = TRUE)
-  expect_setequal(DBI::dbListFields(pop$db_conn, "trait_effects"),
-                  TABLE_RESERVED_COLS$trait_effects)
+  expect_setequal(DBI::dbListFields(pop$db_conn, "phenotype_effects"),
+                  TABLE_RESERVED_COLS$phenotype_effects)
 })
 
-test_that("remove_rows() deletes an exact row from trait_effects", {
+test_that("remove_rows() deletes an exact row from phenotype_effects", {
   # This is the user-visible failure the stale row key caused.
   pop <- make_pop_all_tables()
   on.exit(close_pop(pop), add = TRUE)
 
-  before <- get_table(pop, "trait_effects") |> dplyr::collect()
+  before <- get_table(pop, "phenotype_effects") |> dplyr::collect()
   expect_setequal(before$effect_name, c("sex", "pen"))
 
   pop |>
-    get_table("trait_effects") |>
+    get_table("phenotype_effects") |>
     dplyr::filter(effect_name == "sex") |>
     remove_rows(verbose = FALSE)
 
-  after <- get_table(pop, "trait_effects") |> dplyr::collect()
+  after <- get_table(pop, "phenotype_effects") |> dplyr::collect()
   expect_identical(after$effect_name, "pen")
   expect_identical(after$phenotype_name, "ADG")
 })
 
-test_that("mutate_table() blocks the renamed trait_effects reserved columns", {
+test_that("mutate_table() blocks the renamed phenotype_effects reserved columns", {
   pop <- make_pop_all_tables()
   on.exit(close_pop(pop), add = TRUE)
 
   expect_error(
-    pop |> get_table("trait_effects") |> mutate_table(phenotype_name = "X"),
+    pop |> get_table("phenotype_effects") |> mutate_table(phenotype_name = "X"),
     regexp = "reserved"
   )
   expect_error(
-    pop |> get_table("trait_effects") |> mutate_table(null_class_action = "error"),
+    pop |> get_table("phenotype_effects") |> mutate_table(null_class_action = "error"),
+    regexp = "reserved"
+  )
+})
+
+
+test_that("package-managed tables reserve every column they have", {
+  # Regression: founder_haplotypes, phenotype_components, and
+  # phenotype_random_effects had no TABLE_RESERVED_COLS entry at all, so
+  # mutate_table() blocked nothing on them and a user could overwrite e.g.
+  # phenotype_random_effects.draw_value or phenotype_components.contributor_type
+  # in place. Tables written exclusively by a define_*/add_* function reserve
+  # all of their columns; only entity-shaped tables leave room for user columns.
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  managed <- c("founder_haplotypes", "phenotype_components",
+               "phenotype_random_effects", "phenotype_effects", "genome_effects",
+               "phenotype_meta", "ind_true_index")
+
+  for (tbl in managed) {
+    expect_true(tbl %in% names(TABLE_RESERVED_COLS), info = tbl)
+    expected <- setdiff(TABLE_RESERVED_COLS[[tbl]], DEFERRED_COLS[[tbl]])
+    expect_setequal(DBI::dbListFields(pop$db_conn, tbl), expected)
+  }
+})
+
+test_that("mutate_table() blocks writes to the newly registered tables", {
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  expect_error(
+    pop |> get_table("founder_haplotypes") |> mutate_table(allele = 1L),
+    regexp = "reserved"
+  )
+  expect_error(
+    pop |> get_table("phenotype_random_effects") |> mutate_table(draw_value = 1),
+    regexp = "reserved"
+  )
+  expect_error(
+    pop |> get_table("phenotype_components") |> mutate_table(contributor_type = "dam"),
     regexp = "reserved"
   )
 })

@@ -66,12 +66,20 @@ validate_sql_identifier <- function(name, what = "identifier",
 
 #' Reserved columns per table (cannot be modified by the user)
 #'
+#' A table absent from this list is unprotected: `mutate_table()` will happily
+#' overwrite any column on it. Tables written and owned exclusively by a
+#' `define_*`/`add_*` function (`founder_haplotypes`, `phenotype_components`,
+#' `phenotype_random_effects`, `genome_effects`, ...) therefore list **every** column.
+#' Only entity-shaped tables that users legitimately annotate — `ind_meta`,
+#' `genome_meta`, `ind_phenotype`, `index_meta` — leave room for user columns.
+#'
 #' @keywords internal
 TABLE_RESERVED_COLS <- list(
   "_schema_meta"   = c("id_schema_meta", "object_type", "table_name",
                        "column_name", "description", "notes"),
   ind_meta         = c("id_ind", "id_parent_1", "id_parent_2", "line_name", "sex", "ploidy", "replicate"),
   genome_meta      = c("locus_id", "locus_name", "chr", "chr_name", "pos_bp"),
+  founder_haplotypes = c("line_name", "haplotype_id", "locus_name", "allele"),
   genome_map       = c("id_genome_map", "locus_id", "locus_name", "sex",
                        "line_name", "map_name", "pos_cM"),
   genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
@@ -95,9 +103,17 @@ TABLE_RESERVED_COLS <- list(
                        "prevalence", "thresholds", "cat_values", "cat_names",
                        "store_liability", "missing_component_action",
                        "formula_tbv", "formula"),
-  trait_effects    = c("phenotype_name", "effect_name", "effect_class", "source_column",
+  phenotype_effects    = c("phenotype_name", "effect_name", "effect_class", "source_column",
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value", "poly_order", "null_class_action"),
+  phenotype_random_effects = c("phenotype_name", "effect_name", "level",
+                           "draw_value", "date_sampled"),
+  phenotype_components = c("id_phenotype_comp", "phenotype_name", "source_trait_name",
+                           "contributor_type", "group_column", "group_table",
+                           "aggregation", "weight", "weight_type", "covariate_name",
+                           "covariate_table", "poly_order", "poly_scale_min",
+                           "poly_scale_max", "genome_effect_types", "missing_action",
+                           "contributor_filter"),
   trait_var_comp   = c("id_trait_var_comp", "effect_name", "trait_name_1", "trait_name_2", "cov_value"),
   phenotype_var_comp = c("id_phenotype_var_comp", "effect_name", "phenotype_name_1",
                          "phenotype_name_2", "cov_value", "condition_column",
@@ -152,7 +168,7 @@ TABLE_ROW_KEYS <- list(
   ind_crossover    = "id_crossover",
   chr_inheritance   = c("chr_name", "offspring_sex", "line_name"),
   chr_recombination = c("chr_name", "parent_sex", "line_name"),
-  trait_effects    = c("phenotype_name", "effect_name"),
+  phenotype_effects    = c("phenotype_name", "effect_name"),
   trait_var_comp     = "id_trait_var_comp",
   phenotype_var_comp = "id_phenotype_var_comp",
   index_meta         = "id_index_name"
@@ -213,7 +229,7 @@ SYSTEM_TABLES <- c(
   "chr_inheritance", "chr_recombination",
   "founder_haplotypes",
   "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
-  "trait_meta", "trait_effects", "trait_var_comp", "trait_random_effects",
+  "trait_meta", "phenotype_effects", "trait_var_comp", "phenotype_random_effects",
   "phenotype_meta", "phenotype_components", "phenotype_var_comp",
   "index_meta", "ind_index", "ind_true_index"
 )

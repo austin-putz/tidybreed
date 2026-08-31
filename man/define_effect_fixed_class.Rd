@@ -50,7 +50,7 @@ like \code{sex} that should never be missing.
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Inserts a row into \code{trait_effects} representing a discrete fixed effect:
+Inserts a row into \code{phenotype_effects} representing a discrete fixed effect:
 each level of \code{source_column} maps to a numeric shift on the phenotype
 scale. The \code{null_class_action} argument controls what happens when an
 individual has a \code{NULL} value for \code{source_column} at phenotyping time.

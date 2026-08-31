@@ -26,7 +26,7 @@ to their data.txt column numbers (as returned by \code{\link[=build_data_file]{b
 effect_name), as returned by \code{\link[=build_data_file]{build_data_file()}}}
 
 \item{effects_df}{data.frame of (trait_name x effect_name) fixed-effect
-rows from \code{trait_effects}, as returned by \code{\link[=build_data_file]{build_data_file()}}}
+rows from \code{phenotype_effects}, as returned by \code{\link[=build_data_file]{build_data_file()}}}
 
 \item{trait}{character vector of trait names (in model order)}
 

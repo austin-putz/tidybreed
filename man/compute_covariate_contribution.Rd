@@ -9,7 +9,7 @@ compute_covariate_contribution(pop, phenotype_name, subset_df)
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
-\item{phenotype_name}{Character. Phenotype name to look up in \code{trait_effects}.}
+\item{phenotype_name}{Character. Phenotype name to look up in \code{phenotype_effects}.}
 
 \item{subset_df}{Data frame: the per-phenotype subset of \code{ind_meta} (already
 sex-filtered). Must contain \code{id_ind} and any \code{ind_meta} columns referenced

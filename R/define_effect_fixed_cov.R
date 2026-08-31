@@ -1,7 +1,7 @@
 #' Define a continuous covariate (regression) effect in a phenotype model
 #'
 #' @description
-#' Inserts a row into `trait_effects` representing a polynomial regression term.
+#' Inserts a row into `phenotype_effects` representing a polynomial regression term.
 #' At phenotyping time the contribution per individual is
 #' `slope * (source_column_value - center)^poly_order`. When `center` is `NULL`
 #' the mean of `source_column` is computed and stored automatically.
@@ -107,7 +107,7 @@ define_effect_fixed_cov <- function(pop,
     poly_order        = poly_order,
     null_class_action = NA_character_
   )
-  DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)
+  DBI::dbWriteTable(pop$db_conn, "phenotype_effects", row, append = TRUE)
 
   message("Added fixed-covariate effect '", effect_name, "' to phenotype '",
           phenotype_name, "' (slope = ", slope,

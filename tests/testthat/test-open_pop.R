@@ -171,7 +171,7 @@ test_that("ensure_trait_tables() tables are present after open_pop()", {
   pop <- open_pop(db_name = ":memory:")
   on.exit(close_pop(pop))
 
-  trait_tables <- c("trait_meta", "trait_effects", "ind_phenotype",
+  trait_tables <- c("trait_meta", "phenotype_effects", "ind_phenotype",
                     "ind_tbv", "ind_ebv", "index_meta", "ind_index")
   expect_true(all(trait_tables %in% pop$tables))
 })

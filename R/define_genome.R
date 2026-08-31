@@ -419,9 +419,6 @@ define_genome <- function(pop,
   validate_chr_inheritance(db_conn)
   validate_chr_recombination(db_conn)
 
-  # Register genome-table schema descriptions
-  register_schema_meta(db_conn, .genome_table_descriptions())
-
   DBI::dbExecute(db_conn, "COMMIT")
   committed <- TRUE
 

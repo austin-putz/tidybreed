@@ -632,25 +632,3 @@ test_that("simple phenotype (no formula, no components) still works", {
   expect_equal(nrow(ph), 40L)
 })
 
-test_that("old DB without formula_tbv/formula columns gets migrated by ensure_trait_tables", {
-  set.seed(504)
-  pop <- make_formula_pop("fE4")
-  on.exit(close_pop(pop))
-
-  # Manually drop the new columns to simulate a pre-v0.34.0 database
-  DBI::dbExecute(pop$db_conn,
-    "ALTER TABLE phenotype_meta DROP COLUMN formula_tbv")
-  DBI::dbExecute(pop$db_conn,
-    "ALTER TABLE phenotype_meta DROP COLUMN formula")
-
-  cols_before <- DBI::dbListFields(pop$db_conn, "phenotype_meta")
-  expect_false("formula_tbv" %in% cols_before)
-  expect_false("formula"     %in% cols_before)
-
-  # Calling define_trait triggers ensure_trait_tables which should re-add them
-  pop <- define_trait(pop, "ADG", target_add_var = 0.4)
-
-  cols_after <- DBI::dbListFields(pop$db_conn, "phenotype_meta")
-  expect_true("formula_tbv" %in% cols_after)
-  expect_true("formula"     %in% cols_after)
-})

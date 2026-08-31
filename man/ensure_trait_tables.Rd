@@ -14,6 +14,7 @@ The \code{tidybreed_pop} object with \verb{$tables} updated.
 }
 \description{
 Creates all core trait / phenotype / individual tables if they do not already
-exist, and runs any necessary schema migrations on older databases. Idempotent.
+exist. Idempotent. Pre-1.0.0 there is no cross-version compatibility contract,
+so this creates the current schema only and never migrates an older database.
 }
 \keyword{internal}

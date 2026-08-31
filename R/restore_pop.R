@@ -74,9 +74,6 @@ restore_pop <- function(db_path,
     }
   )
 
-  # Migrate old table names before reading table list
-  .migrate_var_comp_tables(db_conn)
-
   existing_tables <- DBI::dbListTables(db_conn)
 
   # ind_meta is always created by open_pop() — use it as the minimum check

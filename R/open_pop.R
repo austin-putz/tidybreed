@@ -157,7 +157,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   .create_core_tables(db_conn)
 
   # Register schema descriptions for core tables
-  register_schema_meta(db_conn, .core_layer_descriptions())
+  register_schema_meta(db_conn, .all_schema_descriptions())
 
   tables_created <- c(
     "_schema_meta", "ind_meta", "trait_var_comp", "genome_effects",
@@ -351,50 +351,6 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       poly_order            INTEGER
     )
   ")
-
-  invisible(NULL)
-}
-
-
-#' Migrate old variance-component table names to the v0.42.0 naming convention
-#'
-#' Renames `trait_effect_cov` → `trait_var_comp` and
-#' `phenotype_residual_cov` → `phenotype_var_comp` in an existing database,
-#' adding the `effect_name` column (backfilled as 'residual') when needed.
-#' Called automatically by [restore_pop()].
-#'
-#' @param con An active DuckDB connection.
-#' @keywords internal
-.migrate_var_comp_tables <- function(con) {
-  existing <- DBI::dbListTables(con)
-
-  if ("trait_effect_cov" %in% existing && !"trait_var_comp" %in% existing) {
-    DBI::dbExecute(con, "ALTER TABLE trait_effect_cov RENAME TO trait_var_comp")
-    tryCatch(
-      DBI::dbExecute(con,
-        "ALTER TABLE trait_var_comp RENAME id_trait_effect_cov TO id_trait_var_comp"),
-      error = function(e) NULL  # column rename not supported in older DuckDB; harmless
-    )
-    message("[tidybreed] Migrated trait_effect_cov -> trait_var_comp")
-  }
-
-  if ("phenotype_residual_cov" %in% existing && !"phenotype_var_comp" %in% existing) {
-    DBI::dbExecute(con, "ALTER TABLE phenotype_residual_cov RENAME TO phenotype_var_comp")
-    tryCatch(
-      DBI::dbExecute(con,
-        "ALTER TABLE phenotype_var_comp RENAME id_residual_cov TO id_phenotype_var_comp"),
-      error = function(e) NULL
-    )
-    # Add effect_name column if not yet present; backfill existing rows as 'residual'
-    col_info <- DBI::dbGetQuery(con, "PRAGMA table_info('phenotype_var_comp')")
-    if (!"effect_name" %in% col_info$name) {
-      DBI::dbExecute(con,
-        "ALTER TABLE phenotype_var_comp ADD COLUMN effect_name VARCHAR DEFAULT 'residual'")
-      DBI::dbExecute(con,
-        "UPDATE phenotype_var_comp SET effect_name = 'residual' WHERE effect_name IS NULL")
-    }
-    message("[tidybreed] Migrated phenotype_residual_cov -> phenotype_var_comp")
-  }
 
   invisible(NULL)
 }

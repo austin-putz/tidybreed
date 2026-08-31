@@ -11,7 +11,7 @@
 #' }
 #'
 #' * `mean` comes from `phenotype_meta.mean`.
-#' * Fixed and random shifts come from `trait_effects` rows.
+#' * Fixed and random shifts come from `phenotype_effects` rows.
 #' * For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is the
 #'   standard additive TBV from `genome_effects` (computed via [add_tbv()],
 #'   which this function calls internally for every source trait it needs).
@@ -481,7 +481,7 @@ add_phenotype <- function(tbl,
       eff_rows <- DBI::dbGetQuery(
         pop$db_conn,
         paste0("SELECT phenotype_name, source_column, source_table ",
-               "FROM trait_effects WHERE effect_name = '", eff_safe, "' ",
+               "FROM phenotype_effects WHERE effect_name = '", eff_safe, "' ",
                "AND phenotype_name IN (", phenos_sql, ")")
       )
 
@@ -515,7 +515,7 @@ add_phenotype <- function(tbl,
         pn_safe2 <- gsub("'", "''", et)
         existing_lvls <- DBI::dbGetQuery(
           pop$db_conn,
-          paste0("SELECT level FROM trait_random_effects ",
+          paste0("SELECT level FROM phenotype_random_effects ",
                  "WHERE phenotype_name = '", pn_safe2,
                  "' AND effect_name = '", eff_safe, "'")
         )$level
@@ -540,7 +540,7 @@ add_phenotype <- function(tbl,
         pn_safe2 <- gsub("'", "''", et)
         existing_lvls <- DBI::dbGetQuery(
           pop$db_conn,
-          paste0("SELECT level FROM trait_random_effects ",
+          paste0("SELECT level FROM phenotype_random_effects ",
                  "WHERE phenotype_name = '", pn_safe2,
                  "' AND effect_name = '", eff_safe, "'")
         )$level
@@ -553,7 +553,7 @@ add_phenotype <- function(tbl,
           draw_value     = draws_mat[new_for_pheno, et],
           date_sampled   = Sys.Date()
         )
-        DBI::dbWriteTable(pop$db_conn, "trait_random_effects", new_df,
+        DBI::dbWriteTable(pop$db_conn, "phenotype_random_effects", new_df,
                           append = TRUE)
       }
     }

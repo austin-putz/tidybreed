@@ -299,14 +299,11 @@ test_that("define_genome() rolls back completely when a validator fails mid-flig
   expect_error(define_genome(pop, n_loci = 10, n_chr = 2, chr_len_Mb = 100),
                "simulated validator failure")
 
-  # All seven tables gone, the _schema_meta descriptions rolled back with them,
-  # and no orphaned temp views left registered on the connection.
+  # All seven tables gone, and no orphaned temp views left registered on the
+  # connection. _schema_meta description rows are NOT checked here: since
+  # v0.64.0 open_pop() registers every group's descriptions up front, so they
+  # are not written inside this transaction and correctly survive its rollback.
   expect_length(genome_tables_present(pop$db_conn), 0L)
-  expect_equal(
-    DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT COUNT(*) AS n FROM _schema_meta ",
-      "WHERE table_name IN ('genome_meta', 'genome_map', 'ind_crossover')"))$n,
-    0L)
   expect_length(
     grep("^__tmp",
          DBI::dbGetQuery(pop$db_conn, "SELECT view_name FROM duckdb_views()")$view_name),

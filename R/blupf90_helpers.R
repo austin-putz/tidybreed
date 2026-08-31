@@ -78,7 +78,7 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   effects_df <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT trait_name, effect_name, effect_class, source_column, source_table ",
-           "FROM trait_effects ",
+           "FROM phenotype_effects ",
            "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
            "AND effect_class IN ('fixed_class', 'fixed_cov') ",
            "ORDER BY effect_class, effect_name")
@@ -261,7 +261,7 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 #' @param distinct_effects data.frame of fixed effects (one row per
 #'   effect_name), as returned by [build_data_file()]
 #' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
-#'   rows from `trait_effects`, as returned by [build_data_file()]
+#'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
 #' @param pop tidybreed_pop; used to look up residual and additive genetic
 #'   (co)variance matrices via [load_phenotype_cov()] and [load_trait_cov()]
@@ -380,7 +380,7 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 #'   effect_name), as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
 #' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
-#'   rows from `trait_effects`, as returned by [build_data_file()]
+#'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param chip_name character or NULL; chip name to report in the genotype
 #'   file section (omitted entirely when NULL)
 #' @param n_loci integer; number of loci written to the genotype file

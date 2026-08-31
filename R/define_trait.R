@@ -27,7 +27,7 @@
 #' @param description Character. Free-text description of the trait.
 #' @param units Character. Measurement units, e.g. `"kg"`, `"count"`.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
-#'   exists, replace its `trait_meta` row and clear associated `trait_effects`
+#'   exists, replace its `trait_meta` row and clear associated `phenotype_effects`
 #'   rows. Default `FALSE` errors if the trait already exists.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
@@ -97,7 +97,7 @@ define_trait <- function(pop,
       paste0("DELETE FROM trait_meta WHERE trait_name = '",
              gsub("'", "''", trait_name), "'"))
     DBI::dbExecute(pop$db_conn,
-      paste0("DELETE FROM trait_effects WHERE phenotype_name = '",
+      paste0("DELETE FROM phenotype_effects WHERE phenotype_name = '",
              gsub("'", "''", trait_name), "'"))
   }
 
@@ -153,7 +153,8 @@ define_trait <- function(pop,
 #'
 #' @description
 #' Creates all core trait / phenotype / individual tables if they do not already
-#' exist, and runs any necessary schema migrations on older databases. Idempotent.
+#' exist. Idempotent. Pre-1.0.0 there is no cross-version compatibility contract,
+#' so this creates the current schema only and never migrates an older database.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @return The `tidybreed_pop` object with `$tables` updated.
@@ -178,8 +179,8 @@ ensure_trait_tables <- function(pop) {
       )
     ",
 
-    trait_effects = "
-      CREATE TABLE trait_effects (
+    phenotype_effects = "
+      CREATE TABLE phenotype_effects (
         phenotype_name    VARCHAR NOT NULL,
         effect_name       VARCHAR NOT NULL,
         effect_class      VARCHAR,
@@ -196,8 +197,8 @@ ensure_trait_tables <- function(pop) {
       )
     ",
 
-    trait_random_effects = "
-      CREATE TABLE trait_random_effects (
+    phenotype_random_effects = "
+      CREATE TABLE phenotype_random_effects (
         phenotype_name VARCHAR NOT NULL,
         effect_name    VARCHAR NOT NULL,
         level          VARCHAR NOT NULL,
@@ -339,88 +340,7 @@ ensure_trait_tables <- function(pop) {
     }
   }
 
-  # ── Migrations for databases created before v0.31.0 ──────────────────────
-
-  # ind_tbv: drop date_calc if present
-  if ("ind_tbv" %in% existing) {
-    tbv_cols <- DBI::dbListFields(con, "ind_tbv")
-    if ("date_calc" %in% tbv_cols)
-      DBI::dbExecute(con, "ALTER TABLE ind_tbv DROP COLUMN date_calc")
-  }
-
-  # ind_ebv: drop date_calc, add eval_number if needed
-  if ("ind_ebv" %in% existing) {
-    ebv_cols <- DBI::dbListFields(con, "ind_ebv")
-    if ("date_calc" %in% ebv_cols)
-      DBI::dbExecute(con, "ALTER TABLE ind_ebv DROP COLUMN date_calc")
-    if (!"eval_number" %in% ebv_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE ind_ebv ADD COLUMN eval_number INTEGER DEFAULT 1")
-  }
-
-  # index_meta: add economic_weight if missing
-  if ("index_meta" %in% existing) {
-    idx_cols <- DBI::dbListFields(con, "index_meta")
-    if (!"economic_weight" %in% idx_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE index_meta ADD COLUMN economic_weight DOUBLE")
-  }
-
-  # trait_effects: rename trait_name → phenotype_name; add poly_order + null_class_action
-  if ("trait_effects" %in% existing) {
-    te_cols <- DBI::dbListFields(con, "trait_effects")
-    if ("trait_name" %in% te_cols && !"phenotype_name" %in% te_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE trait_effects RENAME COLUMN trait_name TO phenotype_name")
-    te_cols <- DBI::dbListFields(con, "trait_effects")   # re-read after rename
-    for (new_col in c("source_table VARCHAR", "slope DOUBLE", "center DOUBLE",
-                      "poly_order INTEGER", "null_class_action VARCHAR")) {
-      col_nm <- strsplit(new_col, " ")[[1]][1]
-      if (!col_nm %in% te_cols)
-        DBI::dbExecute(con,
-          paste0("ALTER TABLE trait_effects ADD COLUMN ", new_col))
-    }
-  }
-
-  # trait_random_effects: rename trait_name → phenotype_name
-  if ("trait_random_effects" %in% existing) {
-    tre_cols <- DBI::dbListFields(con, "trait_random_effects")
-    if ("trait_name" %in% tre_cols && !"phenotype_name" %in% tre_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE trait_random_effects RENAME COLUMN trait_name TO phenotype_name")
-  }
-
-  # ind_phenotype: rename trait_name → phenotype_name
-  if ("ind_phenotype" %in% existing) {
-    ip_cols <- DBI::dbListFields(con, "ind_phenotype")
-    if ("trait_name" %in% ip_cols && !"phenotype_name" %in% ip_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE ind_phenotype RENAME COLUMN trait_name TO phenotype_name")
-  }
-
-  # Add missing_component_action to phenotype_meta if not present (v0.31.x → v0.32.0)
-  if ("phenotype_meta" %in% DBI::dbListTables(con)) {
-    pm_cols <- DBI::dbListFields(con, "phenotype_meta")
-    if (!"missing_component_action" %in% pm_cols)
-      DBI::dbExecute(con,
-        "ALTER TABLE phenotype_meta ADD COLUMN missing_component_action VARCHAR DEFAULT 'skip'")
-  }
-
-  # Add formula_tbv and formula to phenotype_meta (v0.32.x → v0.34.0)
-  if ("phenotype_meta" %in% DBI::dbListTables(con)) {
-    pm_cols <- DBI::dbListFields(con, "phenotype_meta")
-    if (!"formula_tbv" %in% pm_cols)
-      DBI::dbExecute(con, "ALTER TABLE phenotype_meta ADD COLUMN formula_tbv VARCHAR")
-    if (!"formula" %in% pm_cols)
-      DBI::dbExecute(con, "ALTER TABLE phenotype_meta ADD COLUMN formula VARCHAR")
-  }
-
   pop$tables <- unique(c(pop$tables, names(ddl)))
-
-  # Register trait-layer schema descriptions (guarded for legacy databases)
-  if ("_schema_meta" %in% DBI::dbListTables(con)) {
-    register_schema_meta(con, .trait_layer_descriptions())
-  }
 
   pop
 }

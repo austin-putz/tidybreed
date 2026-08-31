@@ -63,7 +63,7 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 }
 \itemize{
 \item \code{mean} comes from \code{phenotype_meta.mean}.
-\item Fixed and random shifts come from \code{trait_effects} rows.
+\item Fixed and random shifts come from \code{phenotype_effects} rows.
 \item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{TBV_i} is the
 standard additive TBV from \code{genome_effects} (computed via \code{\link[=add_tbv]{add_tbv()}},
 which this function calls internally for every source trait it needs).

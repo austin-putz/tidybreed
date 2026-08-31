@@ -7,6 +7,11 @@
 TABLE_RESERVED_COLS
 }
 \description{
-Reserved columns per table (cannot be modified by the user)
+A table absent from this list is unprotected: \code{mutate_table()} will happily
+overwrite any column on it. Tables written and owned exclusively by a
+\verb{define_*}/\verb{add_*} function (\code{founder_haplotypes}, \code{phenotype_components},
+\code{phenotype_random_effects}, \code{genome_effects}, ...) therefore list \strong{every} column.
+Only entity-shaped tables that users legitimately annotate — \code{ind_meta},
+\code{genome_meta}, \code{ind_phenotype}, \code{index_meta} — leave room for user columns.
 }
 \keyword{internal}

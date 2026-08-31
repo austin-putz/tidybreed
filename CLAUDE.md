@@ -371,6 +371,9 @@ Founder haplotype pool in **long** format. Created by
 Logical key `(line_name, haplotype_id, locus_name)` enforced in R (nullable
 `line_name`), matching the `index_meta` convention.
 
+**Reserved**: all columns (the table is a sampling pool written exclusively by
+`define_founder_haplotypes()` and read by `add_founders()`).
+
 ### `ind_meta`
 
 Individual-level metadata. Created empty by `open_pop()`; rows
@@ -407,30 +410,6 @@ Observation-layer metadata lives in `phenotype_meta`.
 `type`, `expressed_sex`, `repeatable`, `mean`, `min_value`, `max_value`,
 `prevalence`, `thresholds`, `cat_values`, `cat_names`, `residual_var`,
 `index_weight`, `economic_value`.
-
-### `trait_effects`
-
-Non-additive-genetic, non-residual terms in the phenotype model (fixed and
-random effects). One row per (phenotype × effect). Despite the `trait_` name,
-this is an **observation-layer** table: it is keyed by `phenotype_name` (FK to
-`phenotype_meta`), not by `trait_name`.
-
-| Column            | Type    | Notes                                                    |
-|-------------------|---------|----------------------------------------------------------|
-| phenotype_name    | VARCHAR | FK to `phenotype_meta.phenotype_name`; PK part           |
-| effect_name       | VARCHAR | e.g. "sex", "gen", "litter"; PK part                     |
-| effect_class      | VARCHAR | `"fixed_class"`, `"fixed_cov"`, or `"random"`            |
-| source_column     | VARCHAR | Column in source table used as grouping variable         |
-| source_table      | VARCHAR | Table containing `source_column` (default `"ind_meta"`)  |
-| distribution      | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
-| levels_json       | VARCHAR | For fixed_class effects: JSON `{"M":30,"F":0}`           |
-| slope             | DOUBLE  | For fixed_cov effects: regression coefficient            |
-| center            | DOUBLE  | For fixed_cov effects: centering value                   |
-| value             | DOUBLE  | Rarely used scalar                                       |
-| poly_order        | INTEGER | Polynomial order for covariate effects; default 1        |
-| null_class_action | VARCHAR | Behavior when the grouping column is NULL; default `"skip"` |
-
-**Primary key**: `(phenotype_name, effect_name)`.
 
 ### `trait_var_comp`
 
@@ -504,6 +483,53 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 `add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
+
+**Reserved**: all columns (managed exclusively by
+`define_phenotype(..., components = ...)`).
+
+### `phenotype_effects`
+
+Non-additive-genetic, non-residual terms in the phenotype model (fixed and
+random effects). One row per (phenotype × effect). An **observation-layer**
+table, keyed by `phenotype_name` (FK to `phenotype_meta`), not by `trait_name`.
+
+| Column            | Type    | Notes                                                    |
+|-------------------|---------|----------------------------------------------------------|
+| phenotype_name    | VARCHAR | FK to `phenotype_meta.phenotype_name`; PK part           |
+| effect_name       | VARCHAR | e.g. "sex", "gen", "litter"; PK part                     |
+| effect_class      | VARCHAR | `"fixed_class"`, `"fixed_cov"`, or `"random"`            |
+| source_column     | VARCHAR | Column in source table used as grouping variable         |
+| source_table      | VARCHAR | Table containing `source_column` (default `"ind_meta"`)  |
+| distribution      | VARCHAR | For random effects: `"normal"`, `"gamma"`, `"uniform"`   |
+| levels_json       | VARCHAR | For fixed_class effects: JSON `{"M":30,"F":0}`           |
+| slope             | DOUBLE  | For fixed_cov effects: regression coefficient            |
+| center            | DOUBLE  | For fixed_cov effects: centering value                   |
+| value             | DOUBLE  | Rarely used scalar                                       |
+| poly_order        | INTEGER | Polynomial order for covariate effects; default 1        |
+| null_class_action | VARCHAR | Behavior when the grouping column is NULL; default `"skip"` |
+
+**Primary key**: `(phenotype_name, effect_name)`.
+
+**Reserved**: all columns (managed by `define_effect_fixed_class()`,
+`define_effect_fixed_cov()`, and `define_effect_random()`).
+
+### `phenotype_random_effects`
+
+Sampled draws for the random effects declared in `phenotype_effects`. One row per
+(phenotype × effect × level), written by `define_effect_random()` and read by
+`add_phenotype()`. Pure observation-layer noise — no genetic content.
+
+| Column         | Type    | Notes                                              |
+|----------------|---------|-----------------------------------------------------|
+| phenotype_name | VARCHAR | FK to `phenotype_meta.phenotype_name`; PK part     |
+| effect_name    | VARCHAR | FK to `phenotype_effects.effect_name`; PK part     |
+| level          | VARCHAR | Level of the grouping column; PK part              |
+| draw_value     | DOUBLE  | Sampled deviation for that level                   |
+| date_sampled   | DATE    | When the draw was taken                            |
+
+**Primary key**: `(phenotype_name, effect_name, level)`.
+
+**Reserved**: all columns (managed exclusively by `define_effect_random()`).
 
 ### `phenotype_var_comp`
 
@@ -847,6 +873,43 @@ pop |>
   dplyr::filter(pheno_value > 500) |>
   add_phenotype("ADG2")
 ```
+
+### `schema()` / `describe_table()`
+
+`R/schema.R`
+
+`schema(pop)` returns a tibble of every table with its display group, row count,
+column count and description, and prints it grouped by pipeline stage under
+section headings. `describe_table(pop, "name")` drills into one table's columns.
+Descriptions live in the `_schema_meta` table and travel with the `.duckdb` file.
+
+```r
+schema(pop)                                   # grouped, empty tables collapsed
+schema(pop, show_empty = TRUE)                # one row per table
+schema(pop, include_system = TRUE)            # also list _schema_meta
+schema(pop, order = "rows")                   # flat, biggest first
+schema(pop, order = "size", sizes = TRUE)     # on-disk bytes (issues CHECKPOINT)
+subset(schema(pop), table_group == "Genome")  # the grouping is data, not text
+```
+
+The header reports whole-database size from `PRAGMA database_size` — the file
+size plus the WAL when it is uncheckpointed, or memory usage for an in-memory
+population. `sizes = TRUE` is opt-in because per-table sizes require a
+`CHECKPOINT`, which is a write; the resulting column always prints its caveat
+footnote (256 KiB block quantization, and per-table sizes not summing to the
+file total).
+
+**Maintenance obligation when adding a table.** Two hard-coded lists in
+`R/schema.R` must name every table:
+
+1. `.schema_table_order()` — the display group and in-group workflow position.
+2. The matching `.<group>_descriptions()` helper, aggregated by
+   `.all_schema_descriptions()` and registered once by `open_pop()`.
+
+A table missing from the first prints under **User tables**; a table missing from
+the second prints `(no description)`. Both are deliberately visible failures
+rather than silent misfiling, and `tests/testthat/test-schema-print.R` asserts
+that the two lists and `SYSTEM_TABLES` name the same tables.
 
 ### `define_trait()` / `define_additive_effects()`
 

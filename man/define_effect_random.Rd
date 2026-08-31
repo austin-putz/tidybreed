@@ -42,9 +42,9 @@ already stored via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matr
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Inserts a row into \code{trait_effects} for a random effect. One value is drawn
+Inserts a row into \code{phenotype_effects} for a random effect. One value is drawn
 per distinct level of \code{source_column}; all individuals sharing that level
-receive the same shift. Drawn values are stored in \code{trait_random_effects}
+receive the same shift. Drawn values are stored in \code{phenotype_random_effects}
 so they are reproducible across repeated calls to \code{\link[=add_phenotype]{add_phenotype()}} without
 requiring a fixed \code{seed}.
 

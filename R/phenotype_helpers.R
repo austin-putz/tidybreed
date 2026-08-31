@@ -95,7 +95,7 @@ clip_count <- function(x, min_value = NA_real_, max_value = NA_real_) {
 #' Compute the covariate contribution for each individual for a single phenotype
 #'
 #' @param pop A `tidybreed_pop` object.
-#' @param phenotype_name Character. Phenotype name to look up in `trait_effects`.
+#' @param phenotype_name Character. Phenotype name to look up in `phenotype_effects`.
 #' @param subset_df Data frame: the per-phenotype subset of `ind_meta` (already
 #'   sex-filtered). Must contain `id_ind` and any `ind_meta` columns referenced
 #'   by effects.
@@ -108,7 +108,7 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
   pn_safe <- gsub("'", "''", phenotype_name)
   effects  <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT * FROM trait_effects WHERE phenotype_name = '", pn_safe, "'")
+    paste0("SELECT * FROM phenotype_effects WHERE phenotype_name = '", pn_safe, "'")
   )
   n_ind <- nrow(subset_df)
   if (nrow(effects) == 0) return(list(contribution = rep(0, n_ind), n_skipped = 0L))
@@ -205,12 +205,12 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
       total <- total + slope_val * (vals - center_val)^p_ord
 
     } else {
-      # Random effect — store/reuse draws in trait_random_effects
+      # Random effect — store/reuse draws in phenotype_random_effects
       unique_lvls <- unique(as.character(group[!is.na(group)]))
 
       existing_draws <- DBI::dbGetQuery(
         pop$db_conn,
-        paste0("SELECT level, draw_value FROM trait_random_effects ",
+        paste0("SELECT level, draw_value FROM phenotype_random_effects ",
                "WHERE phenotype_name = '", pn_safe,
                "' AND effect_name = '", gsub("'", "''", e$effect_name), "'")
       )
@@ -244,7 +244,7 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
           draw_value     = new_draws,
           date_sampled   = as.Date(Sys.Date())
         )
-        DBI::dbWriteTable(pop$db_conn, "trait_random_effects", new_df,
+        DBI::dbWriteTable(pop$db_conn, "phenotype_random_effects", new_df,
                           append = TRUE)
         existing_map <- c(existing_map, stats::setNames(new_draws, new_lvls))
       }

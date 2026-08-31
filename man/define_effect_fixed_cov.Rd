@@ -45,7 +45,7 @@ Default \code{"ind_meta"}.}
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Inserts a row into \code{trait_effects} representing a polynomial regression term.
+Inserts a row into \code{phenotype_effects} representing a polynomial regression term.
 At phenotyping time the contribution per individual is
 \code{slope * (source_column_value - center)^poly_order}. When \code{center} is \code{NULL}
 the mean of \code{source_column} is computed and stored automatically.

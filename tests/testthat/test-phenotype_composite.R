@@ -172,9 +172,9 @@ test_that("repeatable phenotype with PE random effect produces multiple records"
   expect_equal(nrow(ph), 80)
   expect_equal(max(ph$pheno_number), 2)
 
-  # PE draws should be stored in trait_random_effects
+  # PE draws should be stored in phenotype_random_effects
   pe_draws <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM trait_random_effects WHERE phenotype_name = 'LS' AND effect_name = 'pe'")
+    "SELECT * FROM phenotype_random_effects WHERE phenotype_name = 'LS' AND effect_name = 'pe'")
   expect_equal(nrow(pe_draws), 40)  # one draw per individual
 })
 

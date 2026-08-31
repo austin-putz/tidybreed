@@ -1,9 +1,9 @@
 #' Define a random group effect in a phenotype model
 #'
 #' @description
-#' Inserts a row into `trait_effects` for a random effect. One value is drawn
+#' Inserts a row into `phenotype_effects` for a random effect. One value is drawn
 #' per distinct level of `source_column`; all individuals sharing that level
-#' receive the same shift. Drawn values are stored in `trait_random_effects`
+#' receive the same shift. Drawn values are stored in `phenotype_random_effects`
 #' so they are reproducible across repeated calls to [add_phenotype()] without
 #' requiring a fixed `seed`.
 #'
@@ -99,7 +99,7 @@ define_effect_random <- function(pop,
     poly_order        = NA_integer_,
     null_class_action = NA_character_
   )
-  DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)
+  DBI::dbWriteTable(pop$db_conn, "phenotype_effects", row, append = TRUE)
 
   message("Added random effect '", effect_name, "' to phenotype '", phenotype_name,
           "' (variance = ", variance, ", distribution = ", distribution, ").")

@@ -44,7 +44,7 @@ cov_frame <- function(pop) {
 }
 
 
-test_that("define_effect_fixed_cov() writes a correct trait_effects row", {
+test_that("define_effect_fixed_cov() writes a correct phenotype_effects row", {
   set.seed(1)
   pop <- make_cov_pop("fc_row")
   pop <- setup_cov_trait(pop)
@@ -53,7 +53,7 @@ test_that("define_effect_fixed_cov() writes a correct trait_effects row", {
                                  slope = 2, center = 0)
 
   row <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM trait_effects WHERE effect_name = 'age'")
+    "SELECT * FROM phenotype_effects WHERE effect_name = 'age'")
 
   expect_equal(nrow(row), 1)
   expect_equal(row$phenotype_name, "ADG")
@@ -132,7 +132,7 @@ test_that("NULL center is auto-computed as the column mean", {
   )
 
   row <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT center FROM trait_effects WHERE effect_name = 'age'")
+    "SELECT center FROM phenotype_effects WHERE effect_name = 'age'")
   expect_equal(row$center, 55)
 
   # And the stored centre is the one actually applied
@@ -210,7 +210,7 @@ test_that("duplicate effect_name requires overwrite = TRUE", {
                                  slope = 9, center = 0, overwrite = TRUE)
 
   row <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM trait_effects WHERE effect_name = 'age'")
+    "SELECT * FROM phenotype_effects WHERE effect_name = 'age'")
   expect_equal(nrow(row), 1)   # replaced, not appended
   expect_equal(row$slope, 9)
 

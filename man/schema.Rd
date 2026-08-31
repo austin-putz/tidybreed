@@ -4,27 +4,107 @@
 \alias{schema}
 \title{View table-level descriptions for a tidybreed population}
 \usage{
-schema(pop)
+schema(
+  pop,
+  order = c("pipeline", "name", "rows", "size"),
+  show_empty = FALSE,
+  include_system = FALSE,
+  sizes = FALSE
+)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object, or a \code{tidybreed_table} from
 \code{\link[=get_table]{get_table()}} (its \code{pop} reference is used).}
+
+\item{order}{One of \code{"pipeline"} (default, grouped by build stage with
+headings), \code{"name"} (flat alphabetical), \code{"rows"} (flat, largest row count
+first) or \code{"size"} (flat, largest on-disk size first). Group headings print
+only for \code{"pipeline"}; \code{table_group} stays in the returned tibble for all
+four. \code{"size"} requires \code{sizes = TRUE} and errors otherwise.}
+
+\item{show_empty}{Logical. \code{FALSE} (default) collapses each group's zero-row
+tables into a single \verb{+ n empty: ...} line — on a freshly built population
+most tables are empty and would otherwise bury the ones with data. \code{TRUE}
+prints every table on its own row.}
+
+\item{include_system}{Logical. \code{FALSE} (default) hides the \verb{_schema_meta}
+system table; \code{TRUE} lists it under a \strong{System} group.}
+
+\item{sizes}{Logical. \code{FALSE} (default). \code{TRUE} adds a per-table
+\code{size_bytes} column and prints a \code{Size} column with a mandatory caveat
+footnote. Opt-in because collecting it requires a \code{CHECKPOINT}, which
+writes to the database — see \strong{Size reporting}.}
 }
 \value{
 A tibble of class \code{tidybreed_schema} with columns
-\code{table_name}, \code{n_rows}, \code{n_cols}, and \code{description}.
-Printed via \code{\link[=print.tidybreed_schema]{print.tidybreed_schema()}}.
+\code{table_name}, \code{table_group}, \code{n_rows}, \code{n_cols}, and \code{description}.
+Printed via \code{\link[=print.tidybreed_schema]{print.tidybreed_schema()}}. \code{table_group} is a factor whose
+level order is the display order, so the grouping is available as data for
+\code{filter()} / \code{split()} and not only as printed text.
 }
 \description{
 Returns a tibble of all user-visible tables with row counts, column counts,
 and descriptions from \verb{_schema_meta}. Print the result for an aligned
 overview; use \code{describe_table(pop, "name")} to drill into a specific table.
+
+Tables are ordered by pipeline stage — the order in which a population is
+built — and printed under group headings. The order does not depend on how
+the population was opened: \code{\link[=open_pop]{open_pop()}} populates \code{pop$tables} in creation
+order and \code{\link[=restore_pop]{restore_pop()}} in DuckDB catalog order, so before this the same
+\code{.duckdb} file printed differently depending on which one you used.
 }
+\section{Size reporting}{
+
+\code{sizes = TRUE} adds a per-table \code{Size} column. Three things about it are
+load-bearing:
+\enumerate{
+\item \strong{It writes.} DuckDB has no direct per-table byte count; the workable
+route is \verb{PRAGMA storage_info()}, and before a \code{CHECKPOINT} recently
+written data carries \code{block_id = -1} so every table reports zero. \code{schema()}
+therefore issues a \code{CHECKPOINT} when \code{sizes = TRUE}, and only then. This is
+the sole reason the argument is opt-in rather than always on.
+\item \strong{It is quantized.} Size is on-disk storage attributed in whole 256 KiB
+blocks, so small tables are not distinguishable: most read as 0.25 MiB, and
+a table small enough to live in the catalog reads as 0.00 MiB while still
+holding rows.
+\item \strong{It does not add up.} Per-table sizes sum to less than the database total
+in the header, because catalog and header blocks are not attributed to any
+table. Blocks are not shared between tables, so the attribution is sound as
+far as it goes.
+}
+
+Caveats 2 and 3 are printed as a footnote under the table whenever the column
+appears; the footnote has no suppression argument. For an in-memory population
+there are no blocks at all, so \code{sizes = TRUE} warns and omits the column.
+}
+
+\section{Database size}{
+
+The printed header reports the size of the whole database, read from
+\verb{PRAGMA database_size}. For a file-backed population this is the \code{.duckdb}
+file size, plus the write-ahead log when it is non-empty (the WAL is only
+folded into the file by a \code{CHECKPOINT}, which \code{schema()} deliberately does
+not issue — it is a write). For an in-memory population there is no file, so
+the header reports memory usage instead and says so.
+}
+
 \examples{
 \dontrun{
 pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
   define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 schema(pop)
+
+# Expand the collapsed empty tables, and show the system table
+schema(pop, show_empty = TRUE, include_system = TRUE)
+
+# The grouping is data, not just print formatting
+subset(schema(pop), table_group == "Genome")
+
+# Flat orderings answer "what is actually big here?"
+schema(pop, order = "rows")
+
+# On-disk sizes (issues a CHECKPOINT; file-backed populations only)
+schema(pop, order = "size", sizes = TRUE)
 }
 }
 \seealso{

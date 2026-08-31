@@ -250,7 +250,6 @@
   # seeded simulations), the FIRST batch uses dbWriteTable — which also creates
   # the table when new — and any remaining batches use register+INSERT. One
   # transaction makes the whole pool write atomic.
-  is_new_table <- !DBI::dbExistsTable(pop$db_conn, "founder_haplotypes")
   lname <- if (!is.null(line_name)) line_name else NA_character_
   B     <- resolve_batch_size(n_haplotypes, n_loci)
   conn  <- pop$db_conn
@@ -290,21 +289,6 @@
   committed <- TRUE
 
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
-
-  if (is_new_table) {
-    register_schema_meta(pop$db_conn, rbind(
-      .sm_tbl("founder_haplotypes",
-              "Pool of founder haplotypes in long format (one row per haplotype x locus) sampled by add_founders() to assign phased alleles."),
-      .sm_col("founder_haplotypes", "line_name",
-              "Founder line label matching add_founders() line_name. NULL = shared pool for all lines."),
-      .sm_col("founder_haplotypes", "haplotype_id",
-              "Sequential haplotype identifier within the pool (unique per line_name)"),
-      .sm_col("founder_haplotypes", "locus_name",
-              "Locus name; FK to genome_meta.locus_name"),
-      .sm_col("founder_haplotypes", "allele",
-              "Allele on this haplotype at this locus: 0 or 1")
-    ))
-  }
 
   pop
 }

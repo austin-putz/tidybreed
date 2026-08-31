@@ -57,9 +57,13 @@ register_schema_meta <- function(conn, entries) {
 }
 
 
-#' Pre-built descriptions for genome table columns (genome_meta, haplotype, genotype)
+#' Pre-built `_schema_meta` descriptions — Genome group
+#'
+#' Covers genome_meta, genome_map, genome_effects, and the two per-chromosome rule tables.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
 #' @keywords internal
-.genome_table_descriptions <- function() {
+.genome_descriptions <- function() {
   rbind(
     # genome_meta
     .sm_tbl("genome_meta",
@@ -76,8 +80,7 @@ register_schema_meta <- function(conn, entries) {
             "Physical position in base pairs along the chromosome (BIGINT, 1-based; VCF/PLINK convention)"),
     .sm_col("genome_meta", "founder_allele_freq",
             "Per-locus base allele frequency for founder haplotype sampling; present only when define_founder_haplotypes() has been called"),
-
-    # genome_map (genetic map, long)
+    # genome_map
     .sm_tbl("genome_map",
             "Genetic map in long format. One row per (locus x sex x line x map) with a defined genetic position (pos_cM). sex NULL = both sexes; line_name NULL = all lines. define_genome() writes a single default map (map_name 'default'); sex/line/version-specific maps are added as rows. Logical key (locus_id, sex, line_name, map_name)."),
     .sm_col("genome_map", "id_genome_map",
@@ -94,8 +97,98 @@ register_schema_meta <- function(conn, entries) {
             "Map version/identity; default 'default'"),
     .sm_col("genome_map", "pos_cM",
             "Genetic-map position in centiMorgans along the chromosome"),
+    # genome_effects
+    .sm_tbl("genome_effects",
+            "QTL effect data in long format. One row per locus x trait x effect type x line. Populated by define_additive_effects(). A locus is a QTL for a trait if it has a matching row here."),
+    .sm_col("genome_effects", "id_genome_effect",
+            "Auto-incrementing primary key"),
+    .sm_col("genome_effects", "locus_name",
+            "Locus identifier; FK to genome_meta.locus_name"),
+    .sm_col("genome_effects", "line_name",
+            "Line-specific effect (NULL = population-wide, shared across all lines)"),
+    .sm_col("genome_effects", "trait_name",
+            "Genetic component trait; FK to trait_meta.trait_name"),
+    .sm_col("genome_effects", "genome_effect_type",
+            "Type of genetic effect: 'additive' (current); 'dominance' reserved for future use"),
+    .sm_col("genome_effects", "genome_value",
+            "Effect size (allele substitution effect) in trait units"),
+    .sm_col("genome_effects", "base_allele_freq",
+            "Allele frequency used for TBV centering via the Falconer formula"),
+    # chr_inheritance
+    .sm_tbl("chr_inheritance",
+            "Per-chromosome copy counts, keyed by offspring sex. One row per (chr_name, offspring_sex, line_name). Seeded default is a diploid autosome (from_parent_1 = from_parent_2 = 1). Non-default rules (sex chromosomes, organelles) are set via define_chromosome()."),
+    .sm_col("chr_inheritance", "chr_name",
+            "Chromosome label; FK to genome_meta.chr_name"),
+    .sm_col("chr_inheritance", "offspring_sex",
+            "Offspring sex this rule applies to: NULL (all/default), 'M', or 'F'"),
+    .sm_col("chr_inheritance", "line_name",
+            "Offspring line this rule applies to: NULL (all lines) or a line name; reserved for crossbreeding"),
+    .sm_col("chr_inheritance", "from_parent_1",
+            "Absolute number of copies inherited from parent_1 (sire) at ploidy 2"),
+    .sm_col("chr_inheritance", "from_parent_2",
+            "Absolute number of copies inherited from parent_2 (dam) at ploidy 2"),
+    # chr_recombination
+    .sm_tbl("chr_recombination",
+            "Per-chromosome recombination, keyed by producing-parent sex. One row per (chr_name, parent_sex, line_name). Seeded from define_genome()'s genome-wide recombines_M/recombines_F defaults. Non-default rules (Y, W, achiasmy) are set via define_chromosome()."),
+    .sm_col("chr_recombination", "chr_name",
+            "Chromosome label; FK to genome_meta.chr_name"),
+    .sm_col("chr_recombination", "parent_sex",
+            "Producing-parent sex this rule applies to: NULL (both), 'M', or 'F'"),
+    .sm_col("chr_recombination", "line_name",
+            "Producing-parent line this rule applies to: NULL (all lines) or a line name; reserved for crossbreeding"),
+    .sm_col("chr_recombination", "recombines",
+            "TRUE if the chromosome recombines in this parent sex's meiosis; FALSE = whole-chromosome achiasmy")
+  )
+}
 
-    # ind_haplotype (long)
+
+#' Pre-built `_schema_meta` descriptions — Founders group
+#'
+#' Covers the founder haplotype pool.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
+#' @keywords internal
+.founder_descriptions <- function() {
+  rbind(
+    # founder_haplotypes
+    .sm_tbl("founder_haplotypes",
+            "Pool of founder haplotypes in long format (one row per haplotype x locus) sampled by add_founders() to assign phased alleles."),
+    .sm_col("founder_haplotypes", "line_name",
+            "Founder line label matching add_founders() line_name. NULL = shared pool for all lines."),
+    .sm_col("founder_haplotypes", "haplotype_id",
+            "Sequential haplotype identifier within the pool (unique per line_name)"),
+    .sm_col("founder_haplotypes", "locus_name",
+            "Locus name; FK to genome_meta.locus_name"),
+    .sm_col("founder_haplotypes", "allele",
+            "Allele on this haplotype at this locus: 0 or 1")
+  )
+}
+
+
+#' Pre-built `_schema_meta` descriptions — Individuals group
+#'
+#' Covers individual metadata and the per-individual genome tables.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
+#' @keywords internal
+.individual_descriptions <- function() {
+  rbind(
+    # ind_meta
+    .sm_tbl("ind_meta",
+            "Individual-level metadata. One row per individual. Core columns are managed by the system; user-defined columns can be added via mutate_table() or the ... arguments of add_founders() and add_offspring()."),
+    .sm_col("ind_meta", "id_ind",
+            "Primary key; format '{line_name}_{n}' (e.g. 'A_1', 'Holstein_42')"),
+    .sm_col("ind_meta", "id_parent_1",
+            "Paternal parent id_ind; NA for founders"),
+    .sm_col("ind_meta", "id_parent_2",
+            "Maternal parent id_ind; NA for founders"),
+    .sm_col("ind_meta", "line_name",
+            "Genetic line name (e.g. 'A', 'Holstein')"),
+    .sm_col("ind_meta", "sex",
+            "Sex of the individual: 'M' for male, 'F' for female"),
+    .sm_col("ind_meta", "ploidy",
+            "Genome ploidy; declared at add_founders() time (must be 2 in this version), computed at add_offspring() time as the sum of each parent's gamete contribution (own_ploidy / 2 per parent)"),
+    # ind_haplotype
     .sm_tbl("ind_haplotype",
             "Phased haplotypes in long format. One row per individual x haplotype x locus. parent_origin (1/2) and strand (1 for diploids) identify the copy; line_origin traces the allele's founding line. No DB primary key (dropped for insert speed); (id_ind, parent_origin, strand, locus_id) is unique by construction, guaranteed R-side."),
     .sm_col("ind_haplotype", "id_ind",
@@ -112,8 +205,7 @@ register_schema_meta <- function(conn, entries) {
             "Locus name; FK to genome_meta.locus_name; denormalized for direct joins to genome_effects"),
     .sm_col("ind_haplotype", "allele",
             "Phased allele on this strand: 0 (reference) or 1 (alternate)"),
-
-    # ind_genotype (long, on-demand dosage cache)
+    # ind_genotype
     .sm_tbl("ind_genotype",
             "Genotype dosage cache in long format. One row per individual x locus. NOT auto-populated; filled on demand by add_dosage() from ind_haplotype. May be empty or partial. PRIMARY KEY (id_ind, locus_id)."),
     .sm_col("ind_genotype", "id_ind",
@@ -124,34 +216,7 @@ register_schema_meta <- function(conn, entries) {
             "Locus name; FK to genome_meta.locus_name"),
     .sm_col("ind_genotype", "dosage_value",
             "Sum of alleles across strands (0/1/2 for diploids)"),
-
-    # chr_inheritance (long; copy count & origin, keyed by offspring sex)
-    .sm_tbl("chr_inheritance",
-            "Per-chromosome copy counts, keyed by offspring sex. One row per (chr_name, offspring_sex, line_name). Seeded default is a diploid autosome (from_parent_1 = from_parent_2 = 1). Non-default rules (sex chromosomes, organelles) are set via define_chromosome()."),
-    .sm_col("chr_inheritance", "chr_name",
-            "Chromosome label; FK to genome_meta.chr_name"),
-    .sm_col("chr_inheritance", "offspring_sex",
-            "Offspring sex this rule applies to: NULL (all/default), 'M', or 'F'"),
-    .sm_col("chr_inheritance", "line_name",
-            "Offspring line this rule applies to: NULL (all lines) or a line name; reserved for crossbreeding"),
-    .sm_col("chr_inheritance", "from_parent_1",
-            "Absolute number of copies inherited from parent_1 (sire) at ploidy 2"),
-    .sm_col("chr_inheritance", "from_parent_2",
-            "Absolute number of copies inherited from parent_2 (dam) at ploidy 2"),
-
-    # chr_recombination (long; recombines, keyed by producing-parent sex)
-    .sm_tbl("chr_recombination",
-            "Per-chromosome recombination, keyed by producing-parent sex. One row per (chr_name, parent_sex, line_name). Seeded from define_genome()'s genome-wide recombines_M/recombines_F defaults. Non-default rules (Y, W, achiasmy) are set via define_chromosome()."),
-    .sm_col("chr_recombination", "chr_name",
-            "Chromosome label; FK to genome_meta.chr_name"),
-    .sm_col("chr_recombination", "parent_sex",
-            "Producing-parent sex this rule applies to: NULL (both), 'M', or 'F'"),
-    .sm_col("chr_recombination", "line_name",
-            "Producing-parent line this rule applies to: NULL (all lines) or a line name; reserved for crossbreeding"),
-    .sm_col("chr_recombination", "recombines",
-            "TRUE if the chromosome recombines in this parent sex's meiosis; FALSE = whole-chromosome achiasmy"),
-
-    # ind_crossover (long; opt-in crossover-event storage)
+    # ind_crossover
     .sm_tbl("ind_crossover",
             "Crossover events in long format, one row per crossover drawn during meiosis. Created empty by define_genome(); populated only when add_offspring(store_crossovers = TRUE) (row writes land with the Stage-2 kernel). Absence of a row for a (id_ind, parent_origin, chr) means that gamete's chromosome did not recombine."),
     .sm_col("ind_crossover", "id_crossover",
@@ -170,42 +235,29 @@ register_schema_meta <- function(conn, entries) {
 }
 
 
-#' Pre-built descriptions for core (non-genome) tables created by open_pop()
+#' Pre-built `_schema_meta` descriptions — Genetic model group
+#'
+#' Covers the trait-keyed configuration tables.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
 #' @keywords internal
-.core_layer_descriptions <- function() {
+.genetic_model_descriptions <- function() {
   rbind(
-    # _schema_meta itself
-    .sm_tbl("_schema_meta",
-            "System table storing table and column descriptions for all tidybreed database objects."),
-    .sm_col("_schema_meta", "id_schema_meta",
+    # trait_meta
+    .sm_tbl("trait_meta",
+            "Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait()."),
+    .sm_col("trait_meta", "id_trait",
             "Auto-incrementing primary key"),
-    .sm_col("_schema_meta", "object_type",
-            "Entry type: 'table' for table descriptions, 'column' for column descriptions"),
-    .sm_col("_schema_meta", "table_name",
-            "Name of the table this entry describes"),
-    .sm_col("_schema_meta", "column_name",
-            "Column name; NULL for table-level entries"),
-    .sm_col("_schema_meta", "description",
-            "Human-readable description of the table or column"),
-    .sm_col("_schema_meta", "notes",
-            "Optional supplementary context (NULL if unused)"),
-
-    # ind_meta
-    .sm_tbl("ind_meta",
-            "Individual-level metadata. One row per individual. Core columns are managed by the system; user-defined columns can be added via mutate_table() or the ... arguments of add_founders() and add_offspring()."),
-    .sm_col("ind_meta", "id_ind",
-            "Primary key; format '{line_name}_{n}' (e.g. 'A_1', 'Holstein_42')"),
-    .sm_col("ind_meta", "id_parent_1",
-            "Paternal parent id_ind; NA for founders"),
-    .sm_col("ind_meta", "id_parent_2",
-            "Maternal parent id_ind; NA for founders"),
-    .sm_col("ind_meta", "line_name",
-            "Genetic line name (e.g. 'A', 'Holstein')"),
-    .sm_col("ind_meta", "sex",
-            "Sex of the individual: 'M' for male, 'F' for female"),
-    .sm_col("ind_meta", "ploidy",
-            "Genome ploidy; declared at add_founders() time (must be 2 in this version), computed at add_offspring() time as the sum of each parent's gamete contribution (own_ploidy / 2 per parent)"),
-
+    .sm_col("trait_meta", "trait_name",
+            "Unique identifier used across genome_effects, ind_tbv, and trait_var_comp"),
+    .sm_col("trait_meta", "description",
+            "Free-text description of the biological trait"),
+    .sm_col("trait_meta", "units",
+            "Measurement units (e.g. 'kg', 'g/day', 'count')"),
+    .sm_col("trait_meta", "expressed_parent",
+            "Parent-of-origin expression: 'both' (default), 'parent_1' (paternal only), 'parent_2' (maternal only)"),
+    .sm_col("trait_meta", "target_add_mean",
+            "TBV centering mean for the base population; default 0"),
     # trait_var_comp
     .sm_tbl("trait_var_comp",
             "Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'gen_add', 'dominance' (future), 'epistasis' (future)."),
@@ -218,26 +270,19 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("trait_var_comp", "trait_name_2",
             "Second trait; equals trait_name_1 for diagonal (variance) entries"),
     .sm_col("trait_var_comp", "cov_value",
-            "Variance (diagonal) or covariance (off-diagonal) value"),
+            "Variance (diagonal) or covariance (off-diagonal) value")
+  )
+}
 
-    # genome_effects
-    .sm_tbl("genome_effects",
-            "QTL effect data in long format. One row per locus x trait x effect type x line. Populated by define_additive_effects(). A locus is a QTL for a trait if it has a matching row here."),
-    .sm_col("genome_effects", "id_genome_effect",
-            "Auto-incrementing primary key"),
-    .sm_col("genome_effects", "locus_name",
-            "Locus identifier; FK to genome_meta.locus_name"),
-    .sm_col("genome_effects", "line_name",
-            "Line-specific effect (NULL = population-wide, shared across all lines)"),
-    .sm_col("genome_effects", "trait_name",
-            "Genetic component trait; FK to trait_meta.trait_name"),
-    .sm_col("genome_effects", "genome_effect_type",
-            "Type of genetic effect: 'additive' (current); 'dominance' reserved for future use"),
-    .sm_col("genome_effects", "genome_value",
-            "Effect size (allele substitution effect) in trait units"),
-    .sm_col("genome_effects", "base_allele_freq",
-            "Allele frequency used for TBV centering via the Falconer formula"),
 
+#' Pre-built `_schema_meta` descriptions — Observation model group
+#'
+#' Covers the phenotype-keyed configuration tables.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
+#' @keywords internal
+.observation_model_descriptions <- function() {
+  rbind(
     # phenotype_meta
     .sm_tbl("phenotype_meta",
             "Observed phenotype definitions. One row per phenotype. Manages the observation layer: type, mean, sex expression, and distributional parameters. Populated by define_phenotype()."),
@@ -273,7 +318,6 @@ register_schema_meta <- function(conn, entries) {
             "Optional R formula string for computing TBV from trait columns instead of summing genome effects"),
     .sm_col("phenotype_meta", "formula",
             "Optional R formula string for computing the phenotype directly, bypassing standard component assembly"),
-
     # phenotype_components
     .sm_tbl("phenotype_components",
             "Component definitions for composite phenotypes. One row per phenotype x component. Enables maternal effects, social genetic effects, and multi-contributor phenotypes. Populated by define_phenotype(..., components = ...)."),
@@ -311,7 +355,6 @@ register_schema_meta <- function(conn, entries) {
             "Per-component fallback; currently unused, governed by phenotype_meta.missing_component_action"),
     .sm_col("phenotype_components", "contributor_filter",
             "Reserved for spatial/neighbourhood lookup; not yet implemented"),
-
     # phenotype_var_comp
     .sm_tbl("phenotype_var_comp",
             "Phenotype-level variance component storage. One row per (effect_name, phenotype pair, optional condition). Stores residual covariances (effect_name = 'residual') and named random effects (hys, litter, pen, etc.). Populated by define_phenotype(), define_residual_cov(), and define_effect_random()."),
@@ -334,73 +377,95 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_var_comp", "weight_type",
             "Weight function type: 'fixed' (default) or 'legendre'"),
     .sm_col("phenotype_var_comp", "poly_order",
-            "Polynomial order for legendre weight type")
+            "Polynomial order for legendre weight type"),
+    # phenotype_effects
+    .sm_tbl("phenotype_effects",
+            "Fixed and random effect configurations for phenotype models. One row per phenotype x effect. Populated by define_effect_fixed_class(), define_effect_fixed_cov(), define_effect_random()."),
+    .sm_col("phenotype_effects", "phenotype_name",
+            "Phenotype this effect belongs to; FK to phenotype_meta.phenotype_name"),
+    .sm_col("phenotype_effects", "effect_name",
+            "Unique label for this effect within the phenotype (e.g. 'sex', 'gen', 'herd')"),
+    .sm_col("phenotype_effects", "effect_class",
+            "Effect type: 'fixed_class', 'fixed_cov', or 'random'"),
+    .sm_col("phenotype_effects", "source_column",
+            "Column in source_table used as the grouping or covariate variable"),
+    .sm_col("phenotype_effects", "source_table",
+            "Table containing source_column; default 'ind_meta'"),
+    .sm_col("phenotype_effects", "distribution",
+            "Sampling distribution for random effects: 'normal', 'gamma', or 'uniform'"),
+    .sm_col("phenotype_effects", "levels_json",
+            "JSON map of level to shift value for fixed_class effects (e.g. {\"M\": 30, \"F\": 0})"),
+    .sm_col("phenotype_effects", "slope",
+            "Regression coefficient for fixed_cov effects"),
+    .sm_col("phenotype_effects", "center",
+            "Centering value subtracted from the covariate before multiplying by slope"),
+    .sm_col("phenotype_effects", "value",
+            "Rarely used scalar override"),
+    .sm_col("phenotype_effects", "poly_order",
+            "Polynomial order for polynomial covariate effects; default 1 (linear)"),
+    .sm_col("phenotype_effects", "null_class_action",
+            "Behavior when grouping column is NULL: 'skip' excludes the individual"),
+    # phenotype_random_effects
+    .sm_tbl("phenotype_random_effects",
+            "Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency."),
+    .sm_col("phenotype_random_effects", "phenotype_name",
+            "Phenotype this random effect belongs to; FK to phenotype_meta.phenotype_name"),
+    .sm_col("phenotype_random_effects", "effect_name",
+            "Random effect name; FK to phenotype_effects.effect_name"),
+    .sm_col("phenotype_random_effects", "level",
+            "The grouping level (e.g. herd ID, sire ID) as a string"),
+    .sm_col("phenotype_random_effects", "draw_value",
+            "The sampled random effect value for this level"),
+    .sm_col("phenotype_random_effects", "date_sampled",
+            "Date the value was first sampled")
   )
 }
 
 
-#' Pre-built descriptions for trait/phenotype-layer tables
+#' Pre-built `_schema_meta` descriptions — Selection group
+#'
+#' Covers selection index definitions.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
 #' @keywords internal
-.trait_layer_descriptions <- function() {
+.selection_descriptions <- function() {
   rbind(
-    # trait_meta
-    .sm_tbl("trait_meta",
-            "Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait()."),
-    .sm_col("trait_meta", "id_trait",
+    # index_meta
+    .sm_tbl("index_meta",
+            "Selection index definitions. One row per index x trait. A special row with index_name = NULL holds the global economic weight per trait written by define_trait(). Named indices hold selection weights from define_index()."),
+    .sm_col("index_meta", "id_index_name",
             "Auto-incrementing primary key"),
-    .sm_col("trait_meta", "trait_name",
-            "Unique identifier used across genome_effects, ind_tbv, and trait_var_comp"),
-    .sm_col("trait_meta", "description",
-            "Free-text description of the biological trait"),
-    .sm_col("trait_meta", "units",
-            "Measurement units (e.g. 'kg', 'g/day', 'count')"),
-    .sm_col("trait_meta", "expressed_parent",
-            "Parent-of-origin expression: 'both' (default), 'parent_1' (paternal only), 'parent_2' (maternal only)"),
-    .sm_col("trait_meta", "target_add_mean",
-            "TBV centering mean for the base population; default 0"),
+    .sm_col("index_meta", "index_name",
+            "Named selection index (e.g. 'NTI'); NULL for global economic weight rows from define_trait()"),
+    .sm_col("index_meta", "trait_name",
+            "Trait this index entry applies to; FK to trait_meta.trait_name"),
+    .sm_col("index_meta", "index_weight",
+            "Selection index weight for this trait; NULL for global economic weight rows"),
+    .sm_col("index_meta", "economic_weight",
+            "Economic value per unit of this trait")
+  )
+}
 
-    # trait_effects
-    .sm_tbl("trait_effects",
-            "Fixed and random effect configurations for phenotype models. One row per phenotype x effect. Populated by define_effect_fixed_class(), define_effect_fixed_cov(), define_effect_random()."),
-    .sm_col("trait_effects", "phenotype_name",
-            "Phenotype this effect belongs to; FK to phenotype_meta.phenotype_name"),
-    .sm_col("trait_effects", "effect_name",
-            "Unique label for this effect within the phenotype (e.g. 'sex', 'gen', 'herd')"),
-    .sm_col("trait_effects", "effect_class",
-            "Effect type: 'fixed_class', 'fixed_cov', or 'random'"),
-    .sm_col("trait_effects", "source_column",
-            "Column in source_table used as the grouping or covariate variable"),
-    .sm_col("trait_effects", "source_table",
-            "Table containing source_column; default 'ind_meta'"),
-    .sm_col("trait_effects", "distribution",
-            "Sampling distribution for random effects: 'normal', 'gamma', or 'uniform'"),
-    .sm_col("trait_effects", "levels_json",
-            "JSON map of level to shift value for fixed_class effects (e.g. {\"M\": 30, \"F\": 0})"),
-    .sm_col("trait_effects", "slope",
-            "Regression coefficient for fixed_cov effects"),
-    .sm_col("trait_effects", "center",
-            "Centering value subtracted from the covariate before multiplying by slope"),
-    .sm_col("trait_effects", "value",
-            "Rarely used scalar override"),
-    .sm_col("trait_effects", "poly_order",
-            "Polynomial order for polynomial covariate effects; default 1 (linear)"),
-    .sm_col("trait_effects", "null_class_action",
-            "Behavior when grouping column is NULL: 'skip' excludes the individual"),
 
-    # trait_random_effects
-    .sm_tbl("trait_random_effects",
-            "Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency."),
-    .sm_col("trait_random_effects", "phenotype_name",
-            "Phenotype this random effect belongs to; FK to phenotype_meta.phenotype_name"),
-    .sm_col("trait_random_effects", "effect_name",
-            "Random effect name; FK to trait_effects.effect_name"),
-    .sm_col("trait_random_effects", "level",
-            "The grouping level (e.g. herd ID, sire ID) as a string"),
-    .sm_col("trait_random_effects", "draw_value",
-            "The sampled random effect value for this level"),
-    .sm_col("trait_random_effects", "date_sampled",
-            "Date the value was first sampled"),
-
+#' Pre-built `_schema_meta` descriptions — Results group
+#'
+#' Covers simulation output written by the add_* functions.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
+#' @keywords internal
+.results_descriptions <- function() {
+  rbind(
+    # ind_tbv
+    .sm_tbl("ind_tbv",
+            "True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects."),
+    .sm_col("ind_tbv", "id_tbv",
+            "Auto-incrementing primary key"),
+    .sm_col("ind_tbv", "id_ind",
+            "Individual identifier; FK to ind_meta.id_ind"),
+    .sm_col("ind_tbv", "trait_name",
+            "Genetic component trait name; FK to trait_meta.trait_name"),
+    .sm_col("ind_tbv", "tbv_value",
+            "True breeding value for this individual and trait"),
     # ind_phenotype
     .sm_tbl("ind_phenotype",
             "Phenotype records in long format. One row per individual x phenotype x record number. Populated by add_phenotype(). User-defined columns can be added via the ... argument of add_phenotype()."),
@@ -414,19 +479,6 @@ register_schema_meta <- function(conn, entries) {
             "Observed phenotype value (or category code for categorical phenotypes)"),
     .sm_col("ind_phenotype", "pheno_number",
             "Record number for this individual x phenotype combination; 1 = first record"),
-
-    # ind_tbv
-    .sm_tbl("ind_tbv",
-            "True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects."),
-    .sm_col("ind_tbv", "id_tbv",
-            "Auto-incrementing primary key"),
-    .sm_col("ind_tbv", "id_ind",
-            "Individual identifier; FK to ind_meta.id_ind"),
-    .sm_col("ind_tbv", "trait_name",
-            "Genetic component trait name; FK to trait_meta.trait_name"),
-    .sm_col("ind_tbv", "tbv_value",
-            "True breeding value for this individual and trait"),
-
     # ind_ebv
     .sm_tbl("ind_ebv",
             "Estimated breeding values from external BLUP or GBLUP analyses. One row per individual x trait x model x evaluation number. Populated by add_ebv()."),
@@ -446,21 +498,6 @@ register_schema_meta <- function(conn, entries) {
             "Standard error of the EBV (optional; NULL if not supplied)"),
     .sm_col("ind_ebv", "eval_number",
             "Auto-incrementing evaluation counter per trait x model; 1 = first evaluation"),
-
-    # index_meta
-    .sm_tbl("index_meta",
-            "Selection index definitions. One row per index x trait. A special row with index_name = NULL holds the global economic weight per trait written by define_trait(). Named indices hold selection weights from define_index()."),
-    .sm_col("index_meta", "id_index_name",
-            "Auto-incrementing primary key"),
-    .sm_col("index_meta", "index_name",
-            "Named selection index (e.g. 'NTI'); NULL for global economic weight rows from define_trait()"),
-    .sm_col("index_meta", "trait_name",
-            "Trait this index entry applies to; FK to trait_meta.trait_name"),
-    .sm_col("index_meta", "index_weight",
-            "Selection index weight for this trait; NULL for global economic weight rows"),
-    .sm_col("index_meta", "economic_weight",
-            "Economic value per unit of this trait"),
-
     # ind_index
     .sm_tbl("ind_index",
             "Computed selection index values. One row per individual x index x run. Multiple runs are distinguished by index_number. Populated by add_index()."),
@@ -474,7 +511,6 @@ register_schema_meta <- function(conn, entries) {
             "Auto-incrementing run counter per individual; 1 = first computation"),
     .sm_col("ind_index", "index_value",
             "Computed selection index value (weighted sum of EBVs or phenotypes)"),
-
     # ind_true_index
     .sm_tbl("ind_true_index",
             "True selection index values computed from TBVs. One row per individual x index x weight type. Populated by add_tbv() when index_names is supplied."),
@@ -491,6 +527,55 @@ register_schema_meta <- function(conn, entries) {
   )
 }
 
+
+#' Pre-built `_schema_meta` descriptions — System group
+#'
+#' Covers the _schema_meta system table itself.
+#' One function per display group in [schema()]; the group vector in
+#' `.schema_table_order()` and these functions must name the same tables.
+#' @keywords internal
+.system_descriptions <- function() {
+  rbind(
+    # _schema_meta
+    .sm_tbl("_schema_meta",
+            "System table storing table and column descriptions for all tidybreed database objects."),
+    .sm_col("_schema_meta", "id_schema_meta",
+            "Auto-incrementing primary key"),
+    .sm_col("_schema_meta", "object_type",
+            "Entry type: 'table' for table descriptions, 'column' for column descriptions"),
+    .sm_col("_schema_meta", "table_name",
+            "Name of the table this entry describes"),
+    .sm_col("_schema_meta", "column_name",
+            "Column name; NULL for table-level entries"),
+    .sm_col("_schema_meta", "description",
+            "Human-readable description of the table or column"),
+    .sm_col("_schema_meta", "notes",
+            "Optional supplementary context (NULL if unused)")
+  )
+}
+
+
+
+#' All pre-built `_schema_meta` descriptions, in display-group order
+#'
+#' Registered once by [open_pop()]. Description rows are plain metadata and do
+#' not require their table to exist yet, so registering the whole set up front is
+#' cheaper than re-registering a subset from every `define_*` entry point — and it
+#' removes the window in which a later `define_*` call would clobber a user's
+#' [define_schema_description()] override.
+#' @keywords internal
+.all_schema_descriptions <- function() {
+  rbind(
+    .genome_descriptions(),
+    .founder_descriptions(),
+    .individual_descriptions(),
+    .genetic_model_descriptions(),
+    .observation_model_descriptions(),
+    .selection_descriptions(),
+    .results_descriptions(),
+    .system_descriptions()
+  )
+}
 
 # ── Tiny row-builder helpers ──────────────────────────────────────────────────
 
@@ -517,7 +602,239 @@ register_schema_meta <- function(conn, entries) {
 }
 
 
+#' Whole-database size label for the `schema()` header
+#'
+#' `PRAGMA database_size` returns one row of already-formatted strings, so no
+#' byte arithmetic is needed. Two cases:
+#'
+#' - **File-backed**: report `database_size`, plus `wal_size` when the WAL is
+#'   non-empty. The WAL is only folded into the file by a `CHECKPOINT`, so a user
+#'   looking at the `.duckdb` on disk sees both; reporting only `database_size`
+#'   under-reports. `schema()` must not checkpoint — that is a write.
+#' - **In-memory** (`db_name = ":memory:"`): `database_size` is `"0 bytes"` and
+#'   `block_size` is `0` because there is no file. Report `memory_usage` and
+#'   label it as memory, not disk.
+#'
+#' @param conn A DBI connection.
+#' @param db_path Character. `pop$db_path` — the literal `":memory:"` for an
+#'   in-memory population.
+#' @return A single string such as `"4.0 MiB on disk"`, or `NA_character_` if
+#'   the pragma is unavailable.
+#' @keywords internal
+.schema_size_label <- function(conn, db_path) {
+  ds <- tryCatch(DBI::dbGetQuery(conn, "PRAGMA database_size"),
+                 error = function(e) NULL)
+  if (is.null(ds) || nrow(ds) < 1L) return(NA_character_)
+  ds <- ds[1L, , drop = FALSE]
+
+  in_memory <- identical(db_path, ":memory:") ||
+    isTRUE(suppressWarnings(as.numeric(ds$block_size)) == 0)
+  if (in_memory) {
+    if (is.null(ds$memory_usage) || is.na(ds$memory_usage)) return(NA_character_)
+    return(paste0(ds$memory_usage, " in memory"))
+  }
+
+  if (is.null(ds$database_size) || is.na(ds$database_size)) return(NA_character_)
+
+  # Both terms are on disk (the WAL is a sibling .wal file), so the suffix goes
+  # at the end rather than after the first term. Before the first CHECKPOINT
+  # `database_size` can read "0 bytes" with the whole population sitting in the
+  # WAL — printing only the first term would be actively wrong there.
+  wal <- ds$wal_size
+  if (!is.null(wal) && !is.na(wal) && !grepl("^0 +bytes$", wal)) {
+    return(paste0(ds$database_size, " + ", wal, " WAL on disk"))
+  }
+  paste0(ds$database_size, " on disk")
+}
+
+
 # ── Exported functions ────────────────────────────────────────────────────────
+
+#' Display groups for [schema()], in pipeline order
+#'
+#' Option A from `plans/update_schema_print.md`: a hard-coded vector rather than
+#' a name-prefix rule or a `_schema_meta` column. A table added later and not
+#' registered here degrades *visibly* — it appears under **User tables** — rather
+#' than being silently misfiled by a lexical rule that cannot tell
+#' `ind_haplotype` (raw genome data) from `ind_tbv` (simulation output).
+#'
+#' In-group order is workflow order, not alphabetical. `"User tables"` is an
+#' intentionally empty slot: unrecognized tables land there, sorted by name, and
+#' `"System"` always prints last.
+#'
+#' Must name the same tables as the `.\*_descriptions()` helpers above.
+#'
+#' @return A named list of character vectors, in display order.
+#' @keywords internal
+.schema_table_order <- function() {
+  list(
+    "Genome"            = c("genome_meta", "genome_map", "genome_effects",
+                            "chr_inheritance", "chr_recombination"),
+    "Founders"          = c("founder_haplotypes"),
+    "Individuals"       = c("ind_meta", "ind_haplotype", "ind_genotype",
+                            "ind_crossover"),
+    "Genetic model"     = c("trait_meta", "trait_var_comp"),
+    "Observation model" = c("phenotype_meta", "phenotype_components",
+                            "phenotype_var_comp", "phenotype_effects",
+                            "phenotype_random_effects"),
+    "Selection"         = c("index_meta"),
+    "Results"           = c("ind_tbv", "ind_phenotype", "ind_ebv", "ind_index",
+                            "ind_true_index"),
+    "User tables"       = character(0),
+    "System"            = c("_schema_meta")
+  )
+}
+
+
+#' Assign each table to a display group and a pipeline sort position
+#'
+#' @param table_names Character vector of table names.
+#' @return A data.frame with `table_group` and `sort_key` (integer), aligned to
+#'   `table_names`.
+#' @keywords internal
+.schema_group_of <- function(table_names) {
+  groups   <- .schema_table_order()
+  g_names  <- names(groups)
+  user_pos <- match("User tables", g_names)
+
+  grp  <- character(length(table_names))
+  rank <- integer(length(table_names))
+
+  for (i in seq_along(table_names)) {
+    hit <- FALSE
+    for (gi in seq_along(groups)) {
+      wi <- match(table_names[i], groups[[gi]])
+      if (!is.na(wi)) {
+        grp[i]  <- g_names[gi]
+        rank[i] <- wi
+        hit     <- TRUE
+        break
+      }
+    }
+    if (!hit) {
+      grp[i]  <- "User tables"
+      rank[i] <- NA_integer_
+    }
+  }
+
+  # Unrecognized tables sort alphabetically within the User tables group.
+  is_user <- grp == "User tables"
+  if (any(is_user)) {
+    rank[is_user] <- rank(table_names[is_user], ties.method = "first")
+  }
+
+  data.frame(
+    table_group = factor(grp, levels = g_names),
+    sort_key    = match(grp, g_names) * 1000L + rank,
+    stringsAsFactors = FALSE
+  )
+}
+
+
+#' Abbreviate a row count for display
+#'
+#' `ind_haplotype` alone otherwise dictates the width of the `Rows` column for
+#' every table in the printout.
+#'
+#' @param n Integer vector of row counts.
+#' @return Character vector: `"?"` for `NA`, `"1.10M"` style above a million,
+#'   comma-grouped below it.
+#' @keywords internal
+.schema_format_rows <- function(n) {
+  vapply(n, function(v) {
+    if (is.na(v)) return("?")
+    if (v >= 1e9) return(paste0(formatC(v / 1e9, format = "f", digits = 2), "B"))
+    if (v >= 1e6) return(paste0(formatC(v / 1e6, format = "f", digits = 2), "M"))
+    format(v, big.mark = ",")
+  }, character(1))
+}
+
+
+#' Per-table on-disk size, in bytes
+#'
+#' DuckDB has no direct per-table byte count. `duckdb_tables().estimated_size`
+#' looks right but is estimated *cardinality*, not bytes. The workable route is
+#' `PRAGMA storage_info()`, counting the distinct blocks a table's segments
+#' occupy and multiplying by the database block size.
+#'
+#' The caller must `CHECKPOINT` first: before one, recently written data carries
+#' `block_id = -1` and every table reports zero. That is a write, which is why
+#' `sizes` is opt-in on [schema()] rather than always on.
+#'
+#' @param conn A DBI connection.
+#' @param tables Character vector of table names.
+#' @return Numeric vector of bytes, aligned to `tables`; `NA` where the pragma
+#'   could not be read.
+#' @keywords internal
+.schema_table_bytes <- function(conn, tables) {
+  block_size <- tryCatch(
+    as.numeric(DBI::dbGetQuery(conn, "PRAGMA database_size")$block_size[1]),
+    error = function(e) NA_real_
+  )
+  if (is.na(block_size) || block_size <= 0) {
+    return(rep(NA_real_, length(tables)))
+  }
+
+  vapply(tables, function(tbl) {
+    si <- tryCatch(
+      DBI::dbGetQuery(conn, paste0(
+        "PRAGMA storage_info(", DBI::dbQuoteString(conn, tbl), ")")),
+      error = function(e) NULL
+    )
+    if (is.null(si) || nrow(si) == 0L) return(0)
+
+    ids <- si$block_id
+    if (!is.null(si$additional_block_ids)) {
+      ids <- c(ids, unlist(si$additional_block_ids, use.names = FALSE))
+    }
+    ids <- ids[!is.na(ids) & ids >= 0]
+    length(unique(ids)) * block_size
+  }, numeric(1), USE.NAMES = FALSE)
+}
+
+
+#' Format a byte count for the `schema()` Size column
+#'
+#' @param b Numeric vector of bytes.
+#' @return Character vector; `"?"` for `NA`.
+#' @keywords internal
+.schema_format_size <- function(b) {
+  vapply(b, function(v) {
+    if (is.na(v)) return("?")
+    if (v >= 1024^3) return(paste0(formatC(v / 1024^3, format = "f", digits = 2), " GiB"))
+    paste0(formatC(v / 1024^2, format = "f", digits = 2), " MiB")
+  }, character(1))
+}
+
+
+#' The Size-column footnote, required whenever a Size column prints
+#'
+#' The column is only defensible because the caveat travels with it, so this has
+#' no suppression argument. It must state *both* caveats: the block quantization
+#' (why small tables are indistinguishable) and the shortfall against the header
+#' total (why the column does not add up). A reader shown only one will read the
+#' other as a bug.
+#'
+#' @param width Integer console width.
+#' @param db_size Character. The header's whole-database label, referenced so
+#'   the shortfall is self-evidently expected rather than looking like loss.
+#' @return `NULL`, invisibly; called for the side effect of printing.
+#' @keywords internal
+.schema_print_size_footnote <- function(width, db_size) {
+  total <- if (is.null(db_size) || is.na(db_size)) "the database" else sub(" on disk$", "", db_size)
+  cat("  ", strrep("\u2500", max(2L, width - 2L)), "\n", sep = "")
+  txt <- paste0(
+    "Size is on-disk storage attributed in whole 256 KiB blocks, so small ",
+    "tables are not distinguishable: most read as 0.25 MiB, and a table small ",
+    "enough to live in the catalog reads as 0.00 MiB while still holding rows. ",
+    "Per-table sizes sum to less than the ", total, " database \u2014 catalog ",
+    "and header blocks are not attributed to any table."
+  )
+  cat(paste0("  ", strwrap(txt, width = max(40L, width - 2L))), sep = "\n")
+  cat("\n")
+  invisible(NULL)
+}
+
 
 #' View table-level descriptions for a tidybreed population
 #'
@@ -526,12 +843,65 @@ register_schema_meta <- function(conn, entries) {
 #' and descriptions from `_schema_meta`. Print the result for an aligned
 #' overview; use `describe_table(pop, "name")` to drill into a specific table.
 #'
+#' Tables are ordered by pipeline stage — the order in which a population is
+#' built — and printed under group headings. The order does not depend on how
+#' the population was opened: [open_pop()] populates `pop$tables` in creation
+#' order and [restore_pop()] in DuckDB catalog order, so before this the same
+#' `.duckdb` file printed differently depending on which one you used.
+#'
 #' @param pop A `tidybreed_pop` object, or a `tidybreed_table` from
 #'   [get_table()] (its `pop` reference is used).
+#' @param order One of `"pipeline"` (default, grouped by build stage with
+#'   headings), `"name"` (flat alphabetical), `"rows"` (flat, largest row count
+#'   first) or `"size"` (flat, largest on-disk size first). Group headings print
+#'   only for `"pipeline"`; `table_group` stays in the returned tibble for all
+#'   four. `"size"` requires `sizes = TRUE` and errors otherwise.
+#' @param show_empty Logical. `FALSE` (default) collapses each group's zero-row
+#'   tables into a single `+ n empty: ...` line — on a freshly built population
+#'   most tables are empty and would otherwise bury the ones with data. `TRUE`
+#'   prints every table on its own row.
+#' @param include_system Logical. `FALSE` (default) hides the `_schema_meta`
+#'   system table; `TRUE` lists it under a **System** group.
+#' @param sizes Logical. `FALSE` (default). `TRUE` adds a per-table
+#'   `size_bytes` column and prints a `Size` column with a mandatory caveat
+#'   footnote. Opt-in because collecting it requires a `CHECKPOINT`, which
+#'   writes to the database — see **Size reporting**.
 #'
 #' @return A tibble of class `tidybreed_schema` with columns
-#'   `table_name`, `n_rows`, `n_cols`, and `description`.
-#'   Printed via [print.tidybreed_schema()].
+#'   `table_name`, `table_group`, `n_rows`, `n_cols`, and `description`.
+#'   Printed via [print.tidybreed_schema()]. `table_group` is a factor whose
+#'   level order is the display order, so the grouping is available as data for
+#'   `filter()` / `split()` and not only as printed text.
+#'
+#' @section Size reporting:
+#' `sizes = TRUE` adds a per-table `Size` column. Three things about it are
+#' load-bearing:
+#'
+#' 1. **It writes.** DuckDB has no direct per-table byte count; the workable
+#'    route is `PRAGMA storage_info()`, and before a `CHECKPOINT` recently
+#'    written data carries `block_id = -1` so every table reports zero. `schema()`
+#'    therefore issues a `CHECKPOINT` when `sizes = TRUE`, and only then. This is
+#'    the sole reason the argument is opt-in rather than always on.
+#' 2. **It is quantized.** Size is on-disk storage attributed in whole 256 KiB
+#'    blocks, so small tables are not distinguishable: most read as 0.25 MiB, and
+#'    a table small enough to live in the catalog reads as 0.00 MiB while still
+#'    holding rows.
+#' 3. **It does not add up.** Per-table sizes sum to less than the database total
+#'    in the header, because catalog and header blocks are not attributed to any
+#'    table. Blocks are not shared between tables, so the attribution is sound as
+#'    far as it goes.
+#'
+#' Caveats 2 and 3 are printed as a footnote under the table whenever the column
+#' appears; the footnote has no suppression argument. For an in-memory population
+#' there are no blocks at all, so `sizes = TRUE` warns and omits the column.
+#'
+#' @section Database size:
+#' The printed header reports the size of the whole database, read from
+#' `PRAGMA database_size`. For a file-backed population this is the `.duckdb`
+#' file size, plus the write-ahead log when it is non-empty (the WAL is only
+#' folded into the file by a `CHECKPOINT`, which `schema()` deliberately does
+#' not issue — it is a write). For an in-memory population there is no file, so
+#' the header reports memory usage instead and says so.
 #'
 #' @seealso [describe_table()], [define_schema_description()]
 #'
@@ -540,13 +910,60 @@ register_schema_meta <- function(conn, entries) {
 #' pop <- open_pop(pop_name = "MySim", db_name = ":memory:") |>
 #'   define_genome(n_loci = 500, n_chr = 5, chr_len_Mb = 100)
 #' schema(pop)
+#'
+#' # Expand the collapsed empty tables, and show the system table
+#' schema(pop, show_empty = TRUE, include_system = TRUE)
+#'
+#' # The grouping is data, not just print formatting
+#' subset(schema(pop), table_group == "Genome")
+#'
+#' # Flat orderings answer "what is actually big here?"
+#' schema(pop, order = "rows")
+#'
+#' # On-disk sizes (issues a CHECKPOINT; file-backed populations only)
+#' schema(pop, order = "size", sizes = TRUE)
 #' }
 #' @export
-schema <- function(pop) {
+schema <- function(pop,
+                   order          = c("pipeline", "name", "rows", "size"),
+                   show_empty     = FALSE,
+                   include_system = FALSE,
+                   sizes          = FALSE) {
   if (inherits(pop, "tidybreed_table")) pop <- pop$pop
   stopifnot(inherits(pop, "tidybreed_pop"))
+  stopifnot(is.logical(show_empty),     length(show_empty)     == 1L)
+  stopifnot(is.logical(include_system), length(include_system) == 1L)
+  stopifnot(is.logical(sizes),          length(sizes)          == 1L)
+  order <- match.arg(order)
 
-  user_tables <- setdiff(pop$tables, "_schema_meta")
+  # order = "size" needs data that only sizes = TRUE collects. Error rather than
+  # silently falling back: the requested ordering is undefined, not merely
+  # unavailable, and order = "rows" is the honest proxy the caller can ask for.
+  if (identical(order, "size") && !sizes) {
+    stop("order = \"size\" requires sizes = TRUE. ",
+         "Per-table sizes are opt-in because collecting them issues a ",
+         "CHECKPOINT, which writes to the database. ",
+         "Use order = \"rows\" for a size proxy that costs nothing.",
+         call. = FALSE)
+  }
+
+  in_memory <- identical(pop$db_path, ":memory:")
+  if (sizes && in_memory) {
+    # No file means no blocks, so there is nothing to attribute. Warn and omit
+    # the column rather than print zeros under a footnote that does not apply.
+    if (identical(order, "size")) {
+      stop("order = \"size\" is not available for an in-memory population: ",
+           "there are no storage blocks to measure. Use order = \"rows\".",
+           call. = FALSE)
+    }
+    warning("sizes = TRUE ignored: this population is in memory, so there are ",
+            "no on-disk blocks to attribute. The header reports memory usage.",
+            call. = FALSE)
+    sizes <- FALSE
+  }
+
+  listed <- pop$tables
+  if (!include_system) listed <- setdiff(listed, "_schema_meta")
 
   # Pull table descriptions from _schema_meta
   desc_df <- DBI::dbGetQuery(
@@ -555,7 +972,7 @@ schema <- function(pop) {
   )
 
   # Build result row by row
-  rows <- lapply(user_tables, function(tbl) {
+  rows <- lapply(listed, function(tbl) {
     n_rows <- tryCatch(
       as.integer(DBI::dbGetQuery(pop$db_conn, paste0("SELECT COUNT(*) AS n FROM ", tbl))$n),
       error = function(e) NA_integer_
@@ -582,10 +999,40 @@ schema <- function(pop) {
                          stringsAsFactors = FALSE)
   }
 
+  # Pipeline grouping. pop$tables arrives in creation order after open_pop() and
+  # in DuckDB catalog order after restore_pop(), so the same .duckdb file used to
+  # print differently depending on how it was opened. Sorting here removes that.
+  grouped            <- .schema_group_of(result$table_name)
+  result$table_group <- grouped$table_group
+
+  keep <- c("table_name", "table_group", "n_rows", "n_cols")
+  if (sizes) {
+    # storage_info() reports zero for anything still sitting in the WAL, so the
+    # checkpoint is mandatory — and is the whole reason `sizes` is opt-in.
+    DBI::dbExecute(pop$db_conn, "CHECKPOINT")
+    result$size_bytes <- .schema_table_bytes(pop$db_conn, result$table_name)
+    keep <- c(keep, "size_bytes")
+  }
+  keep <- c(keep, "description")
+
+  ord_idx <- switch(
+    order,
+    pipeline = base::order(grouped$sort_key),
+    name     = base::order(result$table_name),
+    rows     = base::order(-result$n_rows, result$table_name),
+    size     = base::order(-result$size_bytes, result$table_name)
+  )
+  result           <- result[ord_idx, keep, drop = FALSE]
+  rownames(result) <- NULL
+
   structure(
     tibble::as_tibble(result),
-    pop_name = pop$pop_name,
-    class    = c("tidybreed_schema", "tbl_df", "tbl", "data.frame")
+    pop_name   = pop$pop_name,
+    db_size    = .schema_size_label(pop$db_conn, pop$db_path),
+    show_empty = show_empty,
+    order      = order,
+    sizes      = sizes,
+    class      = c("tidybreed_schema", "tbl_df", "tbl", "data.frame")
   )
 }
 
@@ -597,47 +1044,113 @@ schema <- function(pop) {
 #' @return `x`, invisibly.
 #' @export
 print.tidybreed_schema <- function(x, ...) {
-  width    <- getOption("width", 80L)
-  pop_name <- attr(x, "pop_name")
+  width      <- getOption("width", 80L)
+  pop_name   <- attr(x, "pop_name")
+  show_empty <- isTRUE(attr(x, "show_empty"))
+  ord        <- attr(x, "order")
+  if (is.null(ord)) ord <- "pipeline"
 
-  left   <- paste0("── Schema: ", pop_name, " ")
-  fill_w <- max(2L, width - nchar(left))
-  cat(left, strrep("─", fill_w), "\n", sep = "")
-  cat("  Use describe_table(pop, \"name\") for column-level details.\n\n")
+  left   <- paste0("\u2500\u2500 Schema: ", pop_name, " ")
+
+  # Right-hand header summary: table count, and the whole-database size when
+  # PRAGMA database_size was readable. Dropped rather than wrapped if the
+  # terminal is too narrow to hold it alongside the population name.
+  n_tbl    <- nrow(x)
+  summary  <- paste0(n_tbl, " table", if (n_tbl == 1L) "" else "s")
+  size_lbl <- attr(x, "db_size")
+  if (!is.null(size_lbl) && !is.na(size_lbl)) {
+    summary <- paste0(summary, " \u00b7 ", size_lbl)
+  }
+  right <- paste0(" ", summary, " \u2500\u2500")
+  if (nchar(left) + nchar(right) + 2L > width) right <- ""
+
+  fill_w <- max(2L, width - nchar(left) - nchar(right))
+  cat(left, strrep("\u2500", fill_w), right, "\n", sep = "")
+  cat("  Use describe_table(pop, \"name\") for column-level details.\n")
 
   if (nrow(x) == 0L) {
-    cat("  (no tables)\n")
+    cat("\n  (no tables)\n")
     return(invisible(x))
   }
 
-  tbl_w  <- max(nchar("Table"),   max(nchar(x$table_name)))
-  rows_w <- max(nchar("Rows"),    nchar(format(max(x$n_rows, na.rm = TRUE), big.mark = ",")))
-  cols_w <- max(nchar("Cols"),    nchar(format(max(x$n_cols, na.rm = TRUE), big.mark = ",")))
+  rows_txt <- .schema_format_rows(x$n_rows)
+  cols_txt <- ifelse(is.na(x$n_cols), "?", format(x$n_cols, trim = TRUE))
+  has_size <- "size_bytes" %in% names(x)
+  size_txt <- if (has_size) .schema_format_size(x$size_bytes) else NULL
 
-  hdr <- paste0(
-    "  ", formatC("Table",       width = -tbl_w),  "  ",
-         formatC("Rows",         width =  rows_w),  "  ",
-         formatC("Cols",         width =  cols_w),  "  ",
-         "Description"
-  )
-  cat(hdr, "\n")
-  sep_w <- max(2L, width - 2L)
-  cat("  ", strrep("─", sep_w), "\n", sep = "")
+  tbl_w  <- max(nchar("Table"), max(nchar(x$table_name)))
+  rows_w <- max(nchar("Rows"),  max(nchar(rows_txt)))
+  cols_w <- max(nchar("Cols"),  max(nchar(cols_txt)))
+  size_w <- if (has_size) max(nchar("Size"), max(nchar(size_txt))) else 0L
+  desc_w <- max(10L, width - (4L + tbl_w + 2L + rows_w + 2L + cols_w + 2L +
+                              if (has_size) size_w + 2L else 0L))
 
-  for (i in seq_len(nrow(x))) {
-    row_rows <- if (is.na(x$n_rows[i])) "?" else format(x$n_rows[i], big.mark = ",")
-    row_cols <- if (is.na(x$n_cols[i])) "?" else format(x$n_cols[i], big.mark = ",")
-    desc     <- if (is.na(x$description[i]) || x$description[i] == "") "(no description)" else x$description[i]
-
-    avail_w  <- max(10L, width - tbl_w - rows_w - cols_w - 8L)
-    desc_trunc <- if (nchar(desc) > avail_w) paste0(substr(desc, 1, avail_w - 3L), "...") else desc
-
-    cat("  ",
-        formatC(x$table_name[i], width = -tbl_w),  "  ",
-        formatC(row_rows,         width =  rows_w),  "  ",
-        formatC(row_cols,         width =  cols_w),  "  ",
-        desc_trunc, "\n", sep = "")
+  emit_row <- function(i, indent) {
+    desc <- x$description[i]
+    if (is.na(desc) || desc == "") desc <- "(no description)"
+    if (nchar(desc) > desc_w) desc <- paste0(substr(desc, 1L, desc_w - 3L), "...")
+    cat(indent,
+        formatC(x$table_name[i], width = -tbl_w), "  ",
+        formatC(rows_txt[i],     width =  rows_w), "  ",
+        formatC(cols_txt[i],     width =  cols_w), "  ",
+        if (has_size) paste0(formatC(size_txt[i], width = size_w), "  ") else "",
+        desc, "\n", sep = "")
   }
+
+  # Collapsed one-liner for a group's zero-row tables. On a freshly built
+  # population most tables are empty and would otherwise bury the signal.
+  emit_empty <- function(names_vec, indent) {
+    prefix <- paste0(indent, "+ ", length(names_vec), " empty: ")
+    line   <- prefix
+    cur    <- nchar(prefix)
+    for (k in seq_along(names_vec)) {
+      piece <- paste0(names_vec[k], if (k < length(names_vec)) ", " else "")
+      if (cur + nchar(piece) > width && k > 1L) {
+        cat(line, "\n", sep = "")
+        line <- paste0(strrep(" ", nchar(prefix)))
+        cur  <- nchar(line)
+      }
+      line <- paste0(line, piece)
+      cur  <- cur + nchar(piece)
+    }
+    cat(line, "\n", sep = "")
+  }
+
+  if (identical(ord, "pipeline")) {
+    for (g in levels(x$table_group)) {
+      idx <- which(x$table_group == g)
+      if (!length(idx)) next            # never print a heading for an empty group
+
+      cat("\n  ", g, "\n", sep = "")
+      is_empty <- !is.na(x$n_rows[idx]) & x$n_rows[idx] == 0L
+      shown    <- if (show_empty) idx else idx[!is_empty]
+      for (i in shown) emit_row(i, "    ")
+      if (!show_empty && any(is_empty)) {
+        emit_empty(x$table_name[idx[is_empty]], "    ")
+      }
+    }
+  } else {
+    # Flat orderings print a column header instead of group headings.
+    cat("\n  ",
+        formatC("Table", width = -tbl_w), "  ",
+        formatC("Rows",  width =  rows_w), "  ",
+        formatC("Cols",  width =  cols_w), "  ",
+        if (has_size) paste0(formatC("Size", width = size_w), "  ") else "",
+        "Description\n", sep = "")
+    cat("  ", strrep("\u2500", max(2L, width - 2L)), "\n", sep = "")
+
+    is_empty <- !is.na(x$n_rows) & x$n_rows == 0L
+    shown    <- if (show_empty) seq_len(nrow(x)) else which(!is_empty)
+    for (i in shown) emit_row(i, "  ")
+    if (!show_empty && any(is_empty)) emit_empty(x$table_name[is_empty], "  ")
+  }
+
+  # Mandatory whenever a Size column prints — see .schema_print_size_footnote().
+  if (has_size) {
+    cat("\n")
+    .schema_print_size_footnote(width, attr(x, "db_size"))
+  }
+
   invisible(x)
 }
 

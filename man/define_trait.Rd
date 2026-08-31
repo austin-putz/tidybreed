@@ -40,7 +40,7 @@ traits use only the haplotype from the specified parent when computing TBVs.}
 \item{units}{Character. Measurement units, e.g. \code{"kg"}, \code{"count"}.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a trait with the same name already
-exists, replace its \code{trait_meta} row and clear associated \code{trait_effects}
+exists, replace its \code{trait_meta} row and clear associated \code{phenotype_effects}
 rows. Default \code{FALSE} errors if the trait already exists.}
 }
 \value{

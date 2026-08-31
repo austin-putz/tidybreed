@@ -1,7 +1,7 @@
 #' Define a discrete fixed-class effect in a phenotype model
 #'
 #' @description
-#' Inserts a row into `trait_effects` representing a discrete fixed effect:
+#' Inserts a row into `phenotype_effects` representing a discrete fixed effect:
 #' each level of `source_column` maps to a numeric shift on the phenotype
 #' scale. The `null_class_action` argument controls what happens when an
 #' individual has a `NULL` value for `source_column` at phenotyping time.
@@ -83,7 +83,7 @@ define_effect_fixed_class <- function(pop,
     poly_order        = NA_integer_,
     null_class_action = null_class_action
   )
-  DBI::dbWriteTable(pop$db_conn, "trait_effects", row, append = TRUE)
+  DBI::dbWriteTable(pop$db_conn, "phenotype_effects", row, append = TRUE)
 
   message("Added fixed-class effect '", effect_name, "' to phenotype '",
           phenotype_name, "' (", length(levels), " levels).")

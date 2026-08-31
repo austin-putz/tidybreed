@@ -20,7 +20,7 @@ test_that("define_trait() creates the trait tables and inserts the row", {
                       target_add_mean = 850)
 
   tables <- DBI::dbListTables(pop$db_conn)
-  for (tbl in c("trait_meta", "trait_effects", "trait_var_comp",
+  for (tbl in c("trait_meta", "phenotype_effects", "trait_var_comp",
                 "ind_phenotype", "ind_tbv", "ind_ebv",
                 "phenotype_meta", "phenotype_components",
                 "phenotype_var_comp")) {

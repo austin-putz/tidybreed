@@ -30,7 +30,7 @@
   en_safe <- gsub("'", "''", effect_name)
   existing <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT COUNT(*) AS n FROM trait_effects ",
+    paste0("SELECT COUNT(*) AS n FROM phenotype_effects ",
            "WHERE phenotype_name = '", pn_safe, "'",
            " AND effect_name = '", en_safe, "'")
   )$n
@@ -41,13 +41,13 @@
   if (existing > 0 && overwrite) {
     DBI::dbExecute(
       pop$db_conn,
-      paste0("DELETE FROM trait_effects WHERE phenotype_name = '", pn_safe,
+      paste0("DELETE FROM phenotype_effects WHERE phenotype_name = '", pn_safe,
              "' AND effect_name = '", en_safe, "'")
     )
-    if ("trait_random_effects" %in% DBI::dbListTables(pop$db_conn)) {
+    if ("phenotype_random_effects" %in% DBI::dbListTables(pop$db_conn)) {
       DBI::dbExecute(
         pop$db_conn,
-        paste0("DELETE FROM trait_random_effects WHERE phenotype_name = '",
+        paste0("DELETE FROM phenotype_random_effects WHERE phenotype_name = '",
                pn_safe, "' AND effect_name = '", en_safe, "'")
       )
     }
