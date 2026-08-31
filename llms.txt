@@ -672,8 +672,17 @@ pop |>
 
 ``` r
 
-schema(pop)       # info and name of all tables
+schema(pop)                                # grouped by pipeline stage, empty tables collapsed
+schema(pop, show_empty = TRUE)             # one row per table
+schema(pop, order = "rows")                # flat, biggest first
+schema(pop, order = "size", sizes = TRUE)  # on-disk bytes (issues a CHECKPOINT)
 ```
+
+[`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+prints tables in the order a population is built — Genome, Founders,
+Individuals, Genetic model, Observation model, Selection, Results — with
+the database size in the header. The grouping is also returned as a
+`table_group` column, so it can be filtered like any other data.
 
 Pick out one table to focus on:
 
@@ -1190,7 +1199,8 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | `ind_index` | 1 per (individual × index × run) | Computed selection index values |
 | `trait_meta` | 1 per genetic trait | Genetic-layer configuration (variance target, units) |
 | `trait_var_comp` | 1 per (effect × trait pair) | Additive genetic (co)variance matrix entries |
-| `trait_effects` | 1 per (trait × effect) | Fixed and random model effects |
+| `phenotype_effects` | 1 per (phenotype × effect) | Fixed and random model effects |
+| `phenotype_random_effects` | 1 per (phenotype × effect × level) | Sampled random effect deviations |
 | `phenotype_meta` | 1 per observed phenotype | Observation-layer config (mean, type, sex expression) |
 | `phenotype_components` | 1 per (phenotype × component) | Composite phenotype wiring (self/dam/sire/group) |
 | `phenotype_var_comp` | 1 per (effect × phenotype pair) | Residual and random effect (co)variance entries |

@@ -1,9 +1,10 @@
 # Define a discrete fixed-class effect in a phenotype model
 
-Inserts a row into `trait_effects` representing a discrete fixed effect:
-each level of `source_column` maps to a numeric shift on the phenotype
-scale. The `null_class_action` argument controls what happens when an
-individual has a `NULL` value for `source_column` at phenotyping time.
+Inserts a row into `phenotype_effects` representing a discrete fixed
+effect: each level of `source_column` maps to a numeric shift on the
+phenotype scale. The `null_class_action` argument controls what happens
+when an individual has a `NULL` value for `source_column` at phenotyping
+time.
 
 ## Usage
 

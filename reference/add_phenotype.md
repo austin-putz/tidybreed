@@ -11,7 +11,7 @@ value (TBV) per individual per trait in `ind_tbv`.
 
 - `mean` comes from `phenotype_meta.mean`.
 
-- Fixed and random shifts come from `trait_effects` rows.
+- Fixed and random shifts come from `phenotype_effects` rows.
 
 - For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is
   the standard additive TBV from `genome_effects` (computed via

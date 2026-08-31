@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,61 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.64.0" id="tidybreed-0640-2026-08-31">tidybreed 0.64.0 (2026-08-31)<a class="anchor" aria-label="anchor" href="#tidybreed-0640-2026-08-31"></a></h2>
+<p>Renames the two misnamed phenotype-layer tables, deletes all remaining cross-version migration code, and reworks <code><a href="../reference/schema.html">schema()</a></code> so its output is ordered, grouped, and reports database size.</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-64-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-64-0"></a></h3>
+<ul><li><p><strong><code>trait_effects</code> is now <code>phenotype_effects</code>, and <code>trait_random_effects</code> is now <code>phenotype_random_effects</code>.</strong> Both tables were already keyed by <code>phenotype_name</code> (including in their primary keys), written by the <code>define_effect_*()</code> functions and read by <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> — they are observation-layer tables, and the <code>trait_</code> prefix implied <code>trait_meta</code> was the parent when the FK is to <code>phenotype_meta</code>. No aliases are kept; the old names are gone from the package, tests, vignettes and docs.</p></li>
+<li>
+<p><strong>All cross-version migration code has been deleted.</strong> This covers the pre-v0.31.0 migration section in <code><a href="../reference/ensure_trait_tables.html">ensure_trait_tables()</a></code> (<code>ind_tbv</code>/<code>ind_ebv</code> column drops, <code>index_meta.economic_weight</code>, the <code>trait_name</code> → <code>phenotype_name</code> column renames, and two <code>phenotype_meta</code> column adds) and <code>.migrate_var_comp_tables()</code>, which <code><a href="../reference/restore_pop.html">restore_pop()</a></code> called to rename <code>trait_effect_cov</code> → <code>trait_var_comp</code> and <code>phenotype_residual_cov</code> → <code>phenotype_var_comp</code>.</p>
+<p><strong>A <code>.duckdb</code> file written before this release will not restore usefully — rebuild the population.</strong> <code><a href="../reference/restore_pop.html">restore_pop()</a></code> reads its table list from the DuckDB catalog, so an old file’s <code>trait_effects</code> surfaces as an unrecognized user table while every phenotype reader and writer looks for <code>phenotype_effects</code>. Pre-1.0.0 there is no cross-version compatibility contract; the reproducibility guarantee is same-seed-within-current-code, not across versions.</p>
+</li>
+<li><p><strong><code><a href="../reference/schema.html">schema()</a></code> gained arguments and a column.</strong> The returned tibble now carries a <code>table_group</code> factor (and <code>size_bytes</code> when <code>sizes = TRUE</code>), and the column order is <code>table_name</code>, <code>table_group</code>, <code>n_rows</code>, <code>n_cols</code>, <code>description</code>.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-64-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-64-0"></a></h3>
+<ul><li>
+<p><strong><code><a href="../reference/schema.html">schema()</a></code> output is grouped by pipeline stage.</strong> Tables print under <strong>Genome</strong>, <strong>Founders</strong>, <strong>Individuals</strong>, <strong>Genetic model</strong>, <strong>Observation model</strong>, <strong>Selection</strong>, <strong>Results</strong>, <strong>User tables</strong> and <strong>System</strong> headings, in the order a population is built, with workflow order inside each group.</p>
+<p>This fixes a real defect, not just an aesthetic one: <code><a href="../reference/open_pop.html">open_pop()</a></code> populates <code>pop$tables</code> in creation order and <code><a href="../reference/restore_pop.html">restore_pop()</a></code> in DuckDB catalog order, so the same <code>.duckdb</code> file previously printed in a different order depending on how it had been opened. Ordering now comes from a hard-coded <code><a href="../reference/dot-schema_table_order.html">.schema_table_order()</a></code> vector, so an unregistered table degrades visibly under <strong>User tables</strong> rather than being silently misfiled.</p>
+</li>
+<li><p><strong><code><a href="../reference/schema.html">schema()</a></code> reports database size in its header</strong> — the <code>.duckdb</code> file size plus the WAL when it is uncheckpointed, or memory usage for an in-memory population. Free, exact, and no side effects.</p></li>
+<li><p><strong><code>schema(pop, sizes = TRUE)</code></strong> adds a per-table on-disk <code>Size</code> column and a <code>size_bytes</code> column in the tibble. Opt-in, because collecting it requires a <code>CHECKPOINT</code> — a write — and <code><a href="../reference/schema.html">schema()</a></code> must not write by default. The column always prints a caveat footnote: sizes are attributed in whole 256 KiB blocks so small tables are indistinguishable, and per-table sizes sum to less than the file total because catalog and header blocks are attributed to no table. On an in-memory population it warns and omits the column.</p></li>
+<li><p><strong><code>schema(pop, order = ...)</code></strong> accepts <code>"pipeline"</code> (default), <code>"name"</code>, <code>"rows"</code> or <code>"size"</code>. <code>"size"</code> requires <code>sizes = TRUE</code> and errors otherwise rather than silently falling back. Group headings print only for <code>"pipeline"</code>.</p></li>
+<li><p><strong><code>schema(pop, show_empty = FALSE)</code></strong> (the default) collapses each group’s zero-row tables into one <code>+ n empty: ...</code> line; <code>TRUE</code> prints them all. Row counts over a million abbreviate to <code>1.10M</code> so <code>ind_haplotype</code> no longer sets the <code>Rows</code> column width for every table.</p></li>
+<li><p><strong><code>schema(pop, include_system = TRUE)</code></strong> lists <code>_schema_meta</code> under a <strong>System</strong> group. It stays hidden by default.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixed-0-64-0">Fixed<a class="anchor" aria-label="anchor" href="#fixed-0-64-0"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/mutate_table.html">mutate_table()</a></code> protected nothing on three tables.</strong> <code>founder_haplotypes</code>, <code>phenotype_components</code> and <code>trait_random_effects</code> (now <code>phenotype_random_effects</code>) had no <code>TABLE_RESERVED_COLS</code> entry, so a user could overwrite e.g. <code>draw_value</code> or <code>contributor_type</code> in place. All three are written exclusively by a <code>define_*</code> function and now reserve every column.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-64-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-64-0"></a></h3>
+<ul><li>The <code>_schema_meta</code> description helpers were re-split from three creation-time functions (<code>.genome_table_descriptions()</code>, <code>.core_layer_descriptions()</code>, <code>.trait_layer_descriptions()</code>) into eight that match the display groups one-for-one, aggregated by <code><a href="../reference/dot-all_schema_descriptions.html">.all_schema_descriptions()</a></code> and registered once by <code><a href="../reference/open_pop.html">open_pop()</a></code> instead of from four separate call sites. This also closes the window in which a later <code>define_*()</code> call could clobber a user’s <code><a href="../reference/define_schema_description.html">define_schema_description()</a></code> override.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.63.1" id="tidybreed-0631-2026-08-20">tidybreed 0.63.1 (2026-08-20)<a class="anchor" aria-label="anchor" href="#tidybreed-0631-2026-08-20"></a></h2>
+<p>Repairs drift between the schema registries in <code>R/sql_utils.R</code> and the columns <code>trait_effects</code> actually has, plus a regression test that prevents the same class of drift from returning silently.</p>
+<div class="section level3">
+<h3 id="fixed-0-63-1">Fixed<a class="anchor" aria-label="anchor" href="#fixed-0-63-1"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/remove_rows.html">remove_rows()</a></code> could never delete from <code>trait_effects</code>.</strong> <code>TABLE_ROW_KEYS$trait_effects</code> still listed <code>trait_name</code>, but the column was renamed to <code>phenotype_name</code> when the two-layer phenotype model landed. Every single-table deletion against <code>trait_effects</code> aborted with <code>"collected data is missing key column(s): trait_name"</code>.</li>
+<li>
+<strong><code><a href="../reference/mutate_table.html">mutate_table()</a></code> was not protecting three <code>trait_effects</code> columns.</strong> <code>TABLE_RESERVED_COLS$trait_effects</code> listed the same stale <code>trait_name</code> and omitted <code>poly_order</code> and <code>null_class_action</code> entirely, so a user could overwrite the <code>phenotype_name</code> foreign key — silently detaching effect rows from their phenotype — or clobber either of the two newer columns.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-63-1">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-63-1"></a></h3>
+<ul><li>
+<strong><code>CLAUDE.md</code>: the <code>trait_effects</code> schema table matches the database again.</strong> It documented a <code>trait_name</code> column and was missing <code>poly_order</code> and <code>null_class_action</code>. It now records the real primary key <code>(phenotype_name, effect_name)</code> and notes that, despite the <code>trait_</code> prefix, the table is keyed to <code>phenotype_meta</code> and belongs to the observation layer.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="testing-0-63-1">Testing<a class="anchor" aria-label="anchor" href="#testing-0-63-1"></a></h3>
+<ul><li>
+<strong><code>test-schema-registries.R</code></strong> checks every column named in <code>TABLE_RESERVED_COLS</code>, <code>TABLE_ROW_KEYS</code>, and <code>TABLE_PRIMARY_KEYS</code> against the live schema, so a renamed column fails loudly at test time rather than at a distance inside <code><a href="../reference/remove_rows.html">remove_rows()</a></code> or <code><a href="../reference/mutate_table.html">mutate_table()</a></code>. Columns added later by <code>ALTER TABLE</code> (<code>replicate</code>, <code>liability_value</code>, <code>cat_name</code>) are listed as deliberate forward declarations rather than treated as drift.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.63.0" id="tidybreed-0630-2026-08-19">tidybreed 0.63.0 (2026-08-19)<a class="anchor" aria-label="anchor" href="#tidybreed-0630-2026-08-19"></a></h2>
 <p>Coverage for <code><a href="../reference/add_tbv.html">add_tbv()</a></code>’s true-index feature, one real bug fix found while writing those tests, and removal of two pieces of stale text.</p>

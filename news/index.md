@@ -1,5 +1,167 @@
 # Changelog
 
+## tidybreed 0.64.0 (2026-08-31)
+
+Renames the two misnamed phenotype-layer tables, deletes all remaining
+cross-version migration code, and reworks
+[`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+so its output is ordered, grouped, and reports database size.
+
+### Breaking changes
+
+- **`trait_effects` is now `phenotype_effects`, and
+  `trait_random_effects` is now `phenotype_random_effects`.** Both
+  tables were already keyed by `phenotype_name` (including in their
+  primary keys), written by the `define_effect_*()` functions and read
+  by
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  — they are observation-layer tables, and the `trait_` prefix implied
+  `trait_meta` was the parent when the FK is to `phenotype_meta`. No
+  aliases are kept; the old names are gone from the package, tests,
+  vignettes and docs.
+
+- **All cross-version migration code has been deleted.** This covers the
+  pre-v0.31.0 migration section in
+  [`ensure_trait_tables()`](https://austin-putz.github.io/tidybreed/reference/ensure_trait_tables.md)
+  (`ind_tbv`/`ind_ebv` column drops, `index_meta.economic_weight`, the
+  `trait_name` → `phenotype_name` column renames, and two
+  `phenotype_meta` column adds) and `.migrate_var_comp_tables()`, which
+  [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  called to rename `trait_effect_cov` → `trait_var_comp` and
+  `phenotype_residual_cov` → `phenotype_var_comp`.
+
+  **A `.duckdb` file written before this release will not restore
+  usefully — rebuild the population.**
+  [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  reads its table list from the DuckDB catalog, so an old file’s
+  `trait_effects` surfaces as an unrecognized user table while every
+  phenotype reader and writer looks for `phenotype_effects`. Pre-1.0.0
+  there is no cross-version compatibility contract; the reproducibility
+  guarantee is same-seed-within-current-code, not across versions.
+
+- **[`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+  gained arguments and a column.** The returned tibble now carries a
+  `table_group` factor (and `size_bytes` when `sizes = TRUE`), and the
+  column order is `table_name`, `table_group`, `n_rows`, `n_cols`,
+  `description`.
+
+### New features
+
+- **[`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+  output is grouped by pipeline stage.** Tables print under **Genome**,
+  **Founders**, **Individuals**, **Genetic model**, **Observation
+  model**, **Selection**, **Results**, **User tables** and **System**
+  headings, in the order a population is built, with workflow order
+  inside each group.
+
+  This fixes a real defect, not just an aesthetic one:
+  [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+  populates `pop$tables` in creation order and
+  [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  in DuckDB catalog order, so the same `.duckdb` file previously printed
+  in a different order depending on how it had been opened. Ordering now
+  comes from a hard-coded
+  [`.schema_table_order()`](https://austin-putz.github.io/tidybreed/reference/dot-schema_table_order.md)
+  vector, so an unregistered table degrades visibly under **User
+  tables** rather than being silently misfiled.
+
+- **[`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+  reports database size in its header** — the `.duckdb` file size plus
+  the WAL when it is uncheckpointed, or memory usage for an in-memory
+  population. Free, exact, and no side effects.
+
+- **`schema(pop, sizes = TRUE)`** adds a per-table on-disk `Size` column
+  and a `size_bytes` column in the tibble. Opt-in, because collecting it
+  requires a `CHECKPOINT` — a write — and
+  [`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md)
+  must not write by default. The column always prints a caveat footnote:
+  sizes are attributed in whole 256 KiB blocks so small tables are
+  indistinguishable, and per-table sizes sum to less than the file total
+  because catalog and header blocks are attributed to no table. On an
+  in-memory population it warns and omits the column.
+
+- **`schema(pop, order = ...)`** accepts `"pipeline"` (default),
+  `"name"`, `"rows"` or `"size"`. `"size"` requires `sizes = TRUE` and
+  errors otherwise rather than silently falling back. Group headings
+  print only for `"pipeline"`.
+
+- **`schema(pop, show_empty = FALSE)`** (the default) collapses each
+  group’s zero-row tables into one `+ n empty: ...` line; `TRUE` prints
+  them all. Row counts over a million abbreviate to `1.10M` so
+  `ind_haplotype` no longer sets the `Rows` column width for every
+  table.
+
+- **`schema(pop, include_system = TRUE)`** lists `_schema_meta` under a
+  **System** group. It stays hidden by default.
+
+### Fixed
+
+- **[`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md)
+  protected nothing on three tables.** `founder_haplotypes`,
+  `phenotype_components` and `trait_random_effects` (now
+  `phenotype_random_effects`) had no `TABLE_RESERVED_COLS` entry, so a
+  user could overwrite e.g. `draw_value` or `contributor_type` in place.
+  All three are written exclusively by a `define_*` function and now
+  reserve every column.
+
+### Internal
+
+- The `_schema_meta` description helpers were re-split from three
+  creation-time functions (`.genome_table_descriptions()`,
+  `.core_layer_descriptions()`, `.trait_layer_descriptions()`) into
+  eight that match the display groups one-for-one, aggregated by
+  [`.all_schema_descriptions()`](https://austin-putz.github.io/tidybreed/reference/dot-all_schema_descriptions.md)
+  and registered once by
+  [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+  instead of from four separate call sites. This also closes the window
+  in which a later `define_*()` call could clobber a user’s
+  [`define_schema_description()`](https://austin-putz.github.io/tidybreed/reference/define_schema_description.md)
+  override.
+
+## tidybreed 0.63.1 (2026-08-20)
+
+Repairs drift between the schema registries in `R/sql_utils.R` and the
+columns `trait_effects` actually has, plus a regression test that
+prevents the same class of drift from returning silently.
+
+### Fixed
+
+- **[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  could never delete from `trait_effects`.**
+  `TABLE_ROW_KEYS$trait_effects` still listed `trait_name`, but the
+  column was renamed to `phenotype_name` when the two-layer phenotype
+  model landed. Every single-table deletion against `trait_effects`
+  aborted with `"collected data is missing key column(s): trait_name"`.
+- **[`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md)
+  was not protecting three `trait_effects` columns.**
+  `TABLE_RESERVED_COLS$trait_effects` listed the same stale `trait_name`
+  and omitted `poly_order` and `null_class_action` entirely, so a user
+  could overwrite the `phenotype_name` foreign key — silently detaching
+  effect rows from their phenotype — or clobber either of the two newer
+  columns.
+
+### Documentation
+
+- **`CLAUDE.md`: the `trait_effects` schema table matches the database
+  again.** It documented a `trait_name` column and was missing
+  `poly_order` and `null_class_action`. It now records the real primary
+  key `(phenotype_name, effect_name)` and notes that, despite the
+  `trait_` prefix, the table is keyed to `phenotype_meta` and belongs to
+  the observation layer.
+
+### Testing
+
+- **`test-schema-registries.R`** checks every column named in
+  `TABLE_RESERVED_COLS`, `TABLE_ROW_KEYS`, and `TABLE_PRIMARY_KEYS`
+  against the live schema, so a renamed column fails loudly at test time
+  rather than at a distance inside
+  [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  or
+  [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md).
+  Columns added later by `ALTER TABLE` (`replicate`, `liability_value`,
+  `cat_name`) are listed as deliberate forward declarations rather than
+  treated as drift.
+
 ## tidybreed 0.63.0 (2026-08-19)
 
 Coverage for

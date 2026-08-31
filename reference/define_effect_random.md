@@ -1,9 +1,10 @@
 # Define a random group effect in a phenotype model
 
-Inserts a row into `trait_effects` for a random effect. One value is
+Inserts a row into `phenotype_effects` for a random effect. One value is
 drawn per distinct level of `source_column`; all individuals sharing
 that level receive the same shift. Drawn values are stored in
-`trait_random_effects` so they are reproducible across repeated calls to
+`phenotype_random_effects` so they are reproducible across repeated
+calls to
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
 without requiring a fixed `seed`.
 

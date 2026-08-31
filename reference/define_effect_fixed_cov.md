@@ -1,7 +1,7 @@
 # Define a continuous covariate (regression) effect in a phenotype model
 
-Inserts a row into `trait_effects` representing a polynomial regression
-term. At phenotyping time the contribution per individual is
+Inserts a row into `phenotype_effects` representing a polynomial
+regression term. At phenotyping time the contribution per individual is
 `slope * (source_column_value - center)^poly_order`. When `center` is
 `NULL` the mean of `source_column` is computed and stored automatically.
 

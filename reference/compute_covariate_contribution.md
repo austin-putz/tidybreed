@@ -17,7 +17,7 @@ compute_covariate_contribution(pop, phenotype_name, subset_df)
 
 - phenotype_name:
 
-  Character. Phenotype name to look up in `trait_effects`.
+  Character. Phenotype name to look up in `phenotype_effects`.
 
 - subset_df:
 

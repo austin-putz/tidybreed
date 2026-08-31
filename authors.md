@@ -11,13 +11,13 @@ Source:
 [`inst/CITATION`](https://github.com/austin-putz/tidybreed/blob/main/inst/CITATION)
 
 Putz, A. (2026). tidybreed: Tidy Breeding Program Simulation. R package
-version 0.63.0. https://github.com/austin-putz/tidybreed
+version 0.64.0. https://github.com/austin-putz/tidybreed
 
     @Manual{,
       title = {{tidybreed}: Tidy Breeding Program Simulation},
       author = {Austin Putz},
       year = {2026},
-      note = {R package version 0.63.0. Pre-release (< v1.0.0); API subject to change.},
+      note = {R package version 0.64.0. Pre-release (< v1.0.0); API subject to change.},
       url = {https://github.com/austin-putz/tidybreed},
     }
 

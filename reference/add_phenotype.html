@@ -7,7 +7,7 @@ Model (per phenotype, on the liability / continuous scale):
 
 
 mean comes from phenotype_meta.mean.
-Fixed and random shifts come from trait_effects rows.
+Fixed and random shifts come from phenotype_effects rows.
 For simple phenotypes (phenotype_name == trait_name), TBV_i is the
 standard additive TBV from genome_effects (computed via add_tbv(),
 which this function calls internally for every source trait it needs).
@@ -48,7 +48,7 @@ Model (per phenotype, on the liability / continuous scale):
 
 
 mean comes from phenotype_meta.mean.
-Fixed and random shifts come from trait_effects rows.
+Fixed and random shifts come from phenotype_effects rows.
 For simple phenotypes (phenotype_name == trait_name), TBV_i is the
 standard additive TBV from genome_effects (computed via add_tbv(),
 which this function calls internally for every source trait it needs).
@@ -89,7 +89,7 @@ residual draw.
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -125,7 +125,7 @@ value (TBV) per individual per trait in <code>ind_tbv</code>.</p>
 <p><strong>Model</strong> (per phenotype, on the liability / continuous scale):</p><div class="sourceCode"><pre><code><span></span>
 <span>  <span class="va">y_i</span> <span class="op">=</span> <span class="va">mean</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">fixed_shifts</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">random_shifts</span><span class="op">)</span> <span class="op">+</span> <span class="va">TBV_i</span> <span class="op">+</span> <span class="va">e_i</span></span></code></pre></div>
 <ul><li><p><code>mean</code> comes from <code>phenotype_meta.mean</code>.</p></li>
-<li><p>Fixed and random shifts come from <code>trait_effects</code> rows.</p></li>
+<li><p>Fixed and random shifts come from <code>phenotype_effects</code> rows.</p></li>
 <li><p>For <strong>simple</strong> phenotypes (<code>phenotype_name == trait_name</code>), <code>TBV_i</code> is the
 standard additive TBV from <code>genome_effects</code> (computed via <code><a href="add_tbv.html">add_tbv()</a></code>,
 which this function calls internally for every source trait it needs).</p></li>

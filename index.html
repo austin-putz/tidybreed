@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -678,7 +678,11 @@
 <p>[!TIP] <strong>If you get lost with tables</strong> (and you will…) please use <code>schema(pop)</code>, <code>summary(pop)</code>, and <code>pop |&gt; describe_table("table_name")</code> to get your feet back.</p>
 </blockquote>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span>       <span class="co"># info and name of all tables</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span>                                <span class="co"># grouped by pipeline stage, empty tables collapsed</span></span>
+<span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span>, show_empty <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>             <span class="co"># one row per table</span></span>
+<span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span>, order <span class="op">=</span> <span class="st">"rows"</span><span class="op">)</span>                <span class="co"># flat, biggest first</span></span>
+<span><span class="fu"><a href="reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span>, order <span class="op">=</span> <span class="st">"size"</span>, sizes <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>  <span class="co"># on-disk bytes (issues a CHECKPOINT)</span></span></code></pre></div>
+<p><code><a href="reference/schema.html">schema()</a></code> prints tables in the order a population is built — Genome, Founders, Individuals, Genetic model, Observation model, Selection, Results — with the database size in the header. The grouping is also returned as a <code>table_group</code> column, so it can be filtered like any other data.</p>
 <p>Pick out one table to focus on:</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/describe_table.html">describe_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span>    <span class="co"># view all column descriptions</span></span></code></pre></div>
@@ -1154,9 +1158,14 @@
 <td>Additive genetic (co)variance matrix entries</td>
 </tr>
 <tr>
-<td><code>trait_effects</code></td>
-<td>1 per (trait × effect)</td>
+<td><code>phenotype_effects</code></td>
+<td>1 per (phenotype × effect)</td>
 <td>Fixed and random model effects</td>
+</tr>
+<tr>
+<td><code>phenotype_random_effects</code></td>
+<td>1 per (phenotype × effect × level)</td>
+<td>Sampled random effect deviations</td>
 </tr>
 <tr>
 <td><code>phenotype_meta</code></td>

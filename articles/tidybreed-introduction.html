@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.63.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -221,7 +221,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpaD0MbU/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpUlxieo/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -334,33 +334,31 @@ mitochondrial chromosome.</p>
 <code>schema(pop)</code> lists every table:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span>
-<span><span class="co">#&gt; ── Schema: demo ────────────────────────────────────────────────────────────────</span></span>
+<span><span class="co">#&gt; ── Schema: demo ─────────────────────────────── 22 tables · 1.9 MiB in memory ──</span></span>
 <span><span class="co">#&gt;   Use describe_table(pop, "name") for column-level details.</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;   Table                 Rows  Cols  Description </span></span>
-<span><span class="co">#&gt;   ──────────────────────────────────────────────────────────────────────────────</span></span>
-<span><span class="co">#&gt;   ind_meta                 0     6  Individual-level metadata. One row per in...</span></span>
-<span><span class="co">#&gt;   trait_var_comp           0     5  Genetic variance component storage. One r...</span></span>
-<span><span class="co">#&gt;   genome_effects           0     7  QTL effect data in long format. One row p...</span></span>
-<span><span class="co">#&gt;   phenotype_meta           0    16  Observed phenotype definitions. One row p...</span></span>
-<span><span class="co">#&gt;   phenotype_components     0    17  Component definitions for composite pheno...</span></span>
-<span><span class="co">#&gt;   phenotype_var_comp       0    10  Phenotype-level variance component storag...</span></span>
-<span><span class="co">#&gt;   trait_meta               0     6  Genetic component trait definitions. One ...</span></span>
-<span><span class="co">#&gt;   trait_effects            0    12  Fixed and random effect configurations fo...</span></span>
-<span><span class="co">#&gt;   trait_random_effects     0     5  Sampled random effect levels. One row per...</span></span>
-<span><span class="co">#&gt;   ind_phenotype            0     5  Phenotype records in long format. One row...</span></span>
-<span><span class="co">#&gt;   ind_tbv                  0     4  True breeding values (simulation ground t...</span></span>
-<span><span class="co">#&gt;   ind_ebv                  0     8  Estimated breeding values from external B...</span></span>
-<span><span class="co">#&gt;   index_meta               0     5  Selection index definitions. One row per ...</span></span>
-<span><span class="co">#&gt;   ind_index                0     5  Computed selection index values. One row ...</span></span>
-<span><span class="co">#&gt;   ind_true_index           0     5  True selection index values computed from...</span></span>
-<span><span class="co">#&gt;   genome_meta            500     5  Locus-level metadata. One row per locus. ...</span></span>
-<span><span class="co">#&gt;   genome_map             500     7  Genetic map in long format. One row per (...</span></span>
-<span><span class="co">#&gt;   ind_haplotype            0     7  Phased haplotypes in long format. One row...</span></span>
-<span><span class="co">#&gt;   ind_genotype             0     4  Genotype dosage cache in long format. One...</span></span>
-<span><span class="co">#&gt;   ind_crossover            0     6  Crossover events in long format, one row ...</span></span>
-<span><span class="co">#&gt;   chr_inheritance          5     5  Per-chromosome copy counts, keyed by offs...</span></span>
-<span><span class="co">#&gt;   chr_recombination        5     4  Per-chromosome recombination, keyed by pr...</span></span></code></pre></div>
+<span><span class="co">#&gt;   Genome</span></span>
+<span><span class="co">#&gt;     genome_meta                500     5  Locus-level metadata. One row per l...</span></span>
+<span><span class="co">#&gt;     genome_map                 500     7  Genetic map in long format. One row...</span></span>
+<span><span class="co">#&gt;     chr_inheritance              5     5  Per-chromosome copy counts, keyed b...</span></span>
+<span><span class="co">#&gt;     chr_recombination            5     4  Per-chromosome recombination, keyed...</span></span>
+<span><span class="co">#&gt;     + 1 empty: genome_effects</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Individuals</span></span>
+<span><span class="co">#&gt;     + 4 empty: ind_meta, ind_haplotype, ind_genotype, ind_crossover</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Genetic model</span></span>
+<span><span class="co">#&gt;     + 2 empty: trait_meta, trait_var_comp</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Observation model</span></span>
+<span><span class="co">#&gt;     + 5 empty: phenotype_meta, phenotype_components, phenotype_var_comp, </span></span>
+<span><span class="co">#&gt;                phenotype_effects, phenotype_random_effects</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Selection</span></span>
+<span><span class="co">#&gt;     + 1 empty: index_meta</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Results</span></span>
+<span><span class="co">#&gt;     + 5 empty: ind_tbv, ind_phenotype, ind_ebv, ind_index, ind_true_index</span></span></code></pre></div>
 <p><code><a href="../reference/describe_table.html">describe_table()</a></code> explains one table’s columns:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/describe_table.html">describe_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span></span>
@@ -521,15 +519,15 @@ parent × locus:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 10 × 7</span></span></span>
 <span><span class="co">#&gt;    id_ind parent_origin strand line_origin locus_id locus_name allele</span></span>
 <span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 1</span> A_1                1      1 A                  1 Locus_1         0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 1</span> A_1                1      1 A                  1 Locus_1         1</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 2</span> A_2                1      1 A                  1 Locus_1         0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 3</span> A_3                1      1 A                  1 Locus_1         0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 4</span> A_4                1      1 A                  1 Locus_1         1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 5</span> A_5                1      1 A                  1 Locus_1         0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 4</span> A_4                1      1 A                  1 Locus_1         0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 5</span> A_5                1      1 A                  1 Locus_1         1</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 6</span> A_6                1      1 A                  1 Locus_1         0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 7</span> A_7                1      1 A                  1 Locus_1         0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 8</span> A_8                1      1 A                  1 Locus_1         0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> A_9                1      1 A                  1 Locus_1         0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> A_9                1      1 A                  1 Locus_1         1</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span> A_10               1      1 A                  1 Locus_1         1</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -671,12 +669,12 @@ population.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 4</span></span></span>
 <span><span class="co">#&gt;   id_tbv id_ind trait_name tbv_value</span></span>
 <span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      5 A_5    ADG          -<span style="color: #BB0000;">0.137</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     13 A_13   ADG           0.119 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     16 A_16   ADG           0.115 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     22 A_22   ADG           0.321 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     25 A_25   ADG           0.127 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     31 A_31   ADG          -<span style="color: #BB0000;">0.034</span><span style="color: #BB0000; text-decoration: underline;">6</span></span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      3 A_3    ADG          -<span style="color: #BB0000;">1.22</span>  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      4 A_4    ADG          -<span style="color: #BB0000;">0.774</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     14 A_14   ADG           0.205 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     17 A_17   ADG          -<span style="color: #BB0000;">0.164</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     20 A_20   ADG          -<span style="color: #BB0000;">0.097</span><span style="color: #BB0000; text-decoration: underline;">9</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     24 A_24   ADG          -<span style="color: #BB0000;">0.107</span></span></span></code></pre></div>
 <p><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> builds the observed record: intercept,
 plus fixed and random effects, plus the breeding value, plus a sampled
 residual. It calls <code><a href="../reference/add_tbv.html">add_tbv()</a></code> internally, so you can go
@@ -690,12 +688,12 @@ straight to it.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
 <span><span class="co">#&gt;   id_phenotype id_ind phenotype_name pheno_value pheno_number</span></span>
 <span><span class="co">#&gt;          <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>            1 A_1    ADG                  0.466            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>            2 A_2    ADG                  2.24             1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>            3 A_3    ADG                  1.16             1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>            4 A_4    ADG                  2.96             1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>            5 A_5    ADG                  1.41             1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>            6 A_6    ADG                  0.550            1</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>            1 A_1    ADG                  1.71             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>            2 A_2    ADG                  1.58             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>            3 A_3    ADG                 -<span style="color: #BB0000;">0.319</span>            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>            4 A_4    ADG                  0.848            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>            5 A_5    ADG                  1.92             1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>            6 A_6    ADG                  2.94             1</span></span></code></pre></div>
 <p>The sex effect we defined should show up as a gap of roughly 0.30
 between the group means:</p>
 <div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
@@ -711,8 +709,8 @@ between the group means:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 3</span></span></span>
 <span><span class="co">#&gt;   sex       n mean_ADG</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> F       250     1.00</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> M       250     1.36</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> F       250    0.976</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> M       250    1.38</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="a-second-genetically-correlated-trait">A second, genetically correlated trait<a class="anchor" aria-label="anchor" href="#a-second-genetically-correlated-trait"></a>
@@ -774,8 +772,8 @@ them.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 4</span></span></span>
 <span><span class="co">#&gt;   trait_name     n mean_tbv var_tbv</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG          500   0.026<span style="text-decoration: underline;">2</span>   0.188</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> BF           500  -<span style="color: #BB0000;">0.020</span><span style="color: #BB0000; text-decoration: underline;">4</span>   0.287</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG          500 -<span style="color: #BB0000;">0.005</span><span style="color: #BB0000; text-decoration: underline;">20</span>   0.220</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> BF           500  0.006<span style="text-decoration: underline;">73</span>   0.312</span></span></code></pre></div>
 <p>The realised variances are in the neighbourhood of the 0.25 and 0.30
 we asked for, but they are not exact — and that is worth understanding
 rather than glossing over. <code>target_add_var</code> scales the QTL
@@ -819,7 +817,7 @@ per-chromosome rules in <code>chr_inheritance</code> and
 <code>chr_recombination</code>.</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_offspring.html">add_offspring</a></span><span class="op">(</span><span class="va">pop</span>, <span class="va">matings</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Added 20 offspring (base_seed = 409472004)</span></span>
+<span><span class="co">#&gt; Added 20 offspring (base_seed = 1393264544)</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">1L</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 8</span></span></span>
@@ -881,8 +879,8 @@ genotyped</em> — here, only the offspring:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   has_50K     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> TRUE       20</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> FALSE     500</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE     500</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE       20</span></span></code></pre></div>
 <p><code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> returns the familiar wide 0/1/2
 dosage matrix, ready for GBLUP or export:</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
@@ -894,11 +892,11 @@ dosage matrix, ready for GBLUP or export:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 6</span></span></span>
 <span><span class="co">#&gt;   id_ind locus_1 locus_2 locus_3 locus_4 locus_5</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> A_501        0       2       1       1       0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> A_502        1       2       1       2       0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> A_503        1       2       2       1       0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> A_504        1       2       1       2       0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> A_505        0       1       2       1       0</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> A_501        1       0       1       1       1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> A_502        1       0       2       1       2</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> A_503        1       1       2       0       2</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> A_504        1       0       2       0       2</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> A_505        1       2       2       0       2</span></span></code></pre></div>
 <p>Haplotypes are the source of truth and dosages are derived on demand,
 so nothing is stored twice. If you need dosages repeatedly,
 <code><a href="../reference/add_dosage.html">add_dosage()</a></code> caches them in <code>ind_genotype</code>.</p>
@@ -938,12 +936,12 @@ actually worked:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
 <span><span class="co">#&gt;   id_true_index id_ind index_name weight_type true_index_value</span></span>
 <span><span class="co">#&gt;           <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index                 0.483 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index                 0.726 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index                -<span style="color: #BB0000;">0.362</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index                -<span style="color: #BB0000;">0.375</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index                 0.036<span style="text-decoration: underline;">0</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index                 0.096<span style="text-decoration: underline;">4</span></span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index                -<span style="color: #BB0000;">0.455</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index                 0.338 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index                 0.167 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index                 0.431 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index                 0.522 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index                 0.066<span style="text-decoration: underline;">0</span></span></span></code></pre></div>
 <p><code><a href="../reference/add_index.html">add_index()</a></code> does the same arithmetic on any table of
 values. In a real program you would run it on <code>ind_ebv</code> after
 a BLUP evaluation; here we use the TBVs. <strong>Filter first</strong>
@@ -964,11 +962,11 @@ so there is exactly one value per individual per trait:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 5</span></span></span>
 <span><span class="co">#&gt;   id_index id_ind index_name index_number index_value</span></span>
 <span><span class="co">#&gt;      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>             <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      460 A_512  terminal              1        1.56</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      463 A_515  terminal              1        1.46</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      404 A_462  terminal              1        1.36</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      471 A_54   terminal              1        1.32</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>       70 A_161  terminal              1        1.20</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      381 A_441  terminal              1        1.64</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      509 A_89   terminal              1        1.44</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      465 A_517  terminal              1        1.43</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      486 A_68   terminal              1        1.33</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      352 A_415  terminal              1        1.28</span></span></code></pre></div>
 <p>Those top animals are your selection candidates. Pull their IDs,
 build a new mating plan, call <code><a href="../reference/add_offspring.html">add_offspring()</a></code>, and you have
 closed the loop on a breeding cycle.</p>

@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpaD0MbU/duckdb
+#> ℹ /tmp/RtmpUlxieo/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -254,33 +254,31 @@ Two helpers exist so you never have to guess what is in the database.
 ``` r
 
 schema(pop)
-#> ── Schema: demo ────────────────────────────────────────────────────────────────
+#> ── Schema: demo ─────────────────────────────── 22 tables · 1.9 MiB in memory ──
 #>   Use describe_table(pop, "name") for column-level details.
 #> 
-#>   Table                 Rows  Cols  Description 
-#>   ──────────────────────────────────────────────────────────────────────────────
-#>   ind_meta                 0     6  Individual-level metadata. One row per in...
-#>   trait_var_comp           0     5  Genetic variance component storage. One r...
-#>   genome_effects           0     7  QTL effect data in long format. One row p...
-#>   phenotype_meta           0    16  Observed phenotype definitions. One row p...
-#>   phenotype_components     0    17  Component definitions for composite pheno...
-#>   phenotype_var_comp       0    10  Phenotype-level variance component storag...
-#>   trait_meta               0     6  Genetic component trait definitions. One ...
-#>   trait_effects            0    12  Fixed and random effect configurations fo...
-#>   trait_random_effects     0     5  Sampled random effect levels. One row per...
-#>   ind_phenotype            0     5  Phenotype records in long format. One row...
-#>   ind_tbv                  0     4  True breeding values (simulation ground t...
-#>   ind_ebv                  0     8  Estimated breeding values from external B...
-#>   index_meta               0     5  Selection index definitions. One row per ...
-#>   ind_index                0     5  Computed selection index values. One row ...
-#>   ind_true_index           0     5  True selection index values computed from...
-#>   genome_meta            500     5  Locus-level metadata. One row per locus. ...
-#>   genome_map             500     7  Genetic map in long format. One row per (...
-#>   ind_haplotype            0     7  Phased haplotypes in long format. One row...
-#>   ind_genotype             0     4  Genotype dosage cache in long format. One...
-#>   ind_crossover            0     6  Crossover events in long format, one row ...
-#>   chr_inheritance          5     5  Per-chromosome copy counts, keyed by offs...
-#>   chr_recombination        5     4  Per-chromosome recombination, keyed by pr...
+#>   Genome
+#>     genome_meta                500     5  Locus-level metadata. One row per l...
+#>     genome_map                 500     7  Genetic map in long format. One row...
+#>     chr_inheritance              5     5  Per-chromosome copy counts, keyed b...
+#>     chr_recombination            5     4  Per-chromosome recombination, keyed...
+#>     + 1 empty: genome_effects
+#> 
+#>   Individuals
+#>     + 4 empty: ind_meta, ind_haplotype, ind_genotype, ind_crossover
+#> 
+#>   Genetic model
+#>     + 2 empty: trait_meta, trait_var_comp
+#> 
+#>   Observation model
+#>     + 5 empty: phenotype_meta, phenotype_components, phenotype_var_comp, 
+#>                phenotype_effects, phenotype_random_effects
+#> 
+#>   Selection
+#>     + 1 empty: index_meta
+#> 
+#>   Results
+#>     + 5 empty: ind_tbv, ind_phenotype, ind_ebv, ind_index, ind_true_index
 ```
 
 [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md)
@@ -424,15 +422,15 @@ pop |> get_table("ind_haplotype")
 #> # A tibble: 10 × 7
 #>    id_ind parent_origin strand line_origin locus_id locus_name allele
 #>    <chr>          <int>  <int> <chr>          <int> <chr>       <int>
-#>  1 A_1                1      1 A                  1 Locus_1         0
+#>  1 A_1                1      1 A                  1 Locus_1         1
 #>  2 A_2                1      1 A                  1 Locus_1         0
 #>  3 A_3                1      1 A                  1 Locus_1         0
-#>  4 A_4                1      1 A                  1 Locus_1         1
-#>  5 A_5                1      1 A                  1 Locus_1         0
+#>  4 A_4                1      1 A                  1 Locus_1         0
+#>  5 A_5                1      1 A                  1 Locus_1         1
 #>  6 A_6                1      1 A                  1 Locus_1         0
 #>  7 A_7                1      1 A                  1 Locus_1         0
 #>  8 A_8                1      1 A                  1 Locus_1         0
-#>  9 A_9                1      1 A                  1 Locus_1         0
+#>  9 A_9                1      1 A                  1 Locus_1         1
 #> 10 A_10               1      1 A                  1 Locus_1         1
 ```
 
@@ -596,12 +594,12 @@ pop |> get_table("ind_tbv") |> collect() |> head()
 #> # A tibble: 6 × 4
 #>   id_tbv id_ind trait_name tbv_value
 #>    <int> <chr>  <chr>          <dbl>
-#> 1      5 A_5    ADG          -0.137 
-#> 2     13 A_13   ADG           0.119 
-#> 3     16 A_16   ADG           0.115 
-#> 4     22 A_22   ADG           0.321 
-#> 5     25 A_25   ADG           0.127 
-#> 6     31 A_31   ADG          -0.0346
+#> 1      3 A_3    ADG          -1.22  
+#> 2      4 A_4    ADG          -0.774 
+#> 3     14 A_14   ADG           0.205 
+#> 4     17 A_17   ADG          -0.164 
+#> 5     20 A_20   ADG          -0.0979
+#> 6     24 A_24   ADG          -0.107
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -620,12 +618,12 @@ pop |> get_table("ind_phenotype") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_phenotype id_ind phenotype_name pheno_value pheno_number
 #>          <int> <chr>  <chr>                <dbl>        <int>
-#> 1            1 A_1    ADG                  0.466            1
-#> 2            2 A_2    ADG                  2.24             1
-#> 3            3 A_3    ADG                  1.16             1
-#> 4            4 A_4    ADG                  2.96             1
-#> 5            5 A_5    ADG                  1.41             1
-#> 6            6 A_6    ADG                  0.550            1
+#> 1            1 A_1    ADG                  1.71             1
+#> 2            2 A_2    ADG                  1.58             1
+#> 3            3 A_3    ADG                 -0.319            1
+#> 4            4 A_4    ADG                  0.848            1
+#> 5            5 A_5    ADG                  1.92             1
+#> 6            6 A_6    ADG                  2.94             1
 ```
 
 The sex effect we defined should show up as a gap of roughly 0.30
@@ -645,8 +643,8 @@ pop |>
 #> # A tibble: 2 × 3
 #>   sex       n mean_ADG
 #>   <chr> <int>    <dbl>
-#> 1 F       250     1.00
-#> 2 M       250     1.36
+#> 1 F       250    0.976
+#> 2 M       250    1.38
 ```
 
 ## A second, genetically correlated trait
@@ -715,8 +713,8 @@ pop |>
 #> # A tibble: 2 × 4
 #>   trait_name     n mean_tbv var_tbv
 #>   <chr>      <int>    <dbl>   <dbl>
-#> 1 ADG          500   0.0262   0.188
-#> 2 BF           500  -0.0204   0.287
+#> 1 ADG          500 -0.00520   0.220
+#> 2 BF           500  0.00673   0.312
 ```
 
 The realised variances are in the neighbourhood of the 0.25 and 0.30 we
@@ -766,7 +764,7 @@ and `chr_recombination`.
 ``` r
 
 pop <- add_offspring(pop, matings)
-#> Added 20 offspring (base_seed = 409472004)
+#> Added 20 offspring (base_seed = 1393264544)
 
 pop |> get_table("ind_meta") |> filter(gen == 1L) |> collect() |> head()
 #> # A tibble: 6 × 8
@@ -838,8 +836,8 @@ pop |> get_table("ind_meta") |> count(has_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   has_50K     n
 #>   <lgl>   <dbl>
-#> 1 TRUE       20
-#> 2 FALSE     500
+#> 1 FALSE     500
+#> 2 TRUE       20
 ```
 
 [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
@@ -856,11 +854,11 @@ geno[1:5, 1:6]
 #> # A tibble: 5 × 6
 #>   id_ind locus_1 locus_2 locus_3 locus_4 locus_5
 #>   <chr>    <int>   <int>   <int>   <int>   <int>
-#> 1 A_501        0       2       1       1       0
-#> 2 A_502        1       2       1       2       0
-#> 3 A_503        1       2       2       1       0
-#> 4 A_504        1       2       1       2       0
-#> 5 A_505        0       1       2       1       0
+#> 1 A_501        1       0       1       1       1
+#> 2 A_502        1       0       2       1       2
+#> 3 A_503        1       1       2       0       2
+#> 4 A_504        1       0       2       0       2
+#> 5 A_505        1       2       2       0       2
 ```
 
 Haplotypes are the source of truth and dosages are derived on demand, so
@@ -909,12 +907,12 @@ pop |> get_table("ind_true_index") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_true_index id_ind index_name weight_type true_index_value
 #>           <int> <chr>  <chr>      <chr>                  <dbl>
-#> 1             1 A_1    terminal   index                 0.483 
-#> 2             2 A_10   terminal   index                 0.726 
-#> 3             3 A_100  terminal   index                -0.362 
-#> 4             4 A_101  terminal   index                -0.375 
-#> 5             5 A_102  terminal   index                 0.0360
-#> 6             6 A_103  terminal   index                 0.0964
+#> 1             1 A_1    terminal   index                -0.455 
+#> 2             2 A_10   terminal   index                 0.338 
+#> 3             3 A_100  terminal   index                 0.167 
+#> 4             4 A_101  terminal   index                 0.431 
+#> 5             5 A_102  terminal   index                 0.522 
+#> 6             6 A_103  terminal   index                 0.0660
 ```
 
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
@@ -939,11 +937,11 @@ pop |>
 #> # A tibble: 5 × 5
 #>   id_index id_ind index_name index_number index_value
 #>      <int> <chr>  <chr>             <int>       <dbl>
-#> 1      460 A_512  terminal              1        1.56
-#> 2      463 A_515  terminal              1        1.46
-#> 3      404 A_462  terminal              1        1.36
-#> 4      471 A_54   terminal              1        1.32
-#> 5       70 A_161  terminal              1        1.20
+#> 1      381 A_441  terminal              1        1.64
+#> 2      509 A_89   terminal              1        1.44
+#> 3      465 A_517  terminal              1        1.43
+#> 4      486 A_68   terminal              1        1.33
+#> 5      352 A_415  terminal              1        1.28
 ```
 
 Those top animals are your selection candidates. Pull their IDs, build a

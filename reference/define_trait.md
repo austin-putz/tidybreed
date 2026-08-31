@@ -71,7 +71,7 @@ define_trait(
 - overwrite:
 
   Logical. If `TRUE` and a trait with the same name already exists,
-  replace its `trait_meta` row and clear associated `trait_effects`
+  replace its `trait_meta` row and clear associated `phenotype_effects`
   rows. Default `FALSE` errors if the trait already exists.
 
 ## Value

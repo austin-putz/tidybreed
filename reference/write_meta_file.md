@@ -47,7 +47,7 @@ write_meta_file(
 - effects_df:
 
   data.frame of (trait_name x effect_name) fixed-effect rows from
-  `trait_effects`, as returned by
+  `phenotype_effects`, as returned by
   [`build_data_file()`](https://austin-putz.github.io/tidybreed/reference/build_data_file.md)
 
 - chip_name:
