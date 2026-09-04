@@ -1,24 +1,95 @@
 # Follow-ups deferred from the v0.64.0 schema/rename work
 
-Status: **not started — for review.** Three gaps found while implementing
-`plans/update_schema_print.md`. All three were deliberately left out of v0.64.0
-because each needs a decision that the schema/print work did not settle, and
-guessing would have buried a design choice inside a mechanical change.
+Status: **reviewed and verified against the code (2026-09-04); ready to
+implement.** Originally three gaps found while implementing
+`plans/update_schema_print.md`, all deliberately left out of v0.64.0 because
+each needed a decision the schema/print work did not settle.
 
-They are independent of each other. Rough order of value: **1 > 3 > 2**.
+The review confirmed the original diagnosis, **answered the one open question**,
+and found **two additional defects** plus **three errors in the original plan**.
+Revised order of value: **A > 1 > 3 > 2**.
 
 | # | Gap | Blast radius | Suggested fix |
 |---|-----|--------------|---------------|
-| 1 | `TABLE_ROW_KEYS` / `TABLE_PRIMARY_KEYS` missing entries | `remove_rows()` hard-errors on 5 tables | Register the 3 that have real keys; make the other 2 error deliberately |
-| 2 | 3 tables have `CREATE TABLE` DDL in two files | Silent drift risk only | Single owner: delete the `ensure_trait_tables()` copies |
-| 3 | `archive_replicate()` table lists are incomplete | Replicates silently lose config tables | Derive from `.schema_table_order()` groups, not a hand list |
+| A | `phenotype_random_effects` never reset between replicates | **Correctness bug** — replicates are not independent | Add to `store_and_reset` |
+| 1 | `TABLE_ROW_KEYS` missing entries **+ NULL-unsafe delete join** | `remove_rows()` hard-errors on 5 tables; silently deletes 0 rows on 2 more | Register the real keys; `IS NOT DISTINCT FROM` in the join |
+| 2 | 4 tables have `CREATE TABLE` DDL in 2–3 files | Silent drift risk only | Single owner: delete the `ensure_*()` copies |
+| 3 | `archive_replicate()` table lists are incomplete | Config tables not archived with the run | Extend the literal lists + completeness test |
 
 ---
 
-## 1. `TABLE_ROW_KEYS` / `TABLE_PRIMARY_KEYS` have missing entries
+## A. `phenotype_random_effects` carries across replicates (NEW — correctness bug)
 
 ### What is wrong
 
+This was item 3's "check first" question. **The answer is: draws are reused.**
+
+`R/phenotype_helpers.R:208-250` reads existing draws for the
+`(phenotype_name, effect_name)` pair, computes
+`new_lvls <- setdiff(unique_lvls, names(existing_map))`, and samples **only** for
+levels not already stored:
+
+```r
+existing_draws <- DBI::dbGetQuery(pop$db_conn, "SELECT level, draw_value FROM ...")
+new_lvls <- setdiff(unique_lvls, names(existing_map))
+if (length(new_lvls) > 0) { ... rnorm/rgamma/runif ... }
+per_ind <- unname(existing_map[as.character(group)])
+```
+
+That reuse is **correct within a replicate** — every animal in HYS level
+`2020_Iowa` must receive the same shift across multiple `add_phenotype()` calls,
+which is the entire point of a random effect. It is **wrong across replicates**,
+and nothing clears the table: `R/archive_replicate.R:230` deletes only
+`c(store_and_reset, reset_only)`, and `phenotype_random_effects` appears in
+neither list (nor in `store_once`).
+
+So replicate 2 inherits replicate 1's draws for every level name that repeats —
+which, for `sex`, `line_name`, HYS, litter and pen grouping columns, is most of
+them. The random effects are not re-drawn and the replicates are not
+independent. This is a genuine correctness bug in the simulation, not an
+archiving omission.
+
+### Suggested fix
+
+Add `"phenotype_random_effects"` to the `store_and_reset` default in
+`archive_replicate()`. `store_and_reset` is exactly right: the draws are
+per-replicate *output* worth keeping (stamped with `replicate`, so a run can be
+audited or reproduced), and the working-DB rows are deleted afterwards, so the
+next replicate re-draws from scratch.
+
+`store_once` would be wrong — it archives once and leaves the working rows in
+place, which is the current broken behaviour with extra steps.
+
+`.ensure_archive_table(conn, tbl, add_replicate = TRUE)` adds the `replicate`
+column to the **archive** copy only, so no working-DB schema change is needed and
+the existing collision guard (`archive_replicate.R:145`) already covers it.
+
+### Test to add
+
+Two replicates with the same grouping levels must produce **different** draws:
+
+```r
+test_that("random effect draws are re-drawn after archive_replicate()", {
+  # ... replicate 1, capture phenotype_random_effects
+  pop <- archive_replicate(pop, archive_path = tempfile(fileext = ".duckdb"))
+  expect_equal(nrow(collect(get_table(pop, "phenotype_random_effects"))), 0L)
+  # ... replicate 2 with the same levels; draws must differ
+})
+```
+
+### Scope
+
+`R/archive_replicate.R` (one string + a Details note),
+`tests/testthat/test-archive_replicate.R`. Small — release on its own, ahead of
+the tidy-ups.
+
+---
+
+## 1. `TABLE_ROW_KEYS` gaps **and** a NULL-unsafe delete join
+
+### What is wrong
+
+**1a. Missing registry entries (as originally described — confirmed).**
 v0.64.0 closed this class of gap for `TABLE_RESERVED_COLS` (every one of the 24
 `SYSTEM_TABLES` now has an entry). The other two registries in `R/sql_utils.R`
 were left as they were:
@@ -44,43 +115,61 @@ if (is.null(key_cols)) {
 }
 ```
 
-So `remove_rows()` cannot delete a row from `phenotype_meta`,
-`phenotype_components`, `founder_haplotypes`, or `phenotype_random_effects` —
-even though the first two have a perfectly good integer PK. This is the same
-shape as the v0.63.1 bug (`TABLE_ROW_KEYS$trait_effects` listed a column that had
-been renamed, so every delete aborted), except it fails at "not registered"
-rather than "missing key column".
+Verified live:
+
+```
+> pop |> get_table("phenotype_meta") |> filter(phenotype_name == "ADG") |> remove_rows()
+Error : Cannot delete from 'phenotype_meta': table is not registered in
+TABLE_ROW_KEYS. ...
+```
+
+`phenotype_meta` and `phenotype_components` both have a perfectly good integer
+PK, so this is a pure omission. Same shape as the v0.63.1 bug
+(`TABLE_ROW_KEYS$trait_effects` listed a renamed column, so every delete
+aborted), except it fails at "not registered" rather than "missing key column".
+
+**1b. `delete_exact_rows()` cannot delete rows with NULL key values (NEW).**
+`R/remove_rows.R:6-46` builds its join as:
+
+```r
+join_sql <- paste(paste0("t.", key_cols, " = f.", key_cols), collapse = " AND ")
+```
+
+`NULL = NULL` is `NULL`, not `TRUE`, so any row whose key column is `NULL` never
+matches. Two **already-registered** tables have nullable key columns —
+`chr_inheritance` (`offspring_sex`, `line_name`) and `chr_recombination`
+(`parent_sex`, `line_name`) — and `define_genome()` seeds exactly those rows with
+`NULL` in both. Verified live:
+
+```
+> pop |> get_table("chr_inheritance") |> filter(chr_name == "1") |> remove_rows()
+Deleted 0 rows from `chr_inheritance`      # <- and the row is still there
+```
+
+This is worse than 1a: it reports **success** while doing nothing. It also
+blocks registering `founder_haplotypes`, whose `line_name` is `NULL` for the
+shared pool.
+
+`define_chromosome()` already uses the right idiom (`IS NOT DISTINCT FROM`) for
+its delete-then-insert upsert, so the fix is to match it.
 
 `TABLE_PRIMARY_KEYS` is lower-stakes: it drives vector updates and filtered
 updates in `mutate_table()`. Several tables in that missing list genuinely have
 no single-column PK (`ind_haplotype`, `chr_inheritance`, …), so a missing entry
 there is often *correct*.
 
-### Why it was not fixed in v0.64.0
-
-Two different questions are tangled together, and only one is mechanical:
-
-- Tables with a real single-column PK (`phenotype_meta.id_phenotype_meta`,
-  `phenotype_components.id_phenotype_comp`) are pure omissions — register them.
-- Tables with only a composite logical key (`founder_haplotypes`,
-  `phenotype_random_effects`) raise an actual design question: *should*
-  `remove_rows()` delete from them at all? Deleting one row of a founder
-  haplotype pool leaves a pool that is no longer rectangular, and every
-  downstream sampler assumes it is. That is a decision, not a lookup.
-
 ### Suggested fix
 
-**Split by whether deletion is meaningful, and make both answers explicit.**
-
-**1a. Register the three tables where row deletion is well-defined.** In
+**1a. Register the four tables where row deletion is well-defined.** In
 `R/sql_utils.R`:
 
 ```r
 TABLE_ROW_KEYS <- list(
   ...
-  phenotype_meta       = "id_phenotype_meta",
-  phenotype_components = "id_phenotype_comp",
+  phenotype_meta           = "id_phenotype_meta",
+  phenotype_components     = "id_phenotype_comp",
   phenotype_random_effects = c("phenotype_name", "effect_name", "level"),
+  founder_haplotypes       = c("line_name", "haplotype_id", "locus_name"),
   ...
 )
 
@@ -92,13 +181,36 @@ TABLE_PRIMARY_KEYS <- list(
 )
 ```
 
-`phenotype_random_effects` gets a row key but no primary key: its PK is the
-composite `(phenotype_name, effect_name, level)`, which is exactly what
-`TABLE_ROW_KEYS` is for and exactly what `TABLE_PRIMARY_KEYS` is not.
+`phenotype_random_effects` and `founder_haplotypes` get a row key but no primary
+key: their PKs are composite, which is exactly what `TABLE_ROW_KEYS` is for and
+exactly what `TABLE_PRIMARY_KEYS` is not.
 
-**1b. Refuse deliberately for `founder_haplotypes`, do not just omit it.** An
-omission and a decision currently look identical from the outside. Add a small
-registry next to the others:
+**Correction to the original plan: do not blanket-refuse `founder_haplotypes`.**
+The original 1b proposed a `TABLE_NO_ROW_DELETE` entry for it, on the grounds
+that deleting one row leaves a non-rectangular pool. That reasoning holds for a
+single `(haplotype_id, locus_name)` row, but not for the operation a user
+actually wants: dropping **one line's entire pool** (`filter(line_name == "B")`)
+is well-defined, leaves the remaining lines rectangular, and is a plausible
+crossbreeding-setup operation. A flat refusal forecloses it to prevent a misuse
+that a `nrow`-level check cannot distinguish anyway. Register the composite key
+and let the operation work.
+
+**1b. Make the delete join NULL-safe.** In `delete_exact_rows()`:
+
+```r
+join_sql <- paste(
+  paste0("t.", key_cols, " IS NOT DISTINCT FROM f.", key_cols),
+  collapse = " AND "
+)
+```
+
+`IS NOT DISTINCT FROM` is DuckDB's NULL-safe equality and is already the idiom
+used in `define_chromosome()`. It behaves identically to `=` for non-NULL values,
+so no currently-working delete changes behaviour.
+
+**1c. Keep `TABLE_NO_ROW_DELETE`, but only for `_schema_meta`.** An omission and
+a decision still look identical from the outside, and the registry should say
+which it is:
 
 ```r
 #' Tables where single-row deletion is not a meaningful operation
@@ -107,19 +219,17 @@ registry next to the others:
 #' tables are listed so the refusal is a decision with a reason attached.
 #' @keywords internal
 TABLE_NO_ROW_DELETE <- c(
-  founder_haplotypes =
-    paste("the pool is rectangular (every haplotype_id has a row at every",
-          "locus) and add_founders() assumes it. Drop and rebuild the pool",
-          "with define_founder_haplotypes() instead."),
-  "_schema_meta" =
-    "descriptions are managed by define_schema_description()."
+  `_schema_meta` = paste(
+    "schema descriptions are package-managed and rebuilt by open_pop();",
+    "editing them by hand would be silently overwritten."
+  )
 )
 ```
 
-and branch on it in `remove_rows()` before the generic "not registered" error,
-so the user gets the reason and the alternative rather than a dead end.
+Branch on it in `remove_rows()` before the generic "not registered" error, so the
+user gets a reason and an alternative rather than a dead end.
 
-**1c. Extend the existing registry audit.** `tests/testthat/test-schema-registries.R`
+**1d. Extend the existing registry audit.** `tests/testthat/test-schema-registries.R`
 already asserts that every *listed* column exists. Add the converse, so a new
 table cannot be added without answering the question:
 
@@ -132,6 +242,8 @@ test_that("every system table either has a row key or is explicitly excluded", {
 })
 ```
 
+Plus a regression test that a NULL-keyed row actually deletes.
+
 This is the same visible-degradation principle `.schema_table_order()` uses: the
 next person to add a table is forced to make the call, and forgetting fails a
 test instead of surfacing months later as "why can't I delete from this table".
@@ -139,29 +251,36 @@ test instead of surfacing months later as "why can't I delete from this table".
 ### Scope
 
 `R/sql_utils.R`, `R/remove_rows.R`, `tests/testthat/test-schema-registries.R`,
-plus a `remove_rows()` roxygen note. Small — an afternoon, most of it the
-`founder_haplotypes` decision.
+`tests/testthat/test-remove_rows.R`, plus a `remove_rows()` roxygen note.
 
 ---
 
-## 2. Three tables have duplicate `CREATE TABLE` DDL
+## 2. Duplicate `CREATE TABLE` DDL (four tables, up to three sites each)
 
 ### What is wrong
 
-**Three** tables are defined twice, not one. Enumerating every `CREATE TABLE` in
-the two files that create tables:
+**Correction to the original plan: the duplication is wider than three tables.**
+The original count missed `R/define_effect_cov_matrix.R`, which contains
+`ensure_trait_var_comp()` and `ensure_phenotype_var_comp()`. Full enumeration of
+every `CREATE TABLE` across the package:
 
-| Only in `R/open_pop.R` | Only in `R/define_trait.R` (`ensure_trait_tables()`) | **In both** |
-|---|---|---|
-| `_schema_meta`, `genome_effects`, `ind_meta`, `trait_var_comp` | `ind_ebv`, `ind_index`, `ind_phenotype`, `ind_tbv`, `ind_true_index`, `index_meta`, `phenotype_effects`, `phenotype_random_effects`, `trait_meta` | `phenotype_components`, `phenotype_meta`, `phenotype_var_comp` |
+| Table | DDL sites |
+|---|---|
+| `phenotype_var_comp` | `open_pop.R:341`, `define_trait.R:322`, `define_effect_cov_matrix.R:217` — **three** |
+| `trait_var_comp` | `open_pop.R:276`, `define_effect_cov_matrix.R:195` — two |
+| `phenotype_meta` | `open_pop.R:298`, `define_trait.R:279` — two |
+| `phenotype_components` | `open_pop.R:319`, `define_trait.R:300` — two |
 
-(`define_genome()` creates the remaining genome and per-chromosome tables;
+Single-site tables: `_schema_meta`, `genome_effects`, `ind_meta` (`open_pop.R`);
+`ind_ebv`, `ind_index`, `ind_phenotype`, `ind_tbv`, `ind_true_index`,
+`index_meta`, `phenotype_effects`, `phenotype_random_effects`, `trait_meta`
+(`define_trait.R`); the genome and per-chromosome tables (`define_genome.R`).
 `founder_haplotypes` is created implicitly by `dbWriteTable()` in
-`R/founder_haplotype_helpers.R`, which is a fourth pattern again.)
+`R/founder_haplotype_helpers.R:274`, which is a fourth pattern again.
 
-Both copies are guarded by an existence check and the definitions currently agree
-column-for-column, so nothing is broken today. The problem is three tables with
-two definitions each and nothing enforcing that they stay in sync. Add a column
+All copies were diffed column-for-column during the review and **currently agree
+exactly**, so nothing is broken today. The problem is four tables with two or
+three definitions each and nothing enforcing that they stay in sync. Add a column
 to one copy and the behaviour depends on which function ran first — exactly the
 kind of drift the v0.63.1 registry bug came from.
 
@@ -169,48 +288,30 @@ The split is also not principled: there is no property that makes
 `phenotype_meta` belong in both files while `phenotype_effects` belongs in only
 one. It reads like accretion, not design.
 
-### Why it was not fixed in v0.64.0
-
-It is unrelated to the rename and to the printing work, and touching table
-creation order is the sort of change that wants its own test run rather than
-being buried in a 44-file diff.
-
 ### Suggested fix
 
 **Give these tables one owner: `open_pop()`.** It already creates
-`phenotype_meta`, `phenotype_var_comp` and the rest of the observation-layer
-tables unconditionally, so `phenotype_components` sitting there is consistent;
-`ensure_trait_tables()` is the odd one out.
+`phenotype_meta`, `phenotype_var_comp`, `trait_var_comp` and the rest of the
+observation-layer tables unconditionally, so `phenotype_components` sitting there
+is consistent; the `ensure_*()` helpers are the odd ones out.
 
 1. Delete the `phenotype_components`, `phenotype_meta` and `phenotype_var_comp`
-   entries from the `ddl` list in `R/define_trait.R`. Diff each pair first —
-   they are believed identical, but confirm rather than assume.
-2. Watch `pop$tables`: `ensure_trait_tables()` updates it with `names(ddl)`, so
-   dropping the three entries also drops them from that union. They must still
-   reach `pop$tables` via `open_pop()`'s own `tables_created` vector, or
-   `schema()` will stop listing them.
+   entries from the `ddl` list in `R/define_trait.R`, and delete
+   `ensure_trait_var_comp()` / `ensure_phenotype_var_comp()` from
+   `R/define_effect_cov_matrix.R` (replacing their call sites with a plain
+   existence assertion, or nothing at all if `open_pop()` guarantees the table).
+2. Watch `pop$tables`: `ensure_trait_tables()` updates it with `names(ddl)`, and
+   the `ensure_*_var_comp()` helpers append their own name, so dropping them also
+   drops those tables from that union. They must still reach `pop$tables` via
+   `open_pop()`'s own `tables_created` vector, or `schema()` will stop listing
+   them.
 3. Confirm no path reaches those tables without going through `open_pop()` — it
    should not, since `open_pop()` is the only entry point that creates a
    database, but `restore_pop()` is worth a look.
 
-**Then make the drift impossible rather than merely absent.** A test that
-compares the live column set of every table against a single declared source
-would catch this class permanently. The cheapest version reuses what already
-exists:
-
-```r
-test_that("no table is created by more than one DDL site", {
-  ddl_sites <- c(
-    length(grep("CREATE TABLE phenotype_meta", readLines("../../R/open_pop.R"))),
-    length(grep("CREATE TABLE phenotype_meta", readLines("../../R/define_trait.R")))
-  )
-  expect_equal(sum(ddl_sites), 1L)
-})
-```
-
-That is ugly, file-path-bound, and needs one copy per duplicated table. A better
-version, if it is worth the effort: move every `CREATE TABLE` string into one
-internal `.tidybreed_ddl()` list keyed by table name, have `open_pop()`,
+**Then make the drift impossible rather than merely absent.** The better version,
+if it is worth the effort: move every `CREATE TABLE` string into one internal
+`.tidybreed_ddl()` list keyed by table name, have `open_pop()`,
 `ensure_trait_tables()` and `define_genome()` all create from it, and test that
 its names equal `SYSTEM_TABLES`. Each call site keeps deciding *which* tables it
 creates and when; only the column definitions are single-sourced.
@@ -220,11 +321,17 @@ That would also let the registry audit get much stronger: with the DDL as data,
 live database, and `test-schema-registries.R` would stop needing to build a
 population just to list columns.
 
+(The original plan sketched a `grep`-over-source-files test as the cheap option.
+It is file-path-bound, needs one copy per duplicated table, and would not have
+caught the `define_effect_cov_matrix.R` sites it was written against — skip it in
+favour of the DDL-as-data version or nothing.)
+
 ### Scope
 
-`R/define_trait.R`, `R/open_pop.R`, one test. Small if you take the delete-only
-option; a day if you take the single-DDL-registry option, which also touches
-`R/define_genome.R` and `R/founder_haplotype_helpers.R`.
+`R/define_trait.R`, `R/define_effect_cov_matrix.R`, `R/open_pop.R`, one test.
+Small if you take the delete-only option; a day if you take the
+single-DDL-registry option, which also touches `R/define_genome.R` and
+`R/founder_haplotype_helpers.R`.
 
 ---
 
@@ -246,105 +353,70 @@ reset_only      = c("ind_haplotype", "ind_genotype", "ind_crossover")
 
 That accounts for 18 of the 24 `SYSTEM_TABLES`. Missing entirely:
 
-| Table | Should probably be | Consequence of the omission |
+| Table | Should be | Consequence of the omission |
 |---|---|---|
-| `phenotype_random_effects` | `store_and_reset` | Sampled random-effect draws are neither archived nor cleared between replicates, so replicate 2 silently inherits replicate 1's draws |
+| `phenotype_random_effects` | `store_and_reset` | **See item A** — promoted to its own fix; replicates are not independent |
 | `genome_map` | `store_once` | The genetic map is not archived with the run that used it |
 | `chr_inheritance` | `store_once` | Per-chromosome inheritance rules not archived |
 | `chr_recombination` | `store_once` | Per-chromosome recombination rules not archived |
-| `founder_haplotypes` | `store_once` (or `reset_only`) | The founder pool a replicate was drawn from is not recorded |
+| `founder_haplotypes` | `store_once` | The founder pool a replicate was drawn from is not recorded |
 | `_schema_meta` | neither | Correctly excluded — it is system metadata |
 
-`phenotype_random_effects` is the one that looks like a genuine correctness bug
-rather than an archiving omission: those are *sampled values*, not configuration.
-Carrying them across replicates means the random effects are not re-drawn, which
-is probably not what a replicate is supposed to mean. This needs confirming
-against how `define_effect_random()` and `add_phenotype()` treat existing draws
-before it is called a bug.
-
-### Why it was not fixed in v0.64.0
-
-Every row of that table is a semantic question about what a replicate *is*, and
-the rename only touched one name in one of the three lists. Answering
-"should the founder pool be archived per replicate?" inside a rename commit would
-have been the wrong place for it.
+With item A landed separately, what remains here is a pure archiving-completeness
+gap: four configuration tables that describe how a replicate was generated are
+not copied into the archive, so an archived run is not self-describing.
 
 ### Suggested fix
 
-**Stop hand-maintaining the lists; derive them from the display groups.**
-v0.64.0 established `.schema_table_order()` as the single place that knows every
-table and what layer it belongs to, and the archiving categories line up with
-those groups almost exactly:
+**Correction to the original plan: do not derive the lists from the display
+groups.** The original proposal mapped `.schema_table_order()` groups to archive
+categories with a single `phenotype_random_effects` override. That mapping is
+wrong: it places **Individuals** → `reset_only`, but `ind_meta` is in the
+Individuals group and is currently `store_and_reset` — and deliberately so; the
+roxygen at `archive_replicate.R:45` documents that archiving `ind_meta` is what
+makes `(replicate, id_ind)` a valid composite key. Deriving from groups would
+silently stop archiving pedigree.
 
-| Display group | Archive category | Reasoning |
-|---|---|---|
-| Genome, Founders | `store_once` | Fixed across replicates of one design |
-| Genetic model, Observation model, Selection | `store_once` | Model configuration |
-| Individuals | `reset_only` | Regenerated each replicate; too large to archive |
-| Results | `store_and_reset` | The per-replicate output — the point of archiving |
-| System | excluded | |
+That is two overrides out of eight groups, which is the tell: display grouping
+answers *where a table sits in the pipeline*, archiving answers *whether its
+contents are per-replicate output*. Those are different axes and they disagree on
+`ind_meta` and `phenotype_random_effects` — the two most important tables in the
+mapping. A derivation that needs an override for its own headline cases is not a
+derivation.
 
-The one place the mapping is not mechanical is `phenotype_random_effects`: it
-lives in the **Observation model** group (it is keyed by phenotype and written by
-`define_effect_random()`) but behaves like **Results** (it holds sampled values).
-That is the real finding here — the display grouping and the archiving semantics
-disagree about exactly one table, and that disagreement is worth resolving
-explicitly rather than papering over.
-
-Suggested shape:
+**Instead: keep the three literal lists, extend them, and add a completeness
+test.** The lists are the right shape; they were merely never updated when
+`genome_map`, `chr_inheritance`, `chr_recombination` and `founder_haplotypes`
+were added.
 
 ```r
-#' Archive category per display group, with per-table overrides
-#' @keywords internal
-.archive_category <- function() {
-  by_group <- c(
-    "Genome" = "store_once", "Founders" = "store_once",
-    "Genetic model" = "store_once", "Observation model" = "store_once",
-    "Selection" = "store_once",
-    "Individuals" = "reset_only", "Results" = "store_and_reset",
-    "System" = NA_character_
-  )
-  cat <- by_group[as.character(.schema_group_of(SYSTEM_TABLES)$table_group)]
-  names(cat) <- SYSTEM_TABLES
-
-  # Override: sampled draws, not configuration. Lives in the Observation model
-  # group because it is phenotype-keyed, but must be re-drawn each replicate.
-  cat["phenotype_random_effects"] <- "store_and_reset"
-  cat
-}
+store_once = c("genome_meta", "genome_map", "genome_effects",
+               "chr_inheritance", "chr_recombination", "founder_haplotypes",
+               "trait_meta", "phenotype_effects", "trait_var_comp",
+               "phenotype_meta", "phenotype_components",
+               "phenotype_var_comp", "index_meta")
 ```
 
-Keep the three arguments on `archive_replicate()` so a caller can still override,
-but default them from this rather than from literals. Then a new table is
-archived correctly the moment it is registered in `.schema_table_order()`, and
-the "add a table" checklist does not grow a fourth item.
-
-**Test to add:** every `SYSTEM_TABLES` entry is either assigned a category or
-explicitly `NA` — the same visible-degradation pattern as items 1 and 3.
-
-**Check first, before writing any of this:** whether `add_phenotype()` re-draws
-`phenotype_random_effects` when rows already exist for a phenotype × effect. If
-it re-draws, the omission is cosmetic (stale rows get overwritten) and this is
-just an archiving gap. If it reuses existing draws, replicates are not
-independent and that is a correctness bug that should be fixed and released on
-its own, ahead of the tidy-up.
+**Test to add:** every `SYSTEM_TABLES` entry appears in exactly one of the three
+default lists, or in an explicit `ARCHIVE_EXCLUDED` vector (`_schema_meta`) —
+the same visible-degradation pattern as item 1. This gives the "add a table"
+checklist its fourth item, but makes forgetting it a test failure rather than a
+silently incomplete archive.
 
 ### Scope
 
-`R/archive_replicate.R`, `R/schema.R` (one small helper), `tests/testthat/test-archive_replicate.R`.
-Medium — the code is easy; the `phenotype_random_effects` question is the work.
+`R/archive_replicate.R`, `tests/testthat/test-archive_replicate.R`. Small once
+item A is separated out.
 
 ---
 
 ## Suggested sequencing
 
-1. **Answer the `phenotype_random_effects` re-draw question first** (item 3's
-   "check first"). It is a yes/no read of `add_phenotype()` and it decides
-   whether item 3 is a tidy-up or a bug fix.
-2. **Item 1**, as its own commit. Self-contained, and it removes a hard error
-   users can hit today.
-3. **Item 3**, once 1 is in — it reuses `.schema_group_of()` and reads better
-   after the registries are consistent.
+1. **Item A** — the `phenotype_random_effects` reset. Correctness bug, own
+   commit, own release.
+2. **Item 1**, as its own commit. Self-contained; removes a hard error and a
+   silent no-op that users can hit today.
+3. **Item 3**, once 1 is in — it is a short list edit plus the completeness test.
 4. **Item 2** whenever convenient; it protects against a future problem rather
    than fixing a present one.
 

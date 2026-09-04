@@ -1,3 +1,29 @@
+# tidybreed 0.64.1 (2026-09-04)
+
+Fixes a correctness bug that made replicates non-independent.
+
+## Bug fixes
+
+- **`phenotype_random_effects` is now archived and cleared by
+  `archive_replicate()`.** The table was absent from all three of
+  `archive_replicate()`'s default table lists, so its rows were neither copied to
+  the archive nor deleted from the working database. Because `add_phenotype()`
+  samples a draw the first time it sees a grouping level and **reuses** the
+  stored draw thereafter, every replicate after the first inherited the previous
+  replicate's random-effect draws for any level name that recurred — which, for
+  `sex`, `line_name`, HYS, litter and pen grouping columns, is essentially all of
+  them. The random effects were therefore not re-drawn and the replicates were
+  not independent.
+
+  `phenotype_random_effects` has been added to the `store_and_reset` default: the
+  draws are archived with a `replicate` stamp (so a run stays auditable) and then
+  cleared, and the next replicate re-draws from scratch. Reuse *within* a
+  replicate is unchanged and remains correct — that is what makes every animal in
+  one HYS level receive the same shift across repeated `add_phenotype()` calls.
+
+  Simulations that ran more than one replicate with a random effect should be
+  re-run.
+
 # tidybreed 0.64.0 (2026-08-31)
 
 Renames the two misnamed phenotype-layer tables, deletes all remaining

@@ -9,7 +9,7 @@ archive_replicate(
   replicate = getOption("tidybreed.replicate"),
   archive_path = NULL,
   store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv", "ind_index",
-    "ind_true_index"),
+    "ind_true_index", "phenotype_random_effects"),
   store_once = c("genome_meta", "genome_effects", "trait_meta", "phenotype_effects",
     "trait_var_comp", "phenotype_meta", "phenotype_components", "phenotype_var_comp",
     "index_meta"),
@@ -74,6 +74,15 @@ replicate and restart numbering from \verb{\{line_name\}_1}. Every replicate (an
 every HPC parallel job, which independently restarts numbering too) reuses
 the same \code{id_ind} values — always use \verb{(replicate, id_ind)} as the
 composite key in archive queries.
+
+\strong{Random-effect draws are per-replicate}: \code{phenotype_random_effects} is a
+\code{store_and_reset} table. \code{\link[=add_phenotype]{add_phenotype()}} samples a draw the first time it
+sees a level and \strong{reuses} the stored draw thereafter, which is what makes a
+random effect a random effect \emph{within} a replicate (every animal in HYS level
+\verb{2020_Iowa} gets the same shift across repeated calls). Across replicates that
+reuse would make the replicates non-independent, so the draws are archived
+with the \code{replicate} stamp and then cleared, and the next replicate re-draws
+from scratch.
 
 \strong{HPC note}: concurrent writes from multiple jobs to one shared archive file
 are \strong{not supported}. Use per-job archive files

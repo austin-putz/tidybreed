@@ -335,3 +335,79 @@ test_that("archive_replicate() returns pop invisibly", {
 
   expect_true(inherits(result, "tidybreed_pop"))
 })
+
+# Regression: add_phenotype() reuses a stored draw once it exists for a level,
+# which is correct within a replicate and wrong across them. phenotype_random_
+# effects must therefore be archived and cleared like any other per-replicate
+# output, so the next replicate re-draws instead of inheriting.
+make_random_effect_pop <- function() {
+  pop <- make_test_pop(n_loci = 50, n_chr = 2)
+  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
+  pop <- define_phenotype(pop, "ADG", mean = 500, residual_var = 50)
+  define_effect_random(pop, "ADG", effect_name = "pen",
+                       source_column = "sex", variance = 25)
+}
+
+test_that("phenotype_random_effects is archived and cleared per replicate", {
+  pop <- make_random_effect_pop()
+  arc <- tempfile(fileext = ".duckdb")
+  on.exit({
+    try(close_pop(pop), silent = TRUE)
+    unlink(arc)
+  }, add = TRUE)
+
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+  draws_1 <- get_table(pop, "phenotype_random_effects") |>
+    dplyr::collect() |>
+    dplyr::arrange(level)
+  expect_gt(nrow(draws_1), 0L)
+
+  pop <- archive_replicate(pop, replicate = 1L, archive_path = arc)
+
+  # Working DB is cleared, so the next replicate cannot inherit the draws.
+  expect_equal(
+    nrow(dplyr::collect(get_table(pop, "phenotype_random_effects"))), 0L
+  )
+
+  # The draws are preserved in the archive, stamped with the replicate.
+  arc_conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = arc, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(arc_conn, shutdown = TRUE), add = TRUE)
+
+  expect_true("phenotype_random_effects" %in% DBI::dbListTables(arc_conn))
+  archived <- DBI::dbGetQuery(
+    arc_conn, "SELECT * FROM phenotype_random_effects ORDER BY level"
+  )
+  expect_equal(archived$replicate, rep(1L, nrow(archived)))
+  expect_equal(archived$draw_value, draws_1$draw_value)
+})
+
+test_that("a second replicate re-draws random effects instead of reusing them", {
+  pop <- make_random_effect_pop()
+  arc <- tempfile(fileext = ".duckdb")
+  on.exit({
+    try(close_pop(pop), silent = TRUE)
+    unlink(arc)
+  }, add = TRUE)
+
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+  draws_1 <- get_table(pop, "phenotype_random_effects") |>
+    dplyr::collect() |>
+    dplyr::arrange(level)
+
+  pop <- archive_replicate(pop, replicate = 1L, archive_path = arc)
+
+  # Rebuild the same individuals: identical levels ("M"/"F") as replicate 1.
+  pop <- pop |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+  draws_2 <- get_table(pop, "phenotype_random_effects") |>
+    dplyr::collect() |>
+    dplyr::arrange(level)
+
+  expect_equal(draws_2$level, draws_1$level)
+  expect_false(any(draws_2$draw_value == draws_1$draw_value))
+})

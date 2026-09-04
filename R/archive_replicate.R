@@ -49,6 +49,15 @@
 #' the same `id_ind` values — always use `(replicate, id_ind)` as the
 #' composite key in archive queries.
 #'
+#' **Random-effect draws are per-replicate**: `phenotype_random_effects` is a
+#' `store_and_reset` table. [add_phenotype()] samples a draw the first time it
+#' sees a level and **reuses** the stored draw thereafter, which is what makes a
+#' random effect a random effect *within* a replicate (every animal in HYS level
+#' `2020_Iowa` gets the same shift across repeated calls). Across replicates that
+#' reuse would make the replicates non-independent, so the draws are archived
+#' with the `replicate` stamp and then cleared, and the next replicate re-draws
+#' from scratch.
+#'
 #' **HPC note**: concurrent writes from multiple jobs to one shared archive file
 #' are **not supported**. Use per-job archive files
 #' (`scenario_rep_007.duckdb`) and merge in a post-processing step.
@@ -99,7 +108,8 @@ archive_replicate <- function(
     replicate       = getOption("tidybreed.replicate"),
     archive_path    = NULL,
     store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv",
-                        "ind_ebv", "ind_index", "ind_true_index"),
+                        "ind_ebv", "ind_index", "ind_true_index",
+                        "phenotype_random_effects"),
     store_once      = c("genome_meta", "genome_effects",
                         "trait_meta", "phenotype_effects", "trait_var_comp",
                         "phenotype_meta", "phenotype_components",
