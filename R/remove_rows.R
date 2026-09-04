@@ -15,8 +15,13 @@ delete_exact_rows <- function(conn, table_name, key_df,
   on.exit(DBI::dbExecute(conn, paste0("DROP TABLE IF EXISTS ", temp_name)),
           add = TRUE)
 
+  # IS NOT DISTINCT FROM, not `=`: several registered tables have nullable key
+  # columns (chr_inheritance.offspring_sex / line_name, chr_recombination.
+  # parent_sex / line_name, founder_haplotypes.line_name) and `NULL = NULL` is
+  # NULL, so `=` silently matches nothing and reports a successful 0-row delete.
+  # Same NULL-safe idiom define_chromosome() uses for its upsert.
   join_sql <- paste(
-    paste0("t.", key_cols, " = f.", key_cols),
+    paste0("t.", key_cols, " IS NOT DISTINCT FROM f.", key_cols),
     collapse = " AND "
   )
 
@@ -126,7 +131,14 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' the internal `TABLE_ROW_KEYS` registry to delete exactly the rows matched
 #' by the filter — no more, no less. For example, filtering `ind_tbv` by
 #' `trait_name == "ADG"` deletes only the ADG rows, not all TBV rows for those
-#' animals.
+#' animals. Key columns are matched with `IS NOT DISTINCT FROM`, so rows whose
+#' key is `NULL` — the default `chr_inheritance` / `chr_recombination` rows
+#' seeded by [define_genome()], or the shared (`line_name IS NULL`)
+#' `founder_haplotypes` pool — delete correctly.
+#'
+#' Every system table is registered for single-table deletion except
+#' `_schema_meta`, which is package-managed; `remove_rows()` refuses it with a
+#' pointer to [define_schema_description()] rather than a generic error.
 #'
 #' **Cross-table mode** (`tables != NULL`): extracts unique `id_ind` values
 #' from the filtered table and issues a `DELETE ... WHERE id_ind IN (...)`
@@ -212,6 +224,12 @@ remove_rows <- function(tbl, tables = NULL, confirm_all = FALSE,
 
   # ---- D. Single-table mode -------------------------------------------------
   if (is.null(tables)) {
+
+    if (table_name %in% names(TABLE_NO_ROW_DELETE)) {
+      stop("Cannot delete from '", table_name, "': ",
+           TABLE_NO_ROW_DELETE[[table_name]],
+           call. = FALSE)
+    }
 
     key_cols <- TABLE_ROW_KEYS[[table_name]]
     if (is.null(key_cols)) {

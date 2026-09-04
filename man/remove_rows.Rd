@@ -48,7 +48,14 @@ full-table deletion via \code{confirm_all = TRUE}.
 the internal \code{TABLE_ROW_KEYS} registry to delete exactly the rows matched
 by the filter — no more, no less. For example, filtering \code{ind_tbv} by
 \code{trait_name == "ADG"} deletes only the ADG rows, not all TBV rows for those
-animals.
+animals. Key columns are matched with \verb{IS NOT DISTINCT FROM}, so rows whose
+key is \code{NULL} — the default \code{chr_inheritance} / \code{chr_recombination} rows
+seeded by \code{\link[=define_genome]{define_genome()}}, or the shared (\verb{line_name IS NULL})
+\code{founder_haplotypes} pool — delete correctly.
+
+Every system table is registered for single-table deletion except
+\verb{_schema_meta}, which is package-managed; \code{remove_rows()} refuses it with a
+pointer to \code{\link[=define_schema_description]{define_schema_description()}} rather than a generic error.
 
 \strong{Cross-table mode} (\code{tables != NULL}): extracts unique \code{id_ind} values
 from the filtered table and issues a \verb{DELETE ... WHERE id_ind IN (...)}

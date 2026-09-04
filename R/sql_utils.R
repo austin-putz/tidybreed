@@ -138,6 +138,8 @@ TABLE_PRIMARY_KEYS <- list(
   ind_ebv          = "id_ebv",
   trait_meta       = "id_trait",
   trait_var_comp     = "id_trait_var_comp",
+  phenotype_meta       = "id_phenotype_meta",
+  phenotype_components = "id_phenotype_comp",
   phenotype_var_comp = "id_phenotype_var_comp",
   index_meta         = "id_index_name",
   ind_index        = "id_index",
@@ -169,9 +171,32 @@ TABLE_ROW_KEYS <- list(
   chr_inheritance   = c("chr_name", "offspring_sex", "line_name"),
   chr_recombination = c("chr_name", "parent_sex", "line_name"),
   phenotype_effects    = c("phenotype_name", "effect_name"),
+  phenotype_random_effects = c("phenotype_name", "effect_name", "level"),
+  phenotype_meta       = "id_phenotype_meta",
+  phenotype_components = "id_phenotype_comp",
+  founder_haplotypes = c("line_name", "haplotype_id", "locus_name"),
   trait_var_comp     = "id_trait_var_comp",
   phenotype_var_comp = "id_phenotype_var_comp",
   index_meta         = "id_index_name"
+)
+
+
+#' Tables where row deletion is not a meaningful operation
+#'
+#' A table missing from [TABLE_ROW_KEYS] is ambiguous: it may be a deliberate
+#' refusal or it may be an oversight, and from the outside those look identical.
+#' Listing a table here makes the refusal a decision with a reason attached,
+#' which `remove_rows()` reports instead of the generic "not registered" error.
+#'
+#' Names are table names; values are the reason shown to the user.
+#'
+#' @keywords internal
+TABLE_NO_ROW_DELETE <- c(
+  `_schema_meta` = paste(
+    "schema descriptions are package-managed and rebuilt by open_pop(), so",
+    "hand-edits would be silently overwritten. Use",
+    "define_schema_description() to change a description."
+  )
 )
 
 

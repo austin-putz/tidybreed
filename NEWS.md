@@ -1,3 +1,48 @@
+# tidybreed 0.64.2 (2026-09-04)
+
+Makes `remove_rows()` work on every table it should, and stops it reporting
+success when it deleted nothing.
+
+## Bug fixes
+
+- **`remove_rows()` could not delete from five system tables.** `phenotype_meta`,
+  `phenotype_components`, `phenotype_random_effects` and `founder_haplotypes` had
+  no `TABLE_ROW_KEYS` entry, so single-table deletion stopped with
+  *"table is not registered in TABLE_ROW_KEYS"* — even for `phenotype_meta` and
+  `phenotype_components`, which have a perfectly good integer primary key. All
+  four are now registered, and `phenotype_meta` / `phenotype_components` are also
+  registered in `TABLE_PRIMARY_KEYS` so `mutate_table()` can do vector and
+  filtered updates on them.
+
+- **`remove_rows()` silently deleted nothing from rows with `NULL` key columns.**
+  `delete_exact_rows()` joined the key columns with `=`, and `NULL = NULL` is
+  `NULL`, not `TRUE`. The default `chr_inheritance` and `chr_recombination` rows
+  seeded by `define_genome()` have `NULL` in both `offspring_sex` /
+  `parent_sex` and `line_name`, so deleting one reported
+  *"Deleted 0 rows"* as a success while leaving the row in place. The join now
+  uses `IS NOT DISTINCT FROM`, the same NULL-safe idiom `define_chromosome()`
+  already uses for its upsert. Non-`NULL` keys are unaffected.
+
+## New internal registry
+
+- **`TABLE_NO_ROW_DELETE`** records the tables where row deletion is refused on
+  purpose, with the reason shown to the user. A table missing from
+  `TABLE_ROW_KEYS` is ambiguous — a deliberate refusal and an oversight look
+  identical — and this makes the difference explicit. `_schema_meta` is its only
+  entry: descriptions are package-managed and rebuilt by `open_pop()`, so
+  `remove_rows()` now points at `define_schema_description()` instead of erroring
+  generically.
+
+  `founder_haplotypes` is deliberately **not** listed. Deleting a single
+  `(haplotype_id, locus_name)` row would leave a non-rectangular pool, but
+  dropping one line's whole pool (`filter(line_name == "B")`) is well-defined and
+  useful for crossbreeding setups, and a blanket refusal would foreclose it.
+
+- `tests/testthat/test-schema-registries.R` now asserts that
+  `TABLE_ROW_KEYS` and `TABLE_NO_ROW_DELETE` together name every table in
+  `SYSTEM_TABLES`, so a new table cannot be added without deciding whether it can
+  be deleted from. Same visible-degradation principle as `.schema_table_order()`.
+
 # tidybreed 0.64.1 (2026-09-04)
 
 Fixes a correctness bug that made replicates non-independent.

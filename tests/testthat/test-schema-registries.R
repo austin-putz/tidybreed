@@ -152,3 +152,94 @@ test_that("mutate_table() blocks writes to the newly registered tables", {
     regexp = "reserved"
   )
 })
+
+
+test_that("every system table either has a row key or is explicitly excluded", {
+  # Completeness, not just correctness: a missing TABLE_ROW_KEYS entry made
+  # remove_rows() hard-error on phenotype_meta, phenotype_components,
+  # phenotype_random_effects and founder_haplotypes. Adding a new table must now
+  # force a decision — register a key, or say why deletion is refused.
+  expect_setequal(
+    c(names(TABLE_ROW_KEYS), names(TABLE_NO_ROW_DELETE)),
+    SYSTEM_TABLES
+  )
+  # A table cannot be both deletable and refused.
+  expect_length(intersect(names(TABLE_ROW_KEYS), names(TABLE_NO_ROW_DELETE)), 0L)
+  # Every refusal carries a reason for the user.
+  expect_true(all(nzchar(TABLE_NO_ROW_DELETE)))
+})
+
+test_that("remove_rows() refuses _schema_meta with a reason, not a generic error", {
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  expect_error(
+    pop |>
+      get_table("_schema_meta") |>
+      dplyr::filter(table_name == "ind_meta") |>
+      remove_rows(verbose = FALSE),
+    regexp = "define_schema_description"
+  )
+})
+
+test_that("remove_rows() deletes from the newly registered observation tables", {
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  pop |>
+    get_table("phenotype_random_effects") |>
+    dplyr::filter(effect_name == "pen") |>
+    remove_rows(verbose = FALSE)
+  expect_equal(
+    nrow(dplyr::collect(get_table(pop, "phenotype_random_effects"))), 0L
+  )
+
+  pop |>
+    get_table("phenotype_meta") |>
+    dplyr::filter(phenotype_name == "ADG") |>
+    remove_rows(verbose = FALSE)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_meta"))), 0L)
+})
+
+test_that("remove_rows() deletes rows whose key columns are NULL", {
+  # Regression: delete_exact_rows() joined with `=`, and `NULL = NULL` is NULL,
+  # so the default chr_inheritance / chr_recombination rows seeded by
+  # define_genome() (offspring_sex and line_name both NULL) matched nothing.
+  # The delete reported "Deleted 0 rows" as a success while changing nothing.
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  before <- get_table(pop, "chr_inheritance") |> dplyr::collect()
+  expect_true(all(is.na(before$offspring_sex)))
+  expect_gt(nrow(before), 1L)
+  target <- before$chr_name[[1L]]
+
+  pop |>
+    get_table("chr_inheritance") |>
+    dplyr::filter(chr_name == target) |>
+    remove_rows(verbose = FALSE)
+
+  after <- get_table(pop, "chr_inheritance") |> dplyr::collect()
+  expect_equal(nrow(after), nrow(before) - 1L)
+  expect_false(target %in% after$chr_name)
+})
+
+test_that("remove_rows() deletes a whole line's founder_haplotypes pool", {
+  # The shared pool has line_name IS NULL, so this also exercises the NULL-safe
+  # join on a table whose key is composite and partly nullable.
+  pop <- make_pop_all_tables()
+  on.exit(close_pop(pop), add = TRUE)
+
+  before <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  expect_gt(nrow(before), 0L)
+  expect_true(all(is.na(before$line_name)))
+
+  pop |>
+    get_table("founder_haplotypes") |>
+    dplyr::filter(haplotype_id == 1L) |>
+    remove_rows(verbose = FALSE)
+
+  after <- get_table(pop, "founder_haplotypes") |> dplyr::collect()
+  expect_false(1L %in% after$haplotype_id)
+  expect_equal(nrow(after), nrow(before) - sum(before$haplotype_id == 1L))
+})
