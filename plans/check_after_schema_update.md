@@ -1,24 +1,31 @@
 # Follow-ups deferred from the v0.64.0 schema/rename work
 
-Status: **reviewed and verified against the code (2026-09-04); ready to
-implement.** Originally three gaps found while implementing
-`plans/update_schema_print.md`, all deliberately left out of v0.64.0 because
-each needed a decision the schema/print work did not settle.
+Status: **half done — A and 1 shipped, 3 and 2 outstanding (2026-09-04).**
+Originally three gaps found while implementing `plans/update_schema_print.md`,
+all deliberately left out of v0.64.0 because each needed a decision the
+schema/print work did not settle.
 
 The review confirmed the original diagnosis, **answered the one open question**,
 and found **two additional defects** plus **three errors in the original plan**.
 Revised order of value: **A > 1 > 3 > 2**.
 
-| # | Gap | Blast radius | Suggested fix |
-|---|-----|--------------|---------------|
-| A | `phenotype_random_effects` never reset between replicates | **Correctness bug** — replicates are not independent | Add to `store_and_reset` |
-| 1 | `TABLE_ROW_KEYS` missing entries **+ NULL-unsafe delete join** | `remove_rows()` hard-errors on 5 tables; silently deletes 0 rows on 2 more | Register the real keys; `IS NOT DISTINCT FROM` in the join |
-| 2 | 4 tables have `CREATE TABLE` DDL in 2–3 files | Silent drift risk only | Single owner: delete the `ensure_*()` copies |
-| 3 | `archive_replicate()` table lists are incomplete | Config tables not archived with the run | Extend the literal lists + completeness test |
+| # | Gap | Blast radius | Status |
+|---|-----|--------------|--------|
+| A | `phenotype_random_effects` never reset between replicates | **Correctness bug** — replicates are not independent | ✅ **Done** — v0.64.1, commit `2f164c3` |
+| 1 | `TABLE_ROW_KEYS` missing entries **+ NULL-unsafe delete join** | `remove_rows()` hard-errors on 5 tables; silently deletes 0 rows on 2 more | ✅ **Done** — v0.64.2, commit `24cf2ff` |
+| 3 | `archive_replicate()` table lists are incomplete | Config tables not archived with the run | ⬜ **Not started** — extend the literal lists + completeness test |
+| 2 | 4 tables have `CREATE TABLE` DDL in 2–3 files | Silent drift risk only | ⬜ **Not started** — single owner: delete the `ensure_*()` copies |
+
+Full test suite after A and 1: 51 files, 0 failures (1 pre-existing skip,
+10 pre-existing warnings).
 
 ---
 
 ## A. `phenotype_random_effects` carries across replicates (NEW — correctness bug)
+
+> **DONE — v0.64.1, commit `2f164c3`.** `phenotype_random_effects` added to the
+> `store_and_reset` default, with the Details note and both regression tests
+> below. Kept here as the record of why.
 
 ### What is wrong
 
@@ -86,6 +93,11 @@ the tidy-ups.
 ---
 
 ## 1. `TABLE_ROW_KEYS` gaps **and** a NULL-unsafe delete join
+
+> **DONE — v0.64.2, commit `24cf2ff`.** All four tables registered,
+> `delete_exact_rows()` switched to `IS NOT DISTINCT FROM`, `TABLE_NO_ROW_DELETE`
+> added with `_schema_meta` as its only entry, and the completeness plus
+> NULL-key regression tests are in `test-schema-registries.R`.
 
 ### What is wrong
 
@@ -355,7 +367,7 @@ That accounts for 18 of the 24 `SYSTEM_TABLES`. Missing entirely:
 
 | Table | Should be | Consequence of the omission |
 |---|---|---|
-| `phenotype_random_effects` | `store_and_reset` | **See item A** — promoted to its own fix; replicates are not independent |
+| `phenotype_random_effects` | `store_and_reset` | **Fixed in item A** (v0.64.1) — already in `store_and_reset`; nothing left to do here |
 | `genome_map` | `store_once` | The genetic map is not archived with the run that used it |
 | `chr_inheritance` | `store_once` | Per-chromosome inheritance rules not archived |
 | `chr_recombination` | `store_once` | Per-chromosome recombination rules not archived |
@@ -410,14 +422,16 @@ item A is separated out.
 
 ---
 
-## Suggested sequencing
+## Sequencing
 
-1. **Item A** — the `phenotype_random_effects` reset. Correctness bug, own
-   commit, own release.
-2. **Item 1**, as its own commit. Self-contained; removes a hard error and a
-   silent no-op that users can hit today.
-3. **Item 3**, once 1 is in — it is a short list edit plus the completeness test.
+1. ~~**Item A** — the `phenotype_random_effects` reset. Correctness bug, own
+   commit, own release.~~ **Done: v0.64.1, `2f164c3`.**
+2. ~~**Item 1**, as its own commit. Self-contained; removes a hard error and a
+   silent no-op that users can hit today.~~ **Done: v0.64.2, `24cf2ff`.**
+3. **Item 3** — next. A short list edit plus the completeness test; reads better
+   now that the registries are consistent.
 4. **Item 2** whenever convenient; it protects against a future problem rather
    than fixing a present one.
 
-Version bump + `NEWS.md` entry per `CLAUDE.md` before each commit.
+Version bump + `NEWS.md` entry per `CLAUDE.md` before each commit. Items 3 and 2
+were planned to share one `0.0.1` bump.
