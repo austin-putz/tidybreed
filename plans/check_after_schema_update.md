@@ -21,17 +21,18 @@ Full test suite after A and 1: 51 files, 0 failures (1 pre-existing skip,
 
 ---
 
-## A. `phenotype_random_effects` carries across replicates (NEW — correctness bug)
+## A. `phenotype_random_effects` carried across replicates (correctness bug)
 
 > **DONE — v0.64.1, commit `2f164c3`.** `phenotype_random_effects` added to the
 > `store_and_reset` default, with the Details note and both regression tests
-> below. Kept here as the record of why.
+> below. Everything past this callout describes the **pre-fix** state and is kept
+> as the record of why the fix took this shape.
 
-### What is wrong
+### What was wrong
 
 This was item 3's "check first" question. **The answer is: draws are reused.**
 
-`R/phenotype_helpers.R:208-250` reads existing draws for the
+`R/phenotype_helpers.R:208-255` reads existing draws for the
 `(phenotype_name, effect_name)` pair, computes
 `new_lvls <- setdiff(unique_lvls, names(existing_map))`, and samples **only** for
 levels not already stored:
@@ -46,49 +47,50 @@ per_ind <- unname(existing_map[as.character(group)])
 That reuse is **correct within a replicate** — every animal in HYS level
 `2020_Iowa` must receive the same shift across multiple `add_phenotype()` calls,
 which is the entire point of a random effect. It is **wrong across replicates**,
-and nothing clears the table: `R/archive_replicate.R:230` deletes only
+and nothing cleared the table: `R/archive_replicate.R:240` deletes only
 `c(store_and_reset, reset_only)`, and `phenotype_random_effects` appears in
 neither list (nor in `store_once`).
 
-So replicate 2 inherits replicate 1's draws for every level name that repeats —
+So replicate 2 inherited replicate 1's draws for every level name that repeats —
 which, for `sex`, `line_name`, HYS, litter and pen grouping columns, is most of
-them. The random effects are not re-drawn and the replicates are not
-independent. This is a genuine correctness bug in the simulation, not an
+them. The random effects were not re-drawn and the replicates were not
+independent. This was a genuine correctness bug in the simulation, not an
 archiving omission.
 
-### Suggested fix
+### The fix, as shipped
 
-Add `"phenotype_random_effects"` to the `store_and_reset` default in
+Added `"phenotype_random_effects"` to the `store_and_reset` default in
 `archive_replicate()`. `store_and_reset` is exactly right: the draws are
 per-replicate *output* worth keeping (stamped with `replicate`, so a run can be
 audited or reproduced), and the working-DB rows are deleted afterwards, so the
 next replicate re-draws from scratch.
 
-`store_once` would be wrong — it archives once and leaves the working rows in
-place, which is the current broken behaviour with extra steps.
+`store_once` would have been wrong — it archives once and leaves the working
+rows in place, which was the pre-fix behaviour with extra steps.
 
 `.ensure_archive_table(conn, tbl, add_replicate = TRUE)` adds the `replicate`
 column to the **archive** copy only, so no working-DB schema change is needed and
-the existing collision guard (`archive_replicate.R:145`) already covers it.
+the existing collision guard (`archive_replicate.R:158`) already covers it.
 
-### Test to add
+### Tests added
 
-Two replicates with the same grouping levels must produce **different** draws:
+Two replicates with the same grouping levels must produce **different** draws
+(`tests/testthat/test-archive_replicate.R`):
 
-```r
-test_that("random effect draws are re-drawn after archive_replicate()", {
-  # ... replicate 1, capture phenotype_random_effects
-  pop <- archive_replicate(pop, archive_path = tempfile(fileext = ".duckdb"))
-  expect_equal(nrow(collect(get_table(pop, "phenotype_random_effects"))), 0L)
-  # ... replicate 2 with the same levels; draws must differ
-})
-```
+- `"phenotype_random_effects is archived and cleared per replicate"` — the
+  working table is empty after archiving, and the draws are in the archive
+  stamped with `replicate = 1`.
+- `"a second replicate re-draws random effects instead of reusing them"` —
+  rebuilds the same individuals (identical `"M"`/`"F"` levels) and asserts every
+  draw differs from replicate 1's.
 
-### Scope
+Both share a `make_random_effect_pop()` helper defined in that file.
+
+### Scope, as built
 
 `R/archive_replicate.R` (one string + a Details note),
-`tests/testthat/test-archive_replicate.R`. Small — release on its own, ahead of
-the tidy-ups.
+`tests/testthat/test-archive_replicate.R` (two tests). Released on its own,
+ahead of the tidy-ups.
 
 ---
 
@@ -97,9 +99,10 @@ the tidy-ups.
 > **DONE — v0.64.2, commit `24cf2ff`.** All four tables registered,
 > `delete_exact_rows()` switched to `IS NOT DISTINCT FROM`, `TABLE_NO_ROW_DELETE`
 > added with `_schema_meta` as its only entry, and the completeness plus
-> NULL-key regression tests are in `test-schema-registries.R`.
+> NULL-key regression tests are in `test-schema-registries.R`. Everything past
+> this callout describes the **pre-fix** state and is kept as the record of why.
 
-### What is wrong
+### What was wrong
 
 **1a. Missing registry entries (as originally described — confirmed).**
 v0.64.0 closed this class of gap for `TABLE_RESERVED_COLS` (every one of the 24
@@ -116,8 +119,8 @@ no TABLE_PRIMARY_KEYS:  _schema_meta, ind_haplotype, ind_genotype,
                         phenotype_meta, phenotype_components
 ```
 
-`TABLE_ROW_KEYS` is the one that bites. `remove_rows()` in single-table mode
-(`R/remove_rows.R:216`) does:
+`TABLE_ROW_KEYS` was the one that bit. `remove_rows()` in single-table mode
+(`R/remove_rows.R:234`) did:
 
 ```r
 key_cols <- TABLE_ROW_KEYS[[table_name]]
@@ -141,9 +144,10 @@ PK, so this is a pure omission. Same shape as the v0.63.1 bug
 aborted), except it fails at "not registered" rather than "missing key column".
 
 **1b. `delete_exact_rows()` cannot delete rows with NULL key values (NEW).**
-`R/remove_rows.R:6-46` builds its join as:
+`R/remove_rows.R:6-52` built its join as:
 
 ```r
+# pre-fix
 join_sql <- paste(paste0("t.", key_cols, " = f.", key_cols), collapse = " AND ")
 ```
 
@@ -170,7 +174,7 @@ updates in `mutate_table()`. Several tables in that missing list genuinely have
 no single-column PK (`ind_haplotype`, `chr_inheritance`, …), so a missing entry
 there is often *correct*.
 
-### Suggested fix
+### The fix, as shipped
 
 **1a. Register the four tables where row deletion is well-defined.** In
 `R/sql_utils.R`:
@@ -260,10 +264,12 @@ This is the same visible-degradation principle `.schema_table_order()` uses: the
 next person to add a table is forced to make the call, and forgetting fails a
 test instead of surfacing months later as "why can't I delete from this table".
 
-### Scope
+### Scope, as built
 
-`R/sql_utils.R`, `R/remove_rows.R`, `tests/testthat/test-schema-registries.R`,
-`tests/testthat/test-remove_rows.R`, plus a `remove_rows()` roxygen note.
+`R/sql_utils.R`, `R/remove_rows.R`, `tests/testthat/test-schema-registries.R`
+(four new tests), plus a `remove_rows()` roxygen note. The shipped
+`TABLE_NO_ROW_DELETE` message wording differs slightly from the sketch above;
+`R/sql_utils.R` is the authority.
 
 ---
 
@@ -351,11 +357,12 @@ single-DDL-registry option, which also touches `R/define_genome.R` and
 
 ### What is wrong
 
-`R/archive_replicate.R:101` hard-codes three lists of table names:
+`R/archive_replicate.R:110` hard-codes three lists of table names:
 
 ```r
 store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv",
-                    "ind_ebv", "ind_index", "ind_true_index"),
+                    "ind_ebv", "ind_index", "ind_true_index",
+                    "phenotype_random_effects"),          # <- added by item A
 store_once      = c("genome_meta", "genome_effects",
                     "trait_meta", "phenotype_effects", "trait_var_comp",
                     "phenotype_meta", "phenotype_components",
@@ -363,20 +370,21 @@ store_once      = c("genome_meta", "genome_effects",
 reset_only      = c("ind_haplotype", "ind_genotype", "ind_crossover")
 ```
 
-That accounts for 18 of the 24 `SYSTEM_TABLES`. Missing entirely:
+That accounts for 19 of the 24 `SYSTEM_TABLES` (18 before item A). Still missing:
 
 | Table | Should be | Consequence of the omission |
 |---|---|---|
-| `phenotype_random_effects` | `store_and_reset` | **Fixed in item A** (v0.64.1) — already in `store_and_reset`; nothing left to do here |
 | `genome_map` | `store_once` | The genetic map is not archived with the run that used it |
 | `chr_inheritance` | `store_once` | Per-chromosome inheritance rules not archived |
 | `chr_recombination` | `store_once` | Per-chromosome recombination rules not archived |
 | `founder_haplotypes` | `store_once` | The founder pool a replicate was drawn from is not recorded |
 | `_schema_meta` | neither | Correctly excluded — it is system metadata |
 
-With item A landed separately, what remains here is a pure archiving-completeness
-gap: four configuration tables that describe how a replicate was generated are
-not copied into the archive, so an archived run is not self-describing.
+`phenotype_random_effects` was the sixth missing table and the only one that was
+a correctness bug rather than an archiving gap; it shipped separately as item A.
+What remains here is pure archiving completeness: four configuration tables that
+describe how a replicate was generated are not copied into the archive, so an
+archived run is not self-describing.
 
 ### Suggested fix
 
