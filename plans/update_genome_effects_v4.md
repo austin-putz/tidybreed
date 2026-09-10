@@ -13,6 +13,9 @@ the writer's input format and the evaluation strategy — and renames
 
 **Readiness: implementable.** No open question blocks any phase. The two remaining
 are ergonomic and revisable after the fact.
+★ **Phase A is complete** and required **no change to this schema** — results, hand
+computations and four findings carried into B–D are in
+`plans/update_genome_effects_phase_A.md`.
 **Supersedes:** `update_genome_effects.md` (v1/v2, 16 tables) and
 `update_genome_effects_v3_parsimony.md` (v3, 2 tables), retained as history.
 
@@ -640,6 +643,15 @@ carries a Cartesian pairing of raw haplotype rows, which §Aggregation already f
 reduction left-joins against the `(individual × locus)` list and synthesizes
 `copy_count = 0`.
 
+★ **Open for Phase D — what does that left join join against?** Phase A showed the
+zero-copy state is sharper than the Y-in-a-female framing suggests: a
+`(copy_count 0, dosage 0)` indicator matches **every** individual with no row at that
+locus, so it is a "carries no copy here" effect. The candidates are every locus in
+`genome_meta`, or the loci the individual is expected to carry under
+`chr_inheritance`. Recommend the former — it is what the Phase A fixtures do — with a
+row that `chr_inheritance` says should exist but does not treated as a data error
+surfaced elsewhere, not silently scored as absent.
+
 ### Tuple preflight, restated
 
 The guard from §Contribution now has a computable subject: it estimates
@@ -1023,7 +1035,7 @@ composite origin → member FK.
 | Canonicalization | members by `locus_id`; origin rows by the documented tuple |
 | Families | no duplicate family + scope identity; **no overlapping-but-incomparable predicates within a family** |
 | Terms | ≥ 1 member; each locus at most once per term |
-| Origins | ≤ 1 origin row and `copy_count = 1` on additive members; exact-multiset satisfiability on genotype members; ★ `'any'` rejected on genotype members (cross-table — `contrast_name` lives in `genome_effect_members`) |
+| Origins | ≤ 1 origin row and `copy_count = 1` on additive members; exact-multiset satisfiability on genotype members — ★ **by full bijection search, not greedy consumption**: a demand set mixing a parent-qualified row with an ANY-parent row can be satisfiable while greedy fails it (Phase A finding; ≤ 2 items at diploidy, so the cost is nil). The same search decides genotype containment; ★ `'any'` rejected on genotype members (cross-table — `contrast_name` lives in `genome_effect_members`) |
 | Ploidy | `dominance` rejected at non-diploid loci **unless proven on that member** |
 | Owners | reserved owner names not writable by the general writer without override |
 | Cross-table | `trait_name` in `trait_meta`; children deleted before parents |
@@ -1220,7 +1232,7 @@ the additive formula from first principles and is not pre-change golden output.
 
 | Phase | Work | Gate |
 |---|---|---|
-| **A** | Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | Every fixture representable **and** its value derivable from stored rows alone. ★ Each fixture is also written out in the `terms` format of §Writer API — the cheapest possible test of whether that format is usable, taken before a line of the writer exists. Containment order and multi-locus fallback settled here, before DDL |
+| **A** ✅ | **Complete — `plans/update_genome_effects_phase_A.md`.** Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | ✅ Met: 19 fixtures, **no schema change required**; both evaluators agree with the hand computations. Containment order and multi-locus fallback settled before DDL. ★ Writing each fixture in the `terms` format moves to Phase C as a **round-trip** against this registry (gate 53) — it only becomes a real check once a writer exists to canonicalize it |
 | **B** | ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | Registry, constraint, and validator tests pass; gates 46–48, ★ 54 |
 | **C** | `define_genome_effects()`; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; `(a,d)` and genotype-table helpers; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ **delete `trait_meta.expressed_parent`** (see below) | Writer round-trips every Phase-A fixture; gates 34–35, 41–44, 50, ★ 53 pass |
 | **D** | ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | Oracle agrees; gates 1–39, 40, 45, ★ 51–52 pass |
