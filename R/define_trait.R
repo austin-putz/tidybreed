@@ -228,6 +228,24 @@ ensure_trait_tables <- function(pop) {
       )
     ",
 
+    # True genetic value: the total genotypic value, decomposed by declared
+    # model structure. component_name is a dimension from the start because
+    # adding it later would change the unique key from (id_ind, trait_name) and
+    # reshape every row. No `replicate` column: like ind_tbv, that column exists
+    # only in the archive copy, added by archive_replicate() via
+    # .ensure_archive_table(), which refuses to stamp a table that already has
+    # one.
+    ind_tgv = "
+      CREATE TABLE ind_tgv (
+        id_tgv         INTEGER PRIMARY KEY,
+        id_ind         VARCHAR NOT NULL,
+        trait_name     VARCHAR NOT NULL,
+        component_name VARCHAR NOT NULL,
+        tgv_value      DOUBLE  NOT NULL,
+        UNIQUE (id_ind, trait_name, component_name)
+      )
+    ",
+
     ind_ebv = "
       CREATE TABLE ind_ebv (
         id_ebv      INTEGER PRIMARY KEY,
@@ -340,7 +358,16 @@ ensure_trait_tables <- function(pop) {
     }
   }
 
-  pop$tables <- unique(c(pop$tables, names(ddl)))
+  # Derived views over the tables above. Created here so ind_tgv already exists,
+  # and registered in pop$tables so a freshly built population lists the same
+  # objects as a restored one (restore_pop() reads DBI::dbListTables(), which
+  # includes views).
+  views <- c(ind_tgv_total = .ind_tgv_total_view_sql())
+  for (vw in names(views)) {
+    if (!vw %in% existing) DBI::dbExecute(con, views[[vw]])
+  }
+
+  pop$tables <- unique(c(pop$tables, names(ddl), names(views)))
 
   pop
 }

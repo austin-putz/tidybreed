@@ -12,13 +12,22 @@ test_that("open_pop() creates all core tables before define_genome()", {
   on.exit(close_pop(pop))
 
   core_tables <- c("_schema_meta", "ind_meta", "trait_var_comp",
-                   "genome_effects", "phenotype_meta", "phenotype_components",
+                   "phenotype_meta", "phenotype_components",
                    "phenotype_var_comp")
   expect_true(all(core_tables %in% pop$tables))
+
+  # Result tables created with the trait/phenotype block are here too.
+  expect_true(all(c("ind_tbv", "ind_tgv", "ind_tgv_total") %in% pop$tables))
 
   # Genome tables are NOT present yet
   expect_false("genome_meta" %in% pop$tables)
   expect_false("ind_haplotype" %in% pop$tables)
+
+  # Nor are the effect tables: genome_effect_members declares a foreign key to
+  # genome_meta.locus_id, so all three are created by define_genome().
+  expect_false(any(c("genome_effects", "genome_effect_members",
+                     "genome_effect_member_origins", "genome_effect_terms",
+                     "genome_effect_loci") %in% pop$tables))
 })
 
 test_that("open_pop() with :memory: sets run_dirs to character(0)", {

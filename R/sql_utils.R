@@ -82,8 +82,22 @@ TABLE_RESERVED_COLS <- list(
   founder_haplotypes = c("line_name", "haplotype_id", "locus_name", "allele"),
   genome_map       = c("id_genome_map", "locus_id", "locus_name", "sex",
                        "line_name", "map_name", "pos_cM"),
-  genome_effects   = c("id_genome_effect", "locus_name", "line_name", "trait_name",
-                       "genome_effect_type", "genome_value", "base_allele_freq"),
+  genome_effects   = c("id_genome_effect", "trait_name", "effect_owner",
+                       "effect_name", "genome_value"),
+  genome_effect_members = c("id_genome_effect", "member_slot", "locus_id",
+                            "contrast_name", "copy_count_value", "dosage_value",
+                            "center_value"),
+  genome_effect_member_origins = c("id_genome_effect", "member_slot", "origin_slot",
+                                   "line_match_type", "line_name", "parent_origin",
+                                   "copy_count"),
+  # Views: every column is derived, so every column is reserved. Listed so
+  # mutate_table() reports "reserved" rather than letting ALTER TABLE fail on a
+  # view with a raw SQL error.
+  genome_effect_terms = c("trait_name", "effect_owner", "effect_name",
+                          "id_genome_effect", "effect_order", "contrast_signature",
+                          "family_key", "scope_description", "genome_value"),
+  genome_effect_loci  = c("trait_name", "effect_owner", "id_genome_effect",
+                          "member_slot", "locus_id", "locus_name", "contrast_name"),
   ind_haplotype    = c("id_ind", "parent_origin", "strand", "line_origin",
                        "locus_id", "locus_name", "allele"),
   ind_genotype     = c("id_ind", "locus_id", "locus_name", "dosage_value"),
@@ -95,6 +109,9 @@ TABLE_RESERVED_COLS <- list(
   ind_phenotype    = c("id_phenotype", "id_ind", "phenotype_name", "pheno_value", "pheno_number",
                        "liability_value", "cat_name", "replicate"),
   ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value", "replicate"),
+  ind_tgv          = c("id_tgv", "id_ind", "trait_name", "component_name",
+                       "tgv_value", "replicate"),
+  ind_tgv_total    = c("id_ind", "trait_name", "tgv_total"),
   ind_ebv          = c("id_ebv", "id_ind", "trait_name", "model", "ebv_value", "acc", "se", "eval_number", "replicate"),
   trait_meta       = c("id_trait", "trait_name", "description", "units",
                        "expressed_parent", "target_add_mean"),
@@ -135,6 +152,7 @@ TABLE_PRIMARY_KEYS <- list(
   genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   ind_tbv          = "id_tbv",
+  ind_tgv          = "id_tgv",
   ind_ebv          = "id_ebv",
   trait_meta       = "id_trait",
   trait_var_comp     = "id_trait_var_comp",
@@ -158,10 +176,10 @@ TABLE_ROW_KEYS <- list(
   ind_meta         = "id_ind",
   genome_meta      = "locus_id",
   genome_map       = "id_genome_map",
-  genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
   trait_meta       = "id_trait",
   ind_tbv          = c("id_ind", "trait_name"),
+  ind_tgv          = c("id_ind", "trait_name", "component_name"),
   ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
   ind_index        = c("id_ind", "index_name", "index_number"),
   ind_true_index   = c("id_ind", "index_name", "weight_type"),
@@ -181,6 +199,22 @@ TABLE_ROW_KEYS <- list(
 )
 
 
+# Shared by the derived views below. A view has no rows of its own, so there is
+# nothing a delete could target; the fix is always to change the base table.
+.VIEW_NO_DELETE_REASON <- paste(
+  "this is a derived view, not a table: it has no rows of its own. Delete from",
+  "the table it is built on instead."
+)
+
+# Shared by the three genome-effect tables below.
+.GE_NO_DELETE_REASON <- paste(
+  "effect definitions are configuration, not output, and the three tables are",
+  "parent/child (DuckDB refuses a parent delete with live children and does",
+  "not cascade). Replace them through the writer instead:",
+  "define_genome_effects(mode = 'replace_scope' | 'replace_owner' |",
+  "'replace_trait')."
+)
+
 #' Tables where row deletion is not a meaningful operation
 #'
 #' A table missing from [TABLE_ROW_KEYS] is ambiguous: it may be a deliberate
@@ -192,6 +226,12 @@ TABLE_ROW_KEYS <- list(
 #'
 #' @keywords internal
 TABLE_NO_ROW_DELETE <- c(
+  genome_effects               = .GE_NO_DELETE_REASON,
+  genome_effect_members        = .GE_NO_DELETE_REASON,
+  genome_effect_member_origins = .GE_NO_DELETE_REASON,
+  genome_effect_terms          = .VIEW_NO_DELETE_REASON,
+  genome_effect_loci           = .VIEW_NO_DELETE_REASON,
+  ind_tgv_total                = .VIEW_NO_DELETE_REASON,
   `_schema_meta` = paste(
     "schema descriptions are package-managed and rebuilt by open_pop(), so",
     "hand-edits would be silently overwritten. Use",
@@ -249,11 +289,13 @@ next_row_id <- function(conn, table, id_col) {
 #' @keywords internal
 SYSTEM_TABLES <- c(
   "_schema_meta",
-  "genome_meta", "genome_map", "genome_effects",
+  "genome_meta", "genome_map",
+  "genome_effects", "genome_effect_members", "genome_effect_member_origins",
+  "genome_effect_terms", "genome_effect_loci",
   "ind_haplotype", "ind_genotype", "ind_crossover",
   "chr_inheritance", "chr_recombination",
   "founder_haplotypes",
-  "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
+  "ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv", "ind_tgv_total", "ind_ebv",
   "trait_meta", "phenotype_effects", "trait_var_comp", "phenotype_random_effects",
   "phenotype_meta", "phenotype_components", "phenotype_var_comp",
   "index_meta", "ind_index", "ind_true_index"
@@ -264,7 +306,7 @@ SYSTEM_TABLES <- c(
 #'
 #' @keywords internal
 IND_TABLE_ID_IND_COLS <- c(
-  "ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv",
+  "ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv", "ind_ebv",
   "ind_index", "ind_true_index",
   "ind_haplotype", "ind_genotype", "ind_crossover"
 )

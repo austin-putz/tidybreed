@@ -219,32 +219,74 @@ distance-driven code (founder LD, recombination):
 - `validate_genome_map(conn)` — logical-key uniqueness (NULL-normalized),
   agreement with `genome_meta`, valid `sex`/`map_name`. Run after every map write.
 
-### `genome_effects`
+### `genome_effects` / `genome_effect_members` / `genome_effect_member_origins`
 
-QTL effect data. One row per (locus × trait × effect type × line). Populated by
-`define_additive_effects()` (single or multi-trait).
+Genome effects are stored as **terms**, not one row per locus. A term is one
+coefficient over one or more loci, each locus contributing a named basis function
+(`contrast_name`), each optionally scoped to allele copies of a given line and/or
+parent of origin. Created by `define_genome()` (not `open_pop()` — the `locus_id`
+foreign key needs `genome_meta` to exist first). Written by
+`define_genome_effects()` and, for the reserved `generated_additive_tbv` owner,
+by `define_additive_effects()`.
 
-| Column             | Type    | Notes                                                      |
-|--------------------|---------|------------------------------------------------------------|
-| id_genome_effect   | INTEGER | Primary key assigned by tidybreed via `next_int_id()`       |
-| locus_name         | VARCHAR | FK to `genome_meta.locus_name`                             |
-| line_name          | VARCHAR | NULL = population-wide; set for line-specific effects      |
-| trait_name         | VARCHAR | FK to `trait_meta.trait_name`                              |
-| genome_effect_type | VARCHAR | `"additive"` now; `"dominance"` and others later           |
-| genome_value       | DOUBLE  | Effect size                                                |
-| base_allele_freq   | DOUBLE  | Base allele frequency used for TBV centering (Falconer)    |
+**`genome_effects`** — one row per term.
 
-**Reserved**: all columns (the table is managed exclusively by `define_additive_effects()`).
+| Column           | Type    | Notes                                                     |
+|------------------|---------|-----------------------------------------------------------|
+| id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
+| trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated_additive_tbv"` is reserved for `define_additive_effects()`, `"custom"` is the `define_genome_effects()` default |
+| effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
+| genome_value     | DOUBLE  | The term's coefficient                                    |
 
-QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
-`genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
-flag is stored.
+**`genome_effect_members`** — one row per (term × locus), canonicalized by
+ascending `locus_id` with `member_slot` running `1..n`.
 
-For crossbreeding, `line_name = NULL` means a population-wide/common effect shared
-across lines; non-NULL `line_name` rows are line-specific effects. Current code
-implements additive effects only, but the long `genome_effect_type` dimension is
-reserved so dominance, epistasis, and other non-additive effects can be added later
-without a table rewrite.
+| Column           | Type     | Notes                                                    |
+|------------------|----------|----------------------------------------------------------|
+| id_genome_effect | INTEGER  | FK to `genome_effects`; PK part                          |
+| member_slot      | INTEGER  | Position in the term; PK part                            |
+| locus_id         | INTEGER  | FK to `genome_meta.locus_id`                             |
+| contrast_name    | VARCHAR  | `"additive"` (per allele copy), `"dominance"` (Cockerham, diploid), `"indicator"` (one genotype state) |
+| copy_count_value | UTINYINT | Indicator state: realized copy count. Required with `dosage_value`, because dosage alone conflates "no copy", "one allele-0 copy" and "two allele-0 copies" |
+| dosage_value     | UTINYINT | Indicator state: dosage of allele 1                      |
+| center_value     | DOUBLE   | Per-copy centring constant: `p` under Cockerham coding, `0.5` under functional coding. Required for non-indicator contrasts |
+
+**`genome_effect_member_origins`** — the scope of a member, as a predicate over
+allele copies. **No rows = the common scope**, which matches every copy.
+
+| Column           | Type     | Notes                                                    |
+|------------------|----------|----------------------------------------------------------|
+| id_genome_effect | INTEGER  | PK part; composite FK to `genome_effect_members`         |
+| member_slot      | INTEGER  | PK part; composite FK to `genome_effect_members`         |
+| origin_slot      | INTEGER  | PK part; canonicalized by sorting the origin tuple       |
+| line_match_type  | VARCHAR  | `"exact"` (named line), `"unknown"` (copies with no line), `"any"` (additive members only, and must carry a `parent_origin`) |
+| line_name        | VARCHAR  | Set only for `"exact"`                                   |
+| parent_origin    | UTINYINT | 1 = sire, 2 = dam, NULL = either. Non-NULL on an additive member is how **imprinting** is expressed |
+| copy_count       | INTEGER  | Copies demanded; always 1 on an additive member          |
+
+**Reserved**: all columns of all three. Row deletion is refused — effect
+definitions are configuration and are replaced through
+`define_genome_effects(mode = ...)`, not row-deleted.
+
+**Rules.** An additive member takes at most one origin row (`"A or B"` is
+expanded into separate variants); a genotype member takes an exact multiset whose
+`copy_count`s sum to the state's copy count (2 for `dominance`, the declared
+`copy_count_value` for `indicator`). Terms sharing a **family signature** —
+trait, owner, and the ordered member states, exposed as `family_key` on the
+`genome_effect_terms` view — are scope variants of one term and **compete**: the
+most specific matching scope wins, and overlapping-but-incomparable scopes are
+refused at write time. Terms with different keys **sum**.
+
+Causal-locus membership is **implicit**: a locus is causal for a trait if it
+appears as a member of any term for it. No boolean flag is stored.
+
+### Genome-effect views
+
+| View                   | Grain                      | What it is for                                 |
+|------------------------|----------------------------|-------------------------------------------------|
+| `genome_effect_terms`  | one row per term           | `effect_order`, `contrast_signature`, `family_key`, `scope_description` — all derived, never stored. `family_key` is how you see which terms compete and which sum |
+| `genome_effect_loci`   | one row per (term × locus) | `locus_name` joined from `genome_meta`; the place to ask which loci are causal. `locus_name` lives only here, so there is no id/name agreement invariant in the base tables |
 
 ### `ind_haplotype`
 
@@ -581,6 +623,34 @@ True breeding values (simulation ground truth). Populated by
 | trait_name | VARCHAR |                                        |
 | tbv_value  | DOUBLE  |                                        |
 
+### `ind_tgv`
+
+True **genetic** values (simulation ground truth): the total genotypic value,
+split by declared model structure. One row per (individual × trait × component).
+Populated by `add_tgv()`. Created in `define_trait()`'s lazy DDL block beside
+`ind_tbv`.
+
+| Column         | Type    | Notes                                              |
+|----------------|---------|-----------------------------------------------------|
+| id_tgv         | INTEGER | Primary key assigned via `next_int_id()`            |
+| id_ind         | VARCHAR |                                                     |
+| trait_name     | VARCHAR |                                                     |
+| component_name | VARCHAR | `"order1_additive"`, `"order1_dominance"`, `"order1_other"` (a hand-entered order-1 indicator surface), or `"interaction"` (any term with ≥ 2 members) |
+| tgv_value      | DOUBLE  | Raw sum of the contributing terms; **no mean is added** |
+
+**Unique**: `(id_ind, trait_name, component_name)`. **Reserved**: all columns.
+
+`component_name` records **how a term was declared, not a variance component**.
+A functional A×A term contributes to A, D *and* I in the statistical sense; the
+names carry the order precisely so they cannot be misread as `V_A` / `V_D` /
+`V_I`. There is deliberately **no** `replicate` column: like `ind_tbv`, that
+column exists only in the archive copy, and `archive_replicate()` refuses to
+stamp a table that already has one.
+
+The total is the derived view **`ind_tgv_total`** (`id_ind`, `trait_name`,
+`tgv_total`), never a stored `'total'` row — a stored total would make every
+`SUM(tgv_value)` double-count.
+
 ### `ind_ebv`
 
 Estimated breeding values from external BLUP / GBLUP runs. Logical key
@@ -658,7 +728,8 @@ in R via DELETE + INSERT when `overwrite_index = TRUE`.
 The current surface for creating a population and its genome is
 `open_pop() |> define_genome(...)`. `define_genome()` populates the genome tables:
 
-- Genome: `genome_meta` (physical `pos_bp`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `chr_inheritance` + `chr_recombination` (default autosome rows)
+- Genome: `genome_meta` (physical `pos_bp`, `locus_id` `PRIMARY KEY`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `ind_crossover` (empty), `chr_inheritance` + `chr_recombination` (default autosome rows)
+- Effects: `genome_effects`, `genome_effect_members`, `genome_effect_member_origins` (all empty), plus the `genome_effect_terms` and `genome_effect_loci` views. **These are created here, not in `open_pop()`** — `genome_effect_members` declares a foreign key to `genome_meta.locus_id`, and DuckDB refuses a foreign key to a column that does not exist yet
 
 `define_genome()` key params: `pop`, `n_loci`, `n_chr`, `chr_len_Mb` (finite,
 strictly positive), `cM_per_Mb` (genetic-map rate, cM per Mb; scalar or
@@ -667,8 +738,8 @@ length-`n_chr`, finite, strictly positive, default `1.0` →
 `recombines_M`/`recombines_F` (genome-wide per-parent-sex recombination defaults,
 both `TRUE`; set one `FALSE` for a whole-genome achiasmatic sex, seeded into
 `chr_recombination`). Calling
-`define_genome()` on a population that already has a non-empty `genome_meta` is a
-hard error (no partial re-definition).
+`define_genome()` on a population where **any** of those ten tables or two views
+already exists is a hard error (no partial re-definition).
 
 ### `add_founders()`
 

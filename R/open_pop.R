@@ -159,8 +159,11 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   # Register schema descriptions for core tables
   register_schema_meta(db_conn, .all_schema_descriptions())
 
+  # genome_effects (and its member/origin children) are NOT created here: they
+  # declare a foreign key to genome_meta.locus_id, which does not exist until
+  # define_genome() runs. See define_genome().
   tables_created <- c(
-    "_schema_meta", "ind_meta", "trait_var_comp", "genome_effects",
+    "_schema_meta", "ind_meta", "trait_var_comp",
     "phenotype_meta", "phenotype_components", "phenotype_var_comp"
   )
 
@@ -279,18 +282,6 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       trait_name_1      VARCHAR,
       trait_name_2      VARCHAR,
       cov_value         DOUBLE
-    )
-  ")
-
-  DBI::dbExecute(db_conn, "
-    CREATE TABLE genome_effects (
-      id_genome_effect   INTEGER PRIMARY KEY,
-      locus_name         VARCHAR NOT NULL,
-      line_name          VARCHAR,
-      trait_name         VARCHAR NOT NULL,
-      genome_effect_type VARCHAR NOT NULL,
-      genome_value       DOUBLE  NOT NULL,
-      base_allele_freq   DOUBLE
     )
   ")
 

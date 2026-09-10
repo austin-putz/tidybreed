@@ -1,3 +1,72 @@
+# tidybreed 0.65.0 (2026-09-10)
+
+Replaces the `genome_effects` schema with a term/member/origin model, and adds
+`ind_tgv`. **Breaking, and the package is deliberately mid-migration**: this is
+Phase B of `plans/update_genome_effects_v4.md`, which commits the schema.
+`define_additive_effects()` (Phase C) and `add_tbv()` (Phase D) still read the
+old column shape and do not work in this version. Pre-1.0, no shim.
+
+## Breaking schema changes
+
+- **`genome_effects` is now a term table.** One row is one coefficient over one
+  or more loci, not one locus. `locus_name`, `line_name`, `genome_effect_type`
+  and `base_allele_freq` are gone; `effect_owner`, `effect_name` and
+  `genome_value` remain. The loci a term spans live in the new
+  **`genome_effect_members`** (with the per-locus basis function and its
+  centring constant or genotype state), and their scope — line and parent of
+  origin — in the new **`genome_effect_member_origins`**. This is what makes
+  dominance, epistasis and per-locus imprinting expressible at all.
+
+- **The effect tables are created by `define_genome()`, not `open_pop()`.** They
+  declare a foreign key to `genome_meta.locus_id`, which does not exist until a
+  genome is defined.
+
+- **`genome_meta.locus_id` is now a real `PRIMARY KEY`.** It was documented as
+  one and never declared; DuckDB refuses a foreign key to an unconstrained
+  column. `genome_meta` is written once and reached only by `ALTER TABLE` +
+  `UPDATE` thereafter, so the index costs nothing.
+
+- **Row deletion is refused on all three effect tables.** They are configuration,
+  not output, and are parent/child with no cascade. Replace them through the
+  writer instead of `remove_rows()`.
+
+## New tables and views
+
+- **`ind_tgv`** — true genetic values: the total genotypic value split by
+  declared model structure (`order1_additive`, `order1_dominance`,
+  `order1_other`, `interaction`). One row per individual x trait x component;
+  written by `add_tgv()` in Phase D. The names carry the term order so they
+  cannot be misread as `V_A` / `V_D` / `V_I` — they record how a term was
+  *declared*, not an orthogonal decomposition.
+
+- **`genome_effect_terms`** — one row per term, with `effect_order`,
+  `contrast_signature`, `scope_description` and **`family_key`** derived rather
+  than stored. Terms sharing a `family_key` are scope variants of one term and
+  compete under specificity fallback; terms with different keys sum. This is the
+  only way to see which is which without reading the design notes.
+
+- **`genome_effect_loci`** — one row per (term x locus), with `locus_name`
+  joined from `genome_meta`. The place to ask which loci are causal for a trait.
+
+- **`ind_tgv_total`** — the derived total per individual x trait. Never a stored
+  `'total'` row, which would make every `SUM(tgv_value)` double-count.
+
+## Validation
+
+- **Every row-local invariant is a declared SQL constraint**, verified against
+  real inserts in DuckDB 1.5.5: closed contrast and match-type sets, the
+  contrast/state/centre agreement (including that a non-indicator member's
+  `center_value` is `NOT NULL` — a bare `BETWEEN` accepts `NULL`, because SQL
+  accepts `UNKNOWN`), positive copy counts, and four foreign keys including a
+  composite one.
+
+- **`validate_genome_effects()`** enforces what SQL cannot: at most one origin
+  row per additive member, a genotype multiset that sums to the copy count its
+  state is defined over, `'any'` restricted to additive members, dominance
+  refused where `chr_inheritance` does not resolve to a diploid locus, and —
+  within each fallback family — no duplicate scope and no overlapping but
+  incomparable scopes.
+
 # tidybreed 0.64.2 (2026-09-04)
 
 Makes `remove_rows()` work on every table it should, and stops it reporting

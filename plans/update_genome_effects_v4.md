@@ -13,9 +13,17 @@ the writer's input format and the evaluation strategy — and renames
 
 **Readiness: implementable.** No open question blocks any phase. The two remaining
 are ergonomic and revisable after the fact.
-★ **Phase A is complete** and required **no change to this schema** — results, hand
-computations and four findings carried into B–D are in
-`plans/update_genome_effects_phase_A.md`.
+★ **Phases A and B are complete.** Phase A required **no change to this schema**;
+Phase B corrected two errors in it (see below). Results, hand computations and the
+findings carried forward are in `plans/update_genome_effects_phase_A.md` and
+`plans/update_genome_effects_phase_B.md`.
+
+★ **Two corrections Phase B made to this document.** (a) `ind_tgv` must **not**
+declare a `replicate` column — `archive_replicate.R:153-158` refuses to stamp a
+table that already has one, and `ind_tbv`'s real DDL has none either (the
+`sql_utils.R:97` reference below is the *reserved-columns registry*, not DDL).
+(b) `ind_tgv_total` therefore cannot expose `replicate`. Both are corrected in
+place.
 **Supersedes:** `update_genome_effects.md` (v1/v2, 16 tables) and
 `update_genome_effects_v3_parsimony.md` (v3, 2 tables), retained as history.
 
@@ -310,16 +318,21 @@ schema; re-create it with `define_genome()`."
 
 ★ **`remove_rows()` and `archive_replicate()`.**
 
-- `TABLE_ROW_KEYS` (`sql_utils.R:161`) gains: `genome_effects = "id_genome_effect"`;
-  `genome_effect_members = c("id_genome_effect", "member_slot")`;
-  `genome_effect_member_origins = c("id_genome_effect", "member_slot", "origin_slot")`;
-  `ind_tgv = c("id_ind", "trait_name", "component_name")`.
+- `TABLE_ROW_KEYS` (`sql_utils.R:161`) gains `ind_tgv = c("id_ind", "trait_name",
+  "component_name")`. ★ The three effect tables are **not** added — see the
+  correction below.
 - **`remove_rows()` on `genome_effects` must delete children first.** DuckDB refuses a
   parent delete with live children and does not cascade (audit item 3), so a naive
   single-table delete errors. Either teach `remove_rows()` the child order for these
   three tables or reject the call and point at `define_genome_effects(mode = ...)`.
   **Rejecting is preferred** — effect definitions are configuration and should be
   replaced through the writer, not row-deleted.
+  ★ **Phase B correction:** the two halves of this bullet contradicted each other.
+  `remove_rows()` checks `TABLE_NO_ROW_DELETE` **before** `TABLE_ROW_KEYS`
+  (`remove_rows.R:228`), so listing the three tables in both would leave the
+  `TABLE_ROW_KEYS` entries unreachable. The stated preference is what was built: the
+  three tables are in `TABLE_NO_ROW_DELETE` with a reason naming the writer, and
+  **not** in `TABLE_ROW_KEYS`. Only `ind_tgv` was added there.
 - `archive_replicate()` stamps `replicate` on **output** tables only. `ind_tgv` has the
   column and is stamped; the three effect-definition tables are configuration and are
   **not** stamped, exactly as `genome_effects` is treated today.
@@ -749,13 +762,19 @@ CREATE TABLE ind_tgv (
   trait_name     VARCHAR NOT NULL,
   component_name VARCHAR NOT NULL,
   tgv_value      DOUBLE  NOT NULL,
-  replicate      INTEGER,
   UNIQUE (id_ind, trait_name, component_name)
 );
 ```
 
-`replicate` mirrors `ind_tbv`'s column (`sql_utils.R:97`) so `archive_replicate()`
-works identically. Written by **`add_tgv()`**, beside `add_tbv()` and `add_ebv()`.
+★ **No `replicate` column** (corrected in Phase B). Earlier revisions declared one
+"mirroring `ind_tbv`'s column (`sql_utils.R:97`)" — but that reference is the
+*reserved-columns registry*, not DDL: no result table carries `replicate` on the
+working copy. The column is added to the **archive** copy by
+`.ensure_archive_table(add_replicate = TRUE)`, and `archive_replicate.R:153-158`
+is a collision guard that **refuses to stamp a table that already contains one**,
+so the declared column would have broken the function that uses it. `replicate`
+stays in `TABLE_RESERVED_COLS` and joins `DEFERRED_COLS` in
+`test-schema-registries.R`, exactly as `ind_tbv` does. `archive_replicate()` Written by **`add_tgv()`**, beside `add_tbv()` and `add_ebv()`.
 Writes are idempotent — re-evaluation replaces an individual's rows for a trait in one
 transaction.
 
@@ -1032,11 +1051,11 @@ composite origin → member FK.
 | Group | Checks |
 |---|---|
 | ★ Input shape | `genome_value` and `effect_name` constant within a `term_id`; no unknown `terms` columns; `origin` keys resolve to a member of the named term; every message names the user's `term_id` |
-| Canonicalization | members by `locus_id`; origin rows by the documented tuple |
+| Canonicalization | members by `locus_id` — ★ made mechanical in Phase B as "`member_slot` is `1..n` in ascending `locus_id` order", which the view's `family_key` depends on; origin rows by the documented tuple |
 | Families | no duplicate family + scope identity; **no overlapping-but-incomparable predicates within a family** |
 | Terms | ≥ 1 member; each locus at most once per term |
-| Origins | ≤ 1 origin row and `copy_count = 1` on additive members; exact-multiset satisfiability on genotype members — ★ **by full bijection search, not greedy consumption**: a demand set mixing a parent-qualified row with an ANY-parent row can be satisfiable while greedy fails it (Phase A finding; ≤ 2 items at diploidy, so the cost is nil). The same search decides genotype containment; ★ `'any'` rejected on genotype members (cross-table — `contrast_name` lives in `genome_effect_members`) |
-| Ploidy | `dominance` rejected at non-diploid loci **unless proven on that member** |
+| Origins | ≤ 1 origin row and `copy_count = 1` on additive members; ★ a genotype member's multiset must sum to the copy count its state is defined over (**2** for `dominance`, `copy_count_value` for `indicator`) — the plan stated this rule but gave it no enforcement until Phase B; exact-multiset satisfiability — ★ **by full bijection search, not greedy consumption**: a demand set mixing a parent-qualified row with an ANY-parent row can be satisfiable while greedy fails it (Phase A finding; ≤ 2 items at diploidy, so the cost is nil). The same search decides genotype containment; ★ `'any'` rejected on genotype members (cross-table — `contrast_name` lives in `genome_effect_members`) |
+| Ploidy | `dominance` rejected at non-diploid loci **unless proven on that member** — ★ needs `chr_inheritance` + `genome_meta`, so it lives in `validate_genome_effects(conn)` rather than the frame-level rules. Resolution is line-agnostic (`line_name = NULL`) |
 | Owners | reserved owner names not writable by the general writer without override |
 | Cross-table | `trait_name` in `trait_meta`; children deleted before parents |
 
@@ -1051,7 +1070,7 @@ not force a six-way join on anyone.
 |---|---|---|
 | `genome_effect_terms` | one row per term | `trait_name`, `effect_owner`, `effect_name`, `id_genome_effect`, `effect_order` (member count, **derived** — never stored), `contrast_signature` (ordered `contrast_name` list), ★ `family_key`, `scope_description`, `genome_value` |
 | `genome_effect_loci` | one row per (term × locus) | `trait_name`, `effect_owner`, `id_genome_effect`, `member_slot`, `locus_id`, `locus_name` (joined from `genome_meta`), `contrast_name` |
-| `ind_tgv_total` | one row per (individual × trait) | `id_ind`, `trait_name`, `tgv_total` = `SUM(tgv_value)`, `replicate` |
+| `ind_tgv_total` | one row per (individual × trait) | `id_ind`, `trait_name`, `tgv_total` = `SUM(tgv_value)` — ★ no `replicate`, which the working table does not have |
 
 `locus_name` lives only in the view — v4.1 removed it from
 `genome_effect_members` to kill the id/name agreement invariant.
@@ -1233,7 +1252,7 @@ the additive formula from first principles and is not pre-change golden output.
 | Phase | Work | Gate |
 |---|---|---|
 | **A** ✅ | **Complete — `plans/update_genome_effects_phase_A.md`.** Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | ✅ Met: 19 fixtures, **no schema change required**; both evaluators agree with the hand computations. Containment order and multi-locus fallback settled before DDL. ★ Writing each fixture in the `terms` format moves to Phase C as a **round-trip** against this registry (gate 53) — it only becomes a real check once a writer exists to canonicalize it |
-| **B** | ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | Registry, constraint, and validator tests pass; gates 46–48, ★ 54 |
+| **B** ✅ | **Complete — `plans/update_genome_effects_phase_B.md`.** ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | ✅ Met: gates 46–48 and 54, plus gate 41's row-local half. Every proposed constraint was probed against a real insert in DuckDB 1.5.5 before being written. **Two plan errors and five implementation issues found and fixed in review** — see the Phase B notes |
 | **C** | `define_genome_effects()`; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; `(a,d)` and genotype-table helpers; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ **delete `trait_meta.expressed_parent`** (see below) | Writer round-trips every Phase-A fixture; gates 34–35, 41–44, 50, ★ 53 pass |
 | **D** | ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | Oracle agrees; gates 1–39, 40, 45, ★ 51–52 pass |
 | **E** | Delete the old table shape; ★ add the `restore_pop()` guard for pre-change files; move QTL extraction (`tidybreed_pop.R:159`) and `extract_genotypes()`'s nominal `table_name` check (`:124-127`) to the locus view | No legacy columns remain; gate 49 |
