@@ -33,6 +33,22 @@
 #' keeps its exact meaning. Deriving average effects from a general
 #' non-additive model is a separate calculation.
 #'
+#' @section When the stored coefficients stop being average effects:
+#' Ignoring those terms is right, but it stops giving *the model's* breeding
+#' value as soon as one of them contributes to the additive component or shifts
+#' the coefficients this function reads. `add_tbv()` warns once per trait in
+#' exactly that case: a non-reserved order-one `additive` term (it is part of A
+#' and is skipped), an `indicator` surface (raw functional coding — at a locus
+#' that also carries a generated additive term the stored `a` is no longer the
+#' average effect, \eqn{\alpha = a + d(q - p)}), or an interaction (whose
+#' additive projection depends on other loci and on LD, so there is no local
+#' correction).
+#'
+#' An order-one `dominance` term centred where the additive term is centred is
+#' the **exception and stays silent**: Cockerham coding is HWE-orthogonal, so it
+#' contributes nothing to A and leaves the additive coefficient alone —
+#' `tbv_value` is still exact. Warning there would cry wolf on the common case.
+#'
 #' Each allele copy takes the **most specific** variant whose origin predicate
 #' matches its `(line_origin, parent_origin)` label, falling back per copy to
 #' the common variant. This per-copy fallback is what makes crossbreeding TBV
@@ -141,12 +157,16 @@ add_tbv <- function(tbl, trait_name = NULL,
     return(invisible(pop))
   }
 
-  model <- .gev_read_model(conn, trait, GE_ADDITIVE_OWNER,
-                           order1_additive_only = TRUE)
-  for (t in trait) .gev_require_terms(model, t, GE_ADDITIVE_OWNER, TRUE)
+  # The whole stored model, every owner: the staleness check needs the terms
+  # this function does *not* read, and reading once is cheaper than twice.
+  full  <- .gev_read_model(conn, trait)
+  model <- .gev_reserved_additive(full)
+  for (t in trait) {
+    .gev_require_terms(model, t, tbv = TRUE)
+    .gev_warn_tbv_stale(full, t)
+  }
 
-  res <- .gev_evaluate(conn, ids_t, trait, GE_ADDITIVE_OWNER,
-                       order1_additive_only = TRUE, model = model)
+  res <- .gev_evaluate(conn, ids_t, trait, model = model)
 
   for (t in trait) {
     sub <- res[res$trait_name == t, , drop = FALSE]

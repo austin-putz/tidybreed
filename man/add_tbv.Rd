@@ -75,6 +75,23 @@ contribute to \code{ind_tgv} but \strong{never silently redefine the breeding va
 additive members appearing inside interactions are ignored, and \code{ind_tbv}
 keeps its exact meaning. Deriving average effects from a general
 non-additive model is a separate calculation.
+}
+\section{When the stored coefficients stop being average effects}{
+
+Ignoring those terms is right, but it stops giving \emph{the model's} breeding
+value as soon as one of them contributes to the additive component or shifts
+the coefficients this function reads. \code{add_tbv()} warns once per trait in
+exactly that case: a non-reserved order-one \code{additive} term (it is part of A
+and is skipped), an \code{indicator} surface (raw functional coding — at a locus
+that also carries a generated additive term the stored \code{a} is no longer the
+average effect, \eqn{\alpha = a + d(q - p)}), or an interaction (whose
+additive projection depends on other loci and on LD, so there is no local
+correction).
+
+An order-one \code{dominance} term centred where the additive term is centred is
+the \strong{exception and stays silent}: Cockerham coding is HWE-orthogonal, so it
+contributes nothing to A and leaves the additive coefficient alone —
+\code{tbv_value} is still exact. Warning there would cry wolf on the common case.
 
 Each allele copy takes the \strong{most specific} variant whose origin predicate
 matches its \verb{(line_origin, parent_origin)} label, falling back per copy to
@@ -98,6 +115,7 @@ property of \code{phenotype_meta}, not of a genetic component trait).
 Useful for tracking genetic trend across generations without collecting
 phenotypes.
 }
+
 \examples{
 \dontrun{
 # Crossbreeding TBV: line-specific additive effects for two pure lines, then

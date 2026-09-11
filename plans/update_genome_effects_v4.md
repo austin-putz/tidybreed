@@ -1495,11 +1495,27 @@ what they intended, since nothing forces them to call `add_tgv()`.
 Low stakes. Flagging it only because it is the one place a user can get a correct
 number that answers a question they did not mean to ask.
 
-★ **Still open after Phase D.** The evaluator makes the warning trivial to add —
-`add_tbv()` already reads the full model to filter it, so "does this trait have
-terms outside the reserved owner?" is a row count it already has in hand. Left
-undecided rather than implemented, because it is a user-facing behaviour choice
-and not a gate.
+★ **Decided and implemented in Phase D — but on a sharper condition than any
+option above.** None of the three options is right, because "the trait has
+non-additive terms" is not the condition under which `tbv_value` stops being the
+model's breeding value. A **Cockerham `dominance` term centred where the
+additive term is centred contributes nothing to A and leaves the additive
+coefficient an average effect** — `tbv_value` is still exact, and warning there
+would train the user to ignore the message in the common case.
+
+The warning fires when some term either *contributes to* the additive component
+or *shifts* the coefficients `add_tbv()` reads:
+
+| Non-reserved term | Warns | Why |
+|---|---|---|
+| order-one `additive` | yes | It is part of A and is skipped — owners always sum |
+| `indicator` surface | yes | Raw functional coding: at a locus that also carries a generated additive term the stored `a` is no longer `α = a + d(q − p)` |
+| interaction (≥ 2 members) | yes | Its additive projection depends on other loci and on LD; there is no local correction |
+| order-one `dominance`, centred at the additive term's centre | **no** | HWE-orthogonal by construction; `tbv_value` exact |
+| order-one `dominance`, centred elsewhere | yes | Orthogonality is a property of the centring, not of the contrast name |
+
+One warning per trait, no behaviour change — a test asserts the number is
+byte-identical with and without it.
 
 ### Q2 — Mixed coding at one locus: reject, or allow and sum?
 

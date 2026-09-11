@@ -345,7 +345,9 @@ test_that("gates 32-33: custom terms move tgv_value and leave tbv_value alone", 
     contrast_name = "additive", center_value = 0.5,
     genome_value = 3.0), effect_owner = "AxA")
 
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  # Both new terms are ones add_tbv() must ignore, so it now says so (Q1).
+  expect_warning(pop <- pop |> get_table("ind_meta") |> add_tbv("ADG"),
+                 "does not read")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tbv1 <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
@@ -357,6 +359,126 @@ test_that("gates 32-33: custom terms move tgv_value and leave tbv_value alone", 
   expect_setequal(unique(gev_tgv(pop)$component_name),
                   c("order1_additive", "order1_other", "interaction"))
 })
+
+# ── Q1: add_tbv() says when its coefficients stopped being average effects ──
+
+# The rule is not "this trait has non-additive terms". It is "some term either
+# contributes to the additive component or shifts the coefficients add_tbv()
+# reads". A Cockerham dominance term centred where the additive term is centred
+# does neither, and must stay silent -- it is the common case, and a warning
+# there would train the user to ignore the message.
+
+gev_q1_pop <- function(name) {
+  pop <- gev_lines_pop(name)
+  loci <- gev_loci(pop)
+  pop <- suppressWarnings(pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+                            base = "founder_haplotypes"))
+  pop
+}
+
+gev_add_centre <- function(pop, locus) {
+  DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT DISTINCT m.center_value FROM genome_effect_members m ",
+    "JOIN genome_effects e USING (id_genome_effect) ",
+    "JOIN genome_effect_loci l USING (id_genome_effect, member_slot) ",
+    "WHERE e.effect_owner = '", tidybreed:::GE_ADDITIVE_OWNER, "' ",
+    "AND l.locus_name = '", locus, "'"))$center_value[1]
+}
+
+test_that("Q1: a purely generated additive model is silent", {
+  pop <- gev_q1_pop("gev_q1_clean")
+  on.exit(close_pop(pop), add = TRUE)
+  expect_silent(suppressMessages(
+    pop |> get_table("ind_meta") |> add_tbv("ADG")))
+})
+
+test_that("Q1: a Cockerham dominance term at the additive centre is silent", {
+  pop <- gev_q1_pop("gev_q1_cockerham")
+  on.exit(close_pop(pop), add = TRUE)
+  L <- gev_loci(pop)[1]
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = L, contrast_name = "dominance",
+    center_value = gev_add_centre(pop, L), genome_value = 1.3),
+    effect_owner = "dom")
+  # HWE-orthogonal: contributes nothing to A, leaves the additive coefficient
+  # an average effect. tbv_value is still exact, so there is nothing to say.
+  expect_silent(suppressMessages(
+    pop |> get_table("ind_meta") |> add_tbv("ADG")))
+})
+
+test_that("Q1: a dominance term centred somewhere else does warn", {
+  pop <- gev_q1_pop("gev_q1_offcentre")
+  on.exit(close_pop(pop), add = TRUE)
+  L <- gev_loci(pop)[1]
+  off <- gev_add_centre(pop, L) + 0.2
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = L, contrast_name = "dominance",
+    center_value = off, genome_value = 1.3), effect_owner = "dom")
+  expect_warning(suppressMessages(
+    pop |> get_table("ind_meta") |> add_tbv("ADG")), "no longer average effects")
+})
+
+test_that("Q1: a functional indicator surface warns", {
+  pop <- gev_q1_pop("gev_q1_functional")
+  on.exit(close_pop(pop), add = TRUE)
+  L <- gev_loci(pop)[1]
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
+    dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
+  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
+                warning = conditionMessage)
+  expect_match(w, "indicator")
+  expect_match(w, "alpha = a \\+ d\\(q - p\\)")
+  expect_match(w, "add_tgv\\(\\)")
+})
+
+test_that("Q1: an interaction warns, and is named as one", {
+  pop <- gev_q1_pop("gev_q1_epi")
+  on.exit(close_pop(pop), add = TRUE)
+  loci <- gev_loci(pop)
+  cells <- expand.grid(a = 0:2, b = 0:2)
+  pop <- define_genome_effects(pop, "ADG",
+    genotype_terms(stats::setNames(cells, loci[1:2]),
+                   value = c(0, 0, 0, 0, 1, 2, 0, 2, 3)),
+    effect_owner = "AxA")
+  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
+                warning = conditionMessage)
+  expect_match(w, "interaction")
+  expect_match(w, "on other loci and on LD")
+})
+
+test_that("Q1: a custom order-one additive term warns -- it is part of A", {
+  pop <- gev_q1_pop("gev_q1_custom_add")
+  on.exit(close_pop(pop), add = TRUE)
+  L <- gev_loci(pop)[1]
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = L, contrast_name = "additive", center_value = 0.5,
+    genome_value = 0.9), effect_owner = "hand")
+  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
+                warning = conditionMessage)
+  expect_match(w, "'hand'")
+  expect_match(w, "additive")
+})
+
+test_that("Q1: the warning never changes the number", {
+  pop <- gev_q1_pop("gev_q1_value")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG"))
+  before <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
+
+  L <- gev_loci(pop)[1]
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
+    dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
+  suppressWarnings(suppressMessages(
+    pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")))
+  after <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
+  expect_equal(before, after)
+})
+
 
 test_that("gate 7 / 25: functional and Cockerham codings differ by exactly the reported mean", {
   pop <- gev_lines_pop("gev_ad")

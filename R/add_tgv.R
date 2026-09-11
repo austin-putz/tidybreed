@@ -80,7 +80,7 @@ add_tgv <- function(tbl, trait_name = NULL) {
   }
 
   model <- .gev_read_model(conn, traits)
-  for (t in traits) .gev_require_terms(model, t, NULL, FALSE)
+  for (t in traits) .gev_require_terms(model, t)
 
   res <- .gev_evaluate(conn, ids, traits, model = model)
   for (t in traits) {

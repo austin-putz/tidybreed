@@ -61,14 +61,10 @@
 #' @param conn A DBI connection.
 #' @param trait_names Character vector.
 #' @param effect_owner Optional owner filter (a single reserved or custom name).
-#' @param order1_additive_only When `TRUE`, keep only single-member terms whose
-#'   contrast is `additive`. This is the TBV filter: an additive member sitting
-#'   inside an interaction is not a breeding-value coefficient.
 #' @return List of three data frames, `terms`, `members`, `origins`.
 #' @keywords internal
 #' @noRd
-.gev_read_model <- function(conn, trait_names, effect_owner = NULL,
-                            order1_additive_only = FALSE) {
+.gev_read_model <- function(conn, trait_names, effect_owner = NULL) {
   terms <- DBI::dbGetQuery(conn, paste0(
     "SELECT id_genome_effect, trait_name, effect_owner, effect_name, ",
     "       genome_value FROM genome_effects ",
@@ -101,20 +97,6 @@
   ord <- tabulate(match(members$id_genome_effect, ids), nbins = length(ids))
   terms$effect_order <- ord
 
-  if (order1_additive_only) {
-    keep <- terms$effect_order == 1L &
-      terms$id_genome_effect %in%
-        members$id_genome_effect[members$contrast_name == "additive"]
-    terms <- terms[keep, , drop = FALSE]
-    members <- members[members$id_genome_effect %in% terms$id_genome_effect, , drop = FALSE]
-    origins <- origins[origins$id_genome_effect %in% terms$id_genome_effect, , drop = FALSE]
-    if (nrow(terms) == 0L) {
-      terms$component_name <- character(0)
-      terms$family_key     <- character(0)
-      return(list(terms = terms, members = members, origins = origins))
-    }
-  }
-
   m1 <- members[!duplicated(members$id_genome_effect), , drop = FALSE]
   terms$component_name <- .gev_component(
     m1$contrast_name[match(terms$id_genome_effect, m1$id_genome_effect)],
@@ -141,6 +123,30 @@
              origin_slot = integer(0), line_match_type = character(0),
              line_name = character(0), parent_origin = integer(0),
              copy_count = integer(0), stringsAsFactors = FALSE)
+}
+
+
+#' The subset of a model that `add_tbv()` reads
+#'
+#' Order-one terms whose single member's contrast is `additive`, under the
+#' reserved owner. One definition, because "what is a breeding-value
+#' coefficient" is a contract rather than a convenience filter: an additive
+#' member sitting inside an interaction is not one, and neither is a coefficient
+#' a user hand-wrote under their own owner.
+#'
+#' @keywords internal
+#' @noRd
+.gev_reserved_additive <- function(model) {
+  keep <- model$terms$effect_order == 1L &
+    model$terms$effect_owner == GE_ADDITIVE_OWNER &
+    model$terms$id_genome_effect %in%
+      model$members$id_genome_effect[model$members$contrast_name == "additive"]
+  terms <- model$terms[keep, , drop = FALSE]
+  list(terms   = terms,
+       members = model$members[model$members$id_genome_effect %in%
+                                 terms$id_genome_effect, , drop = FALSE],
+       origins = model$origins[model$origins$id_genome_effect %in%
+                                 terms$id_genome_effect, , drop = FALSE])
 }
 
 
@@ -554,20 +560,16 @@
 #' @param conn A DBI connection.
 #' @param id_ind Character vector of individuals.
 #' @param trait_names Character vector of traits.
-#' @param effect_owner,order1_additive_only Passed to [.gev_read_model()].
-#' @param model An already-read model, to save re-reading it; `NULL` reads one.
+#' @param model The model to evaluate. `NULL` reads the whole stored model for
+#'   `trait_names`; `add_tbv()` passes [.gev_reserved_additive()] of one.
 #' @return Data frame `id_ind`, `trait_name`, `component_name`, `tgv_value`.
 #'   Individuals contributing nothing are absent rather than zero -- the caller
 #'   decides whether that is an error.
 #' @keywords internal
 #' @noRd
-.gev_evaluate <- function(conn, id_ind, trait_names, effect_owner = NULL,
-                          order1_additive_only = FALSE, model = NULL) {
+.gev_evaluate <- function(conn, id_ind, trait_names, model = NULL) {
 
-  if (is.null(model)) {
-    model <- .gev_read_model(conn, trait_names, effect_owner,
-                             order1_additive_only)
-  }
+  if (is.null(model)) model <- .gev_read_model(conn, trait_names)
   empty <- data.frame(id_ind = character(0), trait_name = character(0),
                       component_name = character(0), tgv_value = numeric(0),
                       stringsAsFactors = FALSE)
@@ -760,11 +762,11 @@
 #'
 #' @keywords internal
 #' @noRd
-.gev_require_terms <- function(model, trait, effect_owner, order1_additive_only) {
+.gev_require_terms <- function(model, trait, tbv = FALSE) {
   if (sum(model$terms$trait_name == trait) > 0L) return(invisible(NULL))
-  if (order1_additive_only) {
+  if (tbv) {
     stop("No order-one additive effects found for trait '", trait,
-         "' under effect owner '", effect_owner, "'. ",
+         "' under effect owner '", GE_ADDITIVE_OWNER, "'. ",
          "Call define_additive_effects() first. Terms written through ",
          "define_genome_effects() contribute to ind_tgv but never redefine ",
          "the breeding value.", call. = FALSE)
@@ -772,6 +774,76 @@
   stop("No genome effects found for trait '", trait,
        "'. Call define_additive_effects() or define_genome_effects() first.",
        call. = FALSE)
+}
+
+#' Warn when `add_tbv()`'s coefficients have stopped being average effects
+#'
+#' `add_tbv()` reads only the reserved owner's order-one `additive` terms. That
+#' is not a partial answer — a breeding value is the additive component by
+#' definition — but it stops being *the model's* breeding value as soon as some
+#' other term either contributes to it or shifts the coefficients it reads:
+#'
+#' - a non-reserved order-one `additive` term contributes to A and is skipped;
+#' - an `indicator` surface is raw functional coding, so its additive projection
+#'   is real and, at a locus that also carries a generated additive term, the
+#'   stored `a` is no longer the average effect: `alpha = a + d(q - p)`;
+#' - an interaction has an additive projection that depends on the other loci
+#'   and on LD, so there is no local correction at all;
+#' - an order-one `dominance` term is the **exception**. Cockerham coding is
+#'   HWE-orthogonal, so it contributes nothing to A and leaves the co-located
+#'   additive coefficient alone — provided it is centred at the same frequency.
+#'   Warning on those would cry wolf on the common case, so it stays silent.
+#'
+#' @param full The whole stored model for one trait, every owner.
+#' @keywords internal
+#' @noRd
+.gev_warn_tbv_stale <- function(full, trait) {
+  terms <- full$terms[full$terms$trait_name == trait, , drop = FALSE]
+  if (nrow(terms) == 0L) return(invisible(NULL))
+  mem <- full$members[full$members$id_genome_effect %in% terms$id_genome_effect, ,
+                      drop = FALSE]
+
+  reserved <- terms$id_genome_effect[terms$effect_owner == GE_ADDITIVE_OWNER &
+                                       terms$effect_order == 1L]
+  res_mem <- mem[mem$id_genome_effect %in% reserved &
+                   mem$contrast_name == "additive", , drop = FALSE]
+  if (nrow(res_mem) == 0L) return(invisible(NULL))   # add_tbv() errors anyway
+  others <- terms[!terms$id_genome_effect %in% res_mem$id_genome_effect, ,
+                  drop = FALSE]
+  if (nrow(others) == 0L) return(invisible(NULL))
+
+  # A dominance member is orthogonal only if it is centred where the generated
+  # additive term at that same locus is centred.
+  centred_ok <- function(locus, centre) {
+    have <- res_mem$center_value[res_mem$locus_id == locus]
+    length(have) > 0L && any(abs(have - centre) < 1e-9)
+  }
+
+  kind_of <- vapply(others$id_genome_effect, function(id) {
+    mm <- mem[mem$id_genome_effect == id, , drop = FALSE]
+    if (nrow(mm) > 1L) return("interaction")
+    if (mm$contrast_name == "dominance" &&
+        centred_ok(mm$locus_id, mm$center_value)) return("orthogonal")
+    mm$contrast_name
+  }, character(1))
+  stale <- kind_of != "orthogonal"
+  if (!any(stale)) return(invisible(NULL))
+
+  hit <- others[stale, , drop = FALSE]
+  warning(
+    "Trait '", trait, "' has ", nrow(hit), " term(s) add_tbv() does not read ",
+    "(owner(s) ", paste0("'", sort(unique(hit$effect_owner)), "'", collapse = ", "),
+    "; ", paste(sort(unique(kind_of[stale])), collapse = ", "), ") that ",
+    "contribute to the additive component. tbv_value is the sum of the stored ",
+    "'", GE_ADDITIVE_OWNER, "' additive coefficients, which are no longer ",
+    "average effects: under functional coding alpha = a + d(q - p), and under ",
+    "epistasis the average effect depends on other loci and on LD. ",
+    "Use add_tgv() for the full genetic value; deriving average effects from a ",
+    "general non-additive model is a separate calculation. A Cockerham ",
+    "'dominance' term centred at the same frequency does not trigger this and ",
+    "leaves tbv_value exact.",
+    call. = FALSE)
+  invisible(NULL)
 }
 
 #' Stop when an individual's every term missed

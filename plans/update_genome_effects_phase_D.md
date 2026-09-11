@@ -10,7 +10,7 @@ to `ind_tgv`; `add_tbv()` is the same evaluator filtered to the reserved owner
 and to order-one `additive` terms — **not** a second implementation.
 
 The suite goes from **2194 pass / 144 error** (end of Phase C) to
-**2734 pass / 0 fail / 7 error**. The 7 are one root cause, in
+**2746 pass / 0 fail / 7 error**. The 7 are one root cause, in
 `extract_genotypes()`, and are Phase E's scheduled work.
 
 ---
@@ -26,7 +26,7 @@ The suite goes from **2194 pass / 144 error** (end of Phase C) to
 | `R/genome_effects_helpers.R` | edited | `.ge_family_key()` → vectorized `.ge_family_keys()` |
 | `R/define_additive_effects.R` | edited | One call site of the above |
 | `R/schema.R` | edited | One column description naming a deleted concept |
-| `tests/testthat/test-genome-effects-eval.R` | **new**, 197 assertions | Gates 1–10, 14, 15–18, 21–23, 25–33, 38, 39, 45, 51, 52 |
+| `tests/testthat/test-genome-effects-eval.R` | **new**, 209 assertions | Gates 1–10, 14, 15–18, 21–23, 25–33, 38, 39, 45, 51, 52, and Q1 |
 | `tests/testthat/helper-genome-effects-db.R` | **new** | `ge_flat_view()`, deduplicated out of `test-define_additive_effects.R` |
 | `tests/testthat/test-add_tbv.R` | edited | The oracle rewritten against the term shape; gate 40 unchanged and green |
 | `dev/benchmarks/benchmark_tgv_scale.R` | **new** | Gate 51's wall-clock half |
@@ -274,7 +274,7 @@ replaced by a join against a precomputed map, exactly as the plan predicted.
 ## Verification
 
 ```
-2734 pass · 0 fail · 7 error · 10 warn
+2746 pass · 0 fail · 7 error · 10 warn
 ```
 
 Phase C ended at 2194 / 0 / 144. The 10 warnings are pre-existing and unrelated.
@@ -291,7 +291,7 @@ Per-file, verified directly:
 
 | File | Result |
 |---|---|
-| `test-genome-effects-eval.R` | 197 / 0 |
+| `test-genome-effects-eval.R` | 209 / 0 |
 | `test-genome-effects-writer.R` | 183 / 0 |
 | `test-genome-effects-schema.R` | 98 / 0 |
 | `test-genome-effects-fixtures.R` | 248 / 0 |
@@ -318,16 +318,40 @@ Per-file, verified directly:
   *description* is corrected; the column itself belongs to Phase E's "no legacy
   columns remain".
 
-## One decision left to the user
+## Q1, decided during review
 
-**Q1 — should `add_tbv()` warn when a trait has terms outside the reserved
-owner?** The plan recommends warning once, and Phase D makes it nearly free:
-`add_tbv()` already reads the model in order to filter it, so "does this trait
-have non-reserved terms?" is a row count it has in hand. Left **unimplemented**,
-because Q1 is an open question in the plan rather than a gate, and it is a
-user-facing behaviour choice. One line of code whenever it is wanted.
+**Should `add_tbv()` warn when a trait has terms outside the reserved owner?**
+Decided: **yes, but on a sharper condition than the plan's options offered.**
 
-## Next
+None of the plan's three options is right, because "the trait has non-additive
+terms" is not the condition under which `tbv_value` stops being the model's
+breeding value. The real condition is whether some term contributes to the
+additive component or shifts the coefficients `add_tbv()` reads:
+
+| Non-reserved term | Warns | Why |
+|---|---|---|
+| order-one `additive` | yes | It is part of A and is skipped — owners always sum |
+| `indicator` surface | yes | Raw functional coding: the stored `a` is no longer `α = a + d(q − p)` |
+| interaction (≥ 2 members) | yes | Additive projection depends on other loci and on LD |
+| order-one `dominance` at the additive term's centre | **no** | HWE-orthogonal; `tbv_value` exact |
+| order-one `dominance` centred elsewhere | yes | Orthogonality is a property of the centring, not the contrast name |
+
+The exception is the point. A Cockerham dominance model is the common way to
+write dominance in this package, and under it the additive coefficient *is* the
+average effect — `tbv_value` is exact and there is nothing to say. Warning there
+would train the user to ignore the message in exactly the case where it matters.
+
+`.gev_warn_tbv_stale()`, one warning per trait, no behaviour change: a test
+asserts `ind_tbv` is byte-identical with and without the warning. Seven tests
+cover the table above.
+
+This also drove a small refactor. `add_tbv()` now reads the **whole** stored
+model once and narrows it in R through `.gev_reserved_additive()` — one named
+definition of "what counts as a breeding-value coefficient" — because the check
+needs the terms the function does *not* read. `.gev_read_model()`'s
+`order1_additive_only` parameter is gone rather than kept alongside it.
+
+## Next## Next
 
 **Phase E.** Delete the last old-shape remnants; `restore_pop()` guard for
 pre-change files (gate 49); `extract_genotypes()`'s `effects_tbl` path and the

@@ -44,6 +44,15 @@ order-one `additive` terms, not a second implementation of the effect math.
   redefine `ind_tbv`.
 - `add_tbv()`'s "no effects" error now says *order-one additive* and names the
   effect owner, because that is the actual filter.
+- **`add_tbv()` warns once per trait when its coefficients have stopped being
+  average effects** (plan Q1, decided): a non-reserved order-one `additive` term
+  (part of A, and skipped), an `indicator` surface (raw functional coding, so
+  the stored `a` is no longer `alpha = a + d(q - p)`), or an interaction (whose
+  additive projection depends on other loci and on LD). An order-one
+  `dominance` term centred where the additive term is centred is the
+  **exception and stays silent** — Cockerham coding is HWE-orthogonal, so
+  `tbv_value` is still exact, and warning there would cry wolf on the common
+  case. The warning never changes the number.
 - `add_phenotype()`'s genome-effect precondition no longer requires a
   population-wide term. A purebred design whose only terms are line-specific
   evaluates perfectly well and was being rejected.

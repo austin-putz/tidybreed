@@ -1218,6 +1218,14 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   and on LD. So terms written through `define_genome_effects()` move `ind_tgv`
   and never silently redefine `ind_tbv`, and additive members sitting inside an
   interaction are ignored.
+
+  **`add_tbv()` warns once per trait when the coefficients it reads have
+  stopped being average effects** — a non-reserved order-one `additive` term (it
+  is part of A and is skipped), an `indicator` surface, or an interaction. An
+  order-one `dominance` term centred where the additive term is centred is the
+  exception and stays **silent**: Cockerham coding is HWE-orthogonal, so it
+  contributes nothing to A and `tbv_value` remains exact. The warning is about
+  *which terms were read*, never a claim that the arithmetic is wrong.
 - `add_tgv()` — evaluates **every** term of a trait and writes `ind_tgv`, one
   row per (individual × trait × `component_name`). The raw sum of the stored
   terms; **no mean is added**. Idempotent per (individual, trait) — the delete

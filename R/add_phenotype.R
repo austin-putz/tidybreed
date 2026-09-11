@@ -250,8 +250,8 @@ add_phenotype <- function(tbl,
   # -- the old check also demanded a population-wide row, which would have
   # rejected a purebred-lines-only design that evaluates perfectly well.
   for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
-    n_eff <- nrow(.gev_read_model(pop$db_conn, t, GE_ADDITIVE_OWNER,
-                                  order1_additive_only = TRUE)$terms)
+    n_eff <- nrow(.gev_reserved_additive(
+      .gev_read_model(pop$db_conn, t, GE_ADDITIVE_OWNER))$terms)
     if (n_eff == 0L) {
       stop(
         "No additive effects found for phenotype '", t, "' in genome_effects. ",
