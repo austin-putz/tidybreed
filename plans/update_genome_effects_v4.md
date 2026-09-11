@@ -1517,6 +1517,21 @@ or *shifts* the coefficients `add_tbv()` reads:
 One warning per trait, no behaviour change — a test asserts the number is
 byte-identical with and without it.
 
+★ **The last row is an open item, not a settled one.** A dominance term whose
+`center_value` differs from the additive term at the same locus is reachable
+without doing anything that looks wrong — `define_additive_effects(base =
+"current_pop")` centres at the realized frequency while a hand-written
+`ad_terms(p = )` centres wherever the user typed. The writer cannot reject it
+(different centres across scope variants are legal and intended, which is why
+`center_value` is outside the family signature), so the two terms are different
+families and sum, and the additive coefficient quietly stops being an average
+effect. Phase D's warning catches it at `add_tbv()` time — the right safety net
+at the wrong moment. Candidates for a better one, none scheduled: a write-time
+warning from `define_genome_effects()`, realized-orthogonality reporting as part
+of §Future limitations item 6, or letting `ad_terms()` inherit `p` from the
+stored additive term. See **§Q1, Tracked for later** in
+`plans/update_genome_effects_phase_D.md`.
+
 ### Q2 — Mixed coding at one locus: reject, or allow and sum?
 
 | Option | Notes |
@@ -1628,6 +1643,13 @@ coefficients — and, worse, no way to find out what variance a model actually h
 frequencies, stating its linkage-equilibrium assumption in the output. That turns
 "storable" into "usable" without committing to inverting the variance function. Worth
 scheduling immediately after `plans/consolidate_genetic_values.md`.
+
+★ **Phase D added a second reason to want it.** The same machinery answers "is
+this dominance contrast actually orthogonal to the additive one at this locus?"
+by measuring `E[x_A x_D]` against the real population, rather than assuming HWE
+at a declared `p`. Phase D's `add_tbv()` warning has to decide that question from
+stored `center_value`s alone, which is a consistency check and not a truth check
+— see the mismatched-centre item under **Q1**.
 
 ---
 

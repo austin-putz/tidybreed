@@ -351,7 +351,56 @@ definition of "what counts as a breeding-value coefficient" — because the chec
 needs the terms the function does *not* read. `.gev_read_model()`'s
 `order1_additive_only` parameter is gone rather than kept alongside it.
 
-## Next## Next
+### ★ Tracked for later — the mismatched-centre trap
+
+The last row of that table is a case **nobody had written down before**, found
+while implementing the check rather than while designing it. It deserves
+following up on its own, because a user can walk into it without doing anything
+that looks wrong:
+
+```r
+# centre = the realized frequency in the current population, say 0.41
+pop |> get_table("genome_meta") |> define_additive_effects("ADG", base = "current_pop")
+
+# centre = 0.30, because that is what the user typed
+pop |> define_genome_effects("ADG", ad_terms("Locus_10", a = 0, d = 0.5, p = 0.30,
+                                             coding = "cockerham"))
+```
+
+Both calls are legal, both are reasonable in isolation, and the result is a
+dominance contrast that is **not** orthogonal to the additive contrast sitting at
+the same locus. Reproduced on a 4-locus fixture: the additive member stores
+`center_value = 0.3333` (the realized frequency) and the dominance member
+`0.3000` (the typed `p`), both writes are accepted, and Phase D's warning fires
+at `add_tbv()` — so the stored additive coefficient quietly stops being the
+average effect. Nothing in the writer objects: `center_value` is deliberately
+excluded from the family signature (a line-specific variant legitimately centres
+against its own line's frequency), so the two terms are different families and
+simply sum.
+
+Phase D's warning catches it **at `add_tbv()` time**, which is the right safety
+net but the wrong moment — by then the model is stored and the user is reading a
+number. Three things are worth considering later, in rough order of appeal:
+
+1. **Warn at write time**, in `define_genome_effects()`, when a `dominance`
+   member lands at a locus whose existing additive variant carries a different
+   `center_value`. That is where the mistake is made, and the writer already has
+   both rows in hand. It cannot be an *error* — different centres across scope
+   variants are legal and intended — so it has to be a warning with the two
+   values named.
+2. **Report realized orthogonality** as part of the variance-reporting work
+   (§Future limitations item 6), which can measure `E[x_A x_D]` against the
+   actual population instead of assuming HWE at a declared `p`. That is the only
+   check that is *true* rather than merely consistent.
+3. **Let `ad_terms()` read `p` from the stored additive term** when the locus
+   already has one, instead of requiring the user to retype it. Removes the
+   opportunity rather than detecting the mistake, but only helps the `ad_terms()`
+   path.
+
+None is scheduled. Recorded here so the decision is not re-derived from scratch,
+and so the one-line table row does not have to carry the whole argument.
+
+## Next
 
 **Phase E.** Delete the last old-shape remnants; `restore_pop()` guard for
 pre-change files (gate 49); `extract_genotypes()`'s `effects_tbl` path and the
