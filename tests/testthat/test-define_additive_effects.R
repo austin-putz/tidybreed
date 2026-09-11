@@ -1,25 +1,11 @@
 # These tests were written against the flat genome_effects table: one row per
 # (locus, line) with locus_name, line_name, base_allele_freq and genome_value.
 # Effects now live as terms over members with an origin scope, so the flat shape
-# is reconstructed here as a test-only view. The package deliberately ships no
-# such view -- the point of the new schema is that a term is not a locus -- but
-# every assertion below is about *generated additive* effects, which are exactly
-# the order-one, single-origin case the flat shape described correctly.
-ge_flat_view <- function(pop) {
-  DBI::dbExecute(pop$db_conn, paste0(
-    "CREATE OR REPLACE VIEW gen_add_flat AS ",
-    "SELECT e.trait_name, l.locus_name, m.locus_id, ",
-    "       m.center_value AS base_allele_freq, e.genome_value, ",
-    "       o.line_name, o.parent_origin ",
-    "FROM genome_effects e ",
-    "JOIN genome_effect_members m USING (id_genome_effect) ",
-    "JOIN genome_effect_loci   l USING (id_genome_effect, member_slot) ",
-    "LEFT JOIN genome_effect_member_origins o ",
-    "  USING (id_genome_effect, member_slot) ",
-    "WHERE e.effect_owner = 'generated_additive_tbv'"))
-  pop
-}
-
+# is reconstructed as the test-only `gen_add_flat` view (ge_flat_view(), in
+# helper-genome-effects-db.R). The package deliberately ships no such view --
+# the point of the new schema is that a term is not a locus -- but every
+# assertion below is about *generated additive* effects, which are exactly the
+# order-one, single-origin case the flat shape described correctly.
 make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 5, chr_len_Mb = 100) |>

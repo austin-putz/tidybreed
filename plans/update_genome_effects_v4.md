@@ -1,6 +1,8 @@
 # Genome Effects v4.9 — term/member storage, executable contrasts, origin resolution
 
-**Status:** design proposal, nothing implemented. **This file is canonical.**
+**Status:** implemented through Phase D; Phase E outstanding. **This file is
+canonical**, and is corrected in place as each phase finds an error in it — every
+such correction is ★-marked and named in the phase's own notes.
 **Revision:** v4.9 (2026-09-10). v4.2 answered the v4.1 pass of
 `plans/update_genome_effects_v4_codex_review.md`; v4.3 renamed the result table;
 v4.4 restored its component dimension and deferred the rest to
@@ -13,11 +15,14 @@ the writer's input format and the evaluation strategy — and renames
 
 **Readiness: implementable.** No open question blocks any phase. The two remaining
 are ergonomic and revisable after the fact.
-★ **Phases A, B and C are complete.** Phase A required **no change to this schema**;
-Phase B corrected two errors in it and Phase C one more (see below). Results, hand
+★ **Phases A, B, C and D are complete; only Phase E remains.** Phase A required
+**no change to this schema**; Phase B corrected two errors in it, Phase C one
+more, and Phase D restated the evaluation fast path and settled the zero-copy
+join (see below). Results, hand
 computations and the findings carried forward are in
-`plans/update_genome_effects_phase_A.md`, `plans/update_genome_effects_phase_B.md`
-and `plans/update_genome_effects_phase_C.md`.
+`plans/update_genome_effects_phase_A.md`, `plans/update_genome_effects_phase_B.md`,
+`plans/update_genome_effects_phase_C.md` and
+`plans/update_genome_effects_phase_D.md`.
 
 ★ **Two corrections Phase B made to this document.** (a) `ind_tgv` must **not**
 declare a `replicate` column — `archive_replicate.R:153-158` refuses to stamp a
@@ -565,12 +570,35 @@ factors inside each group — so the fast path above is the one-group special ca
 single set-based formulation. See **§Evaluation strategy**, which is binding on the
 implementation.
 
+★ **Corrected in Phase D: freedom is a property of a *member*, not of a family.**
+The family-level statement above is true but too weak, and implementing it
+literally makes a high-order **unscoped** term unevaluable — a 50-locus unscoped
+dominance term enumerates `|labels|^50` label-vectors and trips the hard cap,
+though evaluating it is one `GROUP BY`. The sharper rule: if **no variant in the
+family scopes member *m***, then `variant(L)` does not depend on `L_m`, so
+
+```text
+Σ over L_m  Σ over units carrying L_m   =   Σ over all units
+```
+
+and that member reduces over every unit at once. The family-level fast path is
+the case where every member is free, and the sharper rule additionally covers a
+**partially** scoped term — one member scoped, another not — which the
+family-level form cannot express. In the implementation such a member carries the
+sentinel label `"*"`, which no real label can collide with because every real
+label contains an `@`.
+
 ★ **Tuple preflight.** Enumeration is over **label-vectors**, `∏_m |labels_m|` per
 family, where a member's label alphabet is the small distinct set defined in
 §Evaluation strategy — not `O(ploidy^order)` per individual. The evaluator estimates that count before running,
 warns at a configurable threshold (default 10⁴ per family) and errors above a hard cap
 (default 10⁶), so an accidental high-order scoped term fails loudly instead of
-appearing to hang.
+appearing to hang. ★ Phase D: a **free** member (one no variant scopes, per the
+correction above) contributes 1 to that product, not `|labels|`. Without that,
+the guard fires on models that cost nothing — worse than having no guard, because
+the message tells the user to reduce the order of a term that is already cheap.
+The thresholds are `options(tidybreed.label_vector_warn)` and
+`options(tidybreed.label_vector_max)`.
 
 **`{A, NULL}` worked case.** One `line_origin = 'A'` copy and one `NULL` copy, with an
 exact-A variant and a common variant: the A copy selects A, the NULL copy selects
@@ -675,14 +703,16 @@ carries a Cartesian pairing of raw haplotype rows, which §Aggregation already f
 reduction left-joins against the `(individual × locus)` list and synthesizes
 `copy_count = 0`.
 
-★ **Open for Phase D — what does that left join join against?** Phase A showed the
-zero-copy state is sharper than the Y-in-a-female framing suggests: a
-`(copy_count 0, dosage 0)` indicator matches **every** individual with no row at that
-locus, so it is a "carries no copy here" effect. The candidates are every locus in
-`genome_meta`, or the loci the individual is expected to carry under
-`chr_inheritance`. Recommend the former — it is what the Phase A fixtures do — with a
-row that `chr_inheritance` says should exist but does not treated as a data error
-surfaced elsewhere, not silently scored as absent.
+★ **Settled in Phase D — the left join is against the loci genotype members
+name.** Phase A showed the zero-copy state is sharper than the Y-in-a-female
+framing suggests: a `(copy_count 0, dosage 0)` indicator matches **every**
+individual with no row at that locus, so it is a "carries no copy here" effect.
+The candidates were every locus in `genome_meta`, or the loci the individual is
+expected to carry under `chr_inheritance`. The former was taken, narrowed to the
+loci that actually carry a genotype member (joining against loci no term
+mentions would be pure waste) — which is what the Phase A fixtures do. A row that
+`chr_inheritance` says should exist but does not is a data error surfaced
+elsewhere, not silently scored as absent.
 
 ### Tuple preflight, restated
 
@@ -1287,7 +1317,7 @@ the additive formula from first principles and is not pre-change golden output.
 | **A** ✅ | **Complete — `plans/update_genome_effects_phase_A.md`.** Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | ✅ Met: 19 fixtures, **no schema change required**; both evaluators agree with the hand computations. Containment order and multi-locus fallback settled before DDL. ★ Writing each fixture in the `terms` format moves to Phase C as a **round-trip** against this registry (gate 53) — it only becomes a real check once a writer exists to canonicalize it |
 | **B** ✅ | **Complete — `plans/update_genome_effects_phase_B.md`.** ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | ✅ Met: gates 46–48 and 54, plus gate 41's row-local half. Every proposed constraint was probed against a real insert in DuckDB 1.5.5 before being written. **Two plan errors and five implementation issues found and fixed in review** — see the Phase B notes |
 | **C** ✅ | **Complete — `plans/update_genome_effects_phase_C.md`.** `define_genome_effects()` with the long `terms` format; `ad_terms()` and `genotype_terms()` builders; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ `trait_meta.expressed_parent` **deleted** at all 14 sites | ✅ Met: gates 34–35, 41–44, 50 and 53; every valid Phase-A fixture round-trips through the public writer. **One plan error and six implementation issues found in review** — see the Phase C notes. Gate 42 was restated: the four wrapper scopes cannot share one family, because `('exact' A, parent ANY)` and `('any', parent 1)` overlap without nesting and the validator refuses that pair by design |
-| **D** | ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | Oracle agrees; gates 1–39, 40, 45, ★ 51–52 pass |
+| **D** ✅ | **Complete — `plans/update_genome_effects_phase_D.md`.** ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | ✅ Met: the oracle agrees for every Phase A fixture and every individual; gates 1–39, 40, 45 and 51–52 pass. **Two plan corrections and ten implementation issues found in review** — see the Phase D notes. The largest: the fast path had to be restated per *member* rather than per family, or a high-order unscoped term is unevaluable |
 | **E** | Delete the old table shape; ★ add the `restore_pop()` guard for pre-change files; move QTL extraction (`tidybreed_pop.R:159`) and `extract_genotypes()`'s nominal `table_name` check (`:124-127`) to the locus view | No legacy columns remain; gate 49 |
 
 ★ **Phase D builds `add_tbv()` once, not twice.** Earlier revisions "rewired
@@ -1464,6 +1494,12 @@ what they intended, since nothing forces them to call `add_tgv()`.
 
 Low stakes. Flagging it only because it is the one place a user can get a correct
 number that answers a question they did not mean to ask.
+
+★ **Still open after Phase D.** The evaluator makes the warning trivial to add —
+`add_tbv()` already reads the full model to filter it, so "does this trait have
+terms outside the reserved owner?" is a row count it already has in hand. Left
+undecided rather than implemented, because it is a user-facing behaviour choice
+and not a gate.
 
 ### Q2 — Mixed coding at one locus: reject, or allow and sum?
 

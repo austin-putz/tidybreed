@@ -1172,9 +1172,9 @@ pop |> define_genome_effects(
   level with `condition_column = "sex"` and `condition_level = "M"` / `"F"` for
   heterogeneous residuals.
 
-### `add_phenotype()` / `add_tbv()`
+### `add_phenotype()` / `add_tbv()` / `add_tgv()`
 
-`R/add_phenotype.R`, `R/add_tbv.R`
+`R/add_phenotype.R`, `R/add_tbv.R`, `R/add_tgv.R`, `R/genome_effects_eval.R`
 
 Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
@@ -1189,7 +1189,10 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
   otherwise independent). Converts liability to phenotype per `type`.
   Writes `ind_phenotype` rows and updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records. Computes centered TBV from the
+- `add_tbv()` — TBV-only; no phenotype records. **One filtered call into the
+  same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
+  `additive` — never a second implementation of the effect math. Computes
+  centered TBV from the
   order-one `additive` terms owned by `generated_additive_tbv`: each allele copy
   takes the most specific variant whose origin predicate matches its
   `(line_origin, parent_origin)` label, falling back per copy to the common
@@ -1208,6 +1211,53 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   - `overwrite_index = FALSE` — when `FALSE`, skips individuals that already have
     a value in `ind_true_index` for the given `(index_name, weight_type)`. Set
     `TRUE` to recompute (e.g. after updating index weights).
+
+  The filter is not conservatism. Under functional `(a, d)` input the stored
+  coefficient is `a` while the breeding-value coefficient in a diploid HWE base
+  is `α = a + d(q − p)`; under epistasis, average effects depend on other loci
+  and on LD. So terms written through `define_genome_effects()` move `ind_tgv`
+  and never silently redefine `ind_tbv`, and additive members sitting inside an
+  interaction are ignored.
+- `add_tgv()` — evaluates **every** term of a trait and writes `ind_tgv`, one
+  row per (individual × trait × `component_name`). The raw sum of the stored
+  terms; **no mean is added**. Idempotent per (individual, trait) — the delete
+  is by trait, not by component, so a component that leaves the model leaves
+  `ind_tgv` with it. Total via the `ind_tgv_total` view.
+
+#### The evaluator (`R/genome_effects_eval.R`)
+
+Both functions run one evaluator, built on the fact that an origin predicate
+reads a copy's `(line_origin, parent_origin)` **label** and nothing else. The
+winning variant is therefore a function of the label, evaluation tuples group by
+label-vector, and the inner sum factors inside each group. Three artifacts:
+
+| Artifact | Grain | Built |
+|---|---|---|
+| Label alphabet | one row per distinct label | one `DISTINCT` per member kind |
+| Resolved variant map | `(family, label-vector) → id_genome_effect` | in R, from stored rows only — never per individual |
+| Member reduction | one row per `(id_ind, id_genome_effect, member_slot, label)` | SQL |
+
+Containment search runs **only** while building the map; it never runs during
+evaluation, and no tie can reach it because overlapping-but-incomparable scopes
+are refused at write time. Evaluation is a fixed number of statements whatever
+the population size (five for an additive model), and individual identifiers
+never appear in the SQL text.
+
+Two shortcuts keep the map small, and both are the plan's fast path rather than
+special cases: a family no variant scopes resolves to itself for every
+label-vector, and a **member** no variant scopes carries the sentinel label
+`"*"`, reducing over every unit at once. Without the second, a 50-locus
+unscoped dominance term would enumerate `|labels|^50` label-vectors. The
+resolution of a family is cached on a signature that excludes `locus_id`, so a
+500-QTL model with common/line-A/line-B variants solves one problem, not 500.
+
+`options(tidybreed.label_vector_warn)` (default `1e4`) and
+`options(tidybreed.label_vector_max)` (default `1e6`) bound the map.
+
+Reference implementations live in `tests/testthat/helper-genome-effects.R`
+(Phase A: two independent evaluators, hand-computed fixtures, no database);
+`tests/testthat/test-genome-effects-eval.R` asserts the SQL evaluator agrees
+with them for every fixture and every individual.
 
 ### `define_trait_simple()`
 
@@ -1249,7 +1299,8 @@ define_additive_effects()`.
 - `select_parents()` — selection index or truncation selection
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
-- Dominance and epistasis effects (currently only additive)
+- Realized variance components from an arbitrary effect model
+- Consolidating `ind_tbv` into `ind_tgv` (see `plans/consolidate_genetic_values.md`)
 
 ## Future Compiled Code Policy
 

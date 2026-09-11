@@ -9,36 +9,64 @@ make_lines_pop <- function(pop_name, n_loci = 10, n_chr = 1) {
                                    method = "fixed", allele_freq = 0.5)
   pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "Landrace",
                                    method = "fixed", allele_freq = 0.5)
-  pop
+  ge_flat_view(pop)
 }
 
-# Independently recompute expected TBV from stored ind_haplotype +
-# genome_effects rows, mirroring (but not literally copying) the centered SQL
-# under test in add_tbv(): line-specific effect first, population-wide
-# fallback otherwise, per locus.
+# Independently recompute expected TBV from the stored rows, per allele copy.
+# Deliberately *not* a call into the package evaluator and not a copy of its
+# SQL: this walks ind_haplotype one copy at a time, finds the order-one additive
+# terms at that locus under the reserved owner, keeps those whose origin row
+# matches the copy's (line_origin, parent_origin) label, and takes the most
+# specific one. The containment order is re-derived here rather than imported,
+# so an error in .ge_pred_leq() cannot make both sides agree.
 independent_tbv <- function(pop, trait, ids) {
   hap <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT id_ind, locus_name, allele, line_origin FROM ind_haplotype ",
-    "WHERE id_ind IN (", paste0("'", ids, "'", collapse = ", "), ")"))
+    "SELECT id_ind, locus_id, parent_origin, allele, line_origin ",
+    "FROM ind_haplotype WHERE id_ind IN (",
+    paste0("'", ids, "'", collapse = ", "), ")"))
   eff <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT locus_name, line_name, genome_value, base_allele_freq FROM genome_effects ",
-    "WHERE trait_name = '", trait, "' AND genome_effect_type = 'additive'"))
+    "SELECT e.id_genome_effect, e.genome_value, m.locus_id, m.center_value, ",
+    "       o.line_match_type, o.line_name, o.parent_origin ",
+    "FROM genome_effects e ",
+    "JOIN genome_effect_members m USING (id_genome_effect) ",
+    "LEFT JOIN genome_effect_member_origins o ",
+    "  USING (id_genome_effect, member_slot) ",
+    "WHERE e.trait_name = '", trait, "' ",
+    "  AND e.effect_owner = 'generated_additive_tbv' ",
+    "  AND m.contrast_name = 'additive' ",
+    "  AND (SELECT COUNT(*) FROM genome_effect_members m2 ",
+    "        WHERE m2.id_genome_effect = e.id_genome_effect) = 1"))
+
+  matches <- function(e, line_origin, parent_origin) {
+    if (is.na(e$line_match_type)) return(TRUE)          # the common scope
+    line_ok <- switch(e$line_match_type,
+      exact   = !is.na(line_origin) && identical(line_origin, e$line_name),
+      unknown = is.na(line_origin),
+      any     = TRUE)
+    line_ok && (is.na(e$parent_origin) || e$parent_origin == parent_origin)
+  }
+  # Specificity as a pair of ranks; a strictly larger pair is strictly more
+  # specific. Two matching scopes with equal total and different tokens are the
+  # overlapping-incomparable case the writer refuses.
+  spec <- function(e) {
+    c(if (is.na(e$line_match_type) || e$line_match_type == "any") 0L else 1L,
+      if (is.na(e$parent_origin)) 0L else 1L)
+  }
 
   stats::setNames(vapply(ids, function(id) {
     rows <- hap[hap$id_ind == id, , drop = FALSE]
     sum(vapply(seq_len(nrow(rows)), function(i) {
-      r <- rows[i, ]
-      e_line <- eff[eff$locus_name == r$locus_name &
-                    !is.na(eff$line_name) & !is.na(r$line_origin) &
-                    eff$line_name == r$line_origin, , drop = FALSE]
-      e <- if (nrow(e_line) == 1L) {
-        e_line
-      } else {
-        eff[eff$locus_name == r$locus_name & is.na(eff$line_name), , drop = FALSE]
-      }
-      if (nrow(e) != 1L) stop("test helper: ambiguous or missing effect match")
-      p <- if (is.na(e$base_allele_freq)) 0 else e$base_allele_freq
-      (r$allele - p) * e$genome_value
+      r    <- rows[i, ]
+      cand <- eff[eff$locus_id == r$locus_id, , drop = FALSE]
+      keep <- vapply(seq_len(nrow(cand)),
+                     function(k) matches(cand[k, ], r$line_origin, r$parent_origin),
+                     logical(1))
+      cand <- cand[keep, , drop = FALSE]
+      if (nrow(cand) == 0L) return(0)
+      sc   <- vapply(seq_len(nrow(cand)), function(k) sum(spec(cand[k, ])), integer(1))
+      best <- cand[sc == max(sc), , drop = FALSE]
+      if (nrow(best) != 1L) stop("test helper: ambiguous effect match")
+      (r$allele - best$center_value) * best$genome_value
     }, numeric(1)))
   }, numeric(1)), ids)
 }
@@ -153,7 +181,7 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
   hap <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, allele FROM ind_haplotype WHERE id_ind = 'Duroc_1'")
   eff_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, base_allele_freq FROM genome_effects WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
+    "SELECT locus_name, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
   hap <- merge(hap, eff_duroc, by = "locus_name")
   expect_equal(actual, sum((hap$allele - hap$base_allele_freq) * 5.0), tolerance = 1e-8)
 
@@ -213,9 +241,9 @@ test_that("add_tbv() centers each allele with its own line's base_allele_freq", 
                             base = "current_pop", base_tbl = landrace_tbl)
 
   base_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM genome_effects WHERE trait_name='ADG' AND line_name='Duroc'")$base_allele_freq
+    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Duroc'")$base_allele_freq
   base_landrace <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM genome_effects WHERE trait_name='ADG' AND line_name='Landrace'")$base_allele_freq
+    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Landrace'")$base_allele_freq
   # Not a degenerate test: the two lines' realized founder allele frequencies differ.
   expect_true(any(abs(base_duroc - base_landrace) > 1e-6))
 
@@ -399,7 +427,7 @@ test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no co
 
   pop <- define_trait(pop, "ADG")
   # Effects on every locus (both chromosomes) so independent_tbv() below has a
-  # matching genome_effects row for every ind_haplotype row it reads.
+  # matching term for every ind_haplotype row it reads.
   all_loci <- pop |> get_table("genome_meta") |>
     dplyr::collect() |> dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
   pop <- pop |> get_table("genome_meta") |>
@@ -426,6 +454,7 @@ test_that("compute_base_allele_freq() is correct (row-count-agnostic) for a mixe
     define_genome(n_loci = 8, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
     define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed", allele_freq = 0.5)
+  pop <- ge_flat_view(pop)
 
   pop <- pop |> get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
@@ -435,7 +464,7 @@ test_that("compute_base_allele_freq() is correct (row-count-agnostic) for a mixe
     define_additive_effects("ADG", effects = rep(1, 8), base = "current_pop")
 
   p_from_effects <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, base_allele_freq FROM genome_effects WHERE trait_name = 'ADG'")
+    "SELECT locus_name, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
   p_hand <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, AVG(CAST(allele AS DOUBLE)) AS p FROM ind_haplotype GROUP BY locus_name")
 

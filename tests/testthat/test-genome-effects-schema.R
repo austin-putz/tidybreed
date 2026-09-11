@@ -407,14 +407,7 @@ test_that("the view's family_key agrees with the R family signature", {
 
   v <- pop |> get_table("genome_effect_terms") |> dplyr::collect()
   members <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM genome_effect_members")
-  for (i in seq_len(nrow(v))) {
-    id <- v$id_genome_effect[i]
-    expect_equal(
-      v$family_key[i],
-      .ge_family_key(v$trait_name[i], v$effect_owner[i],
-                     members[members$id_genome_effect == id, , drop = FALSE])
-    )
-  }
+  expect_equal(v$family_key, .ge_family_keys(v, members))
 })
 
 test_that("genome_effect_loci joins locus_name back in", {

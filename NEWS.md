@@ -1,3 +1,68 @@
+# tidybreed 0.67.0 (2026-09-11)
+
+Phase D of `plans/update_genome_effects_v4.md`: **the evaluator**. The migration
+started in 0.64.0 is now numerically complete — a stored effect model of any
+shape can be evaluated, and `add_tbv()` works again.
+
+One evaluator serves every consumer. `add_tgv()` writes all of its components;
+`add_tbv()` is the same evaluator filtered to the reserved owner and to
+order-one `additive` terms, not a second implementation of the effect math.
+
+## New
+
+- **`add_tgv(tbl, trait_name)`** — computes true genetic values and writes
+  `ind_tgv`, one row per (individual x trait x component):
+  `"order1_additive"`, `"order1_dominance"`, `"order1_other"` (a hand-entered
+  order-one `indicator` surface) and `"interaction"` (any term with two or more
+  members). The total is the derived view `ind_tgv_total`; a stored `'total'`
+  row would make every `SUM(tgv_value)` double-count. Values are the **raw sum
+  of the stored terms — no mean is added**. Writes are idempotent per
+  (individual, trait).
+- `component_name` records **declared model structure, not variance
+  components**. A functional A x A term contributes to V_A, V_D *and* V_I in the
+  statistical sense; the names carry the order so they cannot be misread as an
+  orthogonal decomposition.
+- Two options bound the resource guard: `tidybreed.label_vector_warn`
+  (default 1e4) and `tidybreed.label_vector_max` (default 1e6). They cap the
+  **label-vector** count per fallback family — the size of the resolved variant
+  map — not anything per individual.
+- `dev/benchmarks/benchmark_tgv_scale.R` — evaluation cost per individual across
+  population sizes and three model shapes.
+
+## Changed
+
+- **`add_tbv()` is rebuilt on the evaluator.** Same meaning, same oracle: the
+  Falconer-centred sum over allele copies, each copy taking the most specific
+  variant whose origin predicate matches its `(line_origin, parent_origin)`
+  label. It now reads `center_value` from the member and resolves scope by
+  predicate containment rather than by a `NOT EXISTS` line subquery, so
+  imprinting and line fallback compose per copy instead of competing.
+- `add_tbv()` ignores non-additive terms, additive members inside interactions,
+  and every non-reserved effect owner. Under functional (a, d) input the stored
+  coefficient is `a` while the breeding-value coefficient is
+  `alpha = a + d(q - p)`, so custom terms move `ind_tgv` and never silently
+  redefine `ind_tbv`.
+- `add_tbv()`'s "no effects" error now says *order-one additive* and names the
+  effect owner, because that is the actual filter.
+- `add_phenotype()`'s genome-effect precondition no longer requires a
+  population-wide term. A purebred design whose only terms are line-specific
+  evaluates perfectly well and was being rejected.
+- `.ge_family_keys()` replaces the per-term `.ge_family_key()`. Every caller
+  needed keys for a whole model at once, which made `validate_genome_effects()`
+  quadratic in the number of terms; a 500-QTL three-line model now resolves in
+  about a fifth of the time.
+
+## Fixed
+
+- **A high-order *unscoped* term no longer trips the resource guard.** A member
+  that no variant scopes cannot influence which variant is selected, so its
+  inner sum runs over every unit at once. Without that, a 50-locus unscoped
+  dominance term enumerated `|labels|^50` label-vectors and stopped, though
+  evaluating it is a single `GROUP BY`.
+- The evaluator materializes the zero-copy genotype state instead of joining it
+  away, so a `(copy_count 0, dosage 0)` indicator fires for an individual who
+  carries no copy at that locus — a Y locus in a female, for instance.
+
 # tidybreed 0.66.0 (2026-09-10)
 
 Phase C of `plans/update_genome_effects_v4.md`: the writers. Adds

@@ -336,12 +336,14 @@ pop <- pop |>
   filter(chr %in% c(4L, 5L)) |>
   define_additive_effects("ADG")
 
-pop |> get_table("genome_effects") |> collect() |> head()
+pop |> get_table("genome_effect_terms") |> collect() |> head()
 ```
 
-QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
-`genome_effects`. There is no `is_QTL` flag to keep in sync. `base_allele_freq` is
-stored alongside each effect because it is what centres breeding values.
+Causal-locus membership is **implicit**: a locus is causal for a trait if it
+appears as a member of any term for it — `genome_effect_loci` is the view that
+answers that. There is no `is_QTL` flag to keep in sync. The centring frequency
+lives on the member as `center_value`, because a line-specific variant
+legitimately centres against its own line's base frequency.
 
 ## Define the phenotype
 

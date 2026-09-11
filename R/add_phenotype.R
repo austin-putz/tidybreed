@@ -244,14 +244,14 @@ add_phenotype <- function(tbl,
     formula_str[t]     <- if (is.na(fder)) "" else fder
   }
 
-  # G1: Validate genome_effects only for simple (non-composite) phenotypes
+  # G1: Validate genome_effects only for simple (non-composite) phenotypes.
+  # The requirement is a term add_tbv() can actually read: order one, contrast
+  # 'additive', under the reserved owner. A line-specific-only model qualifies
+  # -- the old check also demanded a population-wide row, which would have
+  # rejected a purebred-lines-only design that evaluates perfectly well.
   for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
-    n_eff <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT COUNT(*) AS n FROM genome_effects ",
-             "WHERE trait_name = '", gsub("'", "''", t), "' ",
-             "AND genome_effect_type = 'additive' AND line_name IS NULL")
-    )$n
+    n_eff <- nrow(.gev_read_model(pop$db_conn, t, GE_ADDITIVE_OWNER,
+                                  order1_additive_only = TRUE)$terms)
     if (n_eff == 0L) {
       stop(
         "No additive effects found for phenotype '", t, "' in genome_effects. ",

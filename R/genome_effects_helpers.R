@@ -95,7 +95,7 @@
 
 # ── Family signature ────────────────────────────────────────────────────────
 
-#' Family signature for one term, from its member rows
+#' Family signatures, one per term
 #'
 #' Must agree with the `family_key` column of `genome_effect_terms`.
 #' `center_value` is deliberately excluded (a line-specific variant legitimately
@@ -104,20 +104,28 @@
 #' `effect_owner` is included: owners always sum, so two owners defining the
 #' same common term must both fire rather than collide as a tie.
 #'
-#' @param trait_name,effect_owner Character scalars.
-#' @param members Data frame of that term's member rows.
-#' @return Character scalar.
+#' Vectorized over terms rather than called per term: every caller needs the key
+#' for a whole model at once, and a per-term filter makes the validator and the
+#' evaluator quadratic in a model with a QTL per locus.
+#'
+#' @param terms Data frame with `id_genome_effect`, `trait_name`, `effect_owner`.
+#' @param members Data frame of member rows for those terms.
+#' @return Character vector, one key per row of `terms`.
 #' @keywords internal
 #' @noRd
-.ge_family_key <- function(trait_name, effect_owner, members) {
-  members <- members[order(members$locus_id), , drop = FALSE]
-  paste0(
-    trait_name, "|", effect_owner, "|",
-    paste(members$locus_id, members$contrast_name,
-          ifelse(is.na(members$copy_count_value), "-", members$copy_count_value),
-          ifelse(is.na(members$dosage_value), "-", members$dosage_value),
-          sep = ":", collapse = "&")
-  )
+.ge_family_keys <- function(terms, members) {
+  if (nrow(terms) == 0L) return(character(0))
+  members <- members[order(members$id_genome_effect, members$locus_id), ,
+                     drop = FALSE]
+  piece <- paste(members$locus_id, members$contrast_name,
+                 ifelse(is.na(members$copy_count_value), "-",
+                        members$copy_count_value),
+                 ifelse(is.na(members$dosage_value), "-", members$dosage_value),
+                 sep = ":")
+  sig <- tapply(piece, as.character(members$id_genome_effect),
+                function(v) paste(v, collapse = "&"))
+  paste0(terms$trait_name, "|", terms$effect_owner, "|",
+         as.character(sig[as.character(terms$id_genome_effect)]))
 }
 
 
@@ -498,11 +506,7 @@ validate_genome_effects <- function(conn, labels = NULL) {
 
   # Fallback families: precedence operates only within a family.
   if (nrow(terms) == 0L) return(unique(v))
-  keys <- vapply(terms$id_genome_effect, function(id) {
-    .ge_family_key(terms$trait_name[terms$id_genome_effect == id],
-                   terms$effect_owner[terms$id_genome_effect == id],
-                   members[members$id_genome_effect == id, , drop = FALSE])
-  }, character(1))
+  keys <- .ge_family_keys(terms, members)
   for (fam in split(terms$id_genome_effect, keys)) {
     if (length(fam) < 2L) next
     preds <- lapply(fam, function(id) {

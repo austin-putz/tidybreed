@@ -416,7 +416,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_components", "poly_scale_max",
             "Upper bound for Legendre polynomial scaling"),
     .sm_col("phenotype_components", "genome_effect_types",
-            "Comma-separated genome_effect_type values to include; default 'additive'"),
+            "Comma-separated contrast names to include; default 'additive'"),
     .sm_col("phenotype_components", "missing_action",
             "Per-component fallback; currently unused, governed by phenotype_meta.missing_component_action"),
     .sm_col("phenotype_components", "contributor_filter",

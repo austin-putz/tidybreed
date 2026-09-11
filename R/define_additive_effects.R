@@ -733,11 +733,8 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
                      model$terms$effect_owner == GE_ADDITIVE_OWNER, ,
                    drop = FALSE]
   if (nrow(t) < 2L) return(invisible(NULL))
-  keys <- vapply(t$id_genome_effect, function(id) {
-    .ge_family_key(t$trait_name[t$id_genome_effect == id], GE_ADDITIVE_OWNER,
-                   model$members[model$members$id_genome_effect == id, ,
-                                 drop = FALSE])
-  }, character(1))
+  keys <- .ge_family_keys(t, model$members[
+    model$members$id_genome_effect %in% t$id_genome_effect, , drop = FALSE])
   hits <- character(0)
   for (fam in split(t$id_genome_effect, keys)) {
     if (length(fam) < 2L) next

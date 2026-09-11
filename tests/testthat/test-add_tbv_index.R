@@ -372,7 +372,7 @@ test_that("add_tbv() errors on a trait with no additive effects", {
   pop <- define_trait(pop, "NOQTL", target_add_var = 0.25)
   expect_error(
     pop |> get_table("ind_meta") |> add_tbv("NOQTL"),
-    "No additive effects found"
+    "No order-one additive effects found"
   )
   close_pop(pop)
 })
