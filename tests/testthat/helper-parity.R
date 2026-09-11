@@ -108,10 +108,11 @@ run_parity_sim <- function() {
     dplyr::filter(line_name == "B") |>
     add_founders(n_males = 4, n_females = 4, line_name = "B", gen = 0L)
 
-  # One non-imprinted trait and one imprinted (parent_1) trait.
+  # One non-imprinted trait and one imprinted trait. Imprinting now rides on
+  # the effect's origin scope, not on a trait-wide flag: IMP's terms are scoped
+  # to ('any', parent 1), so only sire-derived copies contribute.
   pop <- define_trait(pop, "ADG", target_add_var = 1.0)
-  pop <- define_trait(pop, "IMP", target_add_var = 1.0,
-                      expressed_parent = "parent_1")
+  pop <- define_trait(pop, "IMP", target_add_var = 1.0)
 
   set.seed(301)
   pop <- pop |>
@@ -120,7 +121,7 @@ run_parity_sim <- function() {
   set.seed(302)
   pop <- pop |>
     get_table("genome_meta") |>
-    define_additive_effects("IMP", distribution = "normal")
+    define_additive_effects("IMP", distribution = "normal", parent_origin = 1)
 
   # F1: A sires x B dams (crossbred).
   matings_f1 <- tibble::tibble(

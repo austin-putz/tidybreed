@@ -1,8 +1,12 @@
 #' Define additive QTL effects for one or more traits
 #'
 #' @description
-#' Selects QTL from a filtered `genome_meta` table and writes additive effects
-#' to the `genome_effects` table.
+#' Selects QTL from a filtered `genome_meta` table and writes one order-one
+#' `additive` term per locus through [define_genome_effects()], under the
+#' reserved effect owner `"generated_additive_tbv"`. [add_tbv()] reads order-one
+#' `additive` variants from that owner and nothing else, so effects written here
+#' and effects a user writes with [define_genome_effects()] can never be
+#' confused for one another.
 #'
 #' **Single trait** (`trait_name` length 1) — two modes:
 #'
@@ -22,7 +26,7 @@
 #'   `genome_effects` also receive independent draws (with the diagonal
 #'   variance of `G` for that trait).
 #' * `method = "union"` — the loci in `tbl` form the candidate pool; per-trait
-#'   membership is determined from existing rows in `genome_effects`.
+#'   membership is read from the terms already stored at this scope.
 #'
 #' The `base` argument controls which allele frequencies are used:
 #'
@@ -50,13 +54,31 @@
 #' `target_add_var`. Pass `base_line_name = NULL` explicitly to force pooling
 #' anyway.
 #'
-#' The centering constant is stored per row in `genome_effects.base_allele_freq`
-#' and travels with its `genome_value`, so [add_tbv()] applies each allele's own
-#' line's centering — a crossbred animal's line-A alleles are centered on line A
-#' and its line-B alleles on line B.
+#' The centering constant is stored per member as
+#' `genome_effect_members.center_value` and travels with its `genome_value`, so
+#' evaluation applies each allele copy's own line's centering — a crossbred
+#' animal's line-A alleles are centered on line A and its line-B alleles on
+#' line B.
 #'
-#' Calling this function again for the same `(trait_name, genome_effect_type,
-#' line_name)` replaces the existing rows in `genome_effects`.
+#' @section Scope, and what a re-run replaces:
+#' `line_name` and `parent_origin` compose into the single origin row an
+#' `additive` member is allowed:
+#'
+#' | `line_name` | `parent_origin` | Stored scope |
+#' |---|---|---|
+#' | `NULL` | `NULL` | no origin rows (the common scope) |
+#' | `"A"` | `NULL` | `('exact', 'A', parent NULL, copy_count = 1)` |
+#' | `NULL` | `1` / `2` | `('any', NULL, parent, copy_count = 1)` |
+#' | `"A"` | `1` / `2` | `('exact', 'A', parent, copy_count = 1)` |
+#'
+#' Re-running replaces **only the variant at the same scope**
+#' (`mode = "replace_scope"`), so successive common / line-A / line-B calls each
+#' keep the others: the per-copy fallback that makes crossbred breeding values
+#' correct depends on all of them standing. It also means changing
+#' `parent_origin` on a re-run **adds** a variant rather than replacing one —
+#' the two are in a containment relation and both apply, to different copies.
+#' That is legal and rarely intended, so the function warns on exactly that
+#' case.
 #'
 #' @param tbl A `tidybreed_table` from [get_table()]`("genome_meta")` (with an
 #'   optional [dplyr::filter()]). The filtered rows determine which loci are QTL.
@@ -87,13 +109,26 @@
 #'   pass `NULL` explicitly to pool every line instead. Errors if no
 #'   `founder_haplotypes` rows carry that line. See *Which population centers
 #'   the effects* above.
-#' @param line_name Optional character. When set, effects are tagged to this
-#'   genetic line: [add_tbv()] then prefers these rows for alleles whose
-#'   `line_origin` matches, falling back per-locus to the population-wide rows.
-#'   Also becomes the default for `base_line_name`. `NULL` (default) means
-#'   population-wide effects.
-#' @param scale_to_target Logical. If `TRUE`, rescale effects using the Falconer
-#'   formula so the expected additive variance equals the stored `target_add_var`.
+#' @param line_name Optional character. When set, effects are scoped to allele
+#'   copies of this genetic line: a copy whose `line_origin` matches takes these
+#'   values, and falls back per copy to the common variant where no
+#'   line-specific one exists. Also becomes the default for `base_line_name`.
+#'   `NULL` (default) means the common scope, matching every copy.
+#' @param parent_origin Optional `1` (sire / parent_1) or `2` (dam / parent_2) —
+#'   imprinting, restricting the term to copies inherited from that parent.
+#'   `NULL` (default) means both parents' copies. **Per trait**: a scalar is
+#'   recycled, a vector must match `trait_name` positionally, or name its
+#'   entries by trait. A call mixing origins across traits while supplying `G`
+#'   is rejected — under random mating the paternal and maternal copies at a
+#'   locus are independent, so the requested genetic covariance between a
+#'   paternal-only and a maternal-only trait is zero and cannot be realized.
+#'   This replaces the removed `trait_meta.expressed_parent` flag, which could
+#'   only be set trait-wide; [define_genome_effects()] expresses the per-locus
+#'   case the flag never could.
+#' @param scale_to_target Logical. If `TRUE`, rescale effects so the expected
+#'   additive variance equals the stored `target_add_var`:
+#'   `V_A = sum_j n_eligible,j * p_j q_j a_j^2`, where `n_eligible` is 2 for an
+#'   unparented term and 1 for a parent-qualified one.
 #' @param seed Optional integer for reproducibility.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
@@ -150,6 +185,7 @@ define_additive_effects <- function(tbl,
                                     base_tbl        = NULL,
                                     base_line_name  = NULL,
                                     line_name       = NULL,
+                                    parent_origin   = NULL,
                                     scale_to_target = TRUE,
                                     seed            = NULL) {
 
@@ -173,11 +209,14 @@ define_additive_effects <- function(tbl,
   distribution <- match.arg(distribution)
   base         <- match.arg(base)
   method       <- match.arg(method)
+  .ge_require_effect_tables(pop)
 
   if (!is.null(line_name) &&
       (!is.character(line_name) || length(line_name) != 1L)) {
     stop("'line_name' must be a single character string or NULL.", call. = FALSE)
   }
+  if (!is.null(line_name)) validate_sql_identifier(line_name, what = "line name")
+  po <- .dae_parent_origin(parent_origin, trait_name)
 
   # Centre on whatever population the effect applies to: a line-specific effect
   # defaults to its own line's founder pool, a population-wide one to the pooled
@@ -216,14 +255,7 @@ define_additive_effects <- function(tbl,
   if (length(trait_name) == 1L) {
 
     validate_sql_identifier(trait_name, what = "trait name")
-
-    if (!DBI::dbExistsTable(pop$db_conn, "trait_meta") ||
-        nrow(DBI::dbGetQuery(
-          pop$db_conn,
-          paste0("SELECT 1 FROM trait_meta WHERE trait_name = '", trait_name, "'")
-        )) == 0L) {
-      stop("Trait '", trait_name, "' not found in trait_meta.", call. = FALSE)
-    }
+    .ge_require_trait(pop$db_conn, trait_name)
     target_add_var <- get_trait_var(pop, "gen_add", trait_name)
 
     loci_df <- dplyr::collect(tbl)
@@ -288,41 +320,26 @@ define_additive_effects <- function(tbl,
           )
         }
         assert_qtl_autosomal(pop$db_conn, selected_locus_names)
-        qtl_effects <- rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
+        qtl_effects <- rescale_effects_to_target(
+          qtl_tf, qtl_effects, target_add_var, p_base,
+          n_eligible = .dae_n_eligible(po[[trait_name]])
+        )
       }
     }
 
-    p_base_qtl <- as.numeric(p_base[qtl_tf])
-
-    line_sql <- if (is.null(line_name)) {
-      "line_name IS NULL"
-    } else {
-      paste0("line_name = '", line_name, "'")
-    }
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0(
-        "DELETE FROM genome_effects ",
-        "WHERE trait_name = '", trait_name, "' ",
-        "AND genome_effect_type = 'additive' ",
-        "AND ", line_sql
-      )
-    )
-
-    start_id <- next_int_id(pop$db_conn, "genome_effects", "id_genome_effect")
-    effects_df <- tibble::tibble(
-      id_genome_effect   = seq.int(start_id, length.out = n_qtl),
-      locus_name         = selected_locus_names,
-      line_name          = line_name,
-      trait_name         = trait_name,
-      genome_effect_type = "additive",
-      genome_value       = as.numeric(qtl_effects),
-      base_allele_freq   = p_base_qtl
-    )
-    DBI::dbWriteTable(pop$db_conn, "genome_effects", effects_df, append = TRUE)
+    scope <- .dae_scope(line_name, po[[trait_name]])
+    built <- .dae_build(pop$db_conn, trait_name, selected_locus_names,
+                        qtl_effects, as.numeric(p_base[qtl_tf]), scope)
+    model <- .ge_read_model(pop$db_conn)
+    drop  <- .ge_resolve_deletes(model, trait_name, GE_ADDITIVE_OWNER,
+                                 "replace_scope", .ge_scope_from_origin(
+                                   scope, "replace_scope"), TRUE)
+    .ge_commit(pop$db_conn, drop, built)
+    .dae_warn_parent_only(pop$db_conn, trait_name)
 
     message("Set additive effects for ", n_qtl, " QTL on trait '", trait_name,
-            "' (base: ", base, ").")
+            "' (base: ", base, "; scope: ", .dae_scope_label(line_name,
+            po[[trait_name]]), ").")
     return(invisible(pop))
   }
 
@@ -364,11 +381,30 @@ define_additive_effects <- function(tbl,
     G <- G_stored
   }
 
+  # A correlated draw across traits that express from different parents cannot
+  # deliver the requested off-diagonal: under random mating the paternal and
+  # maternal copies at a locus are independent, so the genetic covariance
+  # between a paternal-only and a maternal-only trait is exactly zero however
+  # strongly the sampled coefficients correlate. Unobtainable, not approximate.
+  if (length(unique(vapply(trait_name, function(t) .dae_po_key(po[[t]]),
+                           character(1)))) > 1L) {
+    stop("'parent_origin' differs across traits in one correlated call: ",
+         paste0(trait_name, " = ",
+                vapply(trait_name, function(t) .dae_po_key(po[[t]]),
+                       character(1)), collapse = ", "),
+         ". Under random mating a locus's paternal and maternal copies are ",
+         "independent, so the genetic covariance between a paternal-only and ",
+         "a maternal-only trait is zero — the off-diagonal of G cannot be ",
+         "realized, whatever the sampled coefficients. Use one ",
+         "parent_origin for the whole call, or define the traits separately.",
+         call. = FALSE)
+  }
+
   # Validate traits exist
   trait_meta_rows <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT trait_name FROM trait_meta WHERE trait_name IN (",
-           paste0("'", trait_name, "'", collapse = ", "), ")")
+           sql_in_list(trait_name, what = "trait name"), ")")
   )
   missing_traits <- setdiff(trait_name, trait_meta_rows$trait_name)
   if (length(missing_traits) > 0) {
@@ -398,24 +434,19 @@ define_additive_effects <- function(tbl,
   qtl_tf_mat <- matrix(FALSE, nrow = n_loci, ncol = length(trait_name),
                        dimnames = list(NULL, trait_name))
 
-  line_sql <- if (is.null(line_name)) "line_name IS NULL" else
-    paste0("line_name = '", line_name, "'")
+  model <- .ge_read_model(pop$db_conn)
 
   for (t in trait_name) {
     if (method == "shared") {
       qtl_tf_mat[, t] <- genome_order$locus_name %in% candidate_locus_names
     } else {
-      existing <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT locus_name FROM genome_effects ",
-               "WHERE trait_name = '", t, "' AND genome_effect_type = 'additive' ",
-               "AND ", line_sql)
-      )$locus_name
-      active <- intersect(existing, candidate_locus_names)
+      existing <- .dae_existing_loci(model, t, .dae_scope(line_name, po[[t]]))
+      active   <- intersect(genome_order$locus_name[
+        genome_order$locus_id %in% existing], candidate_locus_names)
       if (length(active) == 0) {
-        warning("Trait '", t, "' has no existing additive effects in genome_effects ",
-                "within the candidate loci; it will receive no effects from this call.",
-                call. = FALSE)
+        warning("Trait '", t, "' has no existing generated additive effects at ",
+                "this scope within the candidate loci; it will receive no ",
+                "effects from this call.", call. = FALSE)
       }
       qtl_tf_mat[, t] <- genome_order$locus_name %in% active
     }
@@ -477,12 +508,17 @@ define_additive_effects <- function(tbl,
       if (any(!is.na(a_qtl))) {
         assert_qtl_autosomal(pop$db_conn, genome_order$locus_name[qtl_tf_k])
         effects_mat[qtl_tf_k, t] <- rescale_effects_to_target(
-          qtl_tf_k, a_qtl, target_var[[t]], p_base
+          qtl_tf_k, a_qtl, target_var[[t]], p_base,
+          n_eligible = .dae_n_eligible(po[[t]])
         )
       }
     }
   }
 
+  # One transaction for the whole call: a partially-written correlated set is
+  # not a weaker version of the requested G, it is a different model.
+  built <- NULL
+  drop  <- integer(0)
   for (t in trait_name) {
     qtl_tf_t      <- qtl_tf_mat[, t]
     locus_names_t <- genome_order$locus_name[qtl_tf_t]
@@ -491,49 +527,283 @@ define_additive_effects <- function(tbl,
     locus_names_t <- locus_names_t[non_na]
     effects_t     <- effects_t[non_na]
     p_base_qtl_t  <- as.numeric(p_base[qtl_tf_t][non_na])
-    n_t           <- length(locus_names_t)
-    if (n_t == 0L) next
+    if (length(locus_names_t) == 0L) next
 
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0(
-        "DELETE FROM genome_effects ",
-        "WHERE trait_name = '", t, "' ",
-        "AND genome_effect_type = 'additive' ",
-        "AND ", line_sql
-      )
-    )
-
-    start_id <- next_int_id(pop$db_conn, "genome_effects", "id_genome_effect")
-    df_t <- tibble::tibble(
-      id_genome_effect   = seq.int(start_id, length.out = n_t),
-      locus_name         = locus_names_t,
-      line_name          = line_name,
-      trait_name         = t,
-      genome_effect_type = "additive",
-      genome_value       = as.numeric(effects_t),
-      base_allele_freq   = p_base_qtl_t
-    )
-    DBI::dbWriteTable(pop$db_conn, "genome_effects", df_t, append = TRUE)
+    scope_t <- .dae_scope(line_name, po[[t]])
+    drop <- c(drop, .ge_resolve_deletes(
+      model, t, GE_ADDITIVE_OWNER, "replace_scope",
+      .ge_scope_from_origin(scope_t, "replace_scope"), TRUE))
+    built <- .dae_stack(built, .dae_build(pop$db_conn, t, locus_names_t,
+                                          effects_t, p_base_qtl_t, scope_t))
   }
+  if (is.null(built)) {
+    stop("No trait received any effect from this call.", call. = FALSE)
+  }
+  .ge_commit(pop$db_conn, unique(drop), built)
+  .dae_warn_parent_only(pop$db_conn, trait_name)
 
   message("Set correlated additive effects for traits: ",
-          paste(trait_name, collapse = ", "), " (method: ", method, ")")
+          paste(trait_name, collapse = ", "), " (method: ", method,
+          "; scope: ", .dae_scope_label(line_name, po[[trait_name[1]]]), ")")
   invisible(pop)
 }
 
 
-#' Rescale QTL effects to hit a target additive variance using Falconer formula
+# ── define_additive_effects() internals ─────────────────────────────────────
+
+#' The effect owner `define_additive_effects()` writes under
+#'
+#' Reserved: `add_tbv()` reads order-one `additive` variants from this owner and
+#' nothing else, and the general writer refuses to touch it. Two distinct
+#' defaults are the point — v4.1 shared one, so rerunning the generator in
+#' replace mode would have deleted a user's own terms.
+#'
+#' @keywords internal
+#' @noRd
+GE_ADDITIVE_OWNER <- "generated_additive_tbv"
+
+#' Resolve `parent_origin` to one value per trait
+#'
+#' Per trait because the deleted `trait_meta.expressed_parent` was per trait; a
+#' scalar-only argument would lose exactly the expressiveness its removal was
+#' meant to preserve. Accepts a scalar (recycled), a vector matching
+#' `trait_name` positionally, or a vector named by trait.
+#'
+#' @keywords internal
+#' @noRd
+.dae_parent_origin <- function(parent_origin, trait_name) {
+  if (is.null(parent_origin)) {
+    return(stats::setNames(rep(list(NULL), length(trait_name)), trait_name))
+  }
+  if (!is.numeric(parent_origin) && !is.integer(parent_origin)) {
+    stop("'parent_origin' must be 1 (sire / parent_1), 2 (dam / parent_2), or ",
+         "NULL (both parents' copies).", call. = FALSE)
+  }
+  v <- stats::setNames(as.integer(parent_origin), names(parent_origin))
+  if (!is.null(names(parent_origin))) {
+    unknown <- setdiff(names(parent_origin), trait_name)
+    if (length(unknown) > 0L) {
+      stop("'parent_origin' names trait(s) not in this call: ",
+           paste(unknown, collapse = ", "), ".", call. = FALSE)
+    }
+    out <- stats::setNames(rep(list(NULL), length(trait_name)), trait_name)
+    for (nm in names(parent_origin)) out[[nm]] <- v[[nm]]
+  } else if (length(v) == 1L) {
+    out <- stats::setNames(rep(list(v), length(trait_name)), trait_name)
+  } else if (length(v) == length(trait_name)) {
+    out <- stats::setNames(as.list(v), trait_name)
+  } else {
+    stop("'parent_origin' must have length 1, length(trait_name) (",
+         length(trait_name), "), or be named by trait.", call. = FALSE)
+  }
+  bad <- vapply(out, function(x) !is.null(x) && (is.na(x) || !x %in% c(1L, 2L)),
+                logical(1))
+  if (any(bad)) {
+    stop("'parent_origin' must be 1 (sire / parent_1) or 2 (dam / parent_2); ",
+         "use NULL for both.", call. = FALSE)
+  }
+  out
+}
+
+#' @keywords internal
+#' @noRd
+.dae_po_key <- function(po) if (is.null(po)) "NULL" else as.character(po)
+
+#' Copies contributing to an additive value at one locus
+#'
+#' `V_A = sum_j n_eligible,j * p_j q_j a_j^2`. Two for an unparented term, one
+#' for a parent-qualified one — a parent-qualified term reads a single copy, so
+#' an imprinted model asked for `target_add_var = V` would otherwise land at
+#' `V/2`. The enumeration is complete only because `assert_qtl_autosomal()`
+#' refuses `scale_to_target = TRUE` at any locus that is not `(1,1)` for both
+#' offspring sexes; without that guard a hemizygous locus would need a third
+#' value and a sex ratio.
+#'
+#' @keywords internal
+#' @noRd
+.dae_n_eligible <- function(po) if (is.null(po)) 2 else 1
+
+#' The `origin` argument for one (line_name, parent_origin) combination
+#'
+#' One row in every scoped case, which is all an additive member may carry.
+#' `'any'` is used only for (no line, one parent) — stamping it unconditionally
+#' would erase the line dimension, so two line-specific imprinted calls would
+#' land on one identical scope and the second would replace the first.
+#'
+#' @keywords internal
+#' @noRd
+.dae_scope <- function(line_name, po) {
+  if (is.null(line_name) && is.null(po)) return(NULL)
+  if (is.null(line_name)) {
+    return(list(line_match_type = "any", parent_origin = po))
+  }
+  c(list(line_match_type = "exact", line_name = line_name),
+    if (is.null(po)) NULL else list(parent_origin = po))
+}
+
+#' @keywords internal
+#' @noRd
+.dae_scope_label <- function(line_name, po) {
+  paste0(if (is.null(line_name)) "all lines" else paste0("line ", line_name),
+         ", ",
+         if (is.null(po)) "both parents' copies"
+         else paste0("parent_origin ", po, " only"))
+}
+
+#' Build one trait's additive terms in the locally-indexed candidate form
+#'
+#' @keywords internal
+#' @noRd
+.dae_build <- function(conn, trait_name, locus_names, effects, centers, scope) {
+  .ge_build(conn, trait_name,
+            terms = data.frame(term_id       = locus_names,
+                               locus_name    = locus_names,
+                               contrast_name = "additive",
+                               center_value  = as.numeric(centers),
+                               genome_value  = as.numeric(effects),
+                               stringsAsFactors = FALSE),
+            origin = scope, effect_owner = GE_ADDITIVE_OWNER)
+}
+
+#' Concatenate two candidate builds, renumbering the second's local ids
+#'
+#' @keywords internal
+#' @noRd
+.dae_stack <- function(a, b) {
+  if (is.null(a)) return(b)
+  off <- max(a$terms$id_genome_effect)
+  b$terms$id_genome_effect   <- b$terms$id_genome_effect + off
+  b$members$id_genome_effect <- b$members$id_genome_effect + off
+  if (nrow(b$origins) > 0L) {
+    b$origins$id_genome_effect <- b$origins$id_genome_effect + off
+  }
+  names(b$labels) <- as.character(as.integer(names(b$labels)) + off)
+  list(terms   = rbind(a$terms, b$terms),
+       members = rbind(a$members, b$members),
+       origins = rbind(a$origins, b$origins),
+       labels  = c(a$labels, b$labels))
+}
+
+#' Loci already carrying a generated additive term for this trait at this scope
+#'
+#' `method = "union"` reads per-trait QTL membership from what is already
+#' stored, which since v0.66.0 lives in the term/member/origin tables.
+#'
+#' @keywords internal
+#' @noRd
+.dae_existing_loci <- function(model, trait_name, scope) {
+  ids <- model$terms$id_genome_effect[
+    model$terms$trait_name == trait_name &
+      model$terms$effect_owner == GE_ADDITIVE_OWNER]
+  if (length(ids) == 0L) return(integer(0))
+  sc  <- .ge_scope_from_origin(scope, "replace_scope")
+  hit <- vapply(ids, function(id) {
+    .ge_term_at_scope(model$members[model$members$id_genome_effect == id, ,
+                                    drop = FALSE],
+                      model$origins[model$origins$id_genome_effect == id, ,
+                                    drop = FALSE],
+                      sc)
+  }, logical(1))
+  unique(model$members$locus_id[model$members$id_genome_effect %in% ids[hit]])
+}
+
+#' Warn when a write leaves two variants differing only in the parent dimension
+#'
+#' `replace_scope` keys on origin-predicate equality and `parent_origin` is part
+#' of the predicate, so `define_additive_effects(line_name = "A")` followed by
+#' the same call with `parent_origin = 1` leaves **both** variants standing.
+#' They are in a containment relation, so the result is a legal fallback pair —
+#' paternal copies take the imprinted value, maternal copies fall back to the
+#' generic one — which is correct by the rules and almost certainly not what a
+#' user re-running the call intended. It is also a behaviour change from the
+#' deleted `expressed_parent`, which was one trait-wide flag that could only be
+#' overwritten.
+#'
+#' Fires only on that case: the members must agree on **every** line predicate
+#' and differ only by one carrying a parent the other leaves open. The
+#' common/line-A/line-B fallback differs in *line*, and a reciprocal
+#' `(exact A, 1)` / `(exact A, 2)` pair has disjoint parents rather than nested
+#' ones, so neither is ever reported.
+#'
+#' @keywords internal
+#' @noRd
+.dae_warn_parent_only <- function(conn, trait_names) {
+  model <- .ge_read_model(conn)
+  t <- model$terms[model$terms$trait_name %in% trait_names &
+                     model$terms$effect_owner == GE_ADDITIVE_OWNER, ,
+                   drop = FALSE]
+  if (nrow(t) < 2L) return(invisible(NULL))
+  keys <- vapply(t$id_genome_effect, function(id) {
+    .ge_family_key(t$trait_name[t$id_genome_effect == id], GE_ADDITIVE_OWNER,
+                   model$members[model$members$id_genome_effect == id, ,
+                                 drop = FALSE])
+  }, character(1))
+  hits <- character(0)
+  for (fam in split(t$id_genome_effect, keys)) {
+    if (length(fam) < 2L) next
+    preds <- lapply(fam, function(id) {
+      .ge_predicate(model$members[model$members$id_genome_effect == id, ,
+                                  drop = FALSE],
+                    model$origins[model$origins$id_genome_effect == id, ,
+                                  drop = FALSE])
+    })
+    for (i in seq_along(fam)) for (j in seq_along(fam)) {
+      if (j == i) next
+      if (!.ge_pred_leq(preds[[i]], preds[[j]]) ||
+          .ge_pred_leq(preds[[j]], preds[[i]])) next
+      if (!.dae_parent_only_pair(preds[[i]], preds[[j]])) next
+      hits <- c(hits, paste0(
+        .ge_scope_label(preds[[i]]), " and ", .ge_scope_label(preds[[j]]),
+        " on trait '", t$trait_name[t$id_genome_effect == fam[i]], "'"))
+    }
+  }
+  if (length(hits) == 0L) return(invisible(NULL))
+  warning("This call left two additive variants that differ only in the ",
+          "parent dimension: ", paste(unique(hits), collapse = "; "),
+          ". Both stand — the qualified one applies to its parent's copies and ",
+          "the other falls back for the rest — which is a legal fallback pair ",
+          "but is rarely what re-running the same call with a new ",
+          "parent_origin was meant to do. Use mode replace_owner via ",
+          "define_genome_effects(), or remove the unwanted variant, if you ",
+          "meant to replace it.", call. = FALSE)
+  invisible(NULL)
+}
+
+#' @keywords internal
+#' @noRd
+.dae_parent_only_pair <- function(P, Q) {
+  if (length(P) != length(Q)) return(FALSE)
+  all(vapply(seq_along(P), function(i) {
+    p <- P[[i]]; q <- Q[[i]]
+    if (p$kind != "additive" || q$kind != "additive") return(FALSE)
+    pl <- if (identical(p$scope, "any")) "any" else p$line
+    ql <- if (identical(q$scope, "any")) "any" else q$line
+    identical(pl, ql)
+  }, logical(1)))
+}
+
+
+
+#' Rescale QTL effects to hit a target additive variance
+#'
+#' `V_A = sum_j n_eligible,j * p_j q_j a_j^2`. The familiar Falconer `2pq a^2`
+#' is the `n_eligible = 2` case; a parent-qualified term reads one copy, so
+#' fixing the 2 would land an imprinted model at `V/2`.
 #'
 #' @param qtl_tf Logical mask of QTL loci, length `n_loci`.
 #' @param qtl_effects Numeric effects at QTL loci, length `sum(qtl_tf)`.
 #' @param target_add_var Target additive variance.
 #' @param p_base Numeric vector of base allele frequencies, length `n_loci`.
+#' @param n_eligible Copies contributing to the additive value at a locus: `2`
+#'   for an unparented term, `1` for a parent-qualified one. The enumeration is
+#'   complete only because `assert_qtl_autosomal()` refuses `scale_to_target`
+#'   at any locus that is not `(1,1)` for both offspring sexes.
 #' @return Rescaled `qtl_effects` vector.
 #' @keywords internal
-rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var, p_base) {
+rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var,
+                                      p_base, n_eligible = 2) {
   p_qtl <- p_base[qtl_tf]
-  V_A   <- sum(2 * p_qtl * (1 - p_qtl) * qtl_effects^2)
+  V_A   <- sum(n_eligible * p_qtl * (1 - p_qtl) * qtl_effects^2)
   if (V_A <= 0 || !is.finite(V_A)) {
     warning("Falconer V_A is zero or infinite; effects returned unchanged.", call. = FALSE)
     return(qtl_effects)

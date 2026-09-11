@@ -15,6 +15,7 @@ define_additive_effects(
   base_tbl = NULL,
   base_line_name = NULL,
   line_name = NULL,
+  parent_origin = NULL,
   scale_to_target = TRUE,
   seed = NULL
 )
@@ -58,14 +59,28 @@ pass \code{NULL} explicitly to pool every line instead. Errors if no
 \code{founder_haplotypes} rows carry that line. See \emph{Which population centers
 the effects} above.}
 
-\item{line_name}{Optional character. When set, effects are tagged to this
-genetic line: \code{\link[=add_tbv]{add_tbv()}} then prefers these rows for alleles whose
-\code{line_origin} matches, falling back per-locus to the population-wide rows.
-Also becomes the default for \code{base_line_name}. \code{NULL} (default) means
-population-wide effects.}
+\item{line_name}{Optional character. When set, effects are scoped to allele
+copies of this genetic line: a copy whose \code{line_origin} matches takes these
+values, and falls back per copy to the common variant where no
+line-specific one exists. Also becomes the default for \code{base_line_name}.
+\code{NULL} (default) means the common scope, matching every copy.}
 
-\item{scale_to_target}{Logical. If \code{TRUE}, rescale effects using the Falconer
-formula so the expected additive variance equals the stored \code{target_add_var}.}
+\item{parent_origin}{Optional \code{1} (sire / parent_1) or \code{2} (dam / parent_2) —
+imprinting, restricting the term to copies inherited from that parent.
+\code{NULL} (default) means both parents' copies. \strong{Per trait}: a scalar is
+recycled, a vector must match \code{trait_name} positionally, or name its
+entries by trait. A call mixing origins across traits while supplying \code{G}
+is rejected — under random mating the paternal and maternal copies at a
+locus are independent, so the requested genetic covariance between a
+paternal-only and a maternal-only trait is zero and cannot be realized.
+This replaces the removed \code{trait_meta.expressed_parent} flag, which could
+only be set trait-wide; \code{\link[=define_genome_effects]{define_genome_effects()}} expresses the per-locus
+case the flag never could.}
+
+\item{scale_to_target}{Logical. If \code{TRUE}, rescale effects so the expected
+additive variance equals the stored \code{target_add_var}:
+\verb{V_A = sum_j n_eligible,j * p_j q_j a_j^2}, where \code{n_eligible} is 2 for an
+unparented term and 1 for a parent-qualified one.}
 
 \item{seed}{Optional integer for reproducibility.}
 }
@@ -73,8 +88,12 @@ formula so the expected additive variance equals the stored \code{target_add_var
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Selects QTL from a filtered \code{genome_meta} table and writes additive effects
-to the \code{genome_effects} table.
+Selects QTL from a filtered \code{genome_meta} table and writes one order-one
+\code{additive} term per locus through \code{\link[=define_genome_effects]{define_genome_effects()}}, under the
+reserved effect owner \code{"generated_additive_tbv"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
+\code{additive} variants from that owner and nothing else, so effects written here
+and effects a user writes with \code{\link[=define_genome_effects]{define_genome_effects()}} can never be
+confused for one another.
 
 \strong{Single trait} (\code{trait_name} length 1) — two modes:
 \itemize{
@@ -95,7 +114,7 @@ all traits. Loci that are QTL for only a subset of traits in
 \code{genome_effects} also receive independent draws (with the diagonal
 variance of \code{G} for that trait).
 \item \code{method = "union"} — the loci in \code{tbl} form the candidate pool; per-trait
-membership is determined from existing rows in \code{genome_effects}.
+membership is read from the terms already stored at this scope.
 }
 
 The \code{base} argument controls which allele frequencies are used:
@@ -126,12 +145,33 @@ the effects, and realized within-line additive variance falls short of
 \code{target_add_var}. Pass \code{base_line_name = NULL} explicitly to force pooling
 anyway.
 
-The centering constant is stored per row in \code{genome_effects.base_allele_freq}
-and travels with its \code{genome_value}, so \code{\link[=add_tbv]{add_tbv()}} applies each allele's own
-line's centering — a crossbred animal's line-A alleles are centered on line A
-and its line-B alleles on line B.
+The centering constant is stored per member as
+\code{genome_effect_members.center_value} and travels with its \code{genome_value}, so
+evaluation applies each allele copy's own line's centering — a crossbred
+animal's line-A alleles are centered on line A and its line-B alleles on
+line B.
+}
 
-Calling this function again for the same \verb{(trait_name, genome_effect_type, line_name)} replaces the existing rows in \code{genome_effects}.
+\section{Scope, and what a re-run replaces}{
+
+\code{line_name} and \code{parent_origin} compose into the single origin row an
+\code{additive} member is allowed:\tabular{lll}{
+   \code{line_name} \tab \code{parent_origin} \tab Stored scope \cr
+   \code{NULL} \tab \code{NULL} \tab no origin rows (the common scope) \cr
+   \code{"A"} \tab \code{NULL} \tab \verb{('exact', 'A', parent NULL, copy_count = 1)} \cr
+   \code{NULL} \tab \code{1} / \code{2} \tab \verb{('any', NULL, parent, copy_count = 1)} \cr
+   \code{"A"} \tab \code{1} / \code{2} \tab \verb{('exact', 'A', parent, copy_count = 1)} \cr
+}
+
+
+Re-running replaces \strong{only the variant at the same scope}
+(\code{mode = "replace_scope"}), so successive common / line-A / line-B calls each
+keep the others: the per-copy fallback that makes crossbred breeding values
+correct depends on all of them standing. It also means changing
+\code{parent_origin} on a re-run \strong{adds} a variant rather than replacing one —
+the two are in a containment relation and both apply, to different copies.
+That is legal and rarely intended, so the function warns on exactly that
+case.
 }
 
 \examples{

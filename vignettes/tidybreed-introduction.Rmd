@@ -109,7 +109,7 @@ functions:
 
 | You want to specify | Function | Examples |
 |---|---|---|
-| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `expressed_parent`, `units` |
+| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `units` |
 | What gets observed | `define_phenotype()` | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
 
 For a simple trait the two share a name and you call both. The payoff comes later:

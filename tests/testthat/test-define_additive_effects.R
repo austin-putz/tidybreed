@@ -1,3 +1,25 @@
+# These tests were written against the flat genome_effects table: one row per
+# (locus, line) with locus_name, line_name, base_allele_freq and genome_value.
+# Effects now live as terms over members with an origin scope, so the flat shape
+# is reconstructed here as a test-only view. The package deliberately ships no
+# such view -- the point of the new schema is that a term is not a locus -- but
+# every assertion below is about *generated additive* effects, which are exactly
+# the order-one, single-origin case the flat shape described correctly.
+ge_flat_view <- function(pop) {
+  DBI::dbExecute(pop$db_conn, paste0(
+    "CREATE OR REPLACE VIEW gen_add_flat AS ",
+    "SELECT e.trait_name, l.locus_name, m.locus_id, ",
+    "       m.center_value AS base_allele_freq, e.genome_value, ",
+    "       o.line_name, o.parent_origin ",
+    "FROM genome_effects e ",
+    "JOIN genome_effect_members m USING (id_genome_effect) ",
+    "JOIN genome_effect_loci   l USING (id_genome_effect, member_slot) ",
+    "LEFT JOIN genome_effect_member_origins o ",
+    "  USING (id_genome_effect, member_slot) ",
+    "WHERE e.effect_owner = 'generated_additive_tbv'"))
+  pop
+}
+
 make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = 5, chr_len_Mb = 100) |>
@@ -6,7 +28,7 @@ make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
     get_table("founder_haplotypes") |>
     add_founders(n_males = n_ind / 2, n_females = n_ind / 2,
                  line_name = "A")
-  pop
+  ge_flat_view(pop)
 }
 
 # Dosage matrix (individuals x loci, locus_id order) from the long ind_haplotype.
@@ -35,7 +57,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
 
   # Effects are now in genome_effects, not genome_meta columns
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, genome_value FROM genome_effects WHERE trait_name = 'ADG'")
+    "SELECT locus_name, genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")
   locus_order <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
   a <- rep(0, nrow(locus_order))
@@ -47,7 +69,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   # This is deterministic given the effects, so it is asserted tightly.
   p <- DBI::dbGetQuery(pop$db_conn,
     "SELECT base_allele_freq AS p, genome_value AS a
-       FROM genome_effects WHERE trait_name = 'ADG'")
+       FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(sum(2 * p$p * (1 - p$p) * p$a^2), 0.5, tolerance = 1e-8)
 
   # The variance *realised* in the sampled founders is a noisy estimate of that
@@ -108,7 +130,7 @@ test_that("base_allele_freq written to genome_effects, not genome_meta", {
   expect_false("is_QTL_ADG"          %in% genome_cols)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM genome_effects WHERE trait_name = 'ADG'")
+    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 50)
   expect_true(all(eff$base_allele_freq >= 0 & eff$base_allele_freq <= 1))
 
@@ -133,7 +155,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
                           distribution = "normal", seed = 5)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, genome_value, base_allele_freq FROM genome_effects WHERE trait_name = 'ADG'")
+    "SELECT locus_name, genome_value, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 100)
 
   # TBV mean should be ≈ 0
@@ -156,7 +178,7 @@ test_that("define_additive_effects() accepts manual effects", {
     define_additive_effects("ADG", effects = rep(2.0, 10))
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM genome_effects WHERE trait_name = 'ADG'")
+    "SELECT genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 10)
   expect_true(all(eff$genome_value == 2.0))
 
@@ -176,7 +198,7 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
     define_additive_effects("ADG", effects = rep(1.0, 20))
 
   n_before <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'ADG'")$n
+    "SELECT COUNT(*) AS n FROM gen_add_flat WHERE trait_name = 'ADG'")$n
   expect_equal(n_before, 20L)
 
   # Call again with different loci set
@@ -188,10 +210,10 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
     define_additive_effects("ADG", effects = rep(3.0, 30))
 
   n_after <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'ADG'")$n
+    "SELECT COUNT(*) AS n FROM gen_add_flat WHERE trait_name = 'ADG'")$n
   expect_equal(n_after, 30L)
   eff_vals <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM genome_effects WHERE trait_name = 'ADG'")$genome_value
+    "SELECT genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")$genome_value
   expect_true(all(eff_vals == 3.0))
 
   close_pop(pop)
@@ -222,7 +244,7 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
 
   load_eff <- function(t) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT locus_name, genome_value FROM genome_effects WHERE trait_name = '", t, "'"))
+      "SELECT locus_name, genome_value FROM gen_add_flat WHERE trait_name = '", t, "'"))
     a <- rep(0, n_loci)
     idx <- match(e$locus_name, locus_order$locus_name)
     a[idx] <- e$genome_value
@@ -278,9 +300,10 @@ make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20)
     define_genome(n_loci = n_loci, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 100) |>
     define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
-  pop |>
+  pop <- pop |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = n_ind / 2, n_females = n_ind / 2, line_name = "A")
+  ge_flat_view(pop)
 }
 
 test_that("scale_to_target = TRUE errors when QTL set includes a sex-linked locus", {
@@ -344,7 +367,7 @@ make_two_line_pop <- function(pop_name, n_loci = 40, n_hap = 20) {
     DBI::dbWriteTable(pop$db_conn, "founder_haplotypes", fh, append = TRUE)
   }
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
-  pop
+  ge_flat_view(pop)
 }
 
 test_that("base_line_name inherits line_name so each line centers on its own pool", {
@@ -353,7 +376,7 @@ test_that("base_line_name inherits line_name so each line centers on its own poo
 
   stored <- function(ln) {
     DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT DISTINCT base_allele_freq FROM genome_effects ",
+      "SELECT DISTINCT base_allele_freq FROM gen_add_flat ",
       "WHERE trait_name = 'ADG' AND line_name ",
       if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$base_allele_freq
   }
@@ -391,7 +414,7 @@ test_that("base_line_name = NULL forces pooling even for a line-specific effect"
 
   expect_equal(
     DBI::dbGetQuery(pop$db_conn,
-      "SELECT DISTINCT base_allele_freq FROM genome_effects
+      "SELECT DISTINCT base_allele_freq FROM gen_add_flat
          WHERE trait_name = 'ADG' AND line_name = 'A'")$base_allele_freq,
     0.5
   )
@@ -422,11 +445,12 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
   mk_line("A", 0.1)   # rare allele in A
   mk_line("B", 0.9)   # common allele in B -- pooled sits near 0.5
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
+  pop <- ge_flat_view(pop)
   pop <- define_trait(pop, "ADG", target_add_var = 2)
 
   falconer <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT base_allele_freq p, genome_value a FROM genome_effects ",
+      "SELECT base_allele_freq p, genome_value a FROM gen_add_flat ",
       "WHERE trait_name = 'ADG' AND line_name = '", ln, "'"))
     sum(2 * e$p * (1 - e$p) * e$a^2)
   }
@@ -434,7 +458,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
   # OWN allele frequencies -- what the simulation actually delivers.
   realised <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT e.locus_name, e.genome_value a, f.p FROM genome_effects e ",
+      "SELECT e.locus_name, e.genome_value a, f.p FROM gen_add_flat e ",
       "JOIN (SELECT locus_name, AVG(CAST(allele AS DOUBLE)) p ",
       "        FROM founder_haplotypes WHERE line_name = '", ln, "' ",
       "        GROUP BY locus_name) f ON f.locus_name = e.locus_name ",
@@ -506,7 +530,7 @@ test_that("defining effects for one line does not clobber another line's rows", 
 
   counts <- DBI::dbGetQuery(pop$db_conn,
     "SELECT line_name, COUNT(*) AS n, MIN(genome_value) AS v
-       FROM genome_effects WHERE trait_name = 'ADG'
+       FROM gen_add_flat WHERE trait_name = 'ADG'
        GROUP BY line_name ORDER BY line_name NULLS LAST")
 
   expect_equal(nrow(counts), 3L)

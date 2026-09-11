@@ -232,21 +232,38 @@ test_that("add_tbv() centers each allele with its own line's base_allele_freq", 
 })
 
 
-test_that("add_tbv() respects parent_origin restriction with line-specific imprinted effects", {
+test_that("add_tbv() respects parent_origin scope with line-specific imprinted effects", {
   pop <- make_lines_pop("tbv_imprint", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
     add_founders(n_males = 2, n_females = 2, line_name = "Duroc", gen = 0L)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Landrace") |>
     add_founders(n_males = 2, n_females = 2, line_name = "Landrace", gen = 0L)
 
-  pop <- define_trait(pop, "IMP", expressed_parent = "parent_1")
+  pop <- define_trait(pop, "IMP")
   loci <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
 
+  # Imprinting is per effect, not per trait: each line's variant carries one
+  # ('exact', line, parent 1) origin row. The line dimension must survive --
+  # stamping a bare ('any', 1) on both would collapse them onto one scope and
+  # the second call would replace the first.
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("IMP", effects = rep(1.0, length(loci)), line_name = "Duroc")
+    define_additive_effects("IMP", effects = rep(1.0, length(loci)),
+                            line_name = "Duroc", parent_origin = 1)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("IMP", effects = rep(4.0, length(loci)), line_name = "Landrace")
+    define_additive_effects("IMP", effects = rep(4.0, length(loci)),
+                            line_name = "Landrace", parent_origin = 1)
+
+  scopes <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT DISTINCT o.line_match_type, o.line_name, o.parent_origin, ",
+    "o.copy_count FROM genome_effect_member_origins o ",
+    "JOIN genome_effects e USING (id_genome_effect) ",
+    "WHERE e.trait_name = 'IMP' ORDER BY o.line_name"))
+  expect_equal(nrow(scopes), 2L)
+  expect_equal(scopes$line_match_type, c("exact", "exact"))
+  expect_equal(scopes$line_name, c("Duroc", "Landrace"))
+  expect_equal(scopes$parent_origin, c(1L, 1L))
+  expect_equal(scopes$copy_count, c(1L, 1L))
 
   matings <- tibble::tibble(id_parent_1 = "Duroc_1", id_parent_2 = "Landrace_3",
                             sex = "M", line_name = "F1", gen = 1L)
@@ -259,11 +276,15 @@ test_that("add_tbv() respects parent_origin restriction with line-specific impri
     "SELECT locus_name, allele, line_origin FROM ind_haplotype WHERE id_ind = 'F1_1' AND parent_origin = 1")
   expect_true(all(hap_po1$line_origin == "Duroc"))  # sire's line only
 
-  # base_allele_freq varies by locus -- join per-locus rather than a single scalar.
-  eff_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, base_allele_freq FROM genome_effects WHERE trait_name='IMP' AND line_name='Duroc'")
+  # The centre varies by locus -- join per-locus rather than a single scalar.
+  eff_duroc <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT l.locus_name, m.center_value ",
+    "FROM genome_effect_loci l ",
+    "JOIN genome_effect_members m USING (id_genome_effect, member_slot) ",
+    "JOIN genome_effect_member_origins o USING (id_genome_effect, member_slot) ",
+    "WHERE l.trait_name = 'IMP' AND o.line_name = 'Duroc'"))
   hap_po1 <- merge(hap_po1, eff_duroc, by = "locus_name")
-  expected <- sum((hap_po1$allele - hap_po1$base_allele_freq) * 1.0)
+  expected <- sum((hap_po1$allele - hap_po1$center_value) * 1.0)
   actual <- DBI::dbGetQuery(pop$db_conn,
     "SELECT tbv_value FROM ind_tbv WHERE id_ind='F1_1' AND trait_name='IMP'")$tbv_value
   expect_equal(actual, expected, tolerance = 1e-8)

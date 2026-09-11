@@ -2,9 +2,15 @@
 % Please edit documentation in R/define_additive_effects.R
 \name{rescale_effects_to_target}
 \alias{rescale_effects_to_target}
-\title{Rescale QTL effects to hit a target additive variance using Falconer formula}
+\title{Rescale QTL effects to hit a target additive variance}
 \usage{
-rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
+rescale_effects_to_target(
+  qtl_tf,
+  qtl_effects,
+  target_add_var,
+  p_base,
+  n_eligible = 2
+)
 }
 \arguments{
 \item{qtl_tf}{Logical mask of QTL loci, length \code{n_loci}.}
@@ -14,11 +20,18 @@ rescale_effects_to_target(qtl_tf, qtl_effects, target_add_var, p_base)
 \item{target_add_var}{Target additive variance.}
 
 \item{p_base}{Numeric vector of base allele frequencies, length \code{n_loci}.}
+
+\item{n_eligible}{Copies contributing to the additive value at a locus: \code{2}
+for an unparented term, \code{1} for a parent-qualified one. The enumeration is
+complete only because \code{assert_qtl_autosomal()} refuses \code{scale_to_target}
+at any locus that is not \verb{(1,1)} for both offspring sexes.}
 }
 \value{
 Rescaled \code{qtl_effects} vector.
 }
 \description{
-Rescale QTL effects to hit a target additive variance using Falconer formula
+\verb{V_A = sum_j n_eligible,j * p_j q_j a_j^2}. The familiar Falconer \verb{2pq a^2}
+is the \code{n_eligible = 2} case; a parent-qualified term reads one copy, so
+fixing the 2 would land an imprinted model at \code{V/2}.
 }
 \keyword{internal}

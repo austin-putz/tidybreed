@@ -1,3 +1,97 @@
+# tidybreed 0.66.0 (2026-09-10)
+
+Phase C of `plans/update_genome_effects_v4.md`: the writers. Adds
+`define_genome_effects()` and its two `terms` builders, rebuilds
+`define_additive_effects()` on top of it, and deletes
+`trait_meta.expressed_parent`. **Still deliberately mid-migration**: `add_tbv()`
+(Phase D) reads the old column shape and does not work in this version.
+
+## New
+
+- **`define_genome_effects(pop, trait_name, terms, ...)`** — the general writer
+  for arbitrary genome effects. `terms` is a **long data frame, one row per
+  (term x locus)**, with scope in a separate `origin` argument (`NULL` for the
+  common scope, a named scalar list, or a data frame keyed by `locus_name`). No
+  nesting, no S3 constructor, no `member_slot` arithmetic: the same shape as
+  every table `get_table()` returns. Four replacement modes — `append`,
+  `replace_scope`, `replace_owner`, `replace_trait` — and a whole write is one
+  transaction that validates the entire table set before `COMMIT`. Every message
+  about malformed input names the `term_id` **the user typed**, never an
+  `id_genome_effect` they have not seen.
+
+- **`ad_terms()`** — expands an `(a, d)` pair into the two members that express
+  it. Functional coding is `additive`@`0.5` plus `indicator`@`(2, 1)`; Cockerham
+  is `additive`@`p` plus `dominance`@`p`. It **reports** the implied genetic mean
+  `mu = a(p - q) + 2pq*d` and writes it nowhere: putting it in
+  `phenotype_meta.mean` would double-count once non-additive genetic values reach
+  the phenotype layer.
+
+- **`genotype_terms()`** — turns a genotype-by-value table into `indicator`
+  terms, one term per row and one member per locus column. A hand-entered
+  epistatic surface is rows, not a second representation.
+
+- **`require_complete = TRUE`** demands every reachable `(copy_count, dosage)`
+  state on every member of an indicator surface — including `copy_count_value =
+  0` where a chromosome can be absent. Sparse by default (an omitted cell is a
+  term you did not write, contributing zero), complete on request.
+
+## Breaking
+
+- **`trait_meta.expressed_parent` is deleted** — argument, column, description
+  and documentation. Imprinting is a property of an **effect**, not of a trait:
+  it is one origin row on a member, so it can now differ per locus, per line and
+  per effect owner, none of which a trait-wide flag could express. Use
+  `define_additive_effects(parent_origin = 1)` for the whole-genome case that
+  flag covered, or `define_genome_effects()` for anything finer.
+
+- **`define_additive_effects()` writes terms.** Same call, new storage: one
+  order-one `additive` term per locus under the reserved owner
+  `generated_additive_tbv`, with the base allele frequency as the member's
+  `center_value`. New `parent_origin` argument, **per trait** (scalar recycled,
+  positional vector, or named by trait). A call mixing origins across traits
+  while supplying `G` is now rejected: under random mating a locus's paternal and
+  maternal copies are independent, so the genetic covariance between a
+  paternal-only and a maternal-only trait is exactly zero and the requested
+  off-diagonal is unobtainable, not merely approximate.
+
+- **Re-running `define_additive_effects()` replaces only the variant at the same
+  scope**, not the whole trait. Successive common / line-A / line-B calls each
+  keep the others — the per-copy fallback that makes crossbred breeding values
+  correct needs all of them standing. One consequence is worth knowing: changing
+  `parent_origin` on a re-run **adds** a variant rather than replacing one. That
+  is a legal containment pair and rarely what was intended, so the function warns
+  on exactly that case and names both variants.
+
+- **The foreign keys *inside* the effect set are gone** (`members` -> `effects`,
+  `origins` -> `members`). DuckDB 1.5.5 refuses to delete a parent row inside an
+  explicit transaction whose children were deleted earlier in that same
+  transaction — single-column and composite keys alike, either delete order,
+  filtered or whole-table — and succeeds only in autocommit. That made every
+  replace mode impossible to write atomically, and a half-replaced effect model
+  is a *different* genetic model rather than a weaker one. The same integrity is
+  enforced by `validate_genome_effects()` before every `COMMIT`, and the DuckDB
+  behaviour is pinned by a test so a version that fixes it gets noticed. The
+  `locus_id` -> `genome_meta` key stays; `genome_meta` rows are never deleted.
+
+## Fixed
+
+- **`scale_to_target` is origin-aware.** `rescale_effects_to_target()` used
+  `V_A = sum 2 p q a^2`, where the 2 counts the copies an unparented additive
+  term reads. A parent-qualified term reads **one**, so an imprinted model asked
+  for `target_add_var = V` landed at `V/2`. The contract is now
+  `V_A = sum_j n_eligible,j * p_j q_j a_j^2` with `n_eligible` 2 unparented and 1
+  parent-qualified. The enumeration is complete only because
+  `assert_qtl_autosomal()` already refuses scaling at any locus that is not
+  `(1,1)` for both offspring sexes; that guard is what keeps the unparented
+  factor at exactly 2.
+
+- **A duplicate caused only by a different centring now names the term to write
+  instead.** `center_value` is outside the fallback-family signature on purpose,
+  so a functional `additive`@`0.5` and a Cockerham `additive`@`p` at one locus
+  under one owner collide as a duplicate. They are genuinely combinable, so the
+  rejection reports the single equivalent `(genome_value, center_value)` rather
+  than a bare duplicate error.
+
 # tidybreed 0.65.0 (2026-09-10)
 
 Replaces the `genome_effects` schema with a term/member/origin model, and adds

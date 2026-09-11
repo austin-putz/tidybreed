@@ -114,7 +114,7 @@ TABLE_RESERVED_COLS <- list(
   ind_tgv_total    = c("id_ind", "trait_name", "tgv_total"),
   ind_ebv          = c("id_ebv", "id_ind", "trait_name", "model", "ebv_value", "acc", "se", "eval_number", "replicate"),
   trait_meta       = c("id_trait", "trait_name", "description", "units",
-                       "expressed_parent", "target_add_mean"),
+                       "target_add_mean"),
   phenotype_meta   = c("id_phenotype_meta", "phenotype_name", "type", "mean",
                        "expressed_sex", "repeatable", "min_value", "max_value",
                        "prevalence", "thresholds", "cat_values", "cat_names",

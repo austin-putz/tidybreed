@@ -65,10 +65,10 @@ allele copy, not genotype dosage) for the individual, of:
 exists for that locus/line. This per-locus fallback is what makes
 crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
 each parent line's own QTL effects and base allele frequency (see the
-"Crossbreeding TBV" example below). For \strong{imprinted} traits
-(\code{trait_meta.expressed_parent} = \code{"parent_1"} or \code{"parent_2"}), only
-haplotype rows from that parent's \code{parent_origin} are summed before the
-same line-matching logic applies.
+"Crossbreeding TBV" example below). \strong{Imprinting} is a property of the
+effect, not of the trait: a term scoped to one \code{parent_origin} (see
+\code{define_additive_effects(parent_origin = )}) reads only that parent's allele
+copies, and the same containment fallback applies per copy.
 
 Optionally computes true selection index values by multiplying per-trait TBVs
 by weights from named indices defined with \code{\link[=define_index]{define_index()}}, and writes them

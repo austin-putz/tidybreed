@@ -118,20 +118,59 @@ test_that("origin row-local invariants are enforced by the database", {
   expect_silent(ins("INSERT INTO genome_effect_member_origins VALUES (1,1,1,'any',NULL,1,1)"))
 })
 
-test_that("children cannot outlive their parents", {
+test_that("orphans inside the effect set are caught by the R validator", {
+  # There is deliberately no FOREIGN KEY from members to effects or from
+  # origins to members. DuckDB 1.5.5 refuses to delete a parent row inside an
+  # explicit transaction whose children were deleted earlier in the same
+  # transaction, which would make every replace mode of
+  # define_genome_effects() unwritable atomically. The rule is enforced by
+  # validate_genome_effects() instead, which runs before every COMMIT.
   pop <- ge_pop()
   on.exit(close_pop(pop), add = TRUE)
   ge_seed_term(pop)
   DBI::dbExecute(pop$db_conn,
                  "INSERT INTO genome_effect_member_origins VALUES (1,1,1,'exact','A',NULL,1)")
+  expect_silent(tidybreed:::validate_genome_effects(pop$db_conn))
 
-  expect_error(DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effects WHERE id_genome_effect = 1"),
+  # A term whose members are gone.
+  DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effect_member_origins")
+  DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effect_members")
+  expect_error(tidybreed:::validate_genome_effects(pop$db_conn), "has no members")
+
+  # A member with no term, and an origin row with no member.
+  DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effects")
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO genome_effect_members VALUES (1, 1, 1, 'additive', NULL, NULL, 0.5)"))
+  expect_error(tidybreed:::validate_genome_effects(pop$db_conn),
+               "member rows with no term")
+  DBI::dbExecute(pop$db_conn,
+                 "INSERT INTO genome_effect_member_origins VALUES (1,9,1,'exact','A',NULL,1)")
+  expect_error(tidybreed:::validate_genome_effects(pop$db_conn),
+               "origin rows with no member")
+})
+
+test_that("a parent delete inside a transaction is what forced the FKs out", {
+  # Pin the DuckDB behaviour the schema comment cites, so a future version that
+  # fixes it is noticed rather than silently leaving the workaround in place.
+  conn <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(conn, "CREATE TABLE p (id INTEGER PRIMARY KEY)")
+  DBI::dbExecute(conn, paste0(
+    "CREATE TABLE c (id INTEGER PRIMARY KEY, ",
+    "FOREIGN KEY (id) REFERENCES p(id))"))
+  DBI::dbExecute(conn, "INSERT INTO p VALUES (1)")
+  DBI::dbExecute(conn, "INSERT INTO c VALUES (1)")
+
+  DBI::dbExecute(conn, "BEGIN TRANSACTION")
+  DBI::dbExecute(conn, "DELETE FROM c WHERE id = 1")
+  expect_error(DBI::dbExecute(conn, "DELETE FROM p WHERE id = 1"),
                "foreign key")
-  expect_error(DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effect_members WHERE id_genome_effect = 1"),
-               "foreign key")
-  expect_error(DBI::dbExecute(pop$db_conn, paste0(
-    "INSERT INTO genome_effect_member_origins VALUES (1,9,1,'exact','A',NULL,1)")),
-    "foreign key")
+  DBI::dbExecute(conn, "ROLLBACK")
+
+  # The identical sequence in autocommit is fine, which is why this reads as a
+  # transaction-visibility limitation and not as a modelling error.
+  DBI::dbExecute(conn, "DELETE FROM c WHERE id = 1")
+  expect_equal(DBI::dbExecute(conn, "DELETE FROM p WHERE id = 1"), 1L)
 })
 
 test_that("remove_rows() refuses the effect tables and says why", {

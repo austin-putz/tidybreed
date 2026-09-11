@@ -168,6 +168,26 @@
   })
 }
 
+#' Human-readable label for a variant's origin predicate
+#'
+#' Used in warnings and errors, where naming an `id_genome_effect` would tell a
+#' user nothing about which of their calls produced the row.
+#'
+#' @keywords internal
+#' @noRd
+.ge_scope_label <- function(P) {
+  paste(vapply(P, function(p) {
+    if (identical(p$scope, "any")) return("common")
+    if (p$kind == "additive") {
+      paste0(p$line, if (is.na(p$parent)) "" else paste0("@p", p$parent))
+    } else {
+      paste(paste0(p$items$line,
+                   ifelse(is.na(p$items$parent), "",
+                          paste0("@p", p$items$parent))), collapse = "+")
+    }
+  }, character(1)), collapse = " x ")
+}
+
 #' Is predicate `P` contained in predicate `Q`? (componentwise, per member)
 #'
 #' `P <= Q` reads "P is at least as specific as Q", so the variant selected for
@@ -271,15 +291,17 @@
 #' Called inside every genome-effect write transaction, before `COMMIT`.
 #'
 #' @param conn A DBI connection.
+#' @param labels Optional `id_genome_effect` -> user label map; see
+#'   [.ge_validate_frames()].
 #' @return `invisible(NULL)`; errors listing every violation found.
 #' @keywords internal
 #' @noRd
-validate_genome_effects <- function(conn) {
+validate_genome_effects <- function(conn, labels = NULL) {
   terms   <- DBI::dbGetQuery(conn, "SELECT * FROM genome_effects")
   members <- DBI::dbGetQuery(conn, "SELECT * FROM genome_effect_members")
   origins <- DBI::dbGetQuery(conn, "SELECT * FROM genome_effect_member_origins")
-  v <- c(.ge_validate_frames(terms, members, origins),
-         .ge_validate_dominance_ploidy(conn, members, origins))
+  v <- c(.ge_validate_frames(terms, members, origins, labels = labels),
+         .ge_validate_dominance_ploidy(conn, members, origins, labels = labels))
   if (length(v) > 0L) {
     stop("Invalid genome effects:\n  - ", paste(v, collapse = "\n  - "),
          call. = FALSE)
@@ -304,7 +326,14 @@ validate_genome_effects <- function(conn) {
 #' @return Character vector of violations.
 #' @keywords internal
 #' @noRd
-.ge_validate_dominance_ploidy <- function(conn, members, origins) {
+.ge_validate_dominance_ploidy <- function(conn, members, origins,
+                                         labels = NULL) {
+  tag_of <- function(id) {
+    lab <- if (is.null(labels)) NA_character_ else
+      unname(labels[match(as.character(id), names(labels))])
+    if (length(lab) != 1L || is.na(lab)) paste0("term ", id)
+    else paste0("term_id '", lab, "'")
+  }
   dom <- members[members$contrast_name == "dominance", , drop = FALSE]
   if (nrow(dom) == 0L) return(character(0))
 
@@ -324,12 +353,48 @@ validate_genome_effects <- function(conn) {
                   , drop = FALSE]
     if (nrow(so) > 0L && sum(so$copy_count) == 2L) next
     v <- c(v, paste0(
-      "term ", id, " member ", slot, ": 'dominance' needs a diploid locus, but ",
+      tag_of(id), " member ", slot, ": 'dominance' needs a diploid locus, but ",
       "chromosome '", chr, "' does not resolve to one copy from each parent for ",
       "both offspring sexes. Give this member an exact origin multiset ",
       "demanding two copies, or use 'indicator' states instead"))
   }
   v
+}
+
+#' Guidance for a duplicate caused only by a different centring
+#'
+#' `center_value` is deliberately outside the family signature -- a line-A
+#' variant legitimately carries a different frequency from its common fallback
+#' -- so a functional `additive`@0.5 and a Cockerham `additive`@p at one locus
+#' under one owner collide as a duplicate. They are genuinely combinable:
+#' `a1(g - c1) + a2(g - c2) = (a1 + a2)(g - c')` with
+#' `c' = (a1 c1 + a2 c2) / (a1 + a2)`. Rejecting keeps the duplicate-term guard;
+#' naming the single equivalent term keeps the rejection actionable.
+#'
+#' Order-one `additive` only: the Cockerham dominance contrast is not linear in
+#' its centre, so no such combination exists for it.
+#'
+#' @keywords internal
+#' @noRd
+.ge_duplicate_hint <- function(terms, members, id1, id2) {
+  m1 <- members[members$id_genome_effect == id1, , drop = FALSE]
+  m2 <- members[members$id_genome_effect == id2, , drop = FALSE]
+  if (nrow(m1) != 1L || nrow(m2) != 1L) return("")
+  if (!identical(m1$contrast_name, "additive")) return("")
+  c1 <- m1$center_value; c2 <- m2$center_value
+  if (isTRUE(all.equal(c1, c2))) return("")
+  a1 <- terms$genome_value[terms$id_genome_effect == id1]
+  a2 <- terms$genome_value[terms$id_genome_effect == id2]
+  if (isTRUE(all.equal(a1 + a2, 0))) {
+    return(paste0(". They differ only in center_value (", c1, " vs ", c2,
+                  "), but their coefficients cancel, so the combined term is ",
+                  "the constant ", signif(a2 * (c2 - c1), 6),
+                  " -- an intercept, which this model has no place for"))
+  }
+  paste0(". They differ only in center_value (", c1, " vs ", c2,
+         "), which is outside the family signature on purpose. Write the one ",
+         "equivalent term instead: genome_value = ", signif(a1 + a2, 6),
+         ", center_value = ", signif((a1 * c1 + a2 * c2) / (a1 + a2), 6))
 }
 
 #' Validate genome-effect rows held as data frames
@@ -338,10 +403,19 @@ validate_genome_effects <- function(conn) {
 #' set before issuing any SQL, and so the rules are testable without a database.
 #'
 #' @param terms,members,origins Data frames matching the three tables.
+#' @param labels Optional named character vector mapping `id_genome_effect` to
+#'   the label to print for it. A writer passes the `term_id` the user typed, so
+#'   a rejected call never names a surrogate id the user has not seen.
 #' @return Character vector of violations; empty when the rows are writable.
 #' @keywords internal
 #' @noRd
-.ge_validate_frames <- function(terms, members, origins) {
+.ge_validate_frames <- function(terms, members, origins, labels = NULL) {
+  tag_of <- function(id) {
+    lab <- if (is.null(labels)) NA_character_ else
+      unname(labels[match(as.character(id), names(labels))])
+    if (length(lab) != 1L || is.na(lab)) paste0("term ", id)
+    else paste0("term_id '", lab, "'")
+  }
   v <- character(0)
   # Only a genuinely empty model is trivially valid. Members with no term at all
   # must still be reported, not skipped.
@@ -363,7 +437,7 @@ validate_genome_effects <- function(conn) {
   for (id in terms$id_genome_effect) {
     mm <- members[members$id_genome_effect == id, , drop = FALSE]
     oo <- origins[origins$id_genome_effect == id, , drop = FALSE]
-    tag <- paste0("term ", id)
+    tag <- tag_of(id)
 
     if (nrow(mm) == 0L) {
       v <- c(v, paste(tag, "has no members"))
@@ -440,11 +514,12 @@ validate_genome_effects <- function(conn) {
       le <- .ge_pred_leq(preds[[i]], preds[[j]])
       ge <- .ge_pred_leq(preds[[j]], preds[[i]])
       if (le && ge) {
-        v <- c(v, paste0("terms ", fam[i], " and ", fam[j],
+        v <- c(v, paste0(tag_of(fam[i]), " and ", tag_of(fam[j]),
                          " are the same logical term at the same scope",
-                         " (duplicate family + scope identity)"))
+                         " (duplicate family + scope identity)",
+                         .ge_duplicate_hint(terms, members, fam[i], fam[j])))
       } else if (!le && !ge && .ge_pred_overlap(preds[[i]], preds[[j]])) {
-        v <- c(v, paste0("terms ", fam[i], " and ", fam[j],
+        v <- c(v, paste0(tag_of(fam[i]), " and ", tag_of(fam[j]),
                          " have overlapping but incomparable scopes in one",
                          " family: neither is more specific, so no variant can",
                          " be selected"))

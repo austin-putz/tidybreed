@@ -22,10 +22,10 @@
 #' exists for that locus/line. This per-locus fallback is what makes
 #' crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
 #' each parent line's own QTL effects and base allele frequency (see the
-#' "Crossbreeding TBV" example below). For **imprinted** traits
-#' (`trait_meta.expressed_parent` = `"parent_1"` or `"parent_2"`), only
-#' haplotype rows from that parent's `parent_origin` are summed before the
-#' same line-matching logic applies.
+#' "Crossbreeding TBV" example below). **Imprinting** is a property of the
+#' effect, not of the trait: a term scoped to one `parent_origin` (see
+#' `define_additive_effects(parent_origin = )`) reads only that parent's allele
+#' copies, and the same containment fallback applies per copy.
 #'
 #' Optionally computes true selection index values by multiplying per-trait TBVs
 #' by weights from named indices defined with [define_index()], and writes them
@@ -156,19 +156,15 @@ add_tbv <- function(tbl, trait_name = NULL,
 
   meta_rows <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_name, expressed_parent ",
-           "FROM trait_meta WHERE trait_name IN (",
-           paste0("'", trait, "'", collapse = ", "), ")")
+    paste0("SELECT trait_name FROM trait_meta WHERE trait_name IN (",
+           sql_in_list(trait, what = "trait name"), ")")
   )
   missing_t <- setdiff(trait, meta_rows$trait_name)
   if (length(missing_t) > 0) {
     stop("Traits not found: ", paste(missing_t, collapse = ", "),
          call. = FALSE)
   }
-  meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
-
   for (t in trait) {
-    m     <- meta_rows[meta_rows$trait_name == t, ]
     ids_t <- ind_meta_subset$id_ind
 
     effect_count <- DBI::dbGetQuery(
@@ -188,12 +184,6 @@ add_tbv <- function(tbl, trait_name = NULL,
     }
 
     id_list <- paste0("'", ids_t, "'", collapse = ", ")
-    parent_filter <- if (m$expressed_parent == "both") {
-      ""
-    } else {
-      parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
-      paste0("AND h.parent_origin = ", parent_origin, " ")
-    }
 
     # Centered TBV, folding (allele - base_allele_freq) into the summed term:
     # this generalizes Falconer centering to per-line base_allele_freq without
@@ -221,7 +211,6 @@ add_tbv <- function(tbl, trait_name = NULL,
         "               AND e2.genome_effect_type = 'additive' ",
         "               AND e2.line_name = h.line_origin)) ) ",
         "WHERE h.id_ind IN (", id_list, ") ",
-        parent_filter,
         "GROUP BY h.id_ind"
       )
     )
@@ -238,10 +227,10 @@ add_tbv <- function(tbl, trait_name = NULL,
         "additive effect for this trait. Usual causes: (a) every QTL for the ",
         "trait sits on a chromosome the individual does not inherit (",
         "chr_inheritance from_parent_1 = 0 and from_parent_2 = 0, e.g. Y in ",
-        "females) -- see define_chromosome(); or (b) the trait is imprinted (",
-        "trait_meta.expressed_parent = 'parent_1'/'parent_2') and restricts to ",
-        "a parent_origin the individual has no copies of (a male's X is ",
-        "from_parent_1 = 0). Place the trait's QTL on a chromosome these ",
+        "females) -- see define_chromosome(); or (b) every term for the trait ",
+        "is scoped to a parent_origin the individual has no copies of (a ",
+        "male's X is from_parent_1 = 0). Place the trait's QTL on a ",
+        "chromosome these individuals carry, or exclude them from the ",
         "individuals carry, or exclude them from the subset.",
         call. = FALSE
       )

@@ -13,10 +13,11 @@ the writer's input format and the evaluation strategy — and renames
 
 **Readiness: implementable.** No open question blocks any phase. The two remaining
 are ergonomic and revisable after the fact.
-★ **Phases A and B are complete.** Phase A required **no change to this schema**;
-Phase B corrected two errors in it (see below). Results, hand computations and the
-findings carried forward are in `plans/update_genome_effects_phase_A.md` and
-`plans/update_genome_effects_phase_B.md`.
+★ **Phases A, B and C are complete.** Phase A required **no change to this schema**;
+Phase B corrected two errors in it and Phase C one more (see below). Results, hand
+computations and the findings carried forward are in
+`plans/update_genome_effects_phase_A.md`, `plans/update_genome_effects_phase_B.md`
+and `plans/update_genome_effects_phase_C.md`.
 
 ★ **Two corrections Phase B made to this document.** (a) `ind_tgv` must **not**
 declare a `replicate` column — `archive_replicate.R:153-158` refuses to stamp a
@@ -24,6 +25,24 @@ table that already has one, and `ind_tbv`'s real DDL has none either (the
 `sql_utils.R:97` reference below is the *reserved-columns registry*, not DDL).
 (b) `ind_tgv_total` therefore cannot expose `replicate`. Both are corrected in
 place.
+
+★ **One correction Phase C made to this document — the intra-set foreign keys
+are gone.** `genome_effect_members` → `genome_effects` and
+`genome_effect_member_origins` → `genome_effect_members` were declared in Phase B
+and verified against real inserts. What Phase B did **not** probe was a *delete*
+inside an explicit transaction: DuckDB 1.5.5 refuses to delete a parent row whose
+children were deleted earlier in the same transaction — for single-column and
+composite keys alike, in either delete order, whether the child delete was
+filtered or a whole-table `DELETE` — and succeeds only in autocommit. That makes
+every `replace_*` mode of `define_genome_effects()` impossible to write as one
+transaction, and a half-replaced effect model is a *different* genetic model, not
+a weaker one. The two keys are therefore dropped and the same integrity is
+enforced by `validate_genome_effects()`, which already reported orphans in both
+directions and runs inside every write transaction before `COMMIT`. The
+`locus_id` → `genome_meta` key **stays**: `genome_meta` rows are never deleted,
+so it never sits in the failing position, and it is the one relationship R cannot
+cheaply re-derive. The DuckDB behaviour itself is pinned by a test, so a version
+that fixes it is noticed rather than leaving the workaround standing forever.
 **Supersedes:** `update_genome_effects.md` (v1/v2, 16 tables) and
 `update_genome_effects_v3_parsimony.md` (v3, 2 tables), retained as history.
 
@@ -855,6 +874,12 @@ variants; infers `copy_count_value` for autosomal indicator input; assigns IDs v
 
 ★ `require_complete = TRUE` validates coverage over all reachable
 `(copy_count, dosage)` states — not dosage values alone.
+★ **Phase C limitation:** coverage is checked over the terms *in the call*, grouped
+by `(trait, owner, ordered locus set)`, and is **scope-blind** — a surface written
+at one origin scope is not checked against a surface at another. Completing a scoped
+surface is a coherent thing to want; nothing here prevents it, it simply is not
+verified. Recorded rather than fixed, because no gate covers it and the check would
+need a per-scope grid whose meaning under partial containment is not yet settled.
 ★ `effect_owner`, `effect_name`, and line names take the package's normal
 identifier/string validation.
 `effect_name` is a per-term label supplied inside `terms`; there is no function-level
@@ -1191,7 +1216,15 @@ written. Storage representability gates Phase A; numerical evaluation gates Phas
     through the writer (cross-table, so R-only).
 42. ★ **Wrapper scope matrix.** All four `(line_name, parent_origin)` combinations
     round-trip to the stored scope in the Writer-API mapping table, and `replace_scope`
-    on one leaves the other three untouched.
+    on one leaves the other three untouched. ★ **Restated in Phase C:** the four
+    cannot occupy one fallback family. `('exact' A, parent ANY)` and
+    `('any', parent 1)` overlap without either containing the other — a line-A
+    paternal copy matches both — so rule 3 of §Origin resolution rejects the pair at
+    write time, correctly. The gate is met with one locus per scope, which puts them
+    in four families; `replace_scope` keys on `(trait, owner, scope)` and ignores
+    locus, so its isolation is still what is being tested. That two of the four
+    mappings are mutually exclusive *within* a family is a property of the
+    containment lattice, not a defect, and is now asserted in both orders.
 43. ★ **Origin-aware variance target.** A generated unparented model and a generated
     parent-qualified model each realize `target_add_var` in the base population; the
     parent-qualified one lands at `V`, not `V/2`.
@@ -1253,7 +1286,7 @@ the additive formula from first principles and is not pre-change golden output.
 |---|---|---|
 | **A** ✅ | **Complete — `plans/update_genome_effects_phase_A.md`.** Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | ✅ Met: 19 fixtures, **no schema change required**; both evaluators agree with the hand computations. Containment order and multi-locus fallback settled before DDL. ★ Writing each fixture in the `terms` format moves to Phase C as a **round-trip** against this registry (gate 53) — it only becomes a real check once a writer exists to canonicalize it |
 | **B** ✅ | **Complete — `plans/update_genome_effects_phase_B.md`.** ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | ✅ Met: gates 46–48 and 54, plus gate 41's row-local half. Every proposed constraint was probed against a real insert in DuckDB 1.5.5 before being written. **Two plan errors and five implementation issues found and fixed in review** — see the Phase B notes |
-| **C** | `define_genome_effects()`; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; `(a,d)` and genotype-table helpers; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ **delete `trait_meta.expressed_parent`** (see below) | Writer round-trips every Phase-A fixture; gates 34–35, 41–44, 50, ★ 53 pass |
+| **C** ✅ | **Complete — `plans/update_genome_effects_phase_C.md`.** `define_genome_effects()` with the long `terms` format; `ad_terms()` and `genotype_terms()` builders; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ `trait_meta.expressed_parent` **deleted** at all 14 sites | ✅ Met: gates 34–35, 41–44, 50 and 53; every valid Phase-A fixture round-trips through the public writer. **One plan error and six implementation issues found in review** — see the Phase C notes. Gate 42 was restated: the four wrapper scopes cannot share one family, because `('exact' A, parent ANY)` and `('any', parent 1)` overlap without nesting and the validator refuses that pair by design |
 | **D** | ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | Oracle agrees; gates 1–39, 40, 45, ★ 51–52 pass |
 | **E** | Delete the old table shape; ★ add the `restore_pop()` guard for pre-change files; move QTL extraction (`tidybreed_pop.R:159`) and `extract_genotypes()`'s nominal `table_name` check (`:124-127`) to the locus view | No legacy columns remain; gate 49 |
 

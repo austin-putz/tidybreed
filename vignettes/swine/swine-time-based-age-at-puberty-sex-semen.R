@@ -1403,7 +1403,6 @@ pop <- pop %>%
     trait_name       = "WWD",
     description      = "Weaning Weight - Direct Genetic Effect",
     units            = "kg",
-    expressed_parent = "both",
     target_add_mean  = 0,
     overwrite        = TRUE
   )
@@ -1436,7 +1435,6 @@ pop <- pop %>%
     trait_name       = "WWM",
     description      = "Weaning Weight - Maternal Genetic Effect",
     units            = "kg",
-    expressed_parent = "both",
     target_add_mean  = 0,
     overwrite        = TRUE
   )

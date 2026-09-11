@@ -21,9 +21,6 @@
 #'   Default `0`; `E[TBV] = 0` when TBVs are centered on base allele
 #'   frequencies. The phenotypic population mean (intercept) is set separately
 #'   in [define_phenotype()].
-#' @param expressed_parent Character. Parent-of-origin expression: `"both"`
-#'   (default), `"parent_1"` (paternal), or `"parent_2"` (maternal). Imprinted
-#'   traits use only the haplotype from the specified parent when computing TBVs.
 #' @param description Character. Free-text description of the trait.
 #' @param units Character. Measurement units, e.g. `"kg"`, `"count"`.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
@@ -62,7 +59,6 @@ define_trait <- function(pop,
                          trait_name,
                          target_add_var   = NULL,
                          target_add_mean  = 0,
-                         expressed_parent = c("both", "parent_1", "parent_2"),
                          description      = NULL,
                          units            = NULL,
                          overwrite        = FALSE) {
@@ -72,8 +68,6 @@ define_trait <- function(pop,
 
   stopifnot(is.character(trait_name), length(trait_name) == 1, nchar(trait_name) > 0)
   validate_trait_name(trait_name)
-
-  expressed_parent <- match.arg(expressed_parent)
 
   pop <- ensure_trait_tables(pop)
 
@@ -117,7 +111,6 @@ define_trait <- function(pop,
                        else as.character(description),
     units            = if (is.null(units)) NA_character_
                        else as.character(units),
-    expressed_parent = expressed_parent,
     target_add_mean  = as.numeric(target_add_mean)
   )
 
@@ -174,7 +167,6 @@ ensure_trait_tables <- function(pop) {
         trait_name       VARCHAR UNIQUE NOT NULL,
         description      VARCHAR,
         units            VARCHAR,
-        expressed_parent VARCHAR DEFAULT 'both',
         target_add_mean  DOUBLE DEFAULT 0
       )
     ",

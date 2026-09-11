@@ -127,7 +127,7 @@ The model is split into two distinct layers with a strict boundary between them:
 **Genetic component layer** — managed by `define_trait()`:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
 - Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_var_comp`
-- Arguments: `target_add_var`, `target_add_mean`, `expressed_parent`, `description`, `units`
+- Arguments: `target_add_var`, `target_add_mean`, `description`, `units`
 - No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
 **Observation layer** — managed by `define_phenotype()`:
@@ -268,6 +268,17 @@ allele copies. **No rows = the common scope**, which matches every copy.
 **Reserved**: all columns of all three. Row deletion is refused — effect
 definitions are configuration and are replaced through
 `define_genome_effects(mode = ...)`, not row-deleted.
+
+**No foreign keys *inside* the set** (members → effects, origins → members),
+deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
+transaction whose children were deleted earlier in that same transaction — for
+single-column and composite keys alike, in either delete order — which makes
+every replace mode unwritable as one transaction. Since a half-replaced effect
+model is a *different* model rather than a weaker one, the FKs go and
+`validate_genome_effects()` reports orphans in both directions before every
+`COMMIT` instead. The `locus_id` → `genome_meta` key **stays**: `genome_meta`
+rows are never deleted, so it never sits in the failing position. See
+`tests/testthat/test-genome-effects-schema.R` for the pinned DuckDB behaviour.
 
 **Rules.** An additive member takes at most one origin row (`"A or B"` is
 expanded into separate variants); a genotype member takes an exact multiset whose
@@ -445,7 +456,6 @@ Observation-layer metadata lives in `phenotype_meta`.
 | trait_name      | VARCHAR | Unique identifier; equals `phenotype_name` for simple traits       |
 | description     | VARCHAR | Free text                                                          |
 | units           | VARCHAR | e.g. `"kg"`, `"g/day"`                                             |
-| expressed_parent| VARCHAR | `"both"` (default), `"parent_1"` (paternal), `"parent_2"` (maternal) — imprinting |
 | target_add_mean | DOUBLE  | TBV centering mean for the base population; default `0`            |
 
 **What does NOT belong here** (all moved to `phenotype_meta` in v0.31.0):
@@ -989,8 +999,7 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 - `define_trait()` — **genetic layer only**. Writes one row to `trait_meta` and
   a global `(index_name = NULL, trait_name, economic_weight = 0)` row to
   `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
-  `trait_var_comp`), `target_add_mean`, `expressed_parent`, `description`,
-  `units`, `overwrite`. **Never** pass observation-layer arguments here
+  `trait_var_comp`), `target_add_mean`, `description`, `units`, `overwrite`. **Never** pass observation-layer arguments here
   (`type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
   in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
   already exists; `overwrite = TRUE` replaces both the `trait_meta` row and its
@@ -1006,7 +1015,32 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
     "shared"` (all traits use the filtered loci) or `"union"` (per-trait QTL
     sets from existing `genome_effects` rows, restricted to the filtered loci).
 
-  Re-calling for the same trait replaces existing rows in `genome_effects`.
+  Writes one order-one `additive` term per locus under the reserved effect
+  owner `generated_additive_tbv`, with `center_value` = the base allele
+  frequency. `line_name` and `parent_origin` compose into the single origin row
+  an additive member may carry:
+
+  | `line_name` | `parent_origin` | Stored scope |
+  |---|---|---|
+  | `NULL` | `NULL` | no origin rows (the common scope) |
+  | `"A"` | `NULL` | `('exact', 'A', parent NULL, copy_count = 1)` |
+  | `NULL` | `1` / `2` | `('any', NULL, parent, copy_count = 1)` |
+  | `"A"` | `1` / `2` | `('exact', 'A', parent, copy_count = 1)` |
+
+  Re-calling replaces **only the variant at the same scope**, so successive
+  common / line-A / line-B calls each keep the others — the per-copy fallback
+  that makes crossbred breeding values correct needs all of them standing.
+  Changing `parent_origin` on a re-run therefore **adds** a variant rather than
+  replacing one; that is a legal containment pair and rarely intended, so the
+  function warns on exactly that case. `parent_origin` is **per trait** (scalar
+  recycled, positional vector, or named by trait); a call mixing origins across
+  traits while supplying `G` is rejected, because the genetic covariance
+  between a paternal-only and a maternal-only trait is zero under random mating
+  and the requested off-diagonal is unobtainable, not merely approximate.
+
+  `scale_to_target` is origin-aware:
+  `V_A = Σ_j n_eligible,j · p_j q_j a_j²`, `n_eligible` = 2 unparented, 1
+  parent-qualified.
 
   ```r
   # Single trait
@@ -1022,7 +1056,74 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
   pop |> get_table("genome_meta") |> filter(...) |>
     define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
+
+  # Imprinting: paternal expression, per line rather than trait-wide
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("IMP", line_name = "Duroc", parent_origin = 1)
   ```
+
+### `define_genome_effects()` / `ad_terms()` / `genotype_terms()`
+
+`R/define_genome_effects.R`, `R/genome_effect_terms_builders.R`
+
+`define_genome_effects(pop, trait_name, terms, effect_owner = "custom", mode =
+c("append", "replace_scope", "replace_owner", "replace_trait"), origin = NULL,
+require_complete = FALSE, allow_reserved_owner = FALSE)` — the general writer
+for arbitrary genome effects. `terms` is a **long data frame, one row per
+(term × locus)**: `term_id` (user-facing only; never stored), `genome_value`,
+`effect_name`, `locus_name`, `contrast_name`, `center_value`,
+`copy_count_value`, `dosage_value`. A single-term call may omit `term_id`.
+Scope lives in a separate `origin` argument — `NULL` (the common scope), a
+named scalar list applied to every member, or a data frame keyed by
+`locus_name` for the exact multisets a genotype member takes.
+
+The writer resolves `locus_name` → `locus_id`, canonicalizes members by
+ascending `locus_id` and origin rows by the sorted tuple, infers
+`copy_count_value` for indicator input at diploid-autosomal loci, assigns ids
+via `next_int_id()`, and writes in **one transaction** that validates the whole
+table set before `COMMIT`. Every message about malformed input names the
+`term_id` the user typed, never an `id_genome_effect` they have not seen.
+`require_complete = TRUE` demands every reachable `(copy_count, dosage)` state
+on every member of an indicator surface — including `copy_count_value = 0`
+where a chromosome can be absent.
+
+Two builders produce `terms`, because a surface is rows, not a second
+representation:
+
+- `ad_terms(locus_name, a, d, p, coding = c("functional", "cockerham"))` —
+  expands an (a, d) pair. Functional coding is `additive`@`0.5` plus
+  `indicator`@`(2, 1)`; Cockerham is `additive`@`p` plus `dominance`@`p`. It
+  **reports** the implied genetic mean `μ = a(p − q) + 2pq·d` and writes it
+  nowhere — putting it in `phenotype_meta.mean` would double-count once
+  non-additive genetic values reach the phenotype layer.
+- `genotype_terms(genotypes, value, copy_count = NULL, drop_zero = TRUE)` —
+  turns a genotype-by-value table into `indicator` terms, one term per row and
+  one member per locus column.
+
+```r
+# One dominance term, Cockerham coding at p = 0.3
+pop |> define_genome_effects("ADG", data.frame(
+  locus_name = "Locus_10", contrast_name = "dominance",
+  center_value = 0.3, genome_value = 0.8))
+
+# A 3x3 A x A surface: nine cells, nine terms, two members each
+cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
+pop |> define_genome_effects(
+  "ADG", genotype_terms(cells, c(0, 0, 0, 0, 1.4, 2.1, 0, 2.1, 3.6)),
+  effect_owner = "epistasis_AxA")
+
+# Reciprocal dominance: the F1 value depends on which parent gave which line
+pop |> define_genome_effects(
+  "ADG",
+  terms  = data.frame(term_id = 1L, locus_name = "Locus_10",
+                      contrast_name = "dominance", center_value = 0.3,
+                      genome_value = 1.2),
+  origin = data.frame(term_id = 1L, locus_name = "Locus_10",
+                      line_match_type = "exact",
+                      line_name     = c("Duroc", "Landrace"),
+                      parent_origin = c(1L, 2L), copy_count = c(1L, 1L)),
+  effect_owner = "reciprocal")
+```
 
 ### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_intercept()`
 
@@ -1088,17 +1189,16 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
   otherwise independent). Converts liability to phenotype per `type`.
   Writes `ind_phenotype` rows and updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records. Computes centered TBV by joining
-  `ind_haplotype` to `genome_effects` (`genome_effect_type = "additive"`) on
-  `(locus_name, line_origin)`: a line-specific effect row (`genome_effects.line_name
-  = ind_haplotype.line_origin`) is preferred, falling back per-locus to the
-  population-wide row (`line_name IS NULL`) only when no line-specific row exists
-  for that locus/line. This is what makes crossbreeding TBV correct (e.g. a Duroc ×
-  Landrace F1 centered against each parent line's own QTL effects and base allele
-  frequency). Imprinted traits (`expressed_parent = "parent_1"`/`"parent_2"`)
-  restrict the join to that parent's `parent_origin` before the same line-matching
-  logic applies. `trait_name` also defaults to all traits in `trait_meta` when
-  omitted. Optional arguments for true index computation:
+- `add_tbv()` — TBV-only; no phenotype records. Computes centered TBV from the
+  order-one `additive` terms owned by `generated_additive_tbv`: each allele copy
+  takes the most specific variant whose origin predicate matches its
+  `(line_origin, parent_origin)` label, falling back per copy to the common
+  variant. This is what makes crossbreeding TBV correct (e.g. a Duroc × Landrace
+  F1 centered against each parent line's own QTL effects and base allele
+  frequency), and it is also how **imprinting** works now: a term scoped to one
+  `parent_origin` reads only that parent's copies, per locus and per line
+  rather than per trait. `trait_name` also defaults to all traits in
+  `trait_meta` when omitted. Optional arguments for true index computation:
   - `index_names` — character vector of named indices; when supplied, multiplies
     per-trait TBVs by the index weights and writes results to `ind_true_index`.
     `NULL` (default) skips index computation.

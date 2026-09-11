@@ -322,8 +322,6 @@ register_schema_meta <- function(conn, entries) {
             "Free-text description of the biological trait"),
     .sm_col("trait_meta", "units",
             "Measurement units (e.g. 'kg', 'g/day', 'count')"),
-    .sm_col("trait_meta", "expressed_parent",
-            "Parent-of-origin expression: 'both' (default), 'parent_1' (paternal only), 'parent_2' (maternal only)"),
     .sm_col("trait_meta", "target_add_mean",
             "TBV centering mean for the base population; default 0"),
     # trait_var_comp

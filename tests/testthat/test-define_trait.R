@@ -73,14 +73,18 @@ test_that("define_trait() stores target_add_mean", {
 })
 
 
-test_that("define_trait() stores expressed_parent", {
+test_that("trait_meta carries no expressed_parent column", {
+  # Imprinting is a property of an effect's scope, not of a trait: it is one
+  # origin row on the member (define_additive_effects(parent_origin = )), which
+  # can differ per locus, per line and per effect owner. The trait-wide flag
+  # could express none of that and is gone, argument and column both.
   pop <- make_tiny_pop("trait_ep")
-  pop <- define_trait(pop, "mat", target_add_var = 1.0,
-                      expressed_parent = "parent_2")
 
-  row <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT expressed_parent FROM trait_meta WHERE trait_name = 'mat'")
-  expect_equal(row$expressed_parent, "parent_2")
+  cols <- DBI::dbGetQuery(pop$db_conn, "SELECT * FROM trait_meta LIMIT 0")
+  expect_false("expressed_parent" %in% names(cols))
+  expect_false("expressed_parent" %in% names(formals(define_trait)))
+  expect_error(define_trait(pop, "mat", expressed_parent = "parent_2"),
+               "unused argument")
 
   close_pop(pop)
 })

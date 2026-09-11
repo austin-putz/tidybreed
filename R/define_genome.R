@@ -460,6 +460,27 @@ define_genome <- function(pop,
     "genome_value     DOUBLE  NOT NULL)"
   ))
 
+  # No FOREIGN KEY inside the set (members -> effects, origins -> members),
+  # deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
+  # transaction when its children were deleted earlier in that same transaction
+  # -- the FK index still holds the uncommitted child entries -- and it does so
+  # for single-column and composite keys alike, in either delete order, whether
+  # the child delete was filtered or a whole-table DELETE. It succeeds only in
+  # autocommit. That makes every replace mode of define_genome_effects()
+  # unwritable as one transaction, and a half-replaced effect model is not a
+  # weaker version of the requested model, it is a different one.
+  #
+  # The integrity those two keys would buy is enforced in R instead, by
+  # validate_genome_effects(), which runs inside every write transaction before
+  # COMMIT and reports orphans in both directions. These tables are package-
+  # owned: remove_rows() refuses them, every column is reserved, and
+  # define_genome_effects() is the only writer -- so the sole route to an orphan
+  # is a raw DBI call, which bypasses every other guard in the package too.
+  #
+  # The locus_id key below stays: genome_meta rows are never deleted, so it is
+  # never in the failing position, and it is the one relationship R cannot
+  # cheaply re-check on every write.
+  #
   # copy_count_value is not redundant with dosage_value: at a variable-copy
   # locus dosage 0 conflates "no copy", "one allele-0 copy" and "two allele-0
   # copies", so an indicator state is the pair, not the dosage.
@@ -486,8 +507,7 @@ define_genome <- function(pop,
     "           AND dosage_value     IS NULL ",
     "           AND center_value     IS NOT NULL ",
     "           AND center_value BETWEEN 0 AND 1) ), ",
-    "FOREIGN KEY (id_genome_effect) REFERENCES genome_effects(id_genome_effect), ",
-    "FOREIGN KEY (locus_id)         REFERENCES genome_meta(locus_id))"
+    "FOREIGN KEY (locus_id) REFERENCES genome_meta(locus_id))"
   ))
 
   # 'any' exists so that (any line, one parent) is storable at all: ANY on the
@@ -511,9 +531,7 @@ define_genome <- function(pop,
     "CHECK ( (line_match_type = 'exact'   AND line_name IS NOT NULL) ",
     "     OR (line_match_type = 'unknown' AND line_name IS NULL) ",
     "     OR (line_match_type = 'any'     AND line_name IS NULL ",
-    "                                     AND parent_origin IS NOT NULL) ), ",
-    "FOREIGN KEY (id_genome_effect, member_slot) ",
-    "  REFERENCES genome_effect_members(id_genome_effect, member_slot))"
+    "                                     AND parent_origin IS NOT NULL) ) )"
   ))
 
   # Views. The base tables must not force a six-way join on anyone, and
