@@ -1,6 +1,6 @@
 # Stage 2 (plans/refactor_haplotype.md) -- add_tbv() using line_origin for
 # crossbreeding additive TBV: line-specific effects with population-wide
-# fallback, imprinting, and per-line base_allele_freq centering.
+# fallback, imprinting, and per-line centring.
 
 make_lines_pop <- function(pop_name, n_loci = 10, n_chr = 1) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
@@ -177,13 +177,13 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
     "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tbv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
   # Sanity: the line-specific value (5.0), not a doubled/summed value, drove the
-  # result -- join per-locus since base_allele_freq varies by locus.
+  # result -- join per-locus since center_value varies by locus.
   hap <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, allele FROM ind_haplotype WHERE id_ind = 'Duroc_1'")
   eff_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
+    "SELECT locus_name, center_value FROM gen_add_flat WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
   hap <- merge(hap, eff_duroc, by = "locus_name")
-  expect_equal(actual, sum((hap$allele - hap$base_allele_freq) * 5.0), tolerance = 1e-8)
+  expect_equal(actual, sum((hap$allele - hap$center_value) * 5.0), tolerance = 1e-8)
 
   close_pop(pop)
 })
@@ -218,7 +218,7 @@ test_that("add_tbv() falls back per-locus when a line has effects at only some l
 })
 
 
-test_that("add_tbv() centers each allele with its own line's base_allele_freq", {
+test_that("add_tbv() centers each allele with its own line's center_value", {
   set.seed(5001)
   pop <- make_lines_pop("tbv_base_by_line", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
@@ -241,9 +241,9 @@ test_that("add_tbv() centers each allele with its own line's base_allele_freq", 
                             base = "current_pop", base_tbl = landrace_tbl)
 
   base_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Duroc'")$base_allele_freq
+    "SELECT center_value FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Duroc'")$center_value
   base_landrace <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Landrace'")$base_allele_freq
+    "SELECT center_value FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Landrace'")$center_value
   # Not a degenerate test: the two lines' realized founder allele frequencies differ.
   expect_true(any(abs(base_duroc - base_landrace) > 1e-6))
 
@@ -464,12 +464,12 @@ test_that("compute_base_allele_freq() is correct (row-count-agnostic) for a mixe
     define_additive_effects("ADG", effects = rep(1, 8), base = "current_pop")
 
   p_from_effects <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT locus_name, center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
   p_hand <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, AVG(CAST(allele AS DOUBLE)) AS p FROM ind_haplotype GROUP BY locus_name")
 
   merged <- merge(p_from_effects, p_hand, by = "locus_name")
-  expect_equal(merged$base_allele_freq, merged$p, tolerance = 1e-8)
+  expect_equal(merged$center_value, merged$p, tolerance = 1e-8)
 
   close_pop(pop)
 })

@@ -1,6 +1,6 @@
 # Genome Effects v4.9 — term/member storage, executable contrasts, origin resolution
 
-**Status:** implemented through Phase D; Phase E outstanding. **This file is
+**Status:** ★ **complete — all five phases implemented (A–E).** **This file is
 canonical**, and is corrected in place as each phase finds an error in it — every
 such correction is ★-marked and named in the phase's own notes.
 **Revision:** v4.9 (2026-09-10). v4.2 answered the v4.1 pass of
@@ -15,14 +15,15 @@ the writer's input format and the evaluation strategy — and renames
 
 **Readiness: implementable.** No open question blocks any phase. The two remaining
 are ergonomic and revisable after the fact.
-★ **Phases A, B, C and D are complete; only Phase E remains.** Phase A required
-**no change to this schema**; Phase B corrected two errors in it, Phase C one
-more, and Phase D restated the evaluation fast path and settled the zero-copy
-join (see below). Results, hand
-computations and the findings carried forward are in
-`plans/update_genome_effects_phase_A.md`, `plans/update_genome_effects_phase_B.md`,
-`plans/update_genome_effects_phase_C.md` and
-`plans/update_genome_effects_phase_D.md`.
+★ **All five phases are complete.** Phase A required **no change to this
+schema**; Phase B corrected two errors in it, Phase C one more, Phase D restated
+the evaluation fast path and settled the zero-copy join, and Phase E added
+`genome_value` to the locus view (see below). Results, hand computations and the
+findings carried forward are in `plans/update_genome_effects_phase_A.md`,
+`plans/update_genome_effects_phase_B.md`,
+`plans/update_genome_effects_phase_C.md`,
+`plans/update_genome_effects_phase_D.md` and
+`plans/update_genome_effects_phase_E.md`.
 
 ★ **Two corrections Phase B made to this document.** (a) `ind_tgv` must **not**
 declare a `replicate` column — `archive_replicate.R:153-158` refuses to stamp a
@@ -1124,11 +1125,22 @@ not force a six-way join on anyone.
 | View | Grain | Columns |
 |---|---|---|
 | `genome_effect_terms` | one row per term | `trait_name`, `effect_owner`, `effect_name`, `id_genome_effect`, `effect_order` (member count, **derived** — never stored), `contrast_signature` (ordered `contrast_name` list), ★ `family_key`, `scope_description`, `genome_value` |
-| `genome_effect_loci` | one row per (term × locus) | `trait_name`, `effect_owner`, `id_genome_effect`, `member_slot`, `locus_id`, `locus_name` (joined from `genome_meta`), `contrast_name` |
+| `genome_effect_loci` | one row per (term × locus) | `trait_name`, `effect_owner`, `id_genome_effect`, `member_slot`, `locus_id`, `locus_name` (joined from `genome_meta`), `contrast_name`, ★ `genome_value` |
 | `ind_tgv_total` | one row per (individual × trait) | `id_ind`, `trait_name`, `tgv_total` = `SUM(tgv_value)` — ★ no `replicate`, which the working table does not have |
 
 `locus_name` lives only in the view — v4.1 removed it from
 `genome_effect_members` to kill the id/name agreement invariant.
+
+★ **`genome_value` on the locus view (Phase E).** The coefficient is a *term*
+attribute and the locus is a *member* attribute, and a `tidybreed_table` reads
+**exactly one relation** — there is no join available to a user filtering with
+`get_table() |> filter()`. Without the coefficient repeated onto the locus grain,
+"give me the large-effect QTL" — a workflow `extract_genotypes()` documented in
+its own examples — becomes unexpressible the moment its reader moves onto the
+view. Repeating it is the same denormalization `trait_name` and `effect_owner`
+already get here, and the column description carries the hazard the repetition
+creates: filter on it, never `SUM` it, because an interaction term would be
+counted once per member.
 
 ★ **`family_key` makes the one invisible concept visible.** Whether two definitions
 **compete** (specificity fallback) or **sum** is decided by the family signature — which
@@ -1278,7 +1290,14 @@ written. Storage representability gates Phase A; numerical evaluation gates Phas
     included, each with a description.
 49. ★ **Pre-change database.** `restore_pop()` on a file carrying the old
     `genome_effects` shape stops with the term/member message instead of failing later
-    inside `add_tbv()`.
+    inside `add_tbv()`. ✅ Phase E — detected on two signals (`genome_effects`
+    without `effect_owner`, or either child table missing), and the refusal
+    **releases the connection**, or the file is left locked and the next
+    `dbConnect()` fails for an unrelated-looking reason. ★ The same guard
+    carries a second check the gate did not anticipate: a file written by
+    0.65.0–0.67.0 has the term/member effects but the pre-rename
+    `phenotype_components.genome_effect_types`, and would otherwise fail inside
+    `define_phenotype()`.
 50. ★ **Parent-only re-run.** `define_additive_effects(line_name = "A")` then the same
     call with `parent_origin = 1` leaves both variants with correct per-copy fallback
     **and** warns; the common/A/B sequence of gate 35 and a reciprocal
@@ -1318,7 +1337,7 @@ the additive formula from first principles and is not pre-change golden output.
 | **B** ✅ | **Complete — `plans/update_genome_effects_phase_B.md`.** ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | ✅ Met: gates 46–48 and 54, plus gate 41's row-local half. Every proposed constraint was probed against a real insert in DuckDB 1.5.5 before being written. **Two plan errors and five implementation issues found and fixed in review** — see the Phase B notes |
 | **C** ✅ | **Complete — `plans/update_genome_effects_phase_C.md`.** `define_genome_effects()` with the long `terms` format; `ad_terms()` and `genotype_terms()` builders; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ `trait_meta.expressed_parent` **deleted** at all 14 sites | ✅ Met: gates 34–35, 41–44, 50 and 53; every valid Phase-A fixture round-trips through the public writer. **One plan error and six implementation issues found in review** — see the Phase C notes. Gate 42 was restated: the four wrapper scopes cannot share one family, because `('exact' A, parent ANY)` and `('any', parent 1)` overlap without nesting and the validator refuses that pair by design |
 | **D** ✅ | **Complete — `plans/update_genome_effects_phase_D.md`.** ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | ✅ Met: the oracle agrees for every Phase A fixture and every individual; gates 1–39, 40, 45 and 51–52 pass. **Two plan corrections and ten implementation issues found in review** — see the Phase D notes. The largest: the fast path had to be restated per *member* rather than per family, or a high-order unscoped term is unevaluable |
-| **E** | Delete the old table shape; ★ add the `restore_pop()` guard for pre-change files; move QTL extraction (`tidybreed_pop.R:159`) and `extract_genotypes()`'s nominal `table_name` check (`:124-127`) to the locus view | No legacy columns remain; gate 49 |
+| **E** ✅ | **Complete — `plans/update_genome_effects_phase_E.md`.** Delete the old table shape; ★ the `restore_pop()` guard for pre-change files; move `extract_genotypes()` onto the locus view — **both** its nominal `table_name` check *and* its locus resolution, which still read `locus_name`; ★ `phenotype_components.genome_effect_types` → `component_names`, the last column naming a deleted vocabulary | ✅ Met: gate 49, and no legacy genome-effect name remains in `R/`, `tests/`, `vignettes/` or `man/`. **Three plan corrections and eight implementation issues found in review** — see the Phase E notes. The largest: the locus view had to gain `genome_value`, or moving the reader onto it silently deletes the documented "large-effect QTL" workflow |
 
 ★ **Phase D builds `add_tbv()` once, not twice.** Earlier revisions "rewired
 `add_tbv()` to the reserved owner" as its own piece of work, which
@@ -1365,8 +1384,11 @@ It lands in Phase C rather than Phase E so that Phase D's `add_tbv()` rewire has
 legacy flag left to honour.
 
 **Out of this plan, contract defined here:** wiring non-additive values into
-`add_phenotype()` and activating the dead `phenotype_components.genome_effect_types`
-(`open_pop.R:334`).
+`add_phenotype()` and activating the dead reserved column at `open_pop.R:334`.
+★ Phase E renamed that column `genome_effect_types` → **`component_names`**
+(default `'order1_additive'`): it named `genome_effects.genome_effect_type`,
+deleted in Phase B, and now names the `ind_tgv.component_name` vocabulary it will
+actually select from. Renamed, still reserved, still unread.
 
 ---
 

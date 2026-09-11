@@ -1,9 +1,9 @@
-#' Extract genotype data for individuals, by chip and/or QTL loci
+#' Extract genotype data for individuals, by chip and/or causal loci
 #'
 #' @description
 #' Returns a tibble of genotypes (0/1/2 encoding) for a set of individuals,
 #' restricted to loci selected by a chip definition, a filtered
-#' `genome_effects` table, or both. Pipe a `tidybreed_table` (from
+#' `genome_effect_loci` view, or both. Pipe a `tidybreed_table` (from
 #' [get_table()] and optionally [dplyr::filter()]) as the first argument to restrict
 #' which individuals are included.
 #'
@@ -16,10 +16,10 @@
 #' * Animals matching any pending `filter()` predicates on `tbl`
 #' * Loci with `is_<chip_name> == TRUE` in `genome_meta`
 #'
-#' **QTL path (`effects_tbl`)** — the returned individual set is:
+#' **Causal-locus path (`effects_tbl`)** — the returned individual set is:
 #' * Animals matching any pending `filter()` predicates on `tbl`
 #'   (or all individuals in `ind_haplotype` when no filter is applied)
-#' * Loci whose `locus_name` appears in the collected `effects_tbl`
+#' * Loci whose `locus_id` appears in the collected `effects_tbl`
 #'
 #' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
 #'   through [dplyr::filter()]). The table must contain an `id_ind` column when a
@@ -28,15 +28,18 @@
 #'   [define_chip()] and applied to animals via [add_genotypes()]. When `NULL`
 #'   the chip path is skipped.
 #' @param effects_tbl A `tidybreed_table` from
-#'   `get_table(pop, "genome_effects")` (optionally filtered), or `NULL`.
-#'   The collected table must contain a `locus_name` column. Use
-#'   [dplyr::filter()] to restrict by `trait_name`, `genome_effect_type`,
-#'   `genome_value`, `line_name`, etc. When `NULL` the QTL path is skipped.
+#'   `get_table(pop, "genome_effect_loci")` (optionally filtered), or `NULL`.
+#'   One row per (term x locus), so use [dplyr::filter()] to restrict by
+#'   `trait_name`, `effect_owner`, `contrast_name`, `genome_value`, or
+#'   `locus_name`. Effects are stored as terms over one or more loci, and a
+#'   multi-locus term contributes every one of its loci. When `NULL` the
+#'   causal-locus path is skipped.
 #' @param loci_tbl A `tidybreed_table` from `get_table(pop, "genome_meta")`
 #'   (optionally filtered), or `NULL`. A general locus filter independent of
-#'   chips and QTL sets — e.g. `filter(!chr_name %in% c("X", "Y", "MT"))` to
-#'   restrict to autosomes. The collected table's `locus_name` values become the
-#'   locus set. Unioned with `chip_name`/`effects_tbl` when combined.
+#'   chips and causal-locus sets — e.g.
+#'   `filter(!chr_name %in% c("X", "Y", "MT"))` to restrict to autosomes. The
+#'   collected table's `locus_name` values become the locus set. Unioned with
+#'   `chip_name`/`effects_tbl` when combined.
 #' @param col_name Character. Name of the BOOLEAN column in `ind_meta` that
 #'   records chip genotyping status. Default: `paste0("has_", chip_name)`.
 #'   Ignored when `chip_name` is `NULL`.
@@ -56,29 +59,30 @@
 #'   dplyr::filter(sex == "F") |>
 #'   extract_genotypes("HD")
 #'
-#' # QTL loci for a trait (all individuals)
+#' # Every causal locus for a trait (all individuals)
 #' geno <- pop |>
 #'   get_table("ind_meta") |>
 #'   extract_genotypes(
-#'     effects_tbl = get_table(pop, "genome_effects") |>
+#'     effects_tbl = get_table(pop, "genome_effect_loci") |>
 #'       dplyr::filter(trait_name == "ADG")
 #'   )
 #'
-#' # Large-effect QTL only, females only
+#' # Additive QTL with a large coefficient, females only
 #' geno <- pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(sex == "F") |>
 #'   extract_genotypes(
-#'     effects_tbl = get_table(pop, "genome_effects") |>
-#'       dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.15)
+#'     effects_tbl = get_table(pop, "genome_effect_loci") |>
+#'       dplyr::filter(trait_name == "ADG", contrast_name == "additive",
+#'                     abs(genome_value) > 0.15)
 #'   )
 #'
-#' # Chip loci + QTL loci unioned
+#' # Chip loci + causal loci unioned
 #' geno <- pop |>
 #'   get_table("ind_meta") |>
 #'   extract_genotypes(
 #'     chip_name   = "50k",
-#'     effects_tbl = get_table(pop, "genome_effects") |>
+#'     effects_tbl = get_table(pop, "genome_effect_loci") |>
 #'       dplyr::filter(trait_name == "ADG")
 #'   )
 #' }
@@ -119,11 +123,13 @@ extract_genotypes <- function(tbl,
   # --- effects_tbl validation ---
   if (!is.null(effects_tbl)) {
     if (!inherits(effects_tbl, "tidybreed_table"))
-      stop("'effects_tbl' must be a tidybreed_table from get_table('genome_effects').",
+      stop("'effects_tbl' must be a tidybreed_table from get_table('genome_effect_loci').",
            call. = FALSE)
-    if (!identical(effects_tbl$table_name, "genome_effects"))
-      stop("'effects_tbl' must be from get_table('genome_effects'), got '",
-           effects_tbl$table_name, "'.", call. = FALSE)
+    if (!identical(effects_tbl$table_name, "genome_effect_loci"))
+      stop("'effects_tbl' must be from get_table('genome_effect_loci'), got '",
+           effects_tbl$table_name, "'. Genome effects are stored as terms over ",
+           "one or more loci; genome_effect_loci is the (term x locus) view.",
+           call. = FALSE)
   }
 
   # --- loci_tbl validation ---
@@ -201,21 +207,18 @@ extract_genotypes <- function(tbl,
   }
 
   if (!is.null(effects_tbl)) {
+    # genome_effect_loci carries locus_id, so the locus set is read straight
+    # off the view -- no locus_name round trip through genome_meta.
     effects_df <- dplyr::collect(effects_tbl)
-    if (!"locus_name" %in% names(effects_df))
-      stop("Collected 'effects_tbl' must contain a 'locus_name' column.",
+    if (!"locus_id" %in% names(effects_df))
+      stop("Collected 'effects_tbl' must contain a 'locus_id' column.",
            call. = FALSE)
-    qtl_names <- unique(effects_df[["locus_name"]])
-    if (length(qtl_names) == 0)
-      stop("No QTL loci found in the filtered 'effects_tbl'. ",
-           "Call define_additive_effects() first.", call. = FALSE)
-    qtl_name_sql <- sql_in_list(qtl_names, what = "locus name")
-    qtl_ids <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT locus_id FROM genome_meta WHERE locus_name IN (",
-             qtl_name_sql, ") ORDER BY locus_id")
-    )$locus_id
-    locus_ids <- sort(union(locus_ids, qtl_ids))
+    causal_ids <- unique(effects_df[["locus_id"]])
+    if (length(causal_ids) == 0)
+      stop("No causal loci found in the filtered 'effects_tbl'. ",
+           "Call define_additive_effects() or define_genome_effects() first.",
+           call. = FALSE)
+    locus_ids <- union(locus_ids, as.integer(causal_ids))
   }
 
   if (!is.null(loci_tbl)) {

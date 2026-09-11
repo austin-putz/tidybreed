@@ -584,10 +584,13 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
                                 line_name = a[[2]])
     }
   }
+  # The two views share trait_name, effect_owner and genome_value, so a join
+  # between them has to qualify every shared column.
   got <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT locus_name, scope_description, genome_value ",
-    "FROM genome_effect_terms JOIN genome_effect_loci USING (id_genome_effect) ",
-    "WHERE locus_name = 'Locus_1' ORDER BY genome_value"))
+    "SELECT l.locus_name, t.scope_description, t.genome_value ",
+    "FROM genome_effect_terms t ",
+    "JOIN genome_effect_loci l USING (id_genome_effect) ",
+    "WHERE l.locus_name = 'Locus_1' ORDER BY t.genome_value"))
   expect_equal(got$genome_value, c(1, 2, 3))
   expect_equal(got$scope_description,
                c("common", "1:exact(A)x1", "1:exact(B)x1"))
@@ -595,9 +598,9 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
   # All three compete rather than sum: same family, different scopes. That is
   # the whole point -- separate owners would sum and give no common fallback.
   fam <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT DISTINCT family_key FROM genome_effect_terms ",
-    "JOIN genome_effect_loci USING (id_genome_effect) ",
-    "WHERE locus_name = 'Locus_1'"))
+    "SELECT DISTINCT t.family_key FROM genome_effect_terms t ",
+    "JOIN genome_effect_loci l USING (id_genome_effect) ",
+    "WHERE l.locus_name = 'Locus_1'"))
   expect_equal(nrow(fam), 1L)
 
   # Re-running the common call drops loci absent from the new set -- the whole

@@ -233,9 +233,9 @@ test_that("define_genome() rejects NA / empty / wrong-length locus_names before 
   pop <- open_pop(db_name = ":memory:")
   on.exit(close_pop(pop))
 
-  # locus_name is the denormalized join key into genome_effects / ind_haplotype /
-  # genome_map. NA and "" used to be written straight through and silently drop
-  # those loci from every downstream join.
+  # locus_name is the denormalized join key into ind_haplotype, ind_genotype,
+  # genome_map and founder_haplotypes. NA and "" used to be written straight
+  # through and silently drop those loci from every downstream join.
   expect_error(
     define_genome(pop, n_loci = 4, n_chr = 1, chr_len_Mb = 100,
                   locus_names = c("L1", NA_character_, "L3", "L4")),

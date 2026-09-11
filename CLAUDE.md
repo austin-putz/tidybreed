@@ -297,7 +297,7 @@ appears as a member of any term for it. No boolean flag is stored.
 | View                   | Grain                      | What it is for                                 |
 |------------------------|----------------------------|-------------------------------------------------|
 | `genome_effect_terms`  | one row per term           | `effect_order`, `contrast_signature`, `family_key`, `scope_description` — all derived, never stored. `family_key` is how you see which terms compete and which sum |
-| `genome_effect_loci`   | one row per (term × locus) | `locus_name` joined from `genome_meta`; the place to ask which loci are causal. `locus_name` lives only here, so there is no id/name agreement invariant in the base tables |
+| `genome_effect_loci`   | one row per (term × locus) | `locus_name` joined from `genome_meta` and the term's `genome_value` repeated on every member row; the place to ask which loci are causal, and the only relation at locus grain that can be filtered by effect size. `locus_name` lives only here, so there is no id/name agreement invariant in the base tables. Never `SUM(genome_value)` — an interaction term would be counted once per member |
 
 ### `ind_haplotype`
 
@@ -316,7 +316,7 @@ plain autosome (`1, 1`, the default), 1 for a hemizygous sex chromosome (e.g.
 | strand        | UTINYINT | Copy within a parent's contribution; always 1 for diploids; PK part |
 | line_origin   | VARCHAR  | Founding line this allele traces to; used by `add_tbv()` for line-specific crossbreeding TBV |
 | locus_id      | INTEGER  | FK to `genome_meta.locus_id`; physical sort/PK key          |
-| locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized for direct `genome_effects` joins |
+| locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized so exports and user queries read without joining `genome_meta`. The effect tables key on `locus_id`, not on this column |
 | allele        | UTINYINT | 0 or 1 (phased)                                             |
 
 **Primary key**: `(id_ind, parent_origin, strand, locus_id)`.
@@ -527,7 +527,7 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 | covariate_table    | VARCHAR | Table containing `covariate_name`                                  |
 | poly_order         | INTEGER | Polynomial basis order                                             |
 | poly_scale_min/max | DOUBLE  | Legendre scaling bounds                                            |
-| genome_effect_types| VARCHAR | Default `"additive"`                                               |
+| component_names    | VARCHAR | Comma-separated `ind_tgv.component_name` values this component draws from; default `"order1_additive"`. **Reserved** — `add_phenotype()` reads only the additive breeding value today |
 | missing_action     | VARCHAR | Per-component fallback (currently unused; use `phenotype_meta.missing_component_action`) |
 | contributor_filter | VARCHAR | Reserved for spatial/neighborhood lookup — not yet implemented     |
 

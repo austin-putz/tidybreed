@@ -322,7 +322,7 @@ ensure_trait_tables <- function(pop) {
         poly_order          INTEGER,
         poly_scale_min      DOUBLE,
         poly_scale_max      DOUBLE,
-        genome_effect_types VARCHAR DEFAULT 'additive',
+        component_names     VARCHAR DEFAULT 'order1_additive',
         missing_action      VARCHAR DEFAULT 'skip',
         contributor_filter  VARCHAR
       )

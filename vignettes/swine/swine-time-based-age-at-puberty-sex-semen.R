@@ -936,14 +936,14 @@ pop %>%
   get_table("ind_meta") %>%
   extract_genotypes(chip_name = "9k")
 
-# extract QTL for this trait (2 animals)
+# extract the causal loci for this trait (2 animals)
 pop %>%
   get_table("ind_meta") %>%
     filter(
       id_ind %in% c("A_1", "A_2")
     ) %>%
   extract_genotypes(
-    effects_tbl = pop %>% get_table("genome_effects") %>% filter(trait_name=="AP")
+    effects_tbl = pop %>% get_table("genome_effect_loci") %>% filter(trait_name=="AP")
   ) %>%
   collect()
 

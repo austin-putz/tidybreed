@@ -422,6 +422,27 @@ test_that("genome_effect_loci joins locus_name back in", {
   expect_false("locus_name" %in% DBI::dbListFields(pop$db_conn, "genome_effect_members"))
 })
 
+test_that("genome_effect_loci carries the term coefficient on every member row", {
+  # Without genome_value on this view there is no way to select large-effect
+  # loci from a tidybreed_table: the coefficient lives on the term and the
+  # locus lives on the member, and get_table() reads exactly one relation.
+  pop <- ge_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  ge_seed_term(pop, id = 1L, locus_id = 3L, value = 0.05)
+  ge_seed_term(pop, id = 2L, locus_id = 9L, value = 0.90)
+  # A two-member term: the coefficient is repeated, never split.
+  DBI::dbExecute(pop$db_conn,
+                 "INSERT INTO genome_effect_members VALUES (2,2,4,'additive',NULL,NULL,0.5)")
+
+  big <- pop |>
+    get_table("genome_effect_loci") |>
+    dplyr::filter(abs(genome_value) > 0.5) |>
+    dplyr::collect()
+
+  expect_setequal(big$locus_id, c(9L, 4L))
+  expect_equal(unique(big$genome_value), 0.90)
+})
+
 test_that("ind_tgv_total sums components and is never stored", {
   pop <- ge_pop()
   on.exit(close_pop(pop), add = TRUE)

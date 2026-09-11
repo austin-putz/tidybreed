@@ -70,7 +70,7 @@
   paste0(
     "CREATE VIEW genome_effect_loci AS ",
     "SELECT e.trait_name, e.effect_owner, m.id_genome_effect, m.member_slot, ",
-    "       m.locus_id, g.locus_name, m.contrast_name ",
+    "       m.locus_id, g.locus_name, m.contrast_name, e.genome_value ",
     "FROM genome_effect_members m ",
     "JOIN genome_effects e ON e.id_genome_effect = m.id_genome_effect ",
     "JOIN genome_meta     g ON g.locus_id         = m.locus_id"

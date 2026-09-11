@@ -154,7 +154,7 @@ run_parity_sim <- function() {
   export_df <- pop |>
     get_table("ind_meta") |>
     extract_genotypes(
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 

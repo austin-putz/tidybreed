@@ -103,6 +103,44 @@ restore_pop <- function(db_path,
     )
   }
 
+  # Files written by a package version whose schema the current code cannot
+  # read. Both checks below fail later and further away if they are not made
+  # here: the first as a missing-column error from inside add_tbv(), the second
+  # as a DuckDB append error from inside define_phenotype(). Pre-1.0 there is no
+  # migration, so the only useful thing to do is say which file and which shape.
+  stop_stale <- function(msg) {
+    DBI::dbDisconnect(db_conn, shutdown = TRUE)
+    stop("'", db_path, "' ", msg,
+         " There is no in-place migration -- rebuild the population.",
+         call. = FALSE)
+  }
+
+  # genome_effects used to be one row per (locus, line, trait), with locus_name
+  # and genome_effect_type columns and no member/origin children.
+  if ("genome_effects" %in% existing_tables) {
+    ge_fields <- DBI::dbListFields(db_conn, "genome_effects")
+    has_children <- all(c("genome_effect_members",
+                          "genome_effect_member_origins") %in% existing_tables)
+    if (!"effect_owner" %in% ge_fields || !has_children) {
+      stop_stale(paste0(
+        "carries the pre-v0.65.0 'genome_effects' shape (one row per locus). ",
+        "Genome effects are now stored as terms: one coefficient in ",
+        "'genome_effects', its loci in 'genome_effect_members', and their ",
+        "scope in 'genome_effect_member_origins'."))
+    }
+  }
+
+  # phenotype_components.genome_effect_types became component_names in v0.68.0.
+  if ("phenotype_components" %in% existing_tables &&
+      !"component_names" %in% DBI::dbListFields(db_conn,
+                                                "phenotype_components")) {
+    stop_stale(paste0(
+      "carries the pre-v0.68.0 'phenotype_components' shape: the reserved ",
+      "column 'genome_effect_types' is now 'component_names', naming ",
+      "ind_tgv.component_name values rather than a deleted genome-effect ",
+      "vocabulary."))
+  }
+
   # Infer pop_name from filename when not supplied
   if (is.null(pop_name)) {
     base     <- basename(db_path)

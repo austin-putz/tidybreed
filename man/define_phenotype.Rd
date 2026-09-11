@@ -88,7 +88,8 @@ component. Columns:
 \code{NULL} means value supplied at \code{\link[=add_phenotype]{add_phenotype()}} call time.
 \item \code{poly_order} (optional): polynomial basis order.
 \item \code{poly_scale_min}, \code{poly_scale_max} (optional): Legendre scaling bounds.
-\item \code{genome_effect_types} (optional, default \code{"additive"}).
+\item \code{component_names} (optional, default \code{"order1_additive"}): reserved;
+see \code{phenotype_components.component_names}.
 \item \code{group_column} (optional): column defining group membership.
 \item \code{group_table} (optional, default \code{"ind_meta"}): table containing
 \code{group_column}.

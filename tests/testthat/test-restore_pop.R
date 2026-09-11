@@ -197,3 +197,87 @@ test_that("restore_pop() errors when genome_meta table is missing", {
 
   unlink(tmp)
 })
+
+
+# ── Gate 49: a pre-term-model file stops here, not inside add_tbv() ─────────
+
+test_that("restore_pop() refuses the pre-v0.65.0 genome_effects shape", {
+  tmp <- tempfile(fileext = ".duckdb")
+  pop <- open_pop(pop_name = "old_shape", db_name = tmp) |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10)
+  close_pop(pop)
+
+  # Rebuild the old table in place: one row per (locus, line, trait), with
+  # locus_name and genome_effect_type, and no member/origin children.
+  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  for (vw in c("genome_effect_loci", "genome_effect_terms"))
+    DBI::dbExecute(conn, paste0("DROP VIEW ", vw))
+  for (tb in c("genome_effect_member_origins", "genome_effect_members",
+               "genome_effects"))
+    DBI::dbExecute(conn, paste0("DROP TABLE ", tb))
+  DBI::dbExecute(conn, "
+    CREATE TABLE genome_effects (
+      id_genome_effect   INTEGER PRIMARY KEY,
+      locus_name         VARCHAR NOT NULL,
+      line_name          VARCHAR,
+      trait_name         VARCHAR NOT NULL,
+      genome_effect_type VARCHAR NOT NULL,
+      genome_value       DOUBLE  NOT NULL,
+      base_allele_freq   DOUBLE
+    )")
+  DBI::dbDisconnect(conn, shutdown = TRUE)
+
+  expect_error(restore_pop(tmp), "pre-v0\\.65\\.0")
+
+  # The refusal must close its connection, or the file stays locked and the
+  # message is followed by an unopenable database.
+  conn2 <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  expect_true("genome_effects" %in% DBI::dbListTables(conn2))
+  DBI::dbDisconnect(conn2, shutdown = TRUE)
+
+  unlink(tmp)
+})
+
+test_that("restore_pop() refuses a term table whose member children are gone", {
+  tmp <- tempfile(fileext = ".duckdb")
+  pop <- open_pop(pop_name = "half_shape", db_name = tmp) |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10)
+  close_pop(pop)
+
+  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  for (vw in c("genome_effect_loci", "genome_effect_terms"))
+    DBI::dbExecute(conn, paste0("DROP VIEW ", vw))
+  DBI::dbExecute(conn, "DROP TABLE genome_effect_member_origins")
+  DBI::dbExecute(conn, "DROP TABLE genome_effect_members")
+  DBI::dbDisconnect(conn, shutdown = TRUE)
+
+  expect_error(restore_pop(tmp), "genome_effect_members")
+
+  unlink(tmp)
+})
+
+test_that("restore_pop() refuses a pre-0.68.0 phenotype_components shape", {
+  # Same class as gate 49, one release later: a file written by 0.65.0-0.67.0
+  # has the term/member genome effects but the old reserved column name, and
+  # would fail inside define_phenotype(components = ) rather than here.
+  tmp <- tempfile(fileext = ".duckdb")
+  # A genome is defined so the genome-effects guard passes first: this test is
+  # about the second check, not about reaching it by accident.
+  pop <- open_pop(pop_name = "old_comp", db_name = tmp) |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10)
+  close_pop(pop)
+
+  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  DBI::dbExecute(conn, paste0("ALTER TABLE phenotype_components ",
+                              "RENAME COLUMN component_names TO ",
+                              "genome_effect_types"))
+  DBI::dbDisconnect(conn, shutdown = TRUE)
+
+  expect_error(restore_pop(tmp), "pre-v0\\.68\\.0")
+
+  conn2 <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  expect_true("phenotype_components" %in% DBI::dbListTables(conn2))
+  DBI::dbDisconnect(conn2, shutdown = TRUE)
+
+  unlink(tmp)
+})

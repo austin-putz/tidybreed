@@ -137,13 +137,13 @@ test_that("extract_genotypes() errors if chip not defined", {
 # New effects_tbl tests
 # ---------------------------------------------------------------------------
 
-test_that("extract_genotypes() with effects_tbl returns QTL loci for all individuals", {
+test_that("extract_genotypes() with effects_tbl returns causal loci for all individuals", {
   pop <- make_qtl_pop("test_eg_qtl_basic")
 
   geno <- pop |>
     get_table("ind_meta") |>
     extract_genotypes(
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -164,7 +164,7 @@ test_that("extract_genotypes() effects_tbl respects pending tbl filter", {
     get_table("ind_meta") |>
     dplyr::filter(sex == "F") |>
     extract_genotypes(
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -187,7 +187,7 @@ test_that("extract_genotypes() chip + effects_tbl unions loci (no overlap)", {
     get_table("ind_meta") |>
     extract_genotypes(
       chip_name   = "HD",
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -211,12 +211,42 @@ test_that("extract_genotypes() chip + effects_tbl deduplicates overlapping loci"
     get_table("ind_meta") |>
     extract_genotypes(
       chip_name   = "50k",
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
   locus_cols <- grep("^locus_", names(geno), value = TRUE)
   expect_equal(length(locus_cols), 50L)
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() effects_tbl filters on contrast and coefficient", {
+  pop <- make_qtl_pop("test_eg_qtl_large")
+
+  # The coefficient lives on the term; genome_effect_loci repeats it on each
+  # member row so a locus-grain filter can see it.
+  cut <- DBI::dbGetQuery(
+    pop$db_conn,
+    "SELECT quantile_cont(abs(genome_value), 0.5) AS q FROM genome_effect_loci
+      WHERE trait_name = 'ADG'")$q
+  n_big <- DBI::dbGetQuery(
+    pop$db_conn, paste0(
+      "SELECT COUNT(DISTINCT locus_id) AS n FROM genome_effect_loci ",
+      "WHERE trait_name = 'ADG' AND contrast_name = 'additive' ",
+      "AND abs(genome_value) > ", cut))$n
+  expect_gt(n_big, 0L)
+
+  geno <- pop |>
+    get_table("ind_meta") |>
+    extract_genotypes(
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
+        dplyr::filter(trait_name == "ADG", contrast_name == "additive",
+                      abs(genome_value) > cut)
+    )
+
+  locus_cols <- grep("^locus_", names(geno), value = TRUE)
+  expect_equal(length(locus_cols), as.integer(n_big))
 
   close_pop(pop)
 })
@@ -228,10 +258,10 @@ test_that("extract_genotypes() errors when effects_tbl filter yields no loci", {
     pop |>
       get_table("ind_meta") |>
       extract_genotypes(
-        effects_tbl = get_table(pop, "genome_effects") |>
+        effects_tbl = get_table(pop, "genome_effect_loci") |>
           dplyr::filter(trait_name == "NONEXISTENT")
       ),
-    "No QTL loci found"
+    "No causal loci found"
   )
 
   close_pop(pop)
@@ -246,7 +276,7 @@ test_that("extract_genotypes() errors when effects_tbl is wrong table", {
       extract_genotypes(
         effects_tbl = get_table(pop, "ind_meta")
       ),
-    "genome_effects"
+    "genome_effect_loci"
   )
 
   close_pop(pop)

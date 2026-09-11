@@ -160,13 +160,14 @@ print.tidybreed_pop <- function(x, ...) {
   # a member of any term, which is exactly one DISTINCT over the locus view.
   # (An additive-QTL / epistatic-only breakdown belongs in describe_table() or a
   # summary helper, not the print header.)
-  n_qtl    <- if ("genome_effect_loci" %in% tables)
+  n_causal <- if ("genome_effect_loci" %in% tables)
     n_of("SELECT COUNT(DISTINCT locus_id) FROM genome_effect_loci") else 0
   model_parts <- c(
     if (n_traits > 0) paste(fmt(n_traits), if (n_traits == 1) "trait" else "traits"),
     if (n_pheno  > 0) paste(fmt(n_pheno),  if (n_pheno  == 1) "phenotype" else "phenotypes"),
     if (n_index  > 0) paste(fmt(n_index),  if (n_index  == 1) "index" else "indices"),
-    if (n_qtl    > 0) paste(fmt(n_qtl), if (n_qtl == 1) "causal locus" else "causal loci")
+    if (n_causal > 0) paste(fmt(n_causal),
+                            if (n_causal == 1) "causal locus" else "causal loci")
   )
   if (length(model_parts) > 0)
     cat("  Model      ", paste(model_parts, collapse = " · "), "\n", sep = "")

@@ -1,5 +1,5 @@
 # These tests were written against the flat genome_effects table: one row per
-# (locus, line) with locus_name, line_name, base_allele_freq and genome_value.
+# (locus, line), carrying the coefficient and its centring frequency together.
 # Effects now live as terms over members with an origin scope, so the flat shape
 # is reconstructed as the test-only `gen_add_flat` view (ge_flat_view(), in
 # helper-genome-effects-db.R). The package deliberately ships no such view --
@@ -54,7 +54,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   # under the base allele frequencies, sum(2 p q a^2), equals target_add_var.
   # This is deterministic given the effects, so it is asserted tightly.
   p <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq AS p, genome_value AS a
+    "SELECT center_value AS p, genome_value AS a
        FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(sum(2 * p$p * (1 - p$p) * p$a^2), 0.5, tolerance = 1e-8)
 
@@ -98,7 +98,7 @@ test_that("TBV mean is approximately 0 for founder population", {
 })
 
 
-test_that("base_allele_freq written to genome_effects, not genome_meta", {
+test_that("center_value written to genome_effect_members, not genome_meta", {
   pop <- make_effects_pop("eff_base_col")
 
   pop <- define_trait(pop, "ADG", target_add_var = 1)
@@ -109,16 +109,16 @@ test_that("base_allele_freq written to genome_effects, not genome_meta", {
     dplyr::filter(locus_name %in% sel) |>
     define_additive_effects("ADG", distribution = "normal")
 
-  # base_allele_freq is in genome_effects, not genome_meta
+  # center_value is in genome_effect_members, not a genome_meta column
   genome_cols <- DBI::dbListFields(pop$db_conn, "genome_meta")
   expect_false("base_allele_freq_ADG" %in% genome_cols)
   expect_false("add_ADG"              %in% genome_cols)
   expect_false("is_QTL_ADG"          %in% genome_cols)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 50)
-  expect_true(all(eff$base_allele_freq >= 0 & eff$base_allele_freq <= 1))
+  expect_true(all(eff$center_value >= 0 & eff$center_value <= 1))
 
   close_pop(pop)
 })
@@ -141,7 +141,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
                           distribution = "normal", seed = 5)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, genome_value, base_allele_freq FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT locus_name, genome_value, center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 100)
 
   # TBV mean should be ≈ 0
@@ -362,9 +362,9 @@ test_that("base_line_name inherits line_name so each line centers on its own poo
 
   stored <- function(ln) {
     DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT DISTINCT base_allele_freq FROM gen_add_flat ",
+      "SELECT DISTINCT center_value FROM gen_add_flat ",
       "WHERE trait_name = 'ADG' AND line_name ",
-      if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$base_allele_freq
+      if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$center_value
   }
 
   pop |> get_table("genome_meta") |>
@@ -400,8 +400,8 @@ test_that("base_line_name = NULL forces pooling even for a line-specific effect"
 
   expect_equal(
     DBI::dbGetQuery(pop$db_conn,
-      "SELECT DISTINCT base_allele_freq FROM gen_add_flat
-         WHERE trait_name = 'ADG' AND line_name = 'A'")$base_allele_freq,
+      "SELECT DISTINCT center_value FROM gen_add_flat
+         WHERE trait_name = 'ADG' AND line_name = 'A'")$center_value,
     0.5
   )
 
@@ -436,7 +436,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
 
   falconer <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT base_allele_freq p, genome_value a FROM gen_add_flat ",
+      "SELECT center_value p, genome_value a FROM gen_add_flat ",
       "WHERE trait_name = 'ADG' AND line_name = '", ln, "'"))
     sum(2 * e$p * (1 - e$p) * e$a^2)
   }

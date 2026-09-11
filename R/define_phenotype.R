@@ -60,7 +60,8 @@
 #'     `NULL` means value supplied at [add_phenotype()] call time.
 #'   - `poly_order` (optional): polynomial basis order.
 #'   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling bounds.
-#'   - `genome_effect_types` (optional, default `"additive"`).
+#'   - `component_names` (optional, default `"order1_additive"`): reserved;
+#'     see `phenotype_components.component_names`.
 #'   - `group_column` (optional): column defining group membership.
 #'   - `group_table` (optional, default `"ind_meta"`): table containing
 #'     `group_column`.
@@ -463,7 +464,7 @@ define_phenotype <- function(pop,
     if (!"poly_order"          %in% names(components)) components$poly_order          <- NA_integer_
     if (!"poly_scale_min"      %in% names(components)) components$poly_scale_min      <- NA_real_
     if (!"poly_scale_max"      %in% names(components)) components$poly_scale_max      <- NA_real_
-    if (!"genome_effect_types" %in% names(components)) components$genome_effect_types <- "additive"
+    if (!"component_names"     %in% names(components)) components$component_names     <- "order1_additive"
     if (!"group_column"        %in% names(components)) components$group_column        <- NA_character_
     if (!"group_table"         %in% names(components)) components$group_table         <- "ind_meta"
     if (!"aggregation"         %in% names(components)) components$aggregation         <- "sum"
@@ -490,7 +491,7 @@ define_phenotype <- function(pop,
       poly_order          = as.integer(components$poly_order),
       poly_scale_min      = as.numeric(components$poly_scale_min),
       poly_scale_max      = as.numeric(components$poly_scale_max),
-      genome_effect_types = as.character(components$genome_effect_types),
+      component_names     = as.character(components$component_names),
       missing_action      = as.character(components$missing_action),
       contributor_filter  = as.character(components$contributor_filter)
     )

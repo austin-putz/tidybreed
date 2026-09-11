@@ -6,7 +6,7 @@
 
 #' A flat view of the generated additive effects
 #'
-#' Several suites want the old one-row-per-(trait, locus, line) shape to assert
+#' Several suites want a one-row-per-(trait, locus, line) grain to assert
 #' against: it is the natural grain for "did this locus get this coefficient and
 #' this centre?". Reconstructing it from the three tables in a view keeps those
 #' assertions readable **and** keeps them honest — the view is derived from the
@@ -17,7 +17,7 @@ ge_flat_view <- function(pop) {
   DBI::dbExecute(pop$db_conn, paste0(
     "CREATE OR REPLACE VIEW gen_add_flat AS ",
     "SELECT e.trait_name, l.locus_name, m.locus_id, ",
-    "       m.center_value AS base_allele_freq, e.genome_value, ",
+    "       m.center_value, e.genome_value, ",
     "       o.line_name, o.parent_origin ",
     "FROM genome_effects e ",
     "JOIN genome_effect_members m USING (id_genome_effect) ",

@@ -1,3 +1,79 @@
+# tidybreed 0.68.0 (2026-09-11)
+
+Phase E of `plans/update_genome_effects_v4.md`, the last one: the readers that
+still assumed one row per locus move onto the views, a pre-change database now
+stops at `restore_pop()` instead of failing later, and the last column naming a
+deleted vocabulary is gone. **No legacy genome-effect shape remains anywhere in
+the package.**
+
+## Breaking changes
+
+- **`extract_genotypes(effects_tbl = )` now takes `get_table("genome_effect_loci")`**,
+  not `get_table("genome_effects")`. The term table has no `locus_name` and no
+  `locus_id` — a coefficient spans one or more loci — so the locus grain only
+  exists in the view. The locus set is read straight off `locus_id`; the old
+  `locus_name` round trip through `genome_meta` is gone. A `tidybreed_table`
+  from any other relation is refused by name, with a message that says why.
+- **`phenotype_components.genome_effect_types` is now `component_names`**, and
+  its default changes from `'additive'` to `'order1_additive'`. The column is
+  still reserved and still unread — `add_phenotype()` uses the additive breeding
+  value only — but it named `genome_effects.genome_effect_type`, a column
+  deleted in 0.65.0. It now names the `ind_tgv.component_name` vocabulary that
+  actually exists, which is what it will select from when non-additive genetic
+  values reach the phenotype layer.
+- **`restore_pop()` refuses a database whose schema this version cannot read.**
+  Two checks, one helper. A file whose `genome_effects` lacks `effect_owner`, or
+  that has no `genome_effect_members` / `genome_effect_member_origins`, carries
+  the pre-0.65.0 one-row-per-locus shape. A file whose `phenotype_components`
+  still has `genome_effect_types` was written by 0.65.0-0.67.0. Both stop with a
+  message naming the file and the shape, and both close the connection so the
+  file is not left locked. There is no in-place migration and there will not be
+  one: pre-1.0, the fix is to rebuild the population.
+
+## Changed
+
+- **`genome_effect_loci` gains `genome_value`**, the term's coefficient repeated
+  on every member row. Without it "give me the large-effect QTL" is
+  unexpressible from a `tidybreed_table`: the coefficient is on the term and the
+  locus is on the member, and `get_table()` reads exactly one relation. Never
+  `SUM()` it — an interaction term would be counted once per member.
+- `print.tidybreed_pop()` reports **causal loci**, counted as
+  `COUNT(DISTINCT locus_id)` over `genome_effect_loci`. (The count itself moved
+  in 0.65.0; this release renames the internal that still said `n_qtl`.)
+- `extract_genotypes()` is retitled "by chip and/or causal loci", and its
+  `effects_tbl` documentation describes filtering by `contrast_name`,
+  `effect_owner` and `genome_value`. A multi-locus term contributes every one of
+  its loci.
+- The test-only `gen_add_flat` view no longer aliases `center_value` back to
+  `base_allele_freq`; the schema description for `ind_haplotype.locus_name` no
+  longer claims it exists for direct joins to `genome_effects`, which key on
+  `locus_id`.
+- `vignettes/tidybreed-introduction.Rmd` corrects the re-run note: since 0.66.0
+  `define_additive_effects()` replaces the variant at the *same scope* and
+  leaves other scopes standing, rather than overwriting every row for the trait.
+
+## Tests
+
+- Gate 49: `restore_pop()` on a rebuilt pre-0.65.0 file stops with the
+  term/member message, and the refusal releases the connection so the file can
+  be reopened. Two further cases cover a term table whose member children are
+  missing, and a `phenotype_components` still carrying `genome_effect_types`.
+- `genome_effect_loci` carries the coefficient on every member row of a
+  two-member term, and `extract_genotypes()` selects a large-effect subset
+  through it.
+- The SQL-injection test for a quote-embedded `locus_name` moved to `loci_tbl`,
+  which is now the only `extract_genotypes()` path that builds an `IN` list out
+  of locus names.
+- **`tests/testthat/parity_golden/tbv.rds` was re-captured.** With the
+  `extract_genotypes()` error in `test-parity.R` fixed, the comparison it exists
+  for ran for the first time since 0.65.0 and failed: the paternal-only IMP
+  breeding values differ from the July golden by exactly `sqrt(2)` at every
+  individual, because 0.66.0 made `scale_to_target` origin-aware
+  (`n_eligible = 1` for a parent-qualified copy, not 2). The old golden recorded
+  a paternal-only trait carrying **half** its requested additive variance. ADG,
+  haplotypes, dosage and the exported matrix were bit-identical, so only that
+  one artifact was replaced; the property is pinned independently by gate 43.
+
 # tidybreed 0.67.0 (2026-09-11)
 
 Phase D of `plans/update_genome_effects_v4.md`: **the evaluator**. The migration

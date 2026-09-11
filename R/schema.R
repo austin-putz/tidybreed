@@ -182,6 +182,8 @@ register_schema_meta <- function(conn, entries) {
             "Locus name, joined from genome_meta; not stored on any effect table"),
     .sm_col("genome_effect_loci", "contrast_name",
             "Basis function at this locus; from genome_effect_members"),
+    .sm_col("genome_effect_loci", "genome_value",
+            "The whole term's coefficient, from genome_effects, repeated on every member row. Filter on it to select large-effect loci; never SUM it, because an interaction term would be counted once per member"),
     # chr_inheritance
     .sm_tbl("chr_inheritance",
             "Per-chromosome copy counts, keyed by offspring sex. One row per (chr_name, offspring_sex, line_name). Seeded default is a diploid autosome (from_parent_1 = from_parent_2 = 1). Non-default rules (sex chromosomes, organelles) are set via define_chromosome()."),
@@ -270,7 +272,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("ind_haplotype", "locus_id",
             "Locus identifier; FK to genome_meta.locus_id; physical sort key"),
     .sm_col("ind_haplotype", "locus_name",
-            "Locus name; FK to genome_meta.locus_name; denormalized for direct joins to genome_effects"),
+            "Locus name; FK to genome_meta.locus_name; denormalized so exports and user queries read without joining genome_meta. The effect tables key on locus_id, not on this column"),
     .sm_col("ind_haplotype", "allele",
             "Phased allele on this strand: 0 (reference) or 1 (alternate)"),
     # ind_genotype
@@ -415,8 +417,8 @@ register_schema_meta <- function(conn, entries) {
             "Lower bound for Legendre polynomial scaling"),
     .sm_col("phenotype_components", "poly_scale_max",
             "Upper bound for Legendre polynomial scaling"),
-    .sm_col("phenotype_components", "genome_effect_types",
-            "Comma-separated contrast names to include; default 'additive'"),
+    .sm_col("phenotype_components", "component_names",
+            "Comma-separated ind_tgv.component_name values this component draws from; default 'order1_additive'. Reserved: add_phenotype() reads only the additive breeding value today"),
     .sm_col("phenotype_components", "missing_action",
             "Per-component fallback; currently unused, governed by phenotype_meta.missing_component_action"),
     .sm_col("phenotype_components", "contributor_filter",

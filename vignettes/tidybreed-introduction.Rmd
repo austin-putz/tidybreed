@@ -453,8 +453,10 @@ pop <- pop |>
 ```
 
 > This **replaces** the ADG effects assigned earlier with a fresh correlated draw.
-> Re-running `define_additive_effects()` for a trait always overwrites its rows in
-> `genome_effects`, so recompute anything derived from them.
+> Re-running `define_additive_effects()` replaces the variant at the *same scope*
+> — here the common, all-lines one — and leaves variants at other scopes
+> (`line_name`, `parent_origin`) standing. Recompute anything derived from the
+> replaced terms.
 
 ```{r tbv2}
 pop <- pop |> get_table("ind_meta") |> add_tbv()   # no trait_name = all traits
