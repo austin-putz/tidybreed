@@ -13,8 +13,8 @@ Phase-B blockers; **v4.9 specifies the two things every prior revision assumed �
 the writer's input format and the evaluation strategy — and renames
 `effect_set_name` to `effect_owner`.**
 
-**Readiness: implementable.** No open question blocks any phase. The two remaining
-are ergonomic and revisable after the fact.
+**Readiness: implementable.** No open question blocks any phase. ★ Both are now
+decided and implemented — Q1 in Phase D, Q2 in Phase B's validator.
 ★ **All five phases are complete.** Phase A required **no change to this
 schema**; Phase B corrected two errors in it, Phase C one more, Phase D restated
 the evaluation fast path and settled the zero-copy join, and Phase E added
@@ -1562,9 +1562,31 @@ stored additive term. See **§Q1, Tracked for later** in
 | Add `center_value` to the family signature | Different centerings become different families and sum. Mathematically fine, but the duplicate-term guard disappears at that locus and a user can silently stack two additive terms |
 | Forbid mixing codings within a `(trait, owner)` entirely | Simplest to explain; blocks legitimate per-locus choices |
 
-**Recommendation: reject with guidance.** Low stakes and easily revisited — flagging
-it because it is a user-visible error message you will have to defend, and because the
-review did not surface it.
+**Recommendation: reject with guidance.**
+
+★ **Decided and implemented — the recommended option, in `.ge_duplicate_hint()`
+(`genome_effects_helpers.R:387`).** Two additive terms at one locus under the
+same `(trait, owner)` and scope are one family and one scope, so the existing
+duplicate guard already refuses them; the hint explains *why* and gives the
+single equivalent term. `a1(x - c1) + a2(x - c2) = (a1 + a2)(x - (a1 c1 + a2 c2)
+/ (a1 + a2))`:
+
+```
+term 1 and term_id '1' are the same logical term at the same scope (duplicate
+family + scope identity). They differ only in center_value (0.5 vs 0.3), which
+is outside the family signature on purpose. Write the one equivalent term
+instead: genome_value = 3, center_value = 0.366667
+```
+
+The degenerate case is handled separately: when `a1 + a2 = 0` the combined term
+is a constant, and the message says so rather than dividing by zero — an
+intercept, which this model has no place for.
+
+**This does not close the mismatched-centre trap** (`..._phase_D.md`). That one
+is two terms in *different* families — a `generated_additive_tbv` additive term
+centred at the realized frequency and a `custom` dominance term centred where the
+user typed. Different family, so they sum, and no duplicate guard can fire. Q2
+is about terms that collide; the trap is about terms that do not.
 
 ---
 

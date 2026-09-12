@@ -308,6 +308,16 @@ every one deliberate:
 The v4 plan is complete. The branch `feat/genome-effects-v49` carries Phases
 B–E and is ready to merge to `main`.
 
+★ **Both open questions are closed.** Q1 was decided and implemented in Phase D.
+Q2 (mixed coding at one locus) turned out to have been implemented in Phase B's
+validator all along — `.ge_duplicate_hint()` refuses the pair and names the one
+equivalent term, `genome_value = a1 + a2`, `center_value = (a1 c1 + a2 c2) /
+(a1 + a2)`, with the `a1 + a2 = 0` case reported as the constant it is. Only the
+plan's §Open questions had not been updated; it now is. Verified by running the
+collision: two additive terms at `Locus_1`, same trait and owner, centres 0.5 and
+0.3, coefficients 1.0 and 2.0, rejected with `genome_value = 3,
+center_value = 0.366667`.
+
 The two items this plan recorded and did not schedule stay open:
 
 - **The mismatched-centre trap** (`..._phase_D.md`, §Tracked for later) — a
