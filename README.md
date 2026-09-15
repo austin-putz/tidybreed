@@ -1040,7 +1040,11 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | `founder_haplotypes` | 1 per (haplotype × locus) | Haplotype pool sampled by `add_founders()` |
 | `ind_haplotype` | 2 per (individual × locus) | Phased haplotypes, long format (paternal / maternal) |
 | `ind_genotype` | 1 per (individual × locus) | 0/1/2 dosages, long format; on-demand cache filled by `add_dosage()` |
-| `genome_effects` | 1 per (locus × trait × effect type) | Additive QTL effect sizes |
+| `genome_effects` | 1 per term | One coefficient over one or more loci (`genome_value`, `effect_owner`) |
+| `genome_effect_members` | 1 per (term × locus) | The loci a term spans and each locus's basis function (`additive` / `dominance` / `indicator`) |
+| `genome_effect_member_origins` | 1 per (term × locus × origin) | Optional line / parent-of-origin scope on a member; no rows = applies to every allele copy |
+| `genome_effect_terms`, `genome_effect_loci` | views | Term-grain and locus-grain reads over the three tables above (`family_key`, `locus_name`, `genome_value`) |
+| `ind_tgv` | 1 per (individual × trait × component) | True genetic values by declared model structure; total via the `ind_tgv_total` view |
 | `ind_meta` | 1 per individual | Pedigree, sex, line; user date/status columns added via `mutate_table()` |
 | `ind_phenotype` | 1 per (individual × phenotype record) | Long-format phenotype records |
 | `ind_tbv` | 1 per (individual × trait) | True breeding values (simulation ground truth) |

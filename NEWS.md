@@ -1,3 +1,35 @@
+# tidybreed 0.68.1 (2026-09-15)
+
+Documentation-only follow-up to Phase E, from the overall review recorded in
+`plans/update_genome_effects_v4_overall_summary.md`. No behaviour change.
+
+## Fixed
+
+- `describe_table()` no longer describes `genome_effect_members.id_genome_effect`
+  and `genome_effect_member_origins.{id_genome_effect, member_slot}` as SQL
+  foreign keys. Phase C dropped both keys; the descriptions now say the match
+  is R-enforced by `validate_genome_effects()`.
+- `README.md` §Database Tables describes the term / member / origin shape of
+  `genome_effects`, the two views, and `ind_tgv`, instead of the pre-0.65.0
+  one-row-per-locus wording.
+- `CLAUDE.md` §Schema Design Bias lists `contrast_name` and `component_name`
+  as example long-table dimensions instead of the deleted `genome_effect_type`.
+- `plans/update_genome_effects_v4.md`: the DDL block and the "Declared in SQL"
+  list no longer show the two foreign keys Phase C removed; a garbled sentence
+  in §Output contract is split back into two.
+- Six `[.internal_fn()]` roxygen links inside `@noRd` blocks in
+  `R/genome_effects_eval.R` and `R/genome_effects_helpers.R` are now code
+  spans, so `roxygenise()` runs without "Could not resolve link" warnings.
+- The swine vignette script reads `genome_effect_loci` (locus grain) where it
+  previously counted `locus_name` on `genome_effects`, which has no such column.
+
+## Added
+
+- `package_summary.md` — a snapshot of package size, exports, tests and
+  dependencies at 0.65.0.
+- `plans/update_genome_effects_v4_overall_summary.md` — the overall review of
+  Phases A–E against the v4.9 plan.
+
 # tidybreed 0.68.0 (2026-09-11)
 
 Phase E of `plans/update_genome_effects_v4.md`, the last one: the readers that

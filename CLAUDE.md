@@ -94,7 +94,7 @@ contributor-specific phenotype components without another fundamental rewrite.
 Do not implement future biology before it is needed. It is enough to reserve
 clean dimensions now when the schema would be painful to alter later. Prefer
 long tables with explicit dimensions such as `line_name`, `sex`, `map_name`,
-`genome_effect_type`, and `effect_name`. Use `NULL` deliberately for
+`contrast_name`, `component_name`, and `effect_name`. Use `NULL` deliberately for
 shared/default behavior, such as population-wide genome effects or maps applying
 to all lines.
 

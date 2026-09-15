@@ -283,7 +283,7 @@ CREATE TABLE genome_effect_members (
              AND dosage_value     IS NULL
              AND center_value     IS NOT NULL          -- ★ BETWEEN alone is UNKNOWN on NULL
              AND center_value BETWEEN 0 AND 1) ),
-  FOREIGN KEY (id_genome_effect) REFERENCES genome_effects(id_genome_effect),
+  -- ★ Phase C: no FOREIGN KEY to genome_effects — see the correction at the top
   FOREIGN KEY (locus_id)         REFERENCES genome_meta(locus_id)     -- ★ was promised, not declared
 );
 
@@ -302,9 +302,9 @@ CREATE TABLE genome_effect_member_origins (
   CHECK ( (line_match_type = 'exact'   AND line_name IS NOT NULL)
        OR (line_match_type = 'unknown' AND line_name IS NULL)
        OR (line_match_type = 'any'     AND line_name IS NULL
-                                       AND parent_origin IS NOT NULL) ),  -- ★
-  FOREIGN KEY (id_genome_effect, member_slot)
-    REFERENCES genome_effect_members(id_genome_effect, member_slot)
+                                       AND parent_origin IS NOT NULL) )   -- ★
+  -- ★ Phase C: no composite FOREIGN KEY to genome_effect_members — see the
+  -- correction at the top; validate_genome_effects() reports orphans instead
 );
 ```
 
@@ -824,8 +824,11 @@ working copy. The column is added to the **archive** copy by
 is a collision guard that **refuses to stamp a table that already contains one**,
 so the declared column would have broken the function that uses it. `replicate`
 stays in `TABLE_RESERVED_COLS` and joins `DEFERRED_COLS` in
-`test-schema-registries.R`, exactly as `ind_tbv` does. `archive_replicate()` Written by **`add_tgv()`**, beside `add_tbv()` and `add_ebv()`.
-Writes are idempotent — re-evaluation replaces an individual's rows for a trait in one
+`test-schema-registries.R`, exactly as `ind_tbv` does; `archive_replicate()`
+stamps it on the archive copy.
+
+Written by **`add_tgv()`**, beside `add_tbv()` and `add_ebv()`. Writes are
+idempotent — re-evaluation replaces an individual's rows for a trait in one
 transaction.
 
 **Long, not wide.** The component dimension is open: epistasis subdivides into A×A,
@@ -1099,8 +1102,10 @@ One transaction per public write: delete-then-insert-then-validate-then-commit.
 `copy_count > 0`; `parent_origin IN (1,2)` or NULL;
 `line_match_type` ↔ `line_name` agreement (`'exact'` ⇒ named, otherwise NULL);
 ★ `'any'` ⇒ `parent_origin IS NOT NULL`;
-`locus_id` FK; member → effect FK;
-composite origin → member FK.
+`locus_id` FK. ★ The member → effect and composite origin → member keys were
+declared in Phase B and **dropped in Phase C** (see the correction at the top);
+orphan detection in both directions is R-enforced by `validate_genome_effects()`
+inside every write transaction.
 
 **Enforced in R:**
 

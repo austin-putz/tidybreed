@@ -194,7 +194,7 @@
 #' individual with no row, whatever the reason.
 #'
 #' @return Data frame with `label`; the items are recovered by
-#'   [.gev_parse_label()].
+#'   `.gev_parse_label()`.
 #' @keywords internal
 #' @noRd
 .gev_genotype_alphabet <- function(conn, ind_tmp, locus_ids) {
@@ -238,7 +238,7 @@
 
 #' Does a per-member predicate match a unit's label?
 #'
-#' The containment lattice itself lives in [.ge_pred_leq()]; this is the other
+#' The containment lattice itself lives in `.ge_pred_leq()`; this is the other
 #' half, asking whether a predicate *fires* on a concrete label rather than how
 #' two predicates order.
 #'
@@ -258,7 +258,7 @@
 
 #' Exact-multiset satisfaction: every demand consumed by a distinct copy
 #'
-#' Exhaustive rather than greedy, for the reason [.ge_bijection()] records: a
+#' Exhaustive rather than greedy, for the reason `.ge_bijection()` records: a
 #' demand set mixing an ANY-parent row with a parent-qualified one can be
 #' satisfiable while a greedy pass fails it.
 #'
@@ -561,7 +561,7 @@
 #' @param id_ind Character vector of individuals.
 #' @param trait_names Character vector of traits.
 #' @param model The model to evaluate. `NULL` reads the whole stored model for
-#'   `trait_names`; `add_tbv()` passes [.gev_reserved_additive()] of one.
+#'   `trait_names`; `add_tbv()` passes `.gev_reserved_additive()` of one.
 #' @return Data frame `id_ind`, `trait_name`, `component_name`, `tgv_value`.
 #'   Individuals contributing nothing are absent rather than zero -- the caller
 #'   decides whether that is an error.

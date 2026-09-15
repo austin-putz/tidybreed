@@ -906,8 +906,9 @@ pop %>%
     base            = "current_pop"
   )
 
-# print 'genome_effects'
-pop %>% get_table("genome_effects") |>
+# print the causal loci (one row per term x locus; a locus-level view over
+# genome_effects / genome_effect_members)
+pop %>% get_table("genome_effect_loci") |>
   count(locus_name)
 
 # calculate all TBV for AP

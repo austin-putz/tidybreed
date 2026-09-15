@@ -300,7 +300,7 @@
 #'
 #' @param conn A DBI connection.
 #' @param labels Optional `id_genome_effect` -> user label map; see
-#'   [.ge_validate_frames()].
+#'   `.ge_validate_frames()`.
 #' @return `invisible(NULL)`; errors listing every violation found.
 #' @keywords internal
 #' @noRd
@@ -407,7 +407,7 @@ validate_genome_effects <- function(conn, labels = NULL) {
 
 #' Validate genome-effect rows held as data frames
 #'
-#' Split from [validate_genome_effects()] so a writer can validate a candidate
+#' Split from `validate_genome_effects()` so a writer can validate a candidate
 #' set before issuing any SQL, and so the rules are testable without a database.
 #'
 #' @param terms,members,origins Data frames matching the three tables.
