@@ -1,3 +1,14 @@
+# tidybreed 0.68.3 (2026-09-16)
+
+## Added
+
+- `dev/package_summary/render_package_summary.R` regenerates
+  `package_summary.md` and a styled `dev/package_summary/package_summary.html`
+  (from `template.html`) from the working tree — exports, function and line
+  counts, tests, largest files, dependencies. Base R only; run from the
+  package root with `Rscript dev/package_summary/render_package_summary.R`.
+  `package_summary.md` is refreshed from its 0.65.0 snapshot.
+
 # tidybreed 0.68.2 (2026-09-15)
 
 ## Fixed
