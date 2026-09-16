@@ -13,7 +13,13 @@
 #
 # The HTML page is meant to be published as a Claude artifact (or opened in a
 # browser / printed to PDF). Nothing here is loaded by the package; `dev/` is
-# in .Rbuildignore. Base R only — no package dependencies.
+# in .Rbuildignore.
+#
+# The "Database tables" section is read from a live in-memory population
+# (open_pop() |> define_genome() |> ... |> define_trait() materializes every
+# table and view), so column counts, types and descriptions come from the DDL
+# the package actually runs. That needs pkgload::load_all() on the working
+# tree; everything else is base R.
 #
 # Counting method (kept stable so snapshots are comparable across versions):
 #   - "function definitions" = lines in R/*.R matching
@@ -116,6 +122,93 @@ m$ratio <- round(m$test_loc / m$r_loc, 2)
 core_imports    <- c("duckdb", "DBI", "dbplyr")
 imports_ordered <- c(core_imports[core_imports %in% m$imports], setdiff(m$imports, core_imports))
 m$license <- sub(" \\+ file LICENSE$", "", m$license)
+
+# ---- database tables --------------------------------------------------------
+# Materialize every table/view in memory and read the registries the package
+# itself uses (schema(), describe_table(), TABLE_ROW_KEYS, archive_replicate()).
+old_opt <- options(tidybreed.quiet = TRUE)     # silences the load banner too
+suppressMessages(pkgload::load_all(root, quiet = TRUE))
+pop <- suppressMessages(
+  open_pop(pop_name = "summary", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 10) |>
+    define_founder_haplotypes(n_haplotypes = 4) |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 1, n_females = 1, line_name = "A") |>
+    define_trait("T")
+)
+sch <- as.data.frame(schema(pop, show_empty = TRUE, include_system = TRUE))
+kinds <- DBI::dbGetQuery(pop$db_conn,
+  "SELECT table_name, table_type FROM information_schema.tables")
+cols <- DBI::dbGetQuery(pop$db_conn,
+  "SELECT table_name, column_name, data_type FROM information_schema.columns
+   ORDER BY table_name, ordinal_position")
+cons <- DBI::dbGetQuery(pop$db_conn,
+  "SELECT table_name, constraint_type, constraint_column_names AS cols
+     FROM duckdb_constraints()
+    WHERE constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY')")
+n_col_described <- DBI::dbGetQuery(pop$db_conn,
+  "SELECT count(*) AS n FROM _schema_meta WHERE object_type = 'column'")$n
+close_pop(pop)
+
+# Key shown per table: the SQL PRIMARY KEY when one is declared, otherwise the
+# logical row key the package enforces in R (TABLE_ROW_KEYS) -- marked as such.
+key_of <- function(tbl) {
+  pk <- cons$cols[cons$table_name == tbl & cons$constraint_type == "PRIMARY KEY"]
+  if (length(pk)) return(list(cols = pk[[1]], logical = FALSE))
+  k <- TABLE_ROW_KEYS[[tbl]]
+  if (is.null(k)) list(cols = character(0), logical = FALSE) else list(cols = k, logical = TRUE)
+}
+options(old_opt)
+
+# which function creates each table: first CREATE TABLE/VIEW site in R/, in
+# pipeline order of the files that own DDL
+ddl_files <- c("open_pop.R", "define_genome.R", "define_founder_haplotypes.R",
+               "define_trait.R", "define_effect_cov_matrix.R", "genome_effects_helpers.R")
+# tables written with dbWriteTable() rather than CREATE TABLE
+creator_override <- c(founder_haplotypes = "define_founder_haplotypes()")
+creator_of <- function(tbl) {
+  if (tbl %in% names(creator_override)) return(creator_override[[tbl]])
+  pat <- sprintf('CREATE (TABLE|VIEW)( IF NOT EXISTS)? "?%s"?\\b', tbl)
+  for (f in ddl_files) {
+    if (any(grepl(pat, readLines(file.path(root, "R", f), warn = FALSE), perl = TRUE))) {
+      if (f == "genome_effects_helpers.R")           # views built by helpers
+        return(if (grepl("^genome_effect_", tbl)) "define_genome()" else "define_trait()")
+      return(paste0(sub("\\.R$", "", f), "()"))
+    }
+  }
+  ""
+}
+
+# archive_replicate() treatment, read from its formals
+arch <- formals(archive_replicate)
+archive_of <- function(tbl) {
+  if (tbl %in% eval(arch$store_and_reset)) "per replicate"
+  else if (tbl %in% eval(arch$store_once)) "once"
+  else if (tbl %in% eval(arch$reset_only)) "reset only"
+  else "kept"
+}
+
+tables <- data.frame(
+  table_name  = sch$table_name,
+  table_group = as.character(sch$table_group),
+  kind        = ifelse(kinds$table_type[match(sch$table_name, kinds$table_name)] == "VIEW", "view", "table"),
+  n_cols      = sch$n_cols,
+  row_key     = vapply(sch$table_name, function(t) paste(key_of(t)$cols, collapse = ", "), ""),
+  key_logical = vapply(sch$table_name, function(t) key_of(t)$logical, TRUE),
+  created_by  = vapply(sch$table_name, creator_of, ""),
+  archive     = vapply(sch$table_name, archive_of, ""),
+  description = sch$description,
+  stringsAsFactors = FALSE
+)
+tables$table_group[tables$table_name == "_schema_meta"] <- "System"
+type_tally <- sort(table(cols$data_type), decreasing = TRUE)
+m$n_tables  <- sum(tables$kind == "table")
+m$n_views   <- sum(tables$kind == "view")
+m$n_columns <- sum(tables$n_cols)
+m$n_groups  <- length(unique(tables$table_group))
+m$n_described <- n_col_described
+m$n_pk      <- sum(!tables$key_logical & nzchar(tables$row_key))
+m$n_logical <- sum(tables$key_logical)
 
 # ---- largest files -----------------------------------------------------------
 # Known purposes; anything else falls back to the file's first roxygen title.
@@ -245,6 +338,26 @@ md <- c(
   "| Test file | LOC |", "|---|---:|",
   sprintf("| `%s` | %s |", test_top$file, fmt(test_top$loc)),
   "",
+  "## Database Tables", "",
+  sprintf("%d tables and %d views in %d groups, %d columns in total, %d of them described in `_schema_meta` (`schema()`, `describe_table()`).",
+          m$n_tables, m$n_views, m$n_groups, m$n_columns, m$n_described), "",
+  sprintf("Column types: %s.", paste(sprintf("%s ×%d", names(type_tally), type_tally), collapse = ", ")), "",
+  sprintf("Keys: %d tables declare a SQL `PRIMARY KEY`; %d use a logical key enforced in R (`TABLE_ROW_KEYS`), by design where a DuckDB constraint would block bulk inserts or transactional replacement. `Archive` is how `archive_replicate()` treats the table: copied and stamped *per replicate*, copied *once*, *reset only*, or *kept* in the working database.",
+          m$n_pk, m$n_logical), "",
+  unlist(lapply(unique(tables$table_group), function(g) {
+    tg <- tables[tables$table_group == g, ]
+    c(sprintf("### %s (%d)", g, nrow(tg)), "",
+      "| Table | Kind | Cols | Key | Created by | Archive | Description |",
+      "|---|---|---:|---|---|---|---|",
+      sprintf("| `%s` | %s | %d | %s | %s | %s | %s |",
+              tg$table_name, tg$kind, tg$n_cols,
+              ifelse(nzchar(tg$row_key),
+                     paste0("`", gsub(", ", "`, `", tg$row_key), "`", ifelse(tg$key_logical, " (logical)", "")),
+                     "—"),
+              ifelse(nzchar(tg$created_by), paste0("`", tg$created_by, "`"), "—"),
+              tg$archive, gsub("\\|", "\\\\|", tg$description)),
+      "")
+  })),
   "## Dependencies", "",
   sprintf("- **Imports:** %s", paste(m$imports, collapse = ", ")),
   sprintf("- **LinkingTo:** %s", paste(m$linkingto, collapse = ", ")),
@@ -328,6 +441,39 @@ dep_rows <- paste(c(
   dep("License", m$license)
 ), collapse = "\n")
 
+tables_ledger <- paste(c(
+  stat(m$n_tables, "Tables", sprintf("in %d groups", m$n_groups), "accent"),
+  stat(m$n_views, "Views", "derived, never stored"),
+  stat(m$n_columns, "Columns", sprintf("%d described in _schema_meta", m$n_described)),
+  stat(m$n_pk, "SQL primary keys", sprintf("%d logical keys enforced in R", m$n_logical))
+), collapse = "\n")
+
+tables_note <- paste(
+  "Key is the declared SQL <code>PRIMARY KEY</code>, or the logical row key enforced in R",
+  "where a DuckDB constraint would block bulk inserts or transactional replacement.",
+  "Archive is how <code>archive_replicate()</code> treats the table: copied and stamped",
+  "<b>per replicate</b>, copied <b>once</b>, <b>reset only</b>, or <b>kept</b> in the working database.")
+
+tables_types <- paste(sprintf('<span class="type"><code>%s</code><b>%d</b></span>',
+                              names(type_tally), type_tally), collapse = "\n")
+
+tables_groups <- paste(unlist(lapply(unique(tables$table_group), function(g) {
+  tg <- tables[tables$table_group == g, ]
+  rows <- sprintf(
+    '          <tr>\n            <td><span class="tname">%s</span><span class="tdesc">%s</span></td>\n            <td class="kind %s">%s</td>\n            <td class="num">%d</td>\n            <td class="key">%s</td>\n            <td class="key">%s</td>\n            <td class="arch">%s</td>\n          </tr>',
+    tg$table_name, html_esc(tg$description), tg$kind, tg$kind, tg$n_cols,
+    ifelse(nzchar(tg$row_key),
+           paste0("<code>", gsub(", ", "</code> <code>", tg$row_key), "</code>",
+                  ifelse(tg$key_logical, ' <span class="lk">logical</span>', "")),
+           "—"),
+    ifelse(nzchar(tg$created_by), paste0("<code>", tg$created_by, "</code>"), "—"),
+    html_esc(tg$archive))
+  c(sprintf('    <div class="tgroup">\n      <h3>%s <span class="count">%d %s</span></h3>\n      <div class="tablewrap">\n        <table class="tables">\n          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>\n          <tbody>',
+            html_esc(g), nrow(tg), if (nrow(tg) == 1) "table" else "tables"),
+    rows,
+    '          </tbody>\n        </table>\n      </div>\n    </div>')
+})), collapse = "\n")
+
 fill <- list(
   version = m$version, date = m$date, branch = m$branch, sha = m$sha, license = m$license,
   n_exports = m$n_exports, ledger = ledger, counts_rows = counts_rows, api_rows = api_rows,
@@ -335,7 +481,9 @@ fill <- list(
   src_max_name = src_top$file[1], src_max_loc = fmt(src_top$loc[1]),
   test_bars = bar_rows(test_top, cls = "test"),
   test_max_name = test_top$file[1], test_max_loc = fmt(test_top$loc[1]),
-  dep_rows = dep_rows
+  dep_rows = dep_rows,
+  tables_ledger = tables_ledger, tables_types = tables_types, tables_groups = tables_groups,
+  tables_note = tables_note
 )
 html <- paste(readLines(template, warn = FALSE), collapse = "\n")
 for (key in names(fill)) html <- gsub(paste0("{{", key, "}}"), fill[[key]], html, fixed = TRUE)

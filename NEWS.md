@@ -1,3 +1,15 @@
+# tidybreed 0.68.4 (2026-09-16)
+
+## Added
+
+- The package summary (`dev/package_summary/`) gains a **Database tables**
+  section, read from a live in-memory population rather than a hand-written
+  list: tables and views by display group, column counts and a column-type
+  tally, the key per table (the declared SQL `PRIMARY KEY`, or the logical
+  `TABLE_ROW_KEYS` key enforced in R), which function creates it, and how
+  `archive_replicate()` treats it. The generator now needs `pkgload`; the
+  rest is still base R.
+
 # tidybreed 0.68.3 (2026-09-16)
 
 ## Added

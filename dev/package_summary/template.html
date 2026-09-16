@@ -209,6 +209,37 @@
   .fns code { background: var(--code-bg); padding: 0.18em 0.5em; border-radius: 4px; font-size: 0.8rem; }
   @media (max-width: 560px) { .api-row { grid-template-columns: 1fr; gap: var(--s1); } }
 
+  /* ---------- database tables ---------- */
+  .ledger.compact .stat .n { font-size: 1.7rem; }
+  .types { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: var(--s3); }
+  .types .type {
+    display: inline-flex; align-items: baseline; gap: 0.35rem;
+    font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 0.15rem 0.5rem;
+  }
+  .types .type code { background: transparent; padding: 0; color: var(--ink); }
+  .types .type b { font-weight: 500; }
+  .tnote { font-size: 0.85rem; color: var(--muted); margin: var(--s3) 0 0; max-width: 70ch; text-wrap: pretty; }
+  .tnote b { font-weight: 500; color: var(--ink-2); }
+  table.tables .lk { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); margin-left: 0.2rem; }
+  .tgroup { margin-top: var(--s4); }
+  .tgroup h3 {
+    font-family: var(--display); font-weight: 700; font-size: 1.05rem;
+    margin: 0 0 var(--s2); display: flex; align-items: baseline; gap: var(--s2);
+    color: var(--accent);
+  }
+  .tgroup h3 .count { font-family: var(--mono); font-weight: 400; font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; }
+  table.tables { font-size: 0.88rem; }
+  table.tables td { padding: 0.5rem 0.6rem; }
+  table.tables .tname { font-family: var(--mono); font-weight: 500; font-size: 0.85rem; display: block; }
+  table.tables .tdesc { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.4; max-width: 34ch; text-wrap: pretty; }
+  table.tables .kind { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  table.tables .kind.view { color: var(--gold); }
+  table.tables .kind.table { color: var(--muted); }
+  table.tables .key code { font-size: 0.74rem; white-space: nowrap; }
+  table.tables .key { line-height: 1.7; }
+  table.tables .arch { font-size: 0.8rem; color: var(--ink-2); white-space: nowrap; }
+
   /* ---------- bar table ---------- */
   .bars { display: grid; gap: 0.55rem; }
   .bar-row { display: grid; grid-template-columns: 15rem 1fr 4.5rem; gap: var(--s2); align-items: center; }
@@ -287,6 +318,18 @@
     <div class="api">
 {{api_rows}}
     </div>
+  </section>
+
+  <section>
+    <h2>Database tables <span class="count">every table is DuckDB, read lazily through dplyr</span></h2>
+    <div class="ledger compact">
+{{tables_ledger}}
+    </div>
+    <div class="types">
+{{tables_types}}
+    </div>
+    <p class="tnote">{{tables_note}}</p>
+{{tables_groups}}
   </section>
 
   <section>
