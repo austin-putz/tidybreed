@@ -74,12 +74,17 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   trait    <- trait_name
   n_traits <- length(trait)
 
-  # Pull fixed effects for these traits (fixed_class and fixed_cov only)
+  # Pull fixed effects for these traits (fixed_class and fixed_cov only).
+  # phenotype_effects and ind_phenotype are observation-layer tables keyed by
+  # phenotype_name; add_ebv() fits simple traits, for which phenotype_name is
+  # the trait_name, so the key is aliased back to trait_name here.
+  trait_in <- paste0("'", trait, "'", collapse = ", ")
   effects_df <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_name, effect_name, effect_class, source_column, source_table ",
+    paste0("SELECT phenotype_name AS trait_name, effect_name, effect_class, ",
+           "source_column, source_table ",
            "FROM phenotype_effects ",
-           "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
+           "WHERE phenotype_name IN (", trait_in, ") ",
            "AND effect_class IN ('fixed_class', 'fixed_cov') ",
            "ORDER BY effect_class, effect_name")
   )
@@ -116,11 +121,12 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   else ""
   pheno_long <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, trait_name, AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
-           "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
+    paste0("SELECT id_ind, phenotype_name AS trait_name, ",
+           "AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
+           "WHERE phenotype_name IN (", trait_in, ") ",
            "AND id_ind IN (", id_in, ")",
            pheno_clause,
-           " GROUP BY id_ind, trait_name")
+           " GROUP BY id_ind, phenotype_name")
   )
   if (nrow(pheno_long) == 0)
     stop("No phenotypic records found for the requested individuals and traits.",

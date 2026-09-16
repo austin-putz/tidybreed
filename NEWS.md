@@ -1,3 +1,43 @@
+# tidybreed 0.68.2 (2026-09-15)
+
+## Fixed
+
+- **`add_ebv(software = "blupf90")` failed on every population written since
+  the two-layer phenotype split.** `build_data_file()` still queried
+  `phenotype_effects` and `ind_phenotype` by `trait_name`; both tables have
+  been keyed by `phenotype_name` since 0.31.0, so the first BLUPF90 run stopped
+  with a DuckDB binder error. Both queries now read `phenotype_name` and alias
+  it back to `trait_name` (`add_ebv()` fits simple traits, for which the two
+  names coincide). A regression test builds the data file without the solver,
+  which is why this went unnoticed: the BLUPF90 path had no test that reached
+  the query.
+
+## Changed
+
+- **Swine vignette script** (`vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R`)
+  runs end to end against the current schema:
+  - WWD/WWM QTL effects and TBVs come from one multi-trait
+    `define_additive_effects()` call; the per-trait calls that preceded it
+    left stale TBVs behind once the joint call replaced the effects.
+  - The daily loop records ADFI and FCR at off-test alongside ADG and BF, and
+    the four copy-pasted `add_ebv()` blocks are one loop over the traits that
+    have observed records that day.
+  - The `maternal` index is computed only on days when every index trait has
+    an EBV (NW records are dated at farrowing, WWD/WWM need weaned litters),
+    and selection switches from random to index when the first index exists,
+    not on the evaluation start date. Previously `add_index()` stopped on the
+    first evaluation date because ADFI was never evaluated.
+  - The hand-rolled WW maternal BLUPF90 run is skipped until WW records exist
+    and assigns `eval_number` per trait like `add_ebv()` does.
+  - An undefined variable in index-based female selection is fixed.
+  - The post-loop section is rewritten for the time-based design: fills in
+    TBV / TGV / true index for every animal (with a TBV-vs-`ind_tgv_total`
+    consistency check), a `restore_pop()` example, timing plots, summary
+    tables and trend figures by birth year-quarter saved to
+    `config$output$save_dir`. The generation-based (`gen_born`, `rep`,
+    `trait_effect_cov`) summary that never matched this script is gone, and
+    the raw `DELETE` reset block uses `remove_rows()`.
+
 # tidybreed 0.68.1 (2026-09-15)
 
 Documentation-only follow-up to Phase E, from the overall review recorded in
