@@ -52,7 +52,8 @@ test_that("print.tidybreed_pop() shows Model / Individuals / Records for a full 
   pop <- pop |> define_trait("ADG", target_add_var = 0.25)
   pop <- pop |>
     get_table("genome_meta") |> dplyr::filter(chr %in% 1:2) |>
-    define_additive_effects("ADG")
+    define_additive_effects("ADG",
+      base_tbl = get_table(pop, "founder_haplotypes"))   # two pools; pooled on purpose
   pop <- pop |> define_phenotype("ADG", residual_var = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 

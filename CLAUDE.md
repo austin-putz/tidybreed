@@ -1042,6 +1042,23 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   `V_A = Σ_j n_eligible,j · p_j q_j a_j²`, `n_eligible` = 2 unparented, 1
   parent-qualified.
 
+  **The base population is `base_tbl`, a filtered `tidybreed_table`** — the
+  same two-table shape as `add_ebv(tbl, phenotype = )`: `tbl` says which loci,
+  `base_tbl` says which allele copies define `p`. Three shapes, dispatched on
+  `table_name` and checked for projected columns: `founder_haplotypes` (the
+  pool), `ind_haplotype` (these copies — `filter(line_origin == "Duroc")` is
+  Duroc copies at any cross depth), or any table with `id_ind` (these
+  individuals, semi-joined on `DISTINCT id_ind`). `p` always comes from
+  `extract_allele_freq()`, so a base selection means the same population in
+  every writer. `base_tbl = NULL` is the population the effect applies to,
+  resolved with the `line → NULL` precedence of `resolve_genome_map()`: the
+  line's own founder pool, else the shared (`NULL`) pool, else an error listing
+  the pools that exist. Only a population-wide effect on a multi-pool founder
+  table warns (Wahlund); an explicit `base_tbl` — including the whole founder
+  table, which is how the common fallback variant of a crossbreeding model is
+  defined — never warns. A selected QTL with no copies in the base is an error
+  naming the loci, never silently centred at `p = 0`.
+
   ```r
   # Single trait
   pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |> define_additive_effects("ADG")
@@ -1052,15 +1069,45 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |>
     define_additive_effects(c("ADG", "BW"), G = G)
 
-  # Use generation-0 animals to define base allele frequencies
-  gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
+  # Generation-0 animals define base allele frequencies
   pop |> get_table("genome_meta") |> filter(...) |>
-    define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
+    define_additive_effects("ADG",
+      base_tbl = get_table(pop, "ind_meta") |> filter(gen == 0L))
+
+  # Crossbreeding: common fallback pooled on purpose (no warning), then each
+  # line centred on its own founder pool by default
+  gm <- pop |> get_table("genome_meta") |> filter(chr %in% 1:5)
+  gm |> define_additive_effects("ADG", base_tbl = get_table(pop, "founder_haplotypes"))
+  gm |> define_additive_effects("ADG", line_name = "Duroc")
+  gm |> define_additive_effects("ADG", line_name = "Landrace")
 
   # Imprinting: paternal expression, per line rather than trait-wide
   pop |> get_table("genome_meta") |>
     define_additive_effects("IMP", line_name = "Duroc", parent_origin = 1)
   ```
+
+### `extract_allele_freq()`
+
+`R/extract_allele_freq.R`
+
+`extract_allele_freq(tbl)` — the single place a population selection becomes
+per-locus allele frequency. Takes the three `base_tbl` shapes above; returns
+one row per `genome_meta` locus in `locus_id` order (`locus_id`, `locus_name`,
+`allele_freq`), `NA` at a locus the selection has no copies for (never `0`),
+an error if no locus is covered at all. One SQL statement with the filter
+rendered as a subquery via `dbplyr::sql_render()`; nothing else is collected.
+Never warns, never writes. Users call it to obtain `p` for `ad_terms()`. Also
+holds `.validate_base_tbl()`, shared by both genome-effect writers.
+
+**How the two writers relate.** `define_genome_effects()` writes any effect
+you supply; `define_*_effects()` functions sample effects of one shape and
+write them through the same engine (`.ge_build → .ge_read_model →
+.ge_resolve_deletes → .ge_commit`). `define_additive_effects()` is provably
+sugar over the writer — `tests/testthat/test-genome-effects-writer.R`
+("generator == writer") reproduces its output exactly through
+`define_genome_effects()` with the reserved owner, `replace_scope`, and the
+same `base_tbl`. `base_tbl = NULL` deliberately differs: the generator has a
+domain default; the writer fills nothing, so a missing centre is an error.
 
 ### `define_genome_effects()` / `ad_terms()` / `genotype_terms()`
 
@@ -1068,7 +1115,8 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 
 `define_genome_effects(pop, trait_name, terms, effect_owner = "custom", mode =
 c("append", "replace_scope", "replace_owner", "replace_trait"), origin = NULL,
-require_complete = FALSE, allow_reserved_owner = FALSE)` — the general writer
+base_tbl = NULL, require_complete = FALSE, allow_reserved_owner = FALSE)` — the
+general writer
 for arbitrary genome effects. `terms` is a **long data frame, one row per
 (term × locus)**: `term_id` (user-facing only; never stored), `genome_value`,
 `effect_name`, `locus_name`, `contrast_name`, `center_value`,
@@ -1085,7 +1133,16 @@ table set before `COMMIT`. Every message about malformed input names the
 `term_id` the user typed, never an `id_genome_effect` they have not seen.
 `require_complete = TRUE` demands every reachable `(copy_count, dosage)` state
 on every member of an indicator surface — including `copy_count_value = 0`
-where a chromosome can be absent.
+where a chromosome can be absent. `base_tbl` (a filtered `tidybreed_table`;
+see `extract_allele_freq()`) fills Cockerham `center_value` on any `additive`
+or `dominance` member that has none — column omitted or `NA`. An explicit
+centre always wins, `indicator` members are never touched, the base is
+validated whenever supplied but queried only if some centre is missing, and
+without `base_tbl` a missing centre is an error. The fill happens inside
+`.ge_build()` before member validation, whose per-row message says when the
+base had no copies at that locus. One `base_tbl` gives one `p` per locus per
+call, so line-scoped surfaces are written one line at a time with
+`mode = "append"`.
 
 Two builders produce `terms`, because a surface is rows, not a second
 representation:

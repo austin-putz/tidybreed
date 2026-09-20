@@ -1,3 +1,54 @@
+# tidybreed 0.69.0 (2026-09-20)
+
+## Breaking
+
+- **`define_additive_effects()` chooses its base population with one argument,
+  `base_tbl`, a filtered `tidybreed_table`.** `base = c("founder_haplotypes",
+  "current_pop")`, `base_line_name`, and the old current-pop-only `base_tbl`
+  are removed, along with `compute_base_allele_freq()`. The table's identity
+  says *what kind of thing* is selected and its `filter()` says *which*:
+  `founder_haplotypes` (the pool), `ind_haplotype` (these allele copies —
+  `filter(line_origin == "Duroc")` is Duroc copies at any cross depth, a base
+  the old API could not express), or any table with `id_ind` (these
+  individuals). This is the two-table shape `add_ebv(tbl, phenotype = )`
+  already uses. Migration: `base = "current_pop"` → `base_tbl = get_table(pop,
+  "ind_meta")` (or a filtered one); `base_line_name = "A"` → drop it when
+  `line_name = "A"` is set, else `base_tbl = get_table(pop,
+  "founder_haplotypes") |> filter(line_name == "A")`; the explicit
+  `base_line_name = NULL` sentinel → `base_tbl = get_table(pop,
+  "founder_haplotypes")`.
+- `base_tbl = NULL` is the population the effect applies to, resolved with the
+  package's `line → NULL` precedence: the line's own founder pool, else the
+  shared (`line_name = NULL`) pool — a shared pool feeding several named lines
+  used to error — else an error listing the pools that exist. Only a
+  population-wide effect on a multi-pool founder table warns (Wahlund); an
+  explicit `base_tbl`, including the whole founder table, is an intentional
+  selection and never warns.
+- A selected QTL locus with no allele copies in the base is now an error
+  naming the loci. It used to be centred silently at `p = 0`.
+
+## Added
+
+- `extract_allele_freq(tbl)` — the single place a population selection becomes
+  per-locus allele frequency. One row per `genome_meta` locus in `locus_id`
+  order, `NA` where the selection has no copies, one SQL statement with the
+  filter rendered as a subquery. Never warns, never writes. Both genome-effect
+  writers use it, and it is how users obtain `p` for `ad_terms()`.
+- `define_genome_effects(base_tbl = )` fills Cockerham `center_value` on any
+  `additive` or `dominance` member that has none (column omitted or `NA`).
+  Explicit centres win, indicators are untouched, the base is queried only if
+  a centre is actually missing, and without `base_tbl` a missing centre stays
+  an error.
+- `define_additive_effects()` is now provably sugar over
+  `define_genome_effects()`: a test reproduces its three effect tables and
+  `add_tbv()` output exactly through the general writer with the reserved
+  owner, `replace_scope`, and the same `base_tbl`.
+
+## Changed
+
+- The swine vignette's six `base = "current_pop"` calls are migrated to an
+  explicit `base_tbl = get_table(pop, "ind_meta")`.
+
 # tidybreed 0.68.4 (2026-09-16)
 
 ## Added

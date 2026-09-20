@@ -1,6 +1,10 @@
 # Base population as a filtered table — `base_tbl` for the genome-effect writers
 
-**Status:** design proposal, nothing implemented. **Created:** 2026-09-20.
+**Status:** **IMPLEMENTED** — v0.69.0, 2026-09-20, commits `48ebce2` (step 1),
+`6a7d3a5` (step 2), `845d1cd` (step 3) + a docs commit. Deviations and the
+as-executed call-site inventory are in
+`plans/update_genome_effects_base_tbl_implementation.md`; `> Implemented:`
+notes below mark where the code differs from the sketch. **Created:** 2026-09-20.
 **Revision:** v5 (2026-09-20) — final pre-implementation pass. **Approved for
 implementation** by the Codex v4 review
 (`plans/update_genome_effects_base_tbl_codex_v1.md`, "Update after v4"); Q10 and
@@ -457,6 +461,10 @@ The reason the column check exists: `select.tidybreed_table()` replaces
 `allele`. Without this check the failure surfaces as a DuckDB binder error inside
 generated SQL.
 
+> **Implemented** as sketched, in `R/extract_allele_freq.R` (the lower layer,
+> so the public helper can call it with `pop = NULL`). `.founder_base_empty_error()`
+> lives in the same file for the same reason.
+
 ### 3.2 `extract_allele_freq()` (`R/extract_allele_freq.R`)
 
 ```r
@@ -520,6 +528,11 @@ errors before any of this runs; the old "Did you call define_founder_haplotypes(
 hint moves onto that path (or is dropped if `get_table()`'s message is judged
 sufficient).
 
+> **Implemented** as sketched. The "Did you call `define_founder_haplotypes()`?"
+> hint was **kept**, on `.dae_default_base()`, and now suggests
+> `base_tbl = get_table(pop, "ind_meta")` as the alternative — more useful than
+> `get_table()`'s generic table-missing message.
+
 ### 3.3 `define_additive_effects()` rewiring
 
 ```r
@@ -565,6 +578,16 @@ neither exists is it an error.
 
 A line-scoped effect that falls back to the shared pool does **not** warn: a
 shared pool is one population by construction, so there is nothing to pool.
+
+> **Implemented** with one placement change. The sketch above resolves the base
+> once at the top of the function; in practice that made the Wahlund warning
+> fire *before* the multi-trait argument checks (the mixed-`parent_origin`
+> error in `gate 44` acquired a warning it never had). The resolution now runs
+> **after argument validation, in each path**, at the point the old
+> `compute_base_allele_freq()` call sat, through one helper
+> `.dae_resolve_base(pop, base_tbl, line_name)` → `list(p_base, label)`. The
+> completion message reports the base as `founder_haplotypes [1 filter]` /
+> `ind_meta` rather than an enum value.
 
 Back in the writer, after `p_base` is in hand and **before anything consumes
 it**:
@@ -631,6 +654,10 @@ new argument, the smaller of the two shapes the review offered:
 `labels`, `locus_name`, contrast); only the suffix is new, and `fill_failed` is
 dropped before anything is written.
 
+> **Implemented** exactly as sketched (including the v4 `needs_fill`
+> normalisation). The roxygen `@param base_tbl` also states the one-`p`-per-call
+> rule from §4.5.
+
 ### 3.5 `plans/TODO.md` entries (not implemented here)
 
 - `add_ebv()`: rename `phenotype` → `phenotype_tbl` for `*_tbl` consistency, and
@@ -670,6 +697,14 @@ and `base = "current_pop", base_tbl = x` (→ `base_tbl = x`). Roxygen in
 **Rule:** the implementer regenerates this inventory with the grep above at the
 time of the change and migrates every executable `current_pop` call to an
 explicit whole-population `base_tbl`. Never just delete the argument.
+
+> **Implemented.** The as-executed inventory is in the implementation summary.
+> Beyond the table above, twelve `suppressWarnings()` wrappers around
+> pooled-default calls in `test-add_tbv.R` and `test-genome-effects-eval.R`
+> became an explicit `base_tbl = get_table(pop, "founder_haplotypes")` — the
+> Q11 "tell" is gone — and the ten `base_line_name = "A"` in
+> `test-genome-effects-writer.R` became `base_tbl = gew_base_A(pop)`. The grep
+> returns nothing after commit 2.
 
 Per the pre-1.0 policy the old names are removed outright — no aliases, no
 deprecation messages, no tests that exercise them.
@@ -749,6 +784,10 @@ deprecation messages, no tests that exercise them.
     leaves explicit values alone; never touches indicators.
 19. No frequency query when every centre is explicit (assert via a mocked
     `extract_allele_freq()` or a `DBI` call counter).
+    > **Implemented** without a mock or counter: the test passes a base whose
+    > *query would fail* (no copies at any locus) with every centre explicit —
+    > if it were queried the call would error, and it does not; the same base
+    > with a missing centre does error. Sharper, and no tracing of `DBI`.
 20. A failed fill keeps the `term_id` + `locus_name` in the error and appends the
     "no copies at this locus" suffix.
 21. `base_tbl` from another population/connection errors here too.
@@ -773,6 +812,11 @@ deprecation messages, no tests that exercise them.
     not in the test.
 
 `vignettes/swine/…`: runs end to end after migration.
+> **Implemented:** run through the last `define_additive_effects()` call (line
+> 1520) on the full 10k-locus / 2000-founder config with `load_all()`; all six
+> migrated calls and the WWD/WWM correlated call ran with `base: ind_meta`,
+> exit 0. The breeding loop beyond that point needs the installed package and
+> BLUPF90 and does not touch the changed code.
 
 ---
 
