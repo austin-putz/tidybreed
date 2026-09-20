@@ -23,6 +23,10 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #' as every table [get_table()] returns. Scope is supplied separately in
 #' `origin` so the common case stays flat.
 #'
+#' `define_genome_effects()` writes any effect you supply; `define_*_effects()`
+#' functions such as [define_additive_effects()] sample effects of one shape
+#' and write them through the same path.
+#'
 #' @section The `terms` data frame:
 #'
 #' | Column | Required | Meaning |
@@ -78,12 +82,26 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #' @param mode One of `"append"`, `"replace_scope"`, `"replace_owner"`,
 #'   `"replace_trait"`.
 #' @param origin Scope; see **Scope (`origin`)**.
+#' @param base_tbl Optional `tidybreed_table` from [get_table()] (optionally
+#'   filtered) selecting the allele copies whose frequencies fill
+#'   `center_value` on any `additive` or `dominance` member that has none:
+#'   `founder_haplotypes`, `ind_haplotype`, or any table with an `id_ind`
+#'   column, from the same `pop` — see [extract_allele_freq()]. An explicit
+#'   `center_value` is never overwritten; `indicator` members are never
+#'   touched; the base is queried only if some centre is actually missing.
+#'   `NULL` (default) fills nothing, and a missing centre is an error. The
+#'   fill is Cockerham `p` only — functional coding writes `0.5` explicitly
+#'   ([ad_terms()] does). One `base_tbl` gives one `p` per locus per call, so
+#'   line-scoped surfaces are written one line at a time with
+#'   `mode = "append"`.
 #' @param require_complete Logical. When `TRUE`, an indicator surface must name
 #'   every reachable `(copy_count, dosage)` state on every member — including
 #'   `copy_count_value = 0` where a chromosome can be absent. Default `FALSE`
 #'   (sparse: a cell you do not write contributes zero).
 #' @param allow_reserved_owner Logical. Permit writing under a package-reserved
-#'   `effect_owner`. Default `FALSE`; [define_additive_effects()] sets it itself.
+#'   `effect_owner`. Default `FALSE`; the package's own generator
+#'   ([define_additive_effects()]) writes under its reserved owner through the
+#'   same engine.
 #'
 #' @return The `tidybreed_pop`, invisibly.
 #'
@@ -128,6 +146,16 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #'                       copy_count    = c(1L, 1L)),
 #'   effect_owner = "reciprocal"
 #' )
+#'
+#' # Let the writer fill Cockerham p from a base population: leave
+#' # center_value out and pass base_tbl (see extract_allele_freq()).
+#' pop <- pop |> define_genome_effects(
+#'   "ADG",
+#'   data.frame(locus_name = "Locus_10", contrast_name = "dominance",
+#'              genome_value = 0.8),
+#'   base_tbl = get_table(pop, "founder_haplotypes") |>
+#'     dplyr::filter(line_name == "A")
+#' )
 #' }
 #' @export
 define_genome_effects <- function(pop,
@@ -139,12 +167,32 @@ define_genome_effects <- function(pop,
                                                           "replace_owner",
                                                           "replace_trait"),
                                   origin              = NULL,
+                                  base_tbl            = NULL,
                                   require_complete    = FALSE,
                                   allow_reserved_owner = FALSE) {
 
   validate_tidybreed_pop(pop)
   mode <- match.arg(mode)
   conn <- pop$db_conn
+
+  # base_tbl is validated whenever supplied (a wrong object should error
+  # whether or not anything needs filling) but queried only when an additive
+  # or dominance row is missing its centre. An omitted center_value column is
+  # the documented way to ask for a fill, so normalise it the way .ge_build()
+  # will before deciding -- terms$center_value is NULL then, and
+  # any(NULL & ...) is FALSE.
+  base_freq <- NULL
+  if (!is.null(base_tbl)) {
+    .validate_base_tbl(base_tbl, pop)
+    if (is.data.frame(terms) && nrow(terms) > 0L &&
+        "contrast_name" %in% names(terms)) {
+      centres <- if ("center_value" %in% names(terms)) terms$center_value
+                 else rep(NA_real_, nrow(terms))
+      needs_fill <- any(is.na(centres) &
+                        terms$contrast_name %in% c("additive", "dominance"))
+      if (isTRUE(needs_fill)) base_freq <- extract_allele_freq(base_tbl)
+    }
+  }
 
   validate_sql_identifier(trait_name, what = "trait name")
   validate_sql_identifier(effect_owner, what = "effect owner")
@@ -158,7 +206,8 @@ define_genome_effects <- function(pop,
   .ge_require_effect_tables(pop)
   .ge_require_trait(conn, trait_name)
 
-  built  <- .ge_build(conn, trait_name, terms, origin, effect_owner)
+  built  <- .ge_build(conn, trait_name, terms, origin, effect_owner,
+                      base_freq = base_freq)
   scope  <- .ge_scope_from_origin(origin, mode)
   model  <- .ge_read_model(conn)
   drop   <- .ge_resolve_deletes(model, trait_name, effect_owner, mode, scope,
@@ -192,7 +241,8 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 #'
 #' @keywords internal
 #' @noRd
-.ge_build <- function(conn, trait_name, terms, origin, effect_owner) {
+.ge_build <- function(conn, trait_name, terms, origin, effect_owner,
+                      base_freq = NULL) {
   if (!is.data.frame(terms) || nrow(terms) == 0L) {
     stop("'terms' must be a data frame with at least one row.", call. = FALSE)
   }
@@ -317,8 +367,22 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
     )
   }))
 
+  # Fill Cockerham centres from the base where the user left them out, on
+  # additive/dominance members only. An explicit centre always wins; an
+  # indicator has no centre and is never touched. fill_failed exists only so
+  # the validator can say why a centre is still missing.
+  members$fill_failed <- FALSE
+  if (!is.null(base_freq)) {
+    fill <- is.na(members$center_value) &
+            members$contrast_name %in% c("additive", "dominance")
+    members$center_value[fill] <-
+      base_freq$allele_freq[match(members$locus_id[fill], base_freq$locus_id)]
+    members$fill_failed <- fill & is.na(members$center_value)
+  }
+
   members <- .ge_infer_copy_counts(conn, members, labels)
   .ge_check_member_fields(members, labels)
+  members$fill_failed <- NULL
 
   origins <- .ge_build_origins(origin, members, labels)
   .ge_check_origin_fields(origins, members, labels)
@@ -404,7 +468,10 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
       if (is.na(members$center_value[i])) {
         v <- c(v, paste0(tag, " is '", members$contrast_name[i],
                          "' and needs 'center_value' (p under Cockerham",
-                         " coding, 0.5 under functional)"))
+                         " coding, 0.5 under functional)",
+                         if (isTRUE(members$fill_failed[i]))
+                           " -- and base_tbl has no allele copies at this locus"
+                         else ""))
       } else if (members$center_value[i] < 0 || members$center_value[i] > 1) {
         v <- c(v, paste0(tag, ": center_value must be between 0 and 1 (got ",
                          members$center_value[i], ")"))

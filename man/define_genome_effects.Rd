@@ -11,6 +11,7 @@ define_genome_effects(
   effect_owner = "custom",
   mode = c("append", "replace_scope", "replace_owner", "replace_trait"),
   origin = NULL,
+  base_tbl = NULL,
   require_complete = FALSE,
   allow_reserved_owner = FALSE
 )
@@ -32,13 +33,28 @@ because \code{effect_owner} is part of the fallback-family signature. Default
 
 \item{origin}{Scope; see \strong{Scope (\code{origin})}.}
 
+\item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
+filtered) selecting the allele copies whose frequencies fill
+\code{center_value} on any \code{additive} or \code{dominance} member that has none:
+\code{founder_haplotypes}, \code{ind_haplotype}, or any table with an \code{id_ind}
+column, from the same \code{pop} — see \code{\link[=extract_allele_freq]{extract_allele_freq()}}. An explicit
+\code{center_value} is never overwritten; \code{indicator} members are never
+touched; the base is queried only if some centre is actually missing.
+\code{NULL} (default) fills nothing, and a missing centre is an error. The
+fill is Cockerham \code{p} only — functional coding writes \code{0.5} explicitly
+(\code{\link[=ad_terms]{ad_terms()}} does). One \code{base_tbl} gives one \code{p} per locus per call, so
+line-scoped surfaces are written one line at a time with
+\code{mode = "append"}.}
+
 \item{require_complete}{Logical. When \code{TRUE}, an indicator surface must name
 every reachable \verb{(copy_count, dosage)} state on every member — including
 \code{copy_count_value = 0} where a chromosome can be absent. Default \code{FALSE}
 (sparse: a cell you do not write contributes zero).}
 
 \item{allow_reserved_owner}{Logical. Permit writing under a package-reserved
-\code{effect_owner}. Default \code{FALSE}; \code{\link[=define_additive_effects]{define_additive_effects()}} sets it itself.}
+\code{effect_owner}. Default \code{FALSE}; the package's own generator
+(\code{\link[=define_additive_effects]{define_additive_effects()}}) writes under its reserved owner through the
+same engine.}
 }
 \value{
 The \code{tidybreed_pop}, invisibly.
@@ -52,6 +68,10 @@ origin (\code{genome_effect_member_origins}).
 \code{terms} is a \strong{long data frame, one row per (term x locus)} — the same shape
 as every table \code{\link[=get_table]{get_table()}} returns. Scope is supplied separately in
 \code{origin} so the common case stays flat.
+
+\code{define_genome_effects()} writes any effect you supply; \verb{define_*_effects()}
+functions such as \code{\link[=define_additive_effects]{define_additive_effects()}} sample effects of one shape
+and write them through the same path.
 }
 \section{The \code{terms} data frame}{
 \tabular{lll}{
@@ -143,6 +163,16 @@ pop <- pop |> define_genome_effects(
                       parent_origin = c(1L, 2L),
                       copy_count    = c(1L, 1L)),
   effect_owner = "reciprocal"
+)
+
+# Let the writer fill Cockerham p from a base population: leave
+# center_value out and pass base_tbl (see extract_allele_freq()).
+pop <- pop |> define_genome_effects(
+  "ADG",
+  data.frame(locus_name = "Locus_10", contrast_name = "dominance",
+             genome_value = 0.8),
+  base_tbl = get_table(pop, "founder_haplotypes") |>
+    dplyr::filter(line_name == "A")
 )
 }
 }

@@ -996,3 +996,186 @@ test_that("silent coercions are refused rather than stored as plausible values",
     "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 })
 
+
+
+# ── base_tbl on the general writer ──────────────────────────────────────────
+# plans/update_genome_effects_base_tbl.md §2.4, §3.4; tests 18-22.
+
+# Two named pools with founders from each, so ind_haplotype has copies too.
+gew_base_pop <- function(n_loci = 6) {
+  pop <- open_pop(pop_name = "gewb", db_name = ":memory:") |>
+    define_genome(n_loci = n_loci, n_chr = 1, chr_len_Mb = 20)
+  set.seed(12)
+  pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "A")
+  pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "B")
+  pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "A") |>
+    add_founders(n_males = 2, n_females = 2, line_name = "A")
+  define_trait(pop, "ADG", target_add_var = 1.0)
+}
+
+gew_centres <- function(pop, owner) {
+  DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT m.locus_id, m.contrast_name, m.center_value ",
+    "FROM genome_effect_members m JOIN genome_effects e USING (id_genome_effect) ",
+    "WHERE e.effect_owner = '", owner, "' ORDER BY m.locus_id"))
+}
+
+test_that("base_tbl fills missing centres on additive/dominance members only", {
+  pop <- gew_base_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  fh_A <- get_table(pop, "founder_haplotypes") |> dplyr::filter(line_name == "A")
+  p    <- extract_allele_freq(fh_A)$allele_freq
+
+  # Column omitted entirely (the documented way to ask for a fill).
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = c("Locus_1", "Locus_2"),
+    contrast_name = c("dominance", "additive"), genome_value = c(0.8, 0.3),
+    term_id = 1:2), effect_owner = "omitted", base_tbl = fh_A)
+  got <- gew_centres(pop, "omitted")
+  expect_equal(got$center_value, p[1:2])
+
+  # Column present with NA.
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_3", contrast_name = "dominance",
+    center_value = NA_real_, genome_value = 0.8),
+    effect_owner = "explicit_na", base_tbl = fh_A)
+  expect_equal(gew_centres(pop, "explicit_na")$center_value, p[3])
+
+  # An explicit centre always wins.
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_4", contrast_name = "additive",
+    center_value = 0.123, genome_value = 0.8),
+    effect_owner = "explicit", base_tbl = fh_A)
+  expect_equal(gew_centres(pop, "explicit")$center_value, 0.123)
+
+  # Indicator members are never touched (and still refuse a centre).
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_5", contrast_name = "indicator", dosage_value = 1L,
+    genome_value = 0.8), effect_owner = "ind", base_tbl = fh_A)
+  expect_true(is.na(gew_centres(pop, "ind")$center_value))
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_5", contrast_name = "indicator", dosage_value = 1L,
+    center_value = 0.5, genome_value = 0.8), effect_owner = "ind2",
+    base_tbl = fh_A), "must not carry 'center_value'")
+
+  # A different base gives a different p: the same population semantics as
+  # define_additive_effects() (both go through extract_allele_freq()).
+  pop <- define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance", genome_value = 0.8),
+    effect_owner = "from_copies",
+    base_tbl = get_table(pop, "ind_haplotype") |> dplyr::filter(line_origin == "A"))
+  p_copies <- pop |> get_table("ind_haplotype") |>
+    dplyr::filter(line_origin == "A") |> extract_allele_freq()
+  expect_equal(gew_centres(pop, "from_copies")$center_value, p_copies$allele_freq[1])
+})
+
+test_that("without base_tbl a missing centre is the error it always was", {
+  pop <- gew_base_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance", genome_value = 0.8)),
+    "needs 'center_value'")
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance",
+    center_value = NA_real_, genome_value = 0.8)),
+    "needs 'center_value'")
+})
+
+test_that("the base is validated always but queried only when a fill is needed", {
+  pop <- gew_base_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  fh_A <- get_table(pop, "founder_haplotypes") |> dplyr::filter(line_name == "A")
+
+  # Validated: a wrong object errors even though every centre is explicit.
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
+    genome_value = 0.8), base_tbl = "A"), "must be a tidybreed_table")
+  other <- gew_base_pop()
+  on.exit(close_pop(other), add = TRUE)
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
+    genome_value = 0.8), base_tbl = get_table(other, "founder_haplotypes")),
+    "same pop as 'tbl'")
+
+  # Not queried: a base whose *query* would fail (no copies anywhere at these
+  # loci) is the sharp check -- if it were queried, the call would error.
+  empty_base <- get_table(pop, "ind_haplotype") |> dplyr::filter(locus_id > 999L)
+  expect_no_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
+    genome_value = 0.8), effect_owner = "explicit", base_tbl = empty_base))
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    locus_name = "Locus_2", contrast_name = "dominance", genome_value = 0.8),
+    effect_owner = "needs", base_tbl = empty_base),
+    "contains no allele copies")
+})
+
+test_that("a failed fill keeps the row-specific message and says why", {
+  pop <- gew_base_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  half <- get_table(pop, "ind_haplotype") |> dplyr::filter(locus_id <= 2L)
+  expect_error(define_genome_effects(pop, "ADG", data.frame(
+    term_id = c("t1", "t2"), locus_name = c("Locus_1", "Locus_4"),
+    contrast_name = "dominance", genome_value = 0.8),
+    effect_owner = "gap", base_tbl = half),
+    "term_id 't2' locus 'Locus_4' is 'dominance' and needs 'center_value'.*and base_tbl has no allele copies at this locus")
+  # Nothing written.
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) n FROM genome_effects")$n, 0)
+})
+
+test_that("generator == writer: define_additive_effects() is sugar over define_genome_effects()", {
+  # plans/update_genome_effects_base_tbl.md §2.5 / test 22. Capture what the
+  # generator wrote, then re-write the same coefficients through the general
+  # writer with center_value OMITTED so the base must be queried -- proving
+  # both the shared storage path and the shared base semantics.
+  snapshot <- function(pop) {
+    list(
+      terms   = DBI::dbGetQuery(pop$db_conn, paste0(
+        "SELECT trait_name, effect_owner, effect_name, genome_value ",
+        "FROM genome_effects ORDER BY genome_value")),
+      members = DBI::dbGetQuery(pop$db_conn, paste0(
+        "SELECT e.genome_value, m.member_slot, m.locus_id, m.contrast_name, ",
+        "       m.copy_count_value, m.dosage_value, m.center_value ",
+        "FROM genome_effect_members m JOIN genome_effects e USING (id_genome_effect) ",
+        "ORDER BY e.genome_value, m.member_slot")),
+      origins = DBI::dbGetQuery(pop$db_conn, paste0(
+        "SELECT e.genome_value, o.member_slot, o.origin_slot, o.line_match_type, ",
+        "       o.line_name, o.parent_origin, o.copy_count ",
+        "FROM genome_effect_member_origins o JOIN genome_effects e USING (id_genome_effect) ",
+        "ORDER BY e.genome_value, o.member_slot, o.origin_slot")),
+      tbv     = DBI::dbGetQuery(pop$db_conn,
+        "SELECT id_ind, trait_name, tbv_value FROM ind_tbv ORDER BY id_ind, trait_name"))
+  }
+  check <- function(line_name, parent_origin, origin) {
+    pop <- gew_base_pop(n_loci = 8)
+    on.exit(close_pop(pop), add = TRUE)
+    base <- get_table(pop, "founder_haplotypes") |> dplyr::filter(line_name == "A")
+
+    pop <- pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", distribution = "normal", seed = 77,
+                              line_name = line_name, parent_origin = parent_origin,
+                              base_tbl = base)
+    pop  <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+    gen  <- snapshot(pop)
+    expect_equal(nrow(gen$terms), 8L)
+
+    coef <- DBI::dbGetQuery(pop$db_conn, paste0(
+      "SELECT locus_name, genome_value FROM genome_effect_loci ",
+      "WHERE effect_owner = 'generated_additive_tbv' ORDER BY locus_id"))
+    pop <- define_genome_effects(pop, "ADG",
+      terms = data.frame(term_id = seq_len(nrow(coef)), locus_name = coef$locus_name,
+                         contrast_name = "additive", genome_value = coef$genome_value),
+      origin = origin, effect_owner = "generated_additive_tbv",
+      mode = "replace_scope", allow_reserved_owner = TRUE, base_tbl = base)
+    pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+    wri <- snapshot(pop)
+
+    expect_equal(wri$terms,   gen$terms)
+    expect_equal(wri$members, gen$members)
+    expect_equal(wri$origins, gen$origins)
+    expect_equal(wri$tbv,     gen$tbv)
+  }
+  check(NULL, NULL, NULL)
+  check("A", 1L, list(line_match_type = "exact", line_name = "A",
+                      parent_origin = 1L, copy_count = 1L))
+})
