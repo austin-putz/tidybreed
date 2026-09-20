@@ -14,8 +14,12 @@
 #' records** are included in the evaluation; ancestors are traced back
 #' automatically for the pedigree via `n_gen_pedigree`.
 #'
-#' @param tbl A `tidybreed_table` from [get_table()] (optionally filtered).
-#'   Must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param trait_name Character vector of trait name(s) to evaluate.
 #' @param software Character or `NULL` (default). Set to `"blupf90"` to run
 #'   the BLUPF90 suite (currently the only supported value). Exactly one of
@@ -220,16 +224,7 @@ add_ebv <- function(tbl,
   }
 
   # ---- Resolve candidate set ----
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- DBI::dbGetQuery(pop$db_conn,
-                                  "SELECT DISTINCT id_ind FROM ind_meta")$id_ind
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected))
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals.", call. = FALSE)
-    subset_ids <- unique(collected[["id_ind"]])
-  }
+  subset_ids <- resolve_subset_ids(tbl, "EBV computation", all_if_null = TRUE)
 
   if (length(subset_ids) == 0) {
     warning("No individuals matched; no EBVs computed.", call. = FALSE)

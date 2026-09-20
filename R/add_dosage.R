@@ -20,8 +20,12 @@
 #' data. `add_dosage()` **materializes simulated dosage values** (ground truth
 #' from `ind_haplotype`) into `ind_genotype`.
 #'
-#' @param tbl A `tidybreed_table` from [get_table()] (optionally filtered). Any
-#'   table with an `id_ind` column is accepted.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param chip_name Character or `NULL`. Name of a chip defined via
 #'   [define_chip()] (which writes `is_<chip_name>` to `genome_meta`). Loci are
 #'   restricted to `is_<chip_name> = TRUE`. Errors if the column is missing.
@@ -64,20 +68,10 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
   validate_tidybreed_pop(pop)
 
   # --- Resolve candidate individuals (distinct id_ind) ---
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to select individuals for add_dosage().",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
-    if (length(subset_ids) == 0L) {
-      warning("No individuals matched; no dosage computed.", call. = FALSE)
-      return(invisible(pop))
-    }
+  subset_ids <- resolve_subset_ids(tbl, "add_dosage()")
+  if (!is.null(subset_ids) && length(subset_ids) == 0L) {
+    warning("No individuals matched; no dosage computed.", call. = FALSE)
+    return(invisible(pop))
   }
 
   assert_ploidy_2(pop, subset_ids)

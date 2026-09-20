@@ -45,8 +45,12 @@
 #' * `user_residual`: supply a numeric vector (or named list) to override the
 #'   residual draw.
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param phenotype_name Character vector of phenotype name(s). When `NULL`
 #'   (default), all phenotypes in `phenotype_meta` are used in
 #'   `id_phenotype_meta` order.
@@ -92,6 +96,23 @@
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(sex == "F", gen == 1L) |>
 #'   add_phenotype("ADG")
+#'
+#' # Any table with id_ind chooses the individuals. Marker-assisted
+#' # pre-selection: only carriers of two copies at Locus_10 (run add_dosage()
+#' # first, since ind_genotype is an on-demand cache)
+#' pop <- pop |>
+#'   get_table("ind_genotype") |>
+#'   dplyr::filter(locus_name == "Locus_10", dosage_value == 2L) |>
+#'   add_phenotype("ADG")
+#'
+#' # EBV-based: only animals above an EBV threshold in the latest evaluation
+#' pop <- pop |>
+#'   get_table("ind_ebv") |>
+#'   dplyr::filter(trait_name == "ADG", eval_number == 3L, ebv_value > 0.5) |>
+#'   add_phenotype("ADG")
+#'
+#' # Unfiltered ind_ebv means "every animal that has an EBV", not everyone
+#' pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
 #'
 #' # Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
 #' # registered once via define_phenotype(components = ...)
@@ -166,17 +187,7 @@ add_phenotype <- function(tbl,
 
   # ── 1. Resolve subset ──────────────────────────────────────────────────────
 
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals for phenotyping.",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
-  }
+  subset_ids <- resolve_subset_ids(tbl, "phenotyping")
 
   # ── 2. Pull candidate ind_meta rows ───────────────────────────────────────
 

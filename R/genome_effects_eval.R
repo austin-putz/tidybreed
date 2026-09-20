@@ -706,29 +706,6 @@
 
 # -- Shared entry-point plumbing --------------------------------------------
 
-#' Individuals selected by a `tidybreed_table`, as a character vector
-#'
-#' @keywords internal
-#' @noRd
-.gev_subset_ids <- function(tbl, what) {
-  pop <- tbl$pop
-  if (length(tbl$pending_filter) == 0L) {
-    ids <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name, "' must contain 'id_ind' to ",
-           "subset individuals for ", what, " computation.", call. = FALSE)
-    }
-    sel <- unique(collected[["id_ind"]])
-    ids <- get_table(pop, "ind_meta") |>
-      dplyr::filter(.data$id_ind %in% !!sel) |>
-      dplyr::collect() |>
-      dplyr::pull("id_ind")
-  }
-  unique(ids)
-}
-
 #' Resolve and check a `trait_name` argument against `trait_meta`
 #'
 #' @keywords internal

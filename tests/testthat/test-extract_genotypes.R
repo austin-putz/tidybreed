@@ -404,3 +404,35 @@ test_that("extract_genotypes() does not error when chr_inheritance has a sex-lin
 
   close_pop(pop)
 })
+
+
+test_that("extract_genotypes() accepts a filtered ind_ebv as the individual set", {
+  pop <- make_extract_pop("test_eg_ebv")
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 4)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'T', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  geno <- pop |>
+    get_table("ind_ebv") |>
+    dplyr::filter(ebv_value >= 2) |>
+    extract_genotypes("50k")
+  expect_setequal(geno$id_ind, ids[2:4])
+
+  # Unfiltered: every animal with an EBV
+  geno_all <- pop |> get_table("ind_ebv") |> extract_genotypes("50k")
+  expect_setequal(geno_all$id_ind, ids)
+
+  expect_error(pop |> get_table("genome_meta") |> extract_genotypes("50k"),
+               "has no 'id_ind' column")
+  expect_error(
+    pop |> get_table("ind_meta") |> dplyr::filter(sex == "X") |>
+      extract_genotypes("50k"),
+    "No individuals found")
+
+  close_pop(pop)
+})

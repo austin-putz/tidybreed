@@ -335,7 +335,7 @@ test_that("add_tbv() errors when the filtered table has no id_ind column", {
   pop <- make_index_pop("ix_noid")
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr == 1L) |> add_tbv("ADG"),
-    "must contain 'id_ind'"
+    "has no 'id_ind' column"
   )
   close_pop(pop)
 })

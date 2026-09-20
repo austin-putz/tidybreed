@@ -33,8 +33,12 @@
 #' re-evaluating after changing the effect model never leaves stale components
 #' behind.
 #'
-#' @param tbl A `tidybreed_table` from [get_table()] (optionally piped through
-#'   [dplyr::filter()]). The table must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param trait_name Character vector of trait name(s). When `NULL` (default),
 #'   all traits in `trait_meta` are used (in `id_trait` order).
 #'
@@ -73,7 +77,7 @@ add_tgv <- function(tbl, trait_name = NULL) {
   conn <- pop$db_conn
 
   traits <- .gev_resolve_traits(conn, trait_name)
-  ids    <- .gev_subset_ids(tbl, "TGV")
+  ids    <- resolve_subset_ids(tbl, "TGV computation", all_if_null = TRUE)
   if (length(ids) == 0L) {
     warning("No individuals matched; no TGVs computed.", call. = FALSE)
     return(invisible(pop))

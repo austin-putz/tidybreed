@@ -10,9 +10,12 @@
 #' Only new animals are flipped. This mirrors real life — once an animal is
 #' genotyped it stays genotyped.
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column when a
-#'   filter is applied.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param chip_name Character. Name of an existing SNP chip (must have an
 #'   `is_<chip_name>` column in `genome_meta`, created by [define_chip()]).
 #' @param col_name Character. Name of the BOOLEAN column to write in
@@ -51,16 +54,11 @@ add_genotypes <- function(tbl,
          "Call define_chip() first.", call. = FALSE)
   }
 
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals for genotyping.",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
+  subset_ids <- resolve_subset_ids(tbl, "genotyping")
+  if (!is.null(subset_ids) && length(subset_ids) == 0L) {
+    warning("No individuals matched; no animals marked as genotyped.",
+            call. = FALSE)
+    return(invisible(pop))
   }
 
   # Ensure has_<chip_name> column exists (DEFAULT FALSE keeps existing TRUEs intact)
@@ -78,7 +76,7 @@ add_genotypes <- function(tbl,
       paste0("UPDATE ind_meta SET ", col_name, " = TRUE")
     )
   } else {
-    ids_sql <- paste0("'", subset_ids, "'", collapse = ", ")
+    ids_sql <- sql_in_list(subset_ids, what = "individual ID")
     DBI::dbExecute(
       pop$db_conn,
       paste0("UPDATE ind_meta SET ", col_name, " = TRUE WHERE id_ind IN (", ids_sql, ")")

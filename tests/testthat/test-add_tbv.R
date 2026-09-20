@@ -527,3 +527,37 @@ test_that("base allele frequency is correct (row-count-agnostic) for a mixed aut
 
   close_pop(pop)
 })
+
+
+test_that("add_tbv() / add_tgv() accept any table with id_ind (unfiltered ind_ebv)", {
+  pop <- open_pop(pop_name = "tbv_any_tbl", db_name = ":memory:") |>
+    define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 50) |>
+    define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
+  pop <- pop |> get_table("founder_haplotypes") |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 3)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'ADG', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  pop <- pop |> get_table("ind_ebv") |> add_tbv("ADG")
+  tbv_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_tbv")$id_ind
+  expect_setequal(tbv_ids, ids)
+
+  pop <- pop |> get_table("ind_ebv") |> dplyr::filter(ebv_value > 1) |>
+    add_tgv("ADG")
+  tgv_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT DISTINCT id_ind FROM ind_tgv")$id_ind
+  expect_setequal(tgv_ids, ids[2:3])
+
+  expect_error(pop |> get_table("genome_meta") |> add_tbv("ADG"),
+               "has no 'id_ind' column")
+  expect_error(pop |> get_table("genome_meta") |> add_tgv("ADG"),
+               "has no 'id_ind' column")
+
+  close_pop(pop)
+})

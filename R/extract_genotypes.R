@@ -21,9 +21,12 @@
 #'   (or all individuals in `ind_haplotype` when no filter is applied)
 #' * Loci whose `locus_id` appears in the collected `effects_tbl`
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column when a
-#'   filter is applied.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param chip_name Character or `NULL`. Name of a chip previously defined via
 #'   [define_chip()] and applied to animals via [add_genotypes()]. When `NULL`
 #'   the chip path is skipped.
@@ -143,16 +146,9 @@ extract_genotypes <- function(tbl,
   }
 
   # --- Resolve pending individual filter from tbl ---
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals for genotype extraction.",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
+  subset_ids <- resolve_subset_ids(tbl, "genotype extraction")
+  if (!is.null(subset_ids) && length(subset_ids) == 0L) {
+    stop("No individuals found in the filtered set.", call. = FALSE)
   }
 
   # --- Resolve final individual IDs ---

@@ -932,11 +932,26 @@ Supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, `count()`,
 and `mutate_table()`. `close_pop()` safely closes the DuckDB connection.
 
 **Subset selection for action functions** (`add_phenotype`, `add_tbv`,
-`add_genotypes`, `extract_genotypes`) requires `get_table()` as the first step.
-`filter()` is called on the `tidybreed_table`, not on the pop directly.
-The unique `id_ind` values from the collected filtered table are used as the
-candidate set. Any table that has an `id_ind` column can be used (e.g.
-`ind_meta`, `ind_phenotype`, `ind_haplotype`, `ind_genotype`).
+`add_tgv`, `add_ebv`, `add_dosage`, `add_genotypes`, `extract_genotypes`)
+requires `get_table()` as the first step. `filter()` is called on the
+`tidybreed_table`, not on the pop directly. **The individuals acted on are
+the distinct `id_ind` values present in the (filtered) table**, whatever the
+table: `ind_meta` for dates/generation, `ind_genotype`/`ind_haplotype` for
+marker-assisted pre-selection, `ind_ebv`/`ind_index` for EBV- or index-based
+selection, `ind_phenotype` for prior records. An unfiltered `ind_meta` is
+everyone; an unfiltered `ind_ebv` is *the animals that have an EBV*, not
+everyone. A table without `id_ind` is an error, filtered or not.
+
+All seven go through one internal helper, `resolve_subset_ids(tbl, what,
+all_if_null)` in `R/sql_utils.R`: it re-applies the stashed filter quosures
+to a fresh un-projected lazy tbl (so `select()` cannot hide `id_ind`), renders
+it with `dbplyr::sql_render()`, and runs one `SELECT DISTINCT id_ind ... JOIN
+ind_meta` in DuckDB — only the id vector is collected, never the table. It
+returns `NULL` for an unfiltered `ind_meta` so callers can keep an unrestricted
+SQL fast path (`add_genotypes()`'s `UPDATE` without `WHERE`); callers that need
+a concrete vector pass `all_if_null = TRUE`. `add_index()` and `remove_rows()`
+deliberately do **not** use it — they act on the rows of the passed table
+itself, not on a derived animal set.
 
 ```r
 # All individuals
@@ -946,6 +961,18 @@ pop |> get_table("ind_meta") |> add_phenotype("ADG")
 pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
+  add_phenotype("ADG")
+
+# Marker-assisted pre-selection (add_dosage() first; ind_genotype is a cache)
+pop |>
+  get_table("ind_genotype") |>
+  dplyr::filter(locus_name == "Locus_10", dosage_value == 2L) |>
+  add_phenotype("ADG")
+
+# EBV-based: the animals above a threshold in one evaluation
+pop |>
+  get_table("ind_ebv") |>
+  dplyr::filter(trait_name == "ADG", eval_number == 3L, ebv_value > 0.5) |>
   add_phenotype("ADG")
 
 # Pre-select top performers from a prior phenotype

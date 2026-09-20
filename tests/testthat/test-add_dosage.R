@@ -141,3 +141,25 @@ test_that("add_dosage does not error when chr_inheritance has a sex-linked row",
 
   expect_no_error(pop |> get_table("ind_meta") |> add_dosage())
 })
+
+
+test_that("add_dosage accepts any table with id_ind, e.g. an unfiltered ind_ebv", {
+  pop <- make_dosage_pop(n_loci = 15)
+  on.exit(close_pop(pop), add = TRUE)
+
+  ids <- head(DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind, 3)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'T', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  # Unfiltered ind_ebv = the animals that have an EBV, not the whole population
+  pop <- pop |> get_table("ind_ebv") |> add_dosage()
+  got <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT DISTINCT id_ind FROM ind_genotype")$id_ind
+  expect_setequal(got, ids)
+
+  expect_error(pop |> get_table("genome_meta") |> add_dosage(),
+               "has no 'id_ind' column")
+})

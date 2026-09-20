@@ -77,6 +77,173 @@ test_that("get_table() |> filter() restricts phenotyped subset", {
 })
 
 
+# ── Any table with id_ind chooses the individuals ────────────────────────────
+# One test per input shape the design targets: marker-assisted pre-selection
+# (ind_genotype / ind_haplotype), truth (ind_tbv), evaluation output (ind_ebv /
+# ind_index) and prior records (ind_phenotype).
+
+phenotyped_ids <- function(pop, phenotype_name = "ADG") {
+  sort(DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT DISTINCT id_ind FROM ind_phenotype WHERE phenotype_name = '",
+    phenotype_name, "'"))$id_ind)
+}
+
+test_that("add_phenotype() accepts a filtered ind_genotype (MAS pre-selection)", {
+  pop <- make_pheno_pop("ph_tbl_geno", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+  pop <- pop |> get_table("ind_meta") |> add_dosage()
+
+  carriers <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT DISTINCT id_ind FROM ind_genotype
+     WHERE locus_name = 'Locus_1' AND dosage_value = 2")$id_ind
+  expect_gt(length(carriers), 0)
+  expect_lt(length(carriers), 40)
+
+  pop <- pop |>
+    get_table("ind_genotype") |>
+    dplyr::filter(locus_name == "Locus_1", dosage_value == 2L) |>
+    add_phenotype("ADG")
+
+  expect_identical(phenotyped_ids(pop), sort(carriers))
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() accepts a filtered ind_haplotype", {
+  pop <- make_pheno_pop("ph_tbl_hap", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+
+  sire_copy_1 <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT DISTINCT id_ind FROM ind_haplotype
+     WHERE locus_name = 'Locus_5' AND parent_origin = 1 AND allele = 1")$id_ind
+
+  pop <- pop |>
+    get_table("ind_haplotype") |>
+    dplyr::filter(locus_name == "Locus_5", parent_origin == 1L, allele == 1L) |>
+    add_phenotype("ADG")
+
+  expect_identical(phenotyped_ids(pop), sort(sire_copy_1))
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() accepts a filtered ind_tbv", {
+  pop <- make_pheno_pop("ph_tbl_tbv", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+
+  top <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind FROM ind_tbv WHERE trait_name = 'ADG' AND tbv_value > 0")$id_ind
+
+  pop <- pop |>
+    get_table("ind_tbv") |>
+    dplyr::filter(trait_name == "ADG", tbv_value > 0) |>
+    add_phenotype("ADG")
+
+  expect_identical(phenotyped_ids(pop), sort(top))
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() accepts ind_ebv, filtered and unfiltered", {
+  pop <- make_pheno_pop("ph_tbl_ebv", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 5)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'ADG', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  # Filtered: ebv_value 3, 4, 5
+  pop <- pop |>
+    get_table("ind_ebv") |>
+    dplyr::filter(ebv_value > 2) |>
+    add_phenotype("ADG")
+  expect_identical(phenotyped_ids(pop), sort(ids[3:5]))
+
+  # Unfiltered: every animal WITH an EBV — not the whole population
+  pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
+  expect_identical(phenotyped_ids(pop), sort(ids))
+
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() accepts a filtered ind_index", {
+  pop <- make_pheno_pop("ph_tbl_idx", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 5)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_index (id_index, id_ind, index_name, index_number, ",
+    "index_value) VALUES ",
+    paste(sprintf("(%d, '%s', 'I1', 1, %d)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  pop <- pop |>
+    get_table("ind_index") |>
+    dplyr::filter(index_name == "I1", index_value >= 4) |>
+    add_phenotype("ADG")
+
+  expect_identical(phenotyped_ids(pop), sort(ids[4:5]))
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() accepts a filtered ind_phenotype for a second phenotype", {
+  pop <- make_pheno_pop("ph_tbl_pheno", n_ind = 40, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+  pop <- setup_simple_trait(pop, "BW",  n_qtl = 20)
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+  adg <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind, pheno_value FROM ind_phenotype WHERE phenotype_name = 'ADG'")
+  cutoff <- stats::median(adg$pheno_value)
+  keep   <- adg$id_ind[adg$pheno_value > cutoff]
+
+  pop <- pop |>
+    get_table("ind_phenotype") |>
+    dplyr::filter(phenotype_name == "ADG", pheno_value > !!cutoff) |>
+    add_phenotype("BW")
+
+  expect_identical(phenotyped_ids(pop, "BW"), sort(keep))
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() errors on a table without id_ind", {
+  pop <- make_pheno_pop("ph_tbl_noid", n_ind = 20, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+
+  expect_error(pop |> get_table("genome_meta") |> add_phenotype("ADG"),
+               "has no 'id_ind' column")
+  expect_error(
+    pop |> get_table("genome_meta") |> dplyr::filter(chr == 1) |>
+      add_phenotype("ADG"),
+    "has no 'id_ind' column")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0)
+
+  close_pop(pop)
+})
+
+
+test_that("add_phenotype() survives select() before filter()", {
+  pop <- make_pheno_pop("ph_tbl_select", n_ind = 20, n_loci = 100)
+  pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
+
+  pop <- pop |>
+    get_table("ind_meta") |>
+    dplyr::select(sex) |>
+    dplyr::filter(sex == "M") |>
+    add_phenotype("ADG")
+
+  expect_length(phenotyped_ids(pop), 10)
+  close_pop(pop)
+})
+
+
 test_that("categorical trait with prevalence respects target rate approximately", {
   set.seed(7)
   pop <- open_pop(pop_name = "ph_categorical", db_name = ":memory:") |>

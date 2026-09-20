@@ -14,8 +14,12 @@ add_phenotype(
 )
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, optionally piped through
+\code{\link[dplyr:filter]{dplyr::filter()}}. Any table with an \code{id_ind} column is accepted; the
+individuals acted on are the distinct \code{id_ind} values present in the
+(filtered) table. An unfiltered \code{ind_meta} selects every individual; an
+unfiltered \code{ind_ebv}, \code{ind_index}, \code{ind_genotype}, ... selects only the
+individuals that have rows there. A table without \code{id_ind} is an error.}
 
 \item{phenotype_name}{Character vector of phenotype name(s). When \code{NULL}
 (default), all phenotypes in \code{phenotype_meta} are used in
@@ -110,6 +114,23 @@ pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
   add_phenotype("ADG")
+
+# Any table with id_ind chooses the individuals. Marker-assisted
+# pre-selection: only carriers of two copies at Locus_10 (run add_dosage()
+# first, since ind_genotype is an on-demand cache)
+pop <- pop |>
+  get_table("ind_genotype") |>
+  dplyr::filter(locus_name == "Locus_10", dosage_value == 2L) |>
+  add_phenotype("ADG")
+
+# EBV-based: only animals above an EBV threshold in the latest evaluation
+pop <- pop |>
+  get_table("ind_ebv") |>
+  dplyr::filter(trait_name == "ADG", eval_number == 3L, ebv_value > 0.5) |>
+  add_phenotype("ADG")
+
+# Unfiltered ind_ebv means "every animal that has an EBV", not everyone
+pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
 
 # Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
 # registered once via define_phenotype(components = ...)

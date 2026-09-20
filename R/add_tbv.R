@@ -71,8 +71,12 @@
 #' Useful for tracking genetic trend across generations without collecting
 #' phenotypes.
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param trait_name Character vector of trait name(s). When `NULL` (default),
 #'   all traits currently in `trait_meta` are used (in `id_trait` order).
 #' @param index_names Character vector of named index(es) from `index_meta` for
@@ -151,7 +155,7 @@ add_tbv <- function(tbl, trait_name = NULL,
     }
   }
 
-  ids_t <- .gev_subset_ids(tbl, "TBV")
+  ids_t <- resolve_subset_ids(tbl, "TBV computation", all_if_null = TRUE)
   if (length(ids_t) == 0) {
     warning("No individuals matched; no TBVs computed.", call. = FALSE)
     return(invisible(pop))

@@ -465,3 +465,61 @@ sql_in_list <- function(values, what = "value") {
   escaped <- gsub("'", "''", values)
   paste0("'", escaped, "'", collapse = ", ")
 }
+
+
+#' Individuals selected by a `tidybreed_table`
+#'
+#' The single place a `tidybreed_table` becomes a set of `id_ind` values for
+#' the action functions (`add_phenotype()`, `add_tbv()`, `add_tgv()`,
+#' `add_ebv()`, `add_dosage()`, `add_genotypes()`, `extract_genotypes()`).
+#' The meaning is always "the individuals present in the (filtered) table":
+#' any table with an `id_ind` column is accepted, an unfiltered `ind_meta`
+#' selects everyone, and an unfiltered `ind_ebv` / `ind_index` /
+#' `ind_genotype` selects only the individuals that have rows there.
+#'
+#' Resolution is one SQL statement: the stashed filter predicates are
+#' re-applied to a fresh, un-projected lazy tbl (so `select()` cannot hide
+#' `id_ind`), rendered as a subquery, reduced to `DISTINCT id_ind`, and
+#' semi-joined to `ind_meta` — nothing but the id vector is collected.
+#'
+#' @param tbl A `tidybreed_table` from `get_table()`.
+#' @param what Human-readable operation label for the error message.
+#' @param all_if_null Logical. `TRUE` expands the unfiltered-`ind_meta` case
+#'   into every `id_ind`; `FALSE` (default) returns `NULL` for it so callers
+#'   can keep an unrestricted SQL fast path.
+#' @return A sorted character vector of `id_ind` (possibly empty), or `NULL`
+#'   for an unfiltered `ind_meta` when `all_if_null = FALSE`.
+#' @keywords internal
+#' @noRd
+resolve_subset_ids <- function(tbl, what = "this operation",
+                               all_if_null = FALSE) {
+  stopifnot(inherits(tbl, "tidybreed_table"))
+  conn <- tbl$pop$db_conn
+
+  # Check the physical table, not the projection: select() drops columns
+  # from tbl$tbl but the id set does not depend on what is projected.
+  if (!"id_ind" %in% DBI::dbListFields(conn, tbl$table_name)) {
+    stop("Table '", tbl$table_name, "' has no 'id_ind' column; it cannot ",
+         "select individuals for ", what, ". Pipe a table with id_ind ",
+         "(e.g. ind_meta, ind_phenotype, ind_ebv, ind_genotype).",
+         call. = FALSE)
+  }
+
+  unfiltered_meta <- identical(tbl$table_name, "ind_meta") &&
+    length(tbl$pending_filter) == 0L
+  if (unfiltered_meta) {
+    if (!all_if_null) return(NULL)
+    return(DBI::dbGetQuery(
+      conn, "SELECT id_ind FROM ind_meta ORDER BY id_ind")$id_ind)
+  }
+
+  lazy <- dplyr::tbl(conn, tbl$table_name)
+  if (length(tbl$pending_filter) > 0L) {
+    lazy <- dplyr::filter(lazy, !!!tbl$pending_filter)
+  }
+  sub <- as.character(dbplyr::sql_render(lazy))
+  DBI::dbGetQuery(conn, paste0(
+    "SELECT DISTINCT m.id_ind FROM ind_meta m ",
+    "JOIN (SELECT DISTINCT id_ind FROM (", sub, ") b) ids USING (id_ind) ",
+    "ORDER BY m.id_ind"))$id_ind
+}

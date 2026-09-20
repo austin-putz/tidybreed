@@ -1,3 +1,53 @@
+# tidybreed 0.70.0 (2026-09-20)
+
+## Breaking
+
+- **The `tbl` argument of every action function now means "the individuals
+  present in this (filtered) table".** `add_phenotype()`, `add_tbv()`,
+  `add_tgv()`, `add_ebv()`, `add_dosage()`, `add_genotypes()` and
+  `extract_genotypes()` accept any table with an `id_ind` column — `ind_meta`
+  for dates/generation, `ind_genotype`/`ind_haplotype` for marker-assisted
+  pre-selection, `ind_ebv`/`ind_index` for EBV- or index-based selection,
+  `ind_phenotype` for prior records — and act on the distinct `id_ind` values
+  it contains. Previously that held only when a `filter()` was pending: an
+  unfiltered `get_table("ind_ebv") |> add_phenotype()` silently phenotyped the
+  whole population, and an unfiltered `get_table("genome_meta")` (no `id_ind`
+  at all) ran without error. Now an unfiltered `ind_ebv` selects the animals
+  that have an EBV, an unfiltered `ind_meta` still selects everyone, and a
+  table without `id_ind` is an error whether or not it is filtered.
+
+## Changed
+
+- Subset resolution no longer collects the filtered table into R to take
+  `unique(id_ind)` — on `ind_haplotype` that was (animals × loci) rows for an
+  id vector. One internal helper, `resolve_subset_ids()`, renders the filtered
+  table as a subquery and runs a single `SELECT DISTINCT id_ind ... JOIN
+  ind_meta` in DuckDB; only the ids are collected, and they come back sorted.
+  The seven per-function copies of the old block, including
+  `.gev_subset_ids()`, are gone.
+- `select()` before `filter()` on the piped table no longer errors with "must
+  contain `id_ind`" — the id set is resolved from the physical table, not the
+  projection.
+- `add_genotypes()` warns and returns (instead of emitting `IN ()`) when the
+  filter matches nobody; `extract_genotypes()` gives the same "No individuals
+  found" error for that case on both the chip and non-chip paths.
+
+## Fixed
+
+- `define_additive_effects()` aligned `center_value` (and manual `effects`)
+  with the wrong loci when the piped `genome_meta` table had been `arrange()`d
+  or had `locus_id` removed with `select()`: the locus names followed the
+  collected row order while `p` was indexed by `locus_id`. The written members
+  now take their names from `genome_meta` in `locus_id` order, whatever the
+  projection or ordering of `tbl`.
+- Multi-trait `define_additive_effects(method = "shared")` carried an
+  unreachable "using union fallback" warning and a per-trait independent-draw
+  loop that could never run (every trait shares one candidate mask); both are
+  gone and the roxygen no longer describes them. Internal history references
+  to removed surfaces (`trait_meta.expressed_parent`, plan version numbers)
+  are dropped, and `rescale_effects_to_target()` no longer has a public
+  manual page.
+
 # tidybreed 0.69.0 (2026-09-20)
 
 ## Breaking

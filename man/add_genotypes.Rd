@@ -7,9 +7,12 @@
 add_genotypes(tbl, chip_name, col_name = paste0("has_", chip_name))
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column when a
-filter is applied.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, optionally piped through
+\code{\link[dplyr:filter]{dplyr::filter()}}. Any table with an \code{id_ind} column is accepted; the
+individuals acted on are the distinct \code{id_ind} values present in the
+(filtered) table. An unfiltered \code{ind_meta} selects every individual; an
+unfiltered \code{ind_ebv}, \code{ind_index}, \code{ind_genotype}, ... selects only the
+individuals that have rows there. A table without \code{id_ind} is an error.}
 
 \item{chip_name}{Character. Name of an existing SNP chip (must have an
 \verb{is_<chip_name>} column in \code{genome_meta}, created by \code{\link[=define_chip]{define_chip()}}).}
