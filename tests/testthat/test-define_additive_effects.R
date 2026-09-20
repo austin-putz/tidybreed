@@ -630,3 +630,39 @@ test_that("defining effects for one line does not clobber another line's rows", 
 
   close_pop(pop)
 })
+
+
+test_that("centres and effects follow locus_id whatever order or projection tbl has", {
+  # The written members are in locus_id order and p_base is indexed the same
+  # way. A QTL table arranged descending and stripped of locus_id must not
+  # shift a locus's centre (or a manual effect) onto its neighbour.
+  pop <- open_pop(pop_name = "bt_order", db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 12)
+  on.exit(close_pop(pop), add = TRUE)
+  set.seed(7)
+  pop <- define_founder_haplotypes(pop, n_haplotypes = 40, method = "uniform",
+                                   line_name = "A")
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+
+  p <- extract_allele_freq(get_table(pop, "founder_haplotypes"))
+  expect_gt(length(unique(round(p$allele_freq, 6))), 3L)   # p really varies
+
+  qtl <- pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_id %% 2L == 0L) |>
+    dplyr::arrange(dplyr::desc(pos_bp)) |>
+    dplyr::select(locus_name, chr)
+  expect_false("locus_id" %in% colnames(qtl$tbl))
+
+  want <- p[p$locus_id %% 2L == 0L, ]           # locus_id order
+  qtl |> define_additive_effects("ADG", effects = want$locus_id, line_name = "A")
+
+  got <- DBI::dbGetQuery(pop$db_conn, "
+    SELECT gm.locus_id, m.center_value, e.genome_value
+      FROM genome_effect_members m
+      JOIN genome_effects e USING (id_genome_effect)
+      JOIN genome_meta gm USING (locus_id)
+     WHERE e.trait_name = 'ADG' ORDER BY gm.locus_id")
+  expect_equal(got$locus_id, want$locus_id)
+  expect_equal(got$center_value, want$allele_freq)
+  expect_equal(got$genome_value, as.numeric(want$locus_id))
+})

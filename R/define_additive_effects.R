@@ -2,8 +2,9 @@
 #'
 #' @description
 #' Selects QTL from a filtered `genome_meta` table and writes one order-one
-#' `additive` term per locus through [define_genome_effects()], under the
-#' reserved effect owner `"generated_additive_tbv"`. [add_tbv()] reads order-one
+#' `additive` term per locus through the same engine as
+#' [define_genome_effects()], under the reserved effect owner
+#' `"generated_additive_tbv"`. [add_tbv()] reads order-one
 #' `additive` variants from that owner and nothing else, so effects written here
 #' and effects a user writes with [define_genome_effects()] can never be
 #' confused for one another.
@@ -21,12 +22,11 @@
 #' from a multivariate normal distribution keyed by the additive-genetic
 #' covariance matrix `G`. Two locus-selection methods:
 #'
-#' * `method = "shared"` — the loci in `tbl` become the shared QTL set for
-#'   all traits. Loci that are QTL for only a subset of traits in
-#'   `genome_effects` also receive independent draws (with the diagonal
-#'   variance of `G` for that trait).
+#' * `method = "shared"` — the loci in `tbl` become the QTL set of every
+#'   trait, and each locus receives one joint draw.
 #' * `method = "union"` — the loci in `tbl` form the candidate pool; per-trait
-#'   membership is read from the terms already stored at this scope.
+#'   membership is read from the terms already stored at this scope, and a
+#'   locus draws jointly only for the traits it is a QTL for.
 #'
 #' `define_genome_effects()` writes any effect you supply; `define_*_effects()`
 #' functions such as this one sample effects of one shape and write them
@@ -122,9 +122,8 @@
 #'   is rejected — under random mating the paternal and maternal copies at a
 #'   locus are independent, so the requested genetic covariance between a
 #'   paternal-only and a maternal-only trait is zero and cannot be realized.
-#'   This replaces the removed `trait_meta.expressed_parent` flag, which could
-#'   only be set trait-wide; [define_genome_effects()] expresses the per-locus
-#'   case the flag never could.
+#'   For imprinting that varies locus by locus, write the terms with
+#'   [define_genome_effects()].
 #' @param scale_to_target Logical. If `TRUE`, rescale effects so the expected
 #'   additive variance equals the stored `target_add_var`:
 #'   `V_A = sum_j n_eligible,j * p_j q_j a_j^2`, where `n_eligible` is 2 for an
@@ -236,17 +235,17 @@ define_additive_effects <- function(tbl,
     if (nrow(loci_df) == 0L) {
       stop("No loci selected — your filter returned zero rows.", call. = FALSE)
     }
-    if ("locus_id" %in% names(loci_df)) {
-      loci_df <- loci_df[order(loci_df$locus_id), ]
-    }
-    selected_locus_names <- loci_df$locus_name
-    n_qtl <- length(selected_locus_names)
 
+    # Everything downstream (effects, p_base, the written members) is in
+    # locus_id order, so take the names from genome_meta rather than from the
+    # collected filter, whose order is whatever the projection left.
     genome_order <- DBI::dbGetQuery(
       pop$db_conn,
       "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id"
     )
-    qtl_tf <- genome_order$locus_name %in% selected_locus_names
+    qtl_tf               <- genome_order$locus_name %in% loci_df$locus_name
+    selected_locus_names <- genome_order$locus_name[qtl_tf]
+    n_qtl                <- length(selected_locus_names)
 
     base       <- .dae_resolve_base(pop, base_tbl, line_name)
     p_base     <- base$p_base
@@ -379,7 +378,6 @@ define_additive_effects <- function(tbl,
     stop("The filtered table must contain 'locus_name'.", call. = FALSE)
   }
   if (nrow(loci_df) == 0L) stop("No loci selected — filter returned zero rows.", call. = FALSE)
-  if ("locus_id" %in% names(loci_df)) loci_df <- loci_df[order(loci_df$locus_id), ]
   candidate_locus_names <- loci_df$locus_name
 
   genome_order <- DBI::dbGetQuery(
@@ -413,22 +411,13 @@ define_additive_effects <- function(tbl,
                         dimnames = list(NULL, trait_name))
 
   if (method == "shared") {
-    shared   <- apply(qtl_tf_mat, 1, all)
-    n_shared <- sum(shared)
-    if (n_shared == 0) {
-      warning("No loci are QTL for all traits; using union fallback.", call. = FALSE)
-    } else {
-      draws <- MASS::mvrnorm(n = n_shared, mu = rep(0, length(trait_name)), Sigma = G)
-      if (is.null(dim(draws))) draws <- matrix(draws, nrow = 1)
-      effects_mat[shared, ] <- draws
-    }
-    for (k in seq_along(trait_name)) {
-      t    <- trait_name[k]
-      solo <- qtl_tf_mat[, t] & !shared
-      if (sum(solo) > 0) {
-        effects_mat[solo, t] <- stats::rnorm(sum(solo), sd = sqrt(G[k, k]))
-      }
-    }
+    # Every trait carries the same mask, so each candidate locus is one joint
+    # draw across all traits.
+    shared <- qtl_tf_mat[, 1L]
+    draws  <- MASS::mvrnorm(n = sum(shared), mu = rep(0, length(trait_name)),
+                            Sigma = G)
+    if (is.null(dim(draws))) draws <- matrix(draws, nrow = 1)
+    effects_mat[shared, ] <- draws
   } else {
     any_qtl <- apply(qtl_tf_mat, 1, any)
     n_any   <- sum(any_qtl)
@@ -493,9 +482,6 @@ define_additive_effects <- function(tbl,
     built <- .dae_stack(built, .dae_build(pop$db_conn, t, locus_names_t,
                                           effects_t, p_base_qtl_t, scope_t))
   }
-  if (is.null(built)) {
-    stop("No trait received any effect from this call.", call. = FALSE)
-  }
   .ge_commit(pop$db_conn, unique(drop), built)
   .dae_warn_parent_only(pop$db_conn, trait_name)
 
@@ -512,9 +498,9 @@ define_additive_effects <- function(tbl,
 #' The effect owner `define_additive_effects()` writes under
 #'
 #' Reserved: `add_tbv()` reads order-one `additive` variants from this owner and
-#' nothing else, and the general writer refuses to touch it. Two distinct
-#' defaults are the point — v4.1 shared one, so rerunning the generator in
-#' replace mode would have deleted a user's own terms.
+#' nothing else, and the general writer refuses to touch it. Keeping it distinct
+#' from the writer's `"custom"` default is what stops a rerun of the generator in
+#' replace mode from deleting a user's own terms.
 #'
 #' @keywords internal
 #' @noRd
@@ -522,9 +508,8 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 
 #' Resolve `parent_origin` to one value per trait
 #'
-#' Per trait because the deleted `trait_meta.expressed_parent` was per trait; a
-#' scalar-only argument would lose exactly the expressiveness its removal was
-#' meant to preserve. Accepts a scalar (recycled), a vector matching
+#' Per trait, because imprinting is a property of a trait and one correlated
+#' call may define several. Accepts a scalar (recycled), a vector matching
 #' `trait_name` positionally, or a vector named by trait.
 #'
 #' @keywords internal
@@ -645,7 +630,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 #' Loci already carrying a generated additive term for this trait at this scope
 #'
 #' `method = "union"` reads per-trait QTL membership from what is already
-#' stored, which since v0.66.0 lives in the term/member/origin tables.
+#' stored in the term/member/origin tables.
 #'
 #' @keywords internal
 #' @noRd
@@ -673,9 +658,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 #' They are in a containment relation, so the result is a legal fallback pair —
 #' paternal copies take the imprinted value, maternal copies fall back to the
 #' generic one — which is correct by the rules and almost certainly not what a
-#' user re-running the call intended. It is also a behaviour change from the
-#' deleted `expressed_parent`, which was one trait-wide flag that could only be
-#' overwritten.
+#' user re-running the call intended.
 #'
 #' Fires only on that case: the members must agree on **every** line predicate
 #' and differ only by one carrying a parent the other leaves open. The
@@ -738,7 +721,6 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 }
 
 
-
 #' Rescale QTL effects to hit a target additive variance
 #'
 #' `V_A = sum_j n_eligible,j * p_j q_j a_j^2`. The familiar Falconer `2pq a^2`
@@ -755,6 +737,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 #'   at any locus that is not `(1,1)` for both offspring sexes.
 #' @return Rescaled `qtl_effects` vector.
 #' @keywords internal
+#' @noRd
 rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var,
                                       p_base, n_eligible = 2) {
   p_qtl <- p_base[qtl_tf]
@@ -765,9 +748,6 @@ rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var,
   }
   qtl_effects * sqrt(target_add_var / V_A)
 }
-
-
-
 
 
 #' Resolve `base_tbl` (default or explicit) into `p_base`
@@ -852,7 +832,7 @@ rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var,
 #' `p_base` may hold `NA` where `extract_allele_freq()` found no copies. Both
 #' `rescale_effects_to_target()` call sites fold `p` into
 #' `V_A = sum n_eligible * p q a^2`, so an `NA` reaching them would make every
-#' effect `NA`; the old zero-initialised vector centred such loci at `p = 0`
+#' effect `NA`, and treating a missing `p` as `0` would centre the locus
 #' silently. Either is worse than stopping here and naming the loci.
 #'
 #' @param p_base Numeric, length `n_loci`, `locus_id` order; may hold `NA`.

@@ -63,9 +63,8 @@ entries by trait. A call mixing origins across traits while supplying \code{G}
 is rejected — under random mating the paternal and maternal copies at a
 locus are independent, so the requested genetic covariance between a
 paternal-only and a maternal-only trait is zero and cannot be realized.
-This replaces the removed \code{trait_meta.expressed_parent} flag, which could
-only be set trait-wide; \code{\link[=define_genome_effects]{define_genome_effects()}} expresses the per-locus
-case the flag never could.}
+For imprinting that varies locus by locus, write the terms with
+\code{\link[=define_genome_effects]{define_genome_effects()}}.}
 
 \item{scale_to_target}{Logical. If \code{TRUE}, rescale effects so the expected
 additive variance equals the stored \code{target_add_var}:
@@ -79,8 +78,9 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Selects QTL from a filtered \code{genome_meta} table and writes one order-one
-\code{additive} term per locus through \code{\link[=define_genome_effects]{define_genome_effects()}}, under the
-reserved effect owner \code{"generated_additive_tbv"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
+\code{additive} term per locus through the same engine as
+\code{\link[=define_genome_effects]{define_genome_effects()}}, under the reserved effect owner
+\code{"generated_additive_tbv"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
 \code{additive} variants from that owner and nothing else, so effects written here
 and effects a user writes with \code{\link[=define_genome_effects]{define_genome_effects()}} can never be
 confused for one another.
@@ -99,12 +99,11 @@ the \code{target_add_var} stored for this trait.
 from a multivariate normal distribution keyed by the additive-genetic
 covariance matrix \code{G}. Two locus-selection methods:
 \itemize{
-\item \code{method = "shared"} — the loci in \code{tbl} become the shared QTL set for
-all traits. Loci that are QTL for only a subset of traits in
-\code{genome_effects} also receive independent draws (with the diagonal
-variance of \code{G} for that trait).
+\item \code{method = "shared"} — the loci in \code{tbl} become the QTL set of every
+trait, and each locus receives one joint draw.
 \item \code{method = "union"} — the loci in \code{tbl} form the candidate pool; per-trait
-membership is read from the terms already stored at this scope.
+membership is read from the terms already stored at this scope, and a
+locus draws jointly only for the traits it is a QTL for.
 }
 
 \code{define_genome_effects()} writes any effect you supply; \verb{define_*_effects()}
