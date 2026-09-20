@@ -11,9 +11,7 @@ define_additive_effects(
   distribution = c("normal", "gamma"),
   G = NULL,
   method = c("shared", "union"),
-  base = c("founder_haplotypes", "current_pop"),
   base_tbl = NULL,
-  base_line_name = NULL,
   line_name = NULL,
   parent_origin = NULL,
   scale_to_target = TRUE,
@@ -44,25 +42,17 @@ read from \code{trait_var_comp}.}
 set. \code{"union"} — per-trait QTL sets are read from existing \code{genome_effects}
 rows, restricted to the filtered loci.}
 
-\item{base}{Character. \code{"founder_haplotypes"} (default) or \code{"current_pop"}.}
-
-\item{base_tbl}{Optional \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} on any table
-with an \code{id_ind} column) used when \code{base = "current_pop"} to restrict
-which individuals define the base allele frequencies. When \code{NULL}, all
-individuals in \code{ind_haplotype} are used. Ignored (with a warning) when
-\code{base = "founder_haplotypes"} — use \code{base_line_name} there.}
-
-\item{base_line_name}{Optional character, \code{base = "founder_haplotypes"} only.
-Which founder pool defines the base allele frequencies. \strong{Defaults to
-\code{line_name}}, so line-specific effects are centered on their own line;
-pass \code{NULL} explicitly to pool every line instead. Errors if no
-\code{founder_haplotypes} rows carry that line. See \emph{Which population centers
-the effects} above.}
+\item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
+filtered) selecting the allele copies that define base allele
+frequencies: \code{founder_haplotypes}, \code{ind_haplotype}, or any table with an
+\code{id_ind} column. Must come from the same \code{pop} as \code{tbl}. \code{NULL} (default)
+resolves to the founder pool of the line the effect applies to — see
+\emph{Which population centers the effects} above.}
 
 \item{line_name}{Optional character. When set, effects are scoped to allele
 copies of this genetic line: a copy whose \code{line_origin} matches takes these
 values, and falls back per copy to the common variant where no
-line-specific one exists. Also becomes the default for \code{base_line_name}.
+line-specific one exists. Also selects the default \code{base_tbl}.
 \code{NULL} (default) means the common scope, matching every copy.}
 
 \item{parent_origin}{Optional \code{1} (sire / parent_1) or \code{2} (dam / parent_2) —
@@ -117,33 +107,38 @@ variance of \code{G} for that trait).
 membership is read from the terms already stored at this scope.
 }
 
-The \code{base} argument controls which allele frequencies are used:
-\itemize{
-\item \code{"founder_haplotypes"} (default) — computes allele frequencies directly
-from the \code{founder_haplotypes} table (requires \code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}}
-was called). Restrict to one founder pool with \code{base_line_name}. (This does
-\strong{not} read \code{genome_meta.founder_allele_freq}, which is informational only.)
-\item \code{"current_pop"} — computes allele frequencies from the current
-\code{ind_haplotype} table. Pass a filtered \code{tidybreed_table} via
-\code{base_tbl} to restrict which individuals define the base population.
-}
+\code{define_genome_effects()} writes any effect you supply; \verb{define_*_effects()}
+functions such as this one sample effects of one shape and write them
+through the same path.
 }
 \section{Which population centers the effects}{
 
 Base allele frequencies center the true breeding value (the Falconer
 \code{allele - p} term) and set the \verb{2pq} denominator used by \code{scale_to_target}.
-By default they come from \strong{the population the effect applies to}:
-\code{base_line_name} inherits \code{line_name}, so a line-specific effect is centered
-on that line's own founder pool and a population-wide effect
-(\code{line_name = NULL}) on the whole founder base.
+They come from \code{base_tbl}, a filtered \code{tidybreed_table} whose identity says
+\emph{what kind of thing} is selected and whose \code{\link[dplyr:filter]{dplyr::filter()}} says \emph{which}
+(see \code{\link[=extract_allele_freq]{extract_allele_freq()}} for the three accepted shapes: the founder
+pool, allele copies in \code{ind_haplotype}, or individuals from any table with
+\code{id_ind}).
 
-This matters because pooling divergent lines overstates within-line
-heterozygosity — the Wahlund effect. Two lines fixed for opposite alleles
-each have zero within-line variance, but pool to \code{p = 0.5} and an apparent
-\verb{2pq = 0.5}; the inflated denominator then makes \code{scale_to_target} \strong{under}-scale
-the effects, and realized within-line additive variance falls short of
-\code{target_add_var}. Pass \code{base_line_name = NULL} explicitly to force pooling
-anyway.
+When \code{base_tbl = NULL} the base is \strong{the population the effect applies to},
+resolved with the same \code{line -> NULL} precedence as \code{resolve_genome_map()}:
+a line-specific effect (\code{line_name = "A"}) centers on line A's own founder
+pool, or on the shared (\code{line_name = NULL}) pool when no named pool exists;
+a population-wide effect (\code{line_name = NULL}) centers on the whole founder
+table. Only that last case warns when the founder table holds more than one
+pool: pooling divergent lines overstates within-line heterozygosity — the
+Wahlund effect. Two lines fixed for opposite alleles each have zero
+within-line variance, but pool to \code{p = 0.5} and an apparent \verb{2pq = 0.5};
+the inflated denominator then makes \code{scale_to_target} \strong{under}-scale the
+effects, and realized within-line additive variance falls short of
+\code{target_add_var}. An explicit \code{base_tbl} is an intentional selection and
+never warns — pass \code{base_tbl = get_table(pop, "founder_haplotypes")} to pool
+on purpose, which is how the common fallback variant of a crossbreeding
+model is defined.
+
+A selected QTL locus with no allele copies in the base is an error, never
+silently centered at \code{p = 0}.
 
 The centering constant is stored per member as
 \code{genome_effect_members.center_value} and travels with its \code{genome_value}, so
@@ -192,26 +187,25 @@ pop <- pop |>
   dplyr::filter(chr \%in\% 1:5) |>
   define_additive_effects(c("ADG", "BW"), G = G)
 
-# current_pop: use generation-0 individuals to define base allele frequencies
-gen0_tbl <- get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L)
+# Generation-0 individuals define the base allele frequencies
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
+  define_additive_effects("ADG",
+    base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
 
-# Crossbreeding: each line's effects centered on its own founder pool.
-# base_line_name inherits line_name, so nothing extra is needed.
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG", line_name = "Duroc")
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG", line_name = "Landrace")
+# Crossbreeding: three variants. The common fallback names its base to say
+# "yes, pool"; each line's variant centers on its own founder pool by default.
+gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5)
+pop <- gm |> define_additive_effects("ADG",
+               base_tbl = get_table(pop, "founder_haplotypes"))
+pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
+pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
 
-# Line-specific effects, but deliberately centered on the pooled base
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG", line_name = "Duroc", base_line_name = NULL)
+# Duroc allele copies wherever they sit, including inside crossbreds
+pop <- gm |> define_additive_effects("ADG", line_name = "Duroc",
+  base_tbl = get_table(pop, "ind_haplotype") |>
+    dplyr::filter(line_origin == "Duroc"))
 }
 }
 \seealso{

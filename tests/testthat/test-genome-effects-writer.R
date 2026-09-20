@@ -38,6 +38,12 @@ gew_lines_pop <- function(n_loci = 6) {
   define_trait(pop, "ADG", target_add_var = 1.0)
 }
 
+# Pool A as an explicit base: these tests define population-wide effects on a
+# two-pool fixture and only need a pinned, warning-free p.
+gew_base_A <- function(pop) {
+  get_table(pop, "founder_haplotypes") |> dplyr::filter(line_name == "A")
+}
+
 gew_scopes <- function(pop, trait = "ADG") {
   DBI::dbGetQuery(pop$db_conn, paste0(
     "SELECT t.id_genome_effect, t.effect_owner, t.genome_value, ",
@@ -475,7 +481,7 @@ test_that("gate 34: rerunning define_additive_effects() cannot delete custom ter
   for (i in 1:3) {
     pop <- pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", effects = rep(i, 6),
-                              base_line_name = "A")
+                              base_tbl = gew_base_A(pop))
   }
 
   owners <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -494,7 +500,7 @@ test_that("replace_trait refuses to take the reserved owner with it", {
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), base_line_name = "A")
+    define_additive_effects("ADG", effects = rep(1, 6), base_tbl = gew_base_A(pop))
 
   expect_error(define_genome_effects(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
@@ -517,7 +523,7 @@ test_that("gate 42: all four wrapper scopes round-trip, and replace_scope isolat
   eff <- function(v, locus, ...) {
     pop <<- pop |> get_table("genome_meta") |>
       dplyr::filter(locus_name == !!locus) |>
-      define_additive_effects("ADG", effects = v, base_line_name = "A", ...)
+      define_additive_effects("ADG", effects = v, base_tbl = gew_base_A(pop), ...)
   }
   eff(1, "Locus_1")                                      # NULL / NULL
   eff(2, "Locus_2", line_name = "A")                     # "A"  / NULL
@@ -559,10 +565,10 @@ test_that("two scopes that overlap without nesting are refused, whichever order"
     second <- if (is.na(order[2])) list(line_name = "A") else list(parent_origin = order[2])
     pop <- do.call(define_additive_effects, c(
       list(pop |> get_table("genome_meta"), "ADG", effects = rep(1, 6),
-           base_line_name = "A"), first))
+           base_tbl = gew_base_A(pop)), first))
     expect_error(do.call(define_additive_effects, c(
       list(pop |> get_table("genome_meta"), "ADG", effects = rep(2, 6),
-           base_line_name = "A"), second)),
+           base_tbl = gew_base_A(pop)), second)),
       "overlapping but incomparable")
     expect_equal(DBI::dbGetQuery(pop$db_conn,
       "SELECT COUNT(*) n FROM genome_effects")$n, 6)
@@ -577,7 +583,7 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
     pop <- if (is.null(a[[2]])) {
       pop |> get_table("genome_meta") |>
         define_additive_effects("ADG", effects = rep(a[[1]], 6),
-                                base_line_name = "A")
+                                base_tbl = gew_base_A(pop))
     } else {
       pop |> get_table("genome_meta") |>
         define_additive_effects("ADG", effects = rep(a[[1]], 6),
@@ -606,7 +612,7 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
   # Re-running the common call drops loci absent from the new set -- the whole
   # scope is replaced, not merged into.
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(locus_id <= 3) |>
-    define_additive_effects("ADG", effects = rep(8, 3), base_line_name = "A")
+    define_additive_effects("ADG", effects = rep(8, 3), base_tbl = gew_base_A(pop))
   by_scope <- DBI::dbGetQuery(pop$db_conn, paste0(
     "SELECT scope_description, COUNT(*) n FROM genome_effect_terms ",
     "GROUP BY 1 ORDER BY 1"))
@@ -643,7 +649,7 @@ test_that("gate 50: the common/A/B sequence and a reciprocal pair stay silent", 
 
   # Members differ in *line*, not in parent: never the confusable case.
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), base_line_name = "A")
+    define_additive_effects("ADG", effects = rep(1, 6), base_tbl = gew_base_A(pop))
   expect_warning(
     pop <- pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", effects = rep(2, 6), line_name = "A"),
@@ -680,8 +686,8 @@ test_that("gate 43: scale_to_target lands on V for parent-qualified effects too"
     pop <- suppressWarnings(
       pop |> get_table("genome_meta") |>
         define_additive_effects("ADG", distribution = "normal",
-                                parent_origin = po, base_line_name = "A"))
-    p <- tidybreed:::compute_base_allele_freq(pop, "founder_haplotypes", NULL, "A")
+                                parent_origin = po, base_tbl = gew_base_A(pop)))
+    p <- extract_allele_freq(gew_base_A(pop))$allele_freq
     a <- DBI::dbGetQuery(pop$db_conn, paste0(
       "SELECT m.locus_id, e.genome_value FROM genome_effects e ",
       "JOIN genome_effect_members m USING (id_genome_effect) ORDER BY m.locus_id"))
@@ -704,7 +710,7 @@ test_that("gate 44: parent_origin resolves per trait, in all three input forms",
       pop |> get_table("genome_meta") |>
         define_additive_effects(c("ADG", "BW"), effects = NULL,
                                 G = diag(2), parent_origin = po,
-                                base_line_name = "A"))
+                                base_tbl = gew_base_A(pop)))
     out <- DBI::dbGetQuery(pop$db_conn, paste0(
       "SELECT DISTINCT e.trait_name, t.scope_description ",
       "FROM genome_effect_terms t JOIN genome_effects e USING (id_genome_effect) ",
@@ -989,3 +995,4 @@ test_that("silent coercions are refused rather than stored as plausible values",
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 })
+

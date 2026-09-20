@@ -28,31 +28,37 @@
 #' * `method = "union"` — the loci in `tbl` form the candidate pool; per-trait
 #'   membership is read from the terms already stored at this scope.
 #'
-#' The `base` argument controls which allele frequencies are used:
-#'
-#' * `"founder_haplotypes"` (default) — computes allele frequencies directly
-#'   from the `founder_haplotypes` table (requires [define_founder_haplotypes()]
-#'   was called). Restrict to one founder pool with `base_line_name`. (This does
-#'   **not** read `genome_meta.founder_allele_freq`, which is informational only.)
-#' * `"current_pop"` — computes allele frequencies from the current
-#'   `ind_haplotype` table. Pass a filtered `tidybreed_table` via
-#'   `base_tbl` to restrict which individuals define the base population.
+#' `define_genome_effects()` writes any effect you supply; `define_*_effects()`
+#' functions such as this one sample effects of one shape and write them
+#' through the same path.
 #'
 #' @section Which population centers the effects:
 #' Base allele frequencies center the true breeding value (the Falconer
 #' `allele - p` term) and set the `2pq` denominator used by `scale_to_target`.
-#' By default they come from **the population the effect applies to**:
-#' `base_line_name` inherits `line_name`, so a line-specific effect is centered
-#' on that line's own founder pool and a population-wide effect
-#' (`line_name = NULL`) on the whole founder base.
+#' They come from `base_tbl`, a filtered `tidybreed_table` whose identity says
+#' *what kind of thing* is selected and whose [dplyr::filter()] says *which*
+#' (see [extract_allele_freq()] for the three accepted shapes: the founder
+#' pool, allele copies in `ind_haplotype`, or individuals from any table with
+#' `id_ind`).
 #'
-#' This matters because pooling divergent lines overstates within-line
-#' heterozygosity — the Wahlund effect. Two lines fixed for opposite alleles
-#' each have zero within-line variance, but pool to `p = 0.5` and an apparent
-#' `2pq = 0.5`; the inflated denominator then makes `scale_to_target` **under**-scale
-#' the effects, and realized within-line additive variance falls short of
-#' `target_add_var`. Pass `base_line_name = NULL` explicitly to force pooling
-#' anyway.
+#' When `base_tbl = NULL` the base is **the population the effect applies to**,
+#' resolved with the same `line -> NULL` precedence as `resolve_genome_map()`:
+#' a line-specific effect (`line_name = "A"`) centers on line A's own founder
+#' pool, or on the shared (`line_name = NULL`) pool when no named pool exists;
+#' a population-wide effect (`line_name = NULL`) centers on the whole founder
+#' table. Only that last case warns when the founder table holds more than one
+#' pool: pooling divergent lines overstates within-line heterozygosity — the
+#' Wahlund effect. Two lines fixed for opposite alleles each have zero
+#' within-line variance, but pool to `p = 0.5` and an apparent `2pq = 0.5`;
+#' the inflated denominator then makes `scale_to_target` **under**-scale the
+#' effects, and realized within-line additive variance falls short of
+#' `target_add_var`. An explicit `base_tbl` is an intentional selection and
+#' never warns — pass `base_tbl = get_table(pop, "founder_haplotypes")` to pool
+#' on purpose, which is how the common fallback variant of a crossbreeding
+#' model is defined.
+#'
+#' A selected QTL locus with no allele copies in the base is an error, never
+#' silently centered at `p = 0`.
 #'
 #' The centering constant is stored per member as
 #' `genome_effect_members.center_value` and travels with its `genome_value`, so
@@ -97,22 +103,16 @@
 #'   `"shared"` — all listed traits use the filtered loci as their shared QTL
 #'   set. `"union"` — per-trait QTL sets are read from existing `genome_effects`
 #'   rows, restricted to the filtered loci.
-#' @param base Character. `"founder_haplotypes"` (default) or `"current_pop"`.
-#' @param base_tbl Optional `tidybreed_table` (from [get_table()] on any table
-#'   with an `id_ind` column) used when `base = "current_pop"` to restrict
-#'   which individuals define the base allele frequencies. When `NULL`, all
-#'   individuals in `ind_haplotype` are used. Ignored (with a warning) when
-#'   `base = "founder_haplotypes"` — use `base_line_name` there.
-#' @param base_line_name Optional character, `base = "founder_haplotypes"` only.
-#'   Which founder pool defines the base allele frequencies. **Defaults to
-#'   `line_name`**, so line-specific effects are centered on their own line;
-#'   pass `NULL` explicitly to pool every line instead. Errors if no
-#'   `founder_haplotypes` rows carry that line. See *Which population centers
-#'   the effects* above.
+#' @param base_tbl Optional `tidybreed_table` from [get_table()] (optionally
+#'   filtered) selecting the allele copies that define base allele
+#'   frequencies: `founder_haplotypes`, `ind_haplotype`, or any table with an
+#'   `id_ind` column. Must come from the same `pop` as `tbl`. `NULL` (default)
+#'   resolves to the founder pool of the line the effect applies to — see
+#'   *Which population centers the effects* above.
 #' @param line_name Optional character. When set, effects are scoped to allele
 #'   copies of this genetic line: a copy whose `line_origin` matches takes these
 #'   values, and falls back per copy to the common variant where no
-#'   line-specific one exists. Also becomes the default for `base_line_name`.
+#'   line-specific one exists. Also selects the default `base_tbl`.
 #'   `NULL` (default) means the common scope, matching every copy.
 #' @param parent_origin Optional `1` (sire / parent_1) or `2` (dam / parent_2) —
 #'   imprinting, restricting the term to copies inherited from that parent.
@@ -153,26 +153,25 @@
 #'   dplyr::filter(chr %in% 1:5) |>
 #'   define_additive_effects(c("ADG", "BW"), G = G)
 #'
-#' # current_pop: use generation-0 individuals to define base allele frequencies
-#' gen0_tbl <- get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L)
+#' # Generation-0 individuals define the base allele frequencies
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr %in% 1:5) |>
-#'   define_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
+#'   define_additive_effects("ADG",
+#'     base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
 #'
-#' # Crossbreeding: each line's effects centered on its own founder pool.
-#' # base_line_name inherits line_name, so nothing extra is needed.
-#' pop <- pop |>
-#'   get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-#'   define_additive_effects("ADG", line_name = "Duroc")
-#' pop <- pop |>
-#'   get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-#'   define_additive_effects("ADG", line_name = "Landrace")
+#' # Crossbreeding: three variants. The common fallback names its base to say
+#' # "yes, pool"; each line's variant centers on its own founder pool by default.
+#' gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr %in% 1:5)
+#' pop <- gm |> define_additive_effects("ADG",
+#'                base_tbl = get_table(pop, "founder_haplotypes"))
+#' pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
+#' pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
 #'
-#' # Line-specific effects, but deliberately centered on the pooled base
-#' pop <- pop |>
-#'   get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-#'   define_additive_effects("ADG", line_name = "Duroc", base_line_name = NULL)
+#' # Duroc allele copies wherever they sit, including inside crossbreds
+#' pop <- gm |> define_additive_effects("ADG", line_name = "Duroc",
+#'   base_tbl = get_table(pop, "ind_haplotype") |>
+#'     dplyr::filter(line_origin == "Duroc"))
 #' }
 #' @export
 define_additive_effects <- function(tbl,
@@ -181,9 +180,7 @@ define_additive_effects <- function(tbl,
                                     distribution    = c("normal", "gamma"),
                                     G               = NULL,
                                     method          = c("shared", "union"),
-                                    base            = c("founder_haplotypes", "current_pop"),
                                     base_tbl        = NULL,
-                                    base_line_name  = NULL,
                                     line_name       = NULL,
                                     parent_origin   = NULL,
                                     scale_to_target = TRUE,
@@ -207,7 +204,6 @@ define_additive_effects <- function(tbl,
   pop          <- tbl$pop
   validate_tidybreed_pop(pop)
   distribution <- match.arg(distribution)
-  base         <- match.arg(base)
   method       <- match.arg(method)
   .ge_require_effect_tables(pop)
 
@@ -217,35 +213,6 @@ define_additive_effects <- function(tbl,
   }
   if (!is.null(line_name)) validate_sql_identifier(line_name, what = "line name")
   po <- .dae_parent_origin(parent_origin, trait_name)
-
-  # Centre on whatever population the effect applies to: a line-specific effect
-  # defaults to its own line's founder pool, a population-wide one to the pooled
-  # base. missing() distinguishes "not supplied" (inherit line_name) from an
-  # explicit base_line_name = NULL (force pooling even for a line-specific effect).
-  base_line_name_supplied <- !missing(base_line_name)
-  if (!base_line_name_supplied) {
-    base_line_name <- line_name
-  } else if (!is.null(base_line_name) &&
-             (!is.character(base_line_name) || length(base_line_name) != 1L)) {
-    stop("'base_line_name' must be a single character string or NULL.",
-         call. = FALSE)
-  }
-  if (base != "founder_haplotypes") {
-    # Only an *explicit* base_line_name is an error here. A value merely
-    # inherited from line_name must not fire: `base = "current_pop"` with both
-    # line_name and a line-filtered base_tbl is a legitimate, documented call.
-    if (base_line_name_supplied && !is.null(base_line_name)) {
-      stop("'base_line_name' applies only to base = \"founder_haplotypes\". ",
-           "For base = \"current_pop\", restrict the base population with a ",
-           "line-filtered 'base_tbl' instead.", call. = FALSE)
-    }
-    base_line_name <- NULL
-  }
-  if (!is.null(base_tbl) && base == "founder_haplotypes") {
-    warning("'base_tbl' is ignored when base = \"founder_haplotypes\". ",
-            "Use 'base_line_name' to restrict the founder pool by line.",
-            call. = FALSE)
-  }
 
   if (!is.null(seed)) set.seed(seed)
 
@@ -281,20 +248,10 @@ define_additive_effects <- function(tbl,
     )
     qtl_tf <- genome_order$locus_name %in% selected_locus_names
 
-    base_ids <- if (!is.null(base_tbl)) {
-      if (!inherits(base_tbl, "tidybreed_table")) {
-        stop("'base_tbl' must be a tidybreed_table.", call. = FALSE)
-      }
-      b <- dplyr::collect(base_tbl$tbl)
-      if (!"id_ind" %in% names(b)) {
-        stop("'base_tbl' must contain an 'id_ind' column.", call. = FALSE)
-      }
-      unique(b[["id_ind"]])
-    } else {
-      NULL
-    }
-
-    p_base <- compute_base_allele_freq(pop, base, base_ids, base_line_name)
+    base       <- .dae_resolve_base(pop, base_tbl, line_name)
+    p_base     <- base$p_base
+    base_label <- base$label
+    .dae_require_base_at(p_base, qtl_tf, genome_order$locus_name)
 
     if (!is.null(effects)) {
       if (!is.numeric(effects)) stop("`effects` must be numeric.", call. = FALSE)
@@ -338,7 +295,7 @@ define_additive_effects <- function(tbl,
     .dae_warn_parent_only(pop$db_conn, trait_name)
 
     message("Set additive effects for ", n_qtl, " QTL on trait '", trait_name,
-            "' (base: ", base, "; scope: ", .dae_scope_label(line_name,
+            "' (base: ", base_label, "; scope: ", .dae_scope_label(line_name,
             po[[trait_name]]), ").")
     return(invisible(pop))
   }
@@ -483,16 +440,16 @@ define_additive_effects <- function(tbl,
     effects_mat[any_qtl, ] <- draws
   }
 
-  base_ids <- if (!is.null(base_tbl)) {
-    if (!inherits(base_tbl, "tidybreed_table")) stop("'base_tbl' must be a tidybreed_table.", call. = FALSE)
-    b <- dplyr::collect(base_tbl$tbl)
-    if (!"id_ind" %in% names(b)) stop("'base_tbl' must contain 'id_ind'.", call. = FALSE)
-    unique(b[["id_ind"]])
-  } else {
-    NULL
+  base       <- .dae_resolve_base(pop, base_tbl, line_name)
+  p_base     <- base$p_base
+  base_label <- base$label
+  # Per trait, on the loci that will actually be written: under method =
+  # "union" a trait's QTL set is a subset of the candidates, and a base gap
+  # outside it is not this trait's problem.
+  for (t in trait_name) {
+    written_t <- qtl_tf_mat[, t] & !is.na(effects_mat[, t])
+    .dae_require_base_at(p_base, written_t, genome_order$locus_name, trait = t)
   }
-
-  p_base <- compute_base_allele_freq(pop, base, base_ids, base_line_name)
 
   if (scale_to_target) {
     na_targets <- trait_name[is.na(target_var)]
@@ -544,6 +501,7 @@ define_additive_effects <- function(tbl,
 
   message("Set correlated additive effects for traits: ",
           paste(trait_name, collapse = ", "), " (method: ", method,
+          "; base: ", base_label,
           "; scope: ", .dae_scope_label(line_name, po[[trait_name[1]]]), ")")
   invisible(pop)
 }
@@ -809,104 +767,121 @@ rescale_effects_to_target <- function(qtl_tf, qtl_effects, target_add_var,
 }
 
 
-#' Compute per-locus allele frequencies from the base population
+
+
+
+#' Resolve `base_tbl` (default or explicit) into `p_base`
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param base Character. `"founder_haplotypes"` or `"current_pop"`.
-#' @param base_ids Optional character vector of `id_ind` for `"current_pop"`.
-#' @return Numeric vector of allele frequencies, length `n_loci`, in
-#'   `locus_id` order.
+#' Called after argument validation in each path, so an argument error is
+#' reported before the base is touched or warned about. The default is the
+#' population the effect applies to (`.dae_default_base()`) and may warn; an
+#' explicit `base_tbl` is an intentional selection and never warns. `p_base`
+#' may hold `NA` at loci the base has no copies for -- `.dae_require_base_at()`
+#' refuses those at the QTL before anything folds `p` into `V_A`.
+#'
 #' @keywords internal
-compute_base_allele_freq <- function(pop, base, base_ids = NULL,
-                                     line_name = NULL) {
-  if (base == "founder_haplotypes") {
-    if (!"founder_haplotypes" %in% pop$tables) {
-      stop(
-        "founder_haplotypes table not found. ",
-        "Did you call define_founder_haplotypes()? ",
-        "Use base = 'current_pop' instead.",
-        call. = FALSE
-      )
-    }
-
-    if (is.null(line_name)) {
-      # Pooling every line's haplotypes overstates within-line heterozygosity
-      # (Wahlund), so 2pq is too large and scale_to_target under-scales the
-      # effects. That is correct for a population-wide effect, which is centred
-      # on the whole founder base; it is wrong for a line-specific one, so warn
-      # only when no line is in play.
-      n_lines <- DBI::dbGetQuery(pop$db_conn,
-        "SELECT COUNT(DISTINCT line_name) AS n FROM founder_haplotypes")$n
-      if (isTRUE(n_lines > 1L)) {
-        warning(
-          "founder_haplotypes contains ", n_lines, " lines; base allele ",
-          "frequencies for this population-wide effect are pooled across all ",
-          "of them, which overstates within-line heterozygosity. Set ",
-          "line_name (or base_line_name) for per-line centering.",
-          call. = FALSE
-        )
-      }
-      params <- NULL
-      line_filter <- ""
-    } else {
-      # Parameterized rather than interpolated. line_name reaches SQL in several
-      # places in this file via raw paste0(); this one is bound.
-      validate_sql_identifier(line_name, what = "line name")
-      params <- list(line_name)
-      line_filter <- "WHERE fh.line_name = ? "
-    }
-
-    freq <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT gm.locus_id, AVG(CAST(fh.allele AS DOUBLE)) AS f ",
-      "FROM founder_haplotypes fh ",
-      "JOIN genome_meta gm ON fh.locus_name = gm.locus_name ",
-      line_filter,
-      "GROUP BY gm.locus_id ORDER BY gm.locus_id"), params = params)
-    if (nrow(freq) == 0) {
-      if (is.null(line_name)) {
-        stop("founder_haplotypes table is empty.", call. = FALSE)
-      }
-      # Must be loud: `out` below is zero-initialised, so silently returning it
-      # would centre every allele at 0 and contribute nothing to the Falconer
-      # V_A -- a typo'd line name would produce plausible-looking output.
-      avail <- DBI::dbGetQuery(pop$db_conn,
-        "SELECT DISTINCT line_name FROM founder_haplotypes ORDER BY line_name")$line_name
-      stop(
-        "No founder_haplotypes rows for line '", line_name, "'. Available: ",
-        if (all(is.na(avail))) "only an unnamed (line_name = NULL) pool"
-          else paste0("'", stats::na.omit(avail), "'", collapse = ", "),
-        ".", call. = FALSE
-      )
-    }
-    n_loci <- DBI::dbGetQuery(pop$db_conn,
-      "SELECT COUNT(*) AS n FROM genome_meta")$n
-    out <- numeric(n_loci)
-    out[freq$locus_id] <- freq$f
-    return(out)
+#' @noRd
+.dae_resolve_base <- function(pop, base_tbl, line_name) {
+  if (is.null(base_tbl)) {
+    base_tbl <- .dae_default_base(pop, line_name)
+  } else {
+    .validate_base_tbl(base_tbl, pop)
   }
-
-  if (!"ind_haplotype" %in% pop$tables) {
-    stop("ind_haplotype table does not exist.", call. = FALSE)
-  }
-  where <- ""
-  if (!is.null(base_ids)) {
-    if (length(base_ids) == 0) stop("base_ids is empty.", call. = FALSE)
-    where <- paste0("WHERE id_ind IN (",
-                    sql_in_list(base_ids, what = "individual id"), ") ")
-  }
-  # Per-locus base allele frequency = mean allele over all haplotype rows.
-  freq <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT locus_id, AVG(CAST(allele AS DOUBLE)) AS f ",
-           "FROM ind_haplotype ", where, "GROUP BY locus_id ORDER BY locus_id")
-  )
-  if (nrow(freq) == 0) {
-    stop("No haplotype rows found for the base population.", call. = FALSE)
-  }
-  n_loci <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM genome_meta")$n
-  out <- numeric(n_loci)
-  out[freq$locus_id] <- freq$f
-  out
+  list(p_base = extract_allele_freq(base_tbl)$allele_freq,
+       label  = .dae_base_label(base_tbl))
 }
 
+#' Resolve the default base population for `define_additive_effects()`
+#'
+#' The founder pool of the line the effect applies to, with the same
+#' `line -> NULL` precedence as `resolve_genome_map()` and
+#' `resolve_chr_inheritance()`: a named pool wins, the shared (`NULL`) pool is
+#' the fallback, and only when neither exists is it an error. This is
+#' pool-level fallback, never per-locus stitching -- a named pool that is
+#' missing loci is the base as it stands, and `.dae_require_base_at()` refuses
+#' the gap at the QTL.
+#'
+#' Warns only for a population-wide effect on a founder table holding more
+#' than one pool (Wahlund; see the roxygen). A line-scoped effect that falls
+#' back to the shared pool does not warn: a shared pool is one population by
+#' construction, so nothing is pooled.
+#'
+#' @param pop A `tidybreed_pop`.
+#' @param line_name The effect's `line_name`, or `NULL`.
+#' @return A `tidybreed_table` on `founder_haplotypes`, filtered as resolved.
+#' @keywords internal
+#' @noRd
+.dae_default_base <- function(pop, line_name) {
+  if (!"founder_haplotypes" %in% pop$tables) {
+    stop("founder_haplotypes table not found. Did you call ",
+         "define_founder_haplotypes()? Otherwise pass base_tbl explicitly, ",
+         "e.g. base_tbl = get_table(pop, \"ind_meta\").", call. = FALSE)
+  }
+  fh   <- get_table(pop, "founder_haplotypes")
+  conn <- pop$db_conn
+  if (is.null(line_name)) {
+    # NULL counts as its own pool; COUNT(DISTINCT line_name) would ignore it.
+    n_pools <- DBI::dbGetQuery(conn,
+      "SELECT COUNT(DISTINCT COALESCE(line_name, '')) AS n FROM founder_haplotypes")$n
+    if (isTRUE(n_pools > 1L)) {
+      warning(
+        "founder_haplotypes holds ", n_pools, " pools; base allele frequencies ",
+        "for this population-wide effect are pooled across all of them, which ",
+        "overstates within-line heterozygosity. Set line_name for per-line ",
+        "centering, or pass base_tbl explicitly to pool on purpose.",
+        call. = FALSE)
+    }
+    return(fh)
+  }
+  has_line <- DBI::dbGetQuery(conn,
+    "SELECT EXISTS(SELECT 1 FROM founder_haplotypes WHERE line_name = ?) AS ok",
+    params = list(line_name))$ok
+  if (isTRUE(has_line)) {
+    return(dplyr::filter(fh, .data$line_name == .env$line_name))
+  }
+  has_shared <- DBI::dbGetQuery(conn,
+    "SELECT EXISTS(SELECT 1 FROM founder_haplotypes WHERE line_name IS NULL) AS ok")$ok
+  if (isTRUE(has_shared)) {
+    return(dplyr::filter(fh, is.na(.data$line_name)))
+  }
+  .founder_base_empty_error(conn, paste0("line '", line_name, "'"))
+}
+
+#' Refuse a QTL locus the base has no allele copies for
+#'
+#' `p_base` may hold `NA` where `extract_allele_freq()` found no copies. Both
+#' `rescale_effects_to_target()` call sites fold `p` into
+#' `V_A = sum n_eligible * p q a^2`, so an `NA` reaching them would make every
+#' effect `NA`; the old zero-initialised vector centred such loci at `p = 0`
+#' silently. Either is worse than stopping here and naming the loci.
+#'
+#' @param p_base Numeric, length `n_loci`, `locus_id` order; may hold `NA`.
+#' @param written_tf Logical mask of the loci this call will write.
+#' @param locus_names Character, length `n_loci`, `locus_id` order.
+#' @param trait Optional trait name for the message (multi-trait path).
+#' @keywords internal
+#' @noRd
+.dae_require_base_at <- function(p_base, written_tf, locus_names, trait = NULL) {
+  bad <- written_tf & is.na(p_base)
+  if (!any(bad)) return(invisible(TRUE))
+  shown <- locus_names[bad]
+  if (length(shown) > 5L) {
+    shown <- c(shown[1:5], paste0("... (", length(locus_names[bad]), " total)"))
+  }
+  stop("base_tbl has no allele copies at ", sum(bad), " selected QTL ",
+       if (!is.null(trait)) paste0("for trait '", trait, "' ") else "",
+       "(", paste(shown, collapse = ", "), "). ",
+       "Widen the base selection or drop those loci from the QTL filter.",
+       call. = FALSE)
+}
+
+#' Human-readable base description for the completion message
+#'
+#' @keywords internal
+#' @noRd
+.dae_base_label <- function(base_tbl) {
+  n_filters <- length(base_tbl$pending_filter)
+  paste0(base_tbl$table_name,
+         if (n_filters > 0L) paste0(" [", n_filters, " filter",
+                                    if (n_filters > 1L) "s", "]") else "")
+}

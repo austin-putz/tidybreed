@@ -238,3 +238,45 @@ test_that("output is locus_id-ordered, one row per locus, typed, and read-only",
     numeric(1))
   expect_identical(before, after)
 })
+
+test_that("with F1s present, line_origin selects copies and ind_meta.line_name selects animals", {
+  # Plan test 17. Realized Duroc-origin copies are a finite transmitted sample
+  # of the Duroc pool, so they are compared with a hand computation over
+  # exactly those copies -- never with the pool frequency.
+  set.seed(21)
+  pop <- make_freq_pop("af_f1")
+  on.exit(close_pop(pop))
+  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", effects = rep(1, 6),
+                            base_tbl = get_table(pop, "founder_haplotypes"))
+  f1 <- tibble::tibble(id_parent_1 = c("Duroc_1", "Duroc_2"),
+                       id_parent_2 = c("Landrace_3", "Landrace_4"),
+                       sex = c("M", "F"), line_name = "F1", gen = 1L)
+  pop <- add_offspring(pop, f1)
+  ih <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT h.id_ind, h.locus_id, h.allele, h.line_origin, m.line_name
+     FROM ind_haplotype h JOIN ind_meta m USING (id_ind)")
+
+  by_origin <- pop |> get_table("ind_haplotype") |>
+    dplyr::filter(line_origin == "Duroc") |> extract_allele_freq()
+  expect_equal(by_origin$allele_freq, hand_freq(ih[ih$line_origin == "Duroc", ], 6))
+
+  by_label <- pop |> get_table("ind_meta") |>
+    dplyr::filter(line_name == "F1") |> extract_allele_freq()
+  f1_rows <- ih[ih$line_name == "F1", ]
+  expect_equal(by_label$allele_freq, hand_freq(f1_rows, 6))
+  expect_setequal(unique(f1_rows$line_origin), c("Duroc", "Landrace"))
+
+  # Make the two selections provably different at one locus: fix every
+  # Landrace-origin copy at allele 1 and every Duroc-origin copy at 0 there.
+  DBI::dbExecute(pop$db_conn,
+    "UPDATE ind_haplotype SET allele = CASE WHEN line_origin = 'Duroc' THEN 0 ELSE 1 END
+     WHERE locus_id = 1")
+  by_origin <- pop |> get_table("ind_haplotype") |>
+    dplyr::filter(line_origin == "Duroc") |> extract_allele_freq()
+  by_label <- pop |> get_table("ind_meta") |>
+    dplyr::filter(line_name == "F1") |> extract_allele_freq()
+  expect_equal(by_origin$allele_freq[1], 0)
+  expect_equal(by_label$allele_freq[1], 0.5)   # one Duroc + one Landrace copy each
+})

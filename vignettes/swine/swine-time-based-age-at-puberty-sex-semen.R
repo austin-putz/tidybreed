@@ -309,9 +309,9 @@ pop |>
 # Every call also (re)writes genome_meta.founder_allele_freq with the per-locus
 # frequency of the pool written MOST RECENTLY. It is informational only -- no
 # other tidybreed function reads it -- so with six lines below it describes only
-# line F. For per-line Falconer centering use
-#   define_additive_effects(..., base = "current_pop", base_tbl = <line-filtered>)
-# rather than base = "founder_haplotypes", which pools ALL lines together.
+# line F. define_additive_effects() never reads it: with line_name set it
+# centers on that line's own founder pool by default, and any other base is a
+# filtered table passed as base_tbl (see extract_allele_freq()).
 
 # line A
 pop <- pop %>%
@@ -914,7 +914,7 @@ pop %>%
     trait_name      = "AP", 
     distribution    = "normal", 
     scale_to_target = TRUE, 
-    base            = "current_pop"
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # print the causal loci (one row per term x locus; a locus-level view over
@@ -1154,7 +1154,7 @@ pop %>%
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADG
@@ -1236,7 +1236,7 @@ pop %>%
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for BF
@@ -1309,7 +1309,7 @@ pop %>%
     trait_name      = "ADFI",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADFI
@@ -1437,7 +1437,7 @@ pop %>%
     trait_name      = c("WWD", "WWM"), # trait names
     distribution    = "normal",        # distribution of QTL effects
     scale_to_target = TRUE,            # scale to meet additive variance target
-    base            = "current_pop"    # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # causal loci per trait (locus grain; one row per term x locus)
@@ -1506,7 +1506,7 @@ pop %>%
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADG
