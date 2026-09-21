@@ -126,11 +126,10 @@ clip_count <- function(x, min_value = NA_real_, max_value = NA_real_) {
     group <- src_df[[e$source_column]]
     ec    <- e$effect_class
 
-    if (ec %in% c("fixed", "fixed_class")) {
+    if (ec == "fixed_class") {
       nca <- if (is.na(e$null_class_action)) "skip" else e$null_class_action
 
-      null_mask <- is.na(group) | (as.character(group) == "NA") |
-                   (as.character(group) == "")
+      null_mask <- is.na(group)
       if (any(null_mask)) {
         if (nca == "error") {
           stop("Effect '", e$effect_name, "': ", sum(null_mask),
@@ -177,7 +176,7 @@ clip_count <- function(x, min_value = NA_real_, max_value = NA_real_) {
       level[is.na(group)] <- NA_character_
       random[[length(random) + 1L]] <- list(
         effect_name  = e$effect_name,
-        distribution = e$distribution %||% "normal",
+        distribution = e$distribution,
         level        = level)
     }
   }

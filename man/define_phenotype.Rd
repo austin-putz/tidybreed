@@ -86,11 +86,12 @@ component. Columns:
 \item \code{contributor_type} (required): \code{"self"}, \code{"dam"}, \code{"sire"}, or
 \code{"group"}.
 \item \code{weight} (optional, default \code{1.0}): scalar multiplier.
-\item \code{weight_type} (optional, default \code{"fixed"}): \code{"fixed"}, \code{"covariate"},
-\code{"legendre"}, or \code{"raw_poly"}.
+\item \code{weight_type} (optional, default \code{"fixed"}): \code{"fixed"} or
+\code{"covariate"} (\code{weight * covariate}). \code{"legendre"} and \code{"raw_poly"}
+are reserved and rejected by \code{\link[=add_phenotype]{add_phenotype()}}.
 \item \code{covariate_name} (optional): covariate key.
-\item \code{covariate_table} (optional): table containing the covariate column;
-\code{NULL} means value supplied at \code{\link[=add_phenotype]{add_phenotype()}} call time.
+\item \code{covariate_table} (optional, default \code{"ind_meta"}): table containing
+the covariate column; it must have exactly one row per individual.
 \item \code{poly_order} (optional): polynomial basis order.
 \item \code{poly_scale_min}, \code{poly_scale_max} (optional): Legendre scaling bounds.
 \item \code{component_names} (optional, default \code{"order1_additive"}): reserved;

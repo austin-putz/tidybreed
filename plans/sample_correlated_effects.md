@@ -932,9 +932,8 @@ evaluator, where individual identifiers never enter the statement. *(v3.4:
 Stage 1 already does this — `.ap_read_by_id()` is the one join helper for the
 repeatable guard, the TBV read, effect source tables and the stratum lookup,
 and `next_pheno_numbers()` / `.eval_derived_formula()` register their ids.
-The composite-TBV assembly in `.assemble_composite_tbv()` and
-`.eval_formula_tbv()` still pastes contributor ids; those are TBV reads, not
-residual lookups, and are out of this plan's scope.)*
+*v3.5:* the composite / formula contributor reads went the same way —
+`R/contributor_tbv.R` — so nothing on the phenotype path pastes an id.)*
 `duckdb_register()` is RNG-neutral.
 
 **Stratum lookup contract.** `condition_table` defaults to `ind_meta` and may be

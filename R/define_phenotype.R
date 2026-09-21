@@ -57,11 +57,12 @@
 #'   - `contributor_type` (required): `"self"`, `"dam"`, `"sire"`, or
 #'     `"group"`.
 #'   - `weight` (optional, default `1.0`): scalar multiplier.
-#'   - `weight_type` (optional, default `"fixed"`): `"fixed"`, `"covariate"`,
-#'     `"legendre"`, or `"raw_poly"`.
+#'   - `weight_type` (optional, default `"fixed"`): `"fixed"` or
+#'     `"covariate"` (`weight * covariate`). `"legendre"` and `"raw_poly"`
+#'     are reserved and rejected by [add_phenotype()].
 #'   - `covariate_name` (optional): covariate key.
-#'   - `covariate_table` (optional): table containing the covariate column;
-#'     `NULL` means value supplied at [add_phenotype()] call time.
+#'   - `covariate_table` (optional, default `"ind_meta"`): table containing
+#'     the covariate column; it must have exactly one row per individual.
 #'   - `poly_order` (optional): polynomial basis order.
 #'   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling bounds.
 #'   - `component_names` (optional, default `"order1_additive"`): reserved;

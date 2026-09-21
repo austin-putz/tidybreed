@@ -187,6 +187,7 @@ recipe unlocks it.
   `test-define_phenotype.R` 38, `test-mutate_derived.R` 37 — all green.
 - Full suite at the first commit (`c7d273a`): 3304 passed, 0 failed,
   1 skipped. After the second review pass: 3310 passed, 0 failed, 1 skipped.
+  After the third (contributor lookups): 3316 passed, 0 failed, 1 skipped.
 - `roxygen2::roxygenise(roclets = "rd")` clean; `NAMESPACE` unchanged.
 
 ## Review pass
@@ -214,11 +215,28 @@ Second pass (after the commit), fixes applied:
 - The prevalence-threshold error no longer claims "only conditional strata
   are stored" when the phenotype has no block at all.
 - Unused test helper removed.
-- Left alone, flagged: `.assemble_composite_tbv()` (composite TBV assembly,
-  `R/add_phenotype.R`) still pastes ids into SQL, loops per individual,
-  and keeps `!is.null()` / `"NA"`-string guards. It is TBV code the plan
-  scoped out in v3.4; it deserves its own rewrite with the SGE tests
-  beside it.
+Third pass (composite / formula contributor code, which the plan had
+scoped out but which the "no old code" rule reaches):
+
+- **`R/contributor_tbv.R`** is the one place a contributor becomes a
+  value: `.read_one_per_id()` (exactly-one-row contract, generalized from
+  `.ap_condition_values()`), `.tbv_by_id()`, `.group_members()`,
+  `.group_mate_tbv()` (SGE aggregation in DuckDB, self excluded,
+  singleton → 0, `NULL` group → `NA`). `.assemble_composite_tbv()`,
+  `.build_tbv_env()` and `.ap_materialize_tbvs()` all read through it;
+  `.fetch_contributor_tbvs()`, `.fetch_group_tbvs()` and the
+  `group_member_ids()` closure (with its `tolerant` error-swallowing) are
+  gone. No id is pasted into SQL anywhere on the phenotype path now, so
+  the v3.4 "out of scope" note in §5.5 is retired.
+- A `group_table` with several rows per focal is an error (it used to take
+  one silently, and counted mates with duplicates); `weight_type =
+  "covariate"` needs `covariate_name`; `"legendre"` / `"raw_poly"` error
+  instead of acting as `"fixed"`; the `"NA"`-string tolerances for parent
+  ids and fixed-class levels are deleted (founders' parents are `NULL`).
+- Three tests added to `test-phenotype_composite.R`: exact SGE value
+  against a hand computation, the group-table row contract, and the
+  covariate weight path (with the `NULL` exclusion and the reserved-type
+  error).
 
 First pass (before the commit):
 

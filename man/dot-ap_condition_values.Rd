@@ -7,10 +7,8 @@
 .ap_condition_values(conn, condition_table, condition_column, ids)
 }
 \description{
-Reads \verb{(id_ind, <condition_column>)} from \code{condition_table} for the
-planned ids and requires exactly one row per id; zero or several rows is
-an error naming the table, the column and up to five example ids. The
-value is returned as character (\code{NA} for \code{NULL}), matching how
+\code{.read_one_per_id()} on the condition table (exactly one row per planned
+id), returned as character (\code{NA} for \code{NULL}) to match how
 \code{phenotype_var_comp.condition_level} is stored.
 }
 \keyword{internal}

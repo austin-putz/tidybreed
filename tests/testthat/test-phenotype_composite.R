@@ -597,3 +597,72 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
   expect_equal(nrow(ph), 30L)
   expect_false(any(is.na(ph$pheno_value)))
 })
+
+
+# ── 13. Contributor lookups (R/contributor_tbv.R) ─────────────────────────────
+
+test_that("SGE group contribution equals the hand-computed sum / mean of the pen-mates' TBVs, excluding self", {
+  set.seed(1301)
+  pop <- make_sge_pop("sge_exact", n_pens = 3, pen_size = 4)
+  on.exit(close_pop(pop))
+  pop <- pop |> get_table("ind_meta") |>
+    add_phenotype("ADG", user_residual = rep(0, 12))
+
+  ind <- dplyr::collect(get_table(pop, "ind_meta"))
+  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
+  ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  direct <- stats::setNames(tbv$tbv_value[tbv$trait_name == "ADG_direct"],
+                            tbv$id_ind[tbv$trait_name == "ADG_direct"])
+  social <- stats::setNames(tbv$tbv_value[tbv$trait_name == "ADG_social"],
+                            tbv$id_ind[tbv$trait_name == "ADG_social"])
+  expected <- vapply(ph$id_ind, function(id) {
+    mates <- ind$id_ind[ind$pen_id == ind$pen_id[ind$id_ind == id] & ind$id_ind != id]
+    850 + direct[[id]] + sum(social[mates])
+  }, numeric(1))
+  expect_equal(ph$pheno_value, unname(expected))
+})
+
+test_that("a group table with several rows per focal individual is an error naming the table and ids", {
+  set.seed(1302)
+  pop <- make_sge_pop("sge_dup", n_pens = 2, pen_size = 4)
+  on.exit(close_pop(pop))
+  DBI::dbExecute(pop$db_conn, "CREATE TABLE pen_log AS SELECT id_ind, pen_id FROM ind_meta")
+  DBI::dbExecute(pop$db_conn, "INSERT INTO pen_log VALUES ('A_1', 'pen2')")
+  DBI::dbExecute(pop$db_conn, "DELETE FROM phenotype_components WHERE phenotype_name = 'ADG'")
+  DBI::dbExecute(pop$db_conn, "DELETE FROM phenotype_meta WHERE phenotype_name = 'ADG'")
+  pop <- define_phenotype(pop, "ADG", type = "continuous", residual_var = 300,
+    components = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~group_column, ~group_table,
+      "ADG_direct",       "self",            NA_character_, NA_character_,
+      "ADG_social",       "group",           "pen_id",      "pen_log"))
+  expect_error(pop |> get_table("ind_meta") |> add_phenotype("ADG"),
+               "component 'ADG_social' \\(group\\): 'pen_log' must have exactly one row.*1 have several rows \\(e.g. A_1\\)")
+})
+
+test_that("weight_type = 'covariate' multiplies by the individual's covariate; a NULL covariate excludes; reserved weight types are rejected", {
+  set.seed(1303)
+  pop <- make_composite_pop("comp_cov", n_males = 4, n_females = 4)
+  on.exit(close_pop(pop))
+  pop <- define_trait(pop, "T1", target_add_var = 1)
+  pop <- pop |> get_table("genome_meta") |> define_additive_effects("T1")
+  ids <- sort(dplyr::collect(get_table(pop, "ind_meta"))$id_ind)
+  pop <- pop |> get_table("ind_meta") |>
+    mutate_table(age = tibble::tibble(id_ind = ids, age = c(NA, seq_len(7) * 10)))
+
+  pop <- define_phenotype(pop, "P", type = "continuous", residual_var = 1,
+    components = tibble::tribble(
+      ~source_trait_name, ~contributor_type, ~weight, ~weight_type, ~covariate_name,
+      "T1",               "self",            0.5,     "covariate",  "age"))
+  expect_warning(
+    pop <- pop |> get_table("ind_meta") |> add_phenotype("P", user_residual = rep(0, 7)),
+    paste0("1 individual\\(s\\) had one or more missing components.*", ids[[1L]]))
+  ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
+  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
+  expect_setequal(ph$id_ind, ids[-1L])
+  expect_equal(ph$pheno_value,
+               0.5 * (match(ph$id_ind, ids) - 1L) * 10 * tbv$tbv_value[match(ph$id_ind, tbv$id_ind)])
+
+  DBI::dbExecute(pop$db_conn, "UPDATE phenotype_components SET weight_type = 'legendre' WHERE phenotype_name = 'P'")
+  expect_error(pop |> get_table("ind_meta") |> add_phenotype("P"),
+               "weight_type 'legendre' is not implemented")
+})

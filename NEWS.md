@@ -87,6 +87,19 @@ accumulates until the feature ships.
   phenotype, carry per-`id_ind` names, or be combined with `user_values`;
   a supplied value off the support of a singular covariance is an error;
   a phenotype whose residuals are all supplied needs no residual block.
+- **Composite and `formula_tbv` contributor lookups rewritten** (new
+  `R/contributor_tbv.R`). Self, dam, sire and group contributors are one
+  registered-view SQL each, shared by `phenotype_components` assembly,
+  `formula_tbv` evaluation and the TBV materialization step; ids never
+  enter SQL text and there is no per-individual R loop. Group-mate
+  aggregation (SGE) runs in DuckDB with the same semantics (self excluded,
+  singleton → 0, `NULL` group → missing component); a `group_table` with
+  several rows for a focal individual is now an error (it used to take one
+  silently). `weight_type = "covariate"` requires `covariate_name` and reads
+  `covariate_table` (default `ind_meta`) with the same one-row contract;
+  `"legendre"` / `"raw_poly"` are rejected instead of silently acting as
+  `"fixed"`. The `"NA"`-string tolerance for parents and fixed-class levels
+  is gone — a `NULL` is `NULL`.
   A categorical phenotype using `prevalence` now errors when it has only
   conditional residual strata (the threshold needs the marginal variance;
   use `thresholds =`). Stage-2 draw order: all named-effect draws, then

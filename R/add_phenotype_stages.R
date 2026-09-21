@@ -237,26 +237,7 @@ NULL
     pop <- add_tbv(tbl, trait_name = simple_phenos)
   }
 
-  parent_ids <- function(x) {
-    x <- as.character(x)
-    x[!is.na(x) & x != "NA" & nzchar(x)]
-  }
-  group_member_ids <- function(subset_df, grp_col, grp_tbl, tolerant = FALSE) {
-    focal_sql <- .pvc_in_list(conn, subset_df$id_ind)
-    q <- paste0(
-      "SELECT DISTINCT \"", grp_col, "\" AS gv FROM ", grp_tbl,
-      " WHERE id_ind IN (", focal_sql, ") AND \"", grp_col, "\" IS NOT NULL")
-    grp_vals <- if (tolerant) {
-      tryCatch(DBI::dbGetQuery(conn, q)$gv,
-               error = function(e) character(0))  # column/table errors caught later
-    } else {
-      DBI::dbGetQuery(conn, q)$gv
-    }
-    if (length(grp_vals) == 0) return(character(0))
-    DBI::dbGetQuery(conn, paste0(
-      "SELECT id_ind FROM ", grp_tbl, " WHERE \"", grp_col, "\" IN (",
-      .pvc_in_list(conn, as.character(grp_vals)), ")"))$id_ind
-  }
+  parent_ids <- function(x) { x <- as.character(x); x[!is.na(x)] }
 
   # Composite — gather all contributor IDs + source traits, then add_tbv once
   if (length(composite_phenos) > 0) {
@@ -273,16 +254,14 @@ NULL
           dam  = parent_ids(subset_df$id_parent_2),
           sire = parent_ids(subset_df$id_parent_1),
           group = {
-            grp_rows <- comp_rows[as.character(comp_rows$contributor_type) == "group",
-                                  , drop = FALSE]
+            grp_rows <- comp_rows[comp_rows$contributor_type == "group", , drop = FALSE]
             unlist(lapply(seq_len(nrow(grp_rows)), function(gi) {
-              grp_row <- grp_rows[gi, ]
-              grp_tbl <- if (is.na(grp_row$group_table) || !nzchar(grp_row$group_table))
-                           "ind_meta" else as.character(grp_row$group_table)
-              group_member_ids(subset_df, as.character(grp_row$group_column), grp_tbl)
+              g <- grp_rows[gi, , drop = FALSE]
+              .group_members(conn, subset_df$id_ind, g$group_column, g$group_table,
+                             what = paste0("Phenotype '", t, "', component '",
+                                           g$source_trait_name, "' (group)"))
             }))
-          },
-          character(0))
+          })
         all_contributor_ids <- unique(c(all_contributor_ids, ids))
       }
     }
@@ -309,8 +288,8 @@ NULL
           dam  = parent_ids(subset_df$id_parent_2),
           sire = parent_ids(subset_df$id_parent_1),
           group_sum = , group_mean =
-            group_member_ids(subset_df, ref$col, ref$table, tolerant = TRUE),
-          character(0))
+            .group_members(conn, subset_df$id_ind, ref$col, ref$table,
+                           what = paste0("formula_tbv for phenotype '", t, "'")))
         all_contributor_ids <- unique(c(all_contributor_ids, ids))
       }
     }
@@ -429,9 +408,8 @@ NULL
     }
   } else if (tbv_kind == "components") {
     mca <- .ap_missing_action(m)
-    comp_result <- .assemble_composite_tbv(pop, t, comp_rows, subset_df,
-                                           missing_component_action = mca)
-    tbv  <- unname(comp_result$composite_tbv[ids_t])
+    tbv  <- unname(.assemble_composite_tbv(pop, t, comp_rows, subset_df,
+                                           missing_component_action = mca)[ids_t])
     excl <- is.na(tbv)
     if (any(excl)) {
       ids_t <- ids_t[!excl]; tbv <- tbv[!excl]; terms <- .ap_subset_terms(terms, !excl)
@@ -502,39 +480,13 @@ NULL
 
 #' The residual condition value of every planned record
 #'
-#' Reads `(id_ind, <condition_column>)` from `condition_table` for the
-#' planned ids and requires exactly one row per id; zero or several rows is
-#' an error naming the table, the column and up to five example ids. The
-#' value is returned as character (`NA` for `NULL`), matching how
+#' `.read_one_per_id()` on the condition table (exactly one row per planned
+#' id), returned as character (`NA` for `NULL`) to match how
 #' `phenotype_var_comp.condition_level` is stored.
-#'
 #' @keywords internal
 .ap_condition_values <- function(conn, condition_table, condition_column, ids) {
-  if (!condition_table %in% DBI::dbListTables(conn)) {
-    stop("Residual condition table '", condition_table, "' does not exist.",
-         call. = FALSE)
-  }
-  if (!condition_column %in% DBI::dbListFields(conn, condition_table)) {
-    stop("Residual condition column '", condition_column,
-         "' not found in table '", condition_table, "'.", call. = FALSE)
-  }
-  rows <- .ap_read_by_id(conn, condition_table, ids, condition_column)
-  counts  <- table(rows$id_ind)
-  missing <- setdiff(ids, rows$id_ind)
-  several <- names(counts)[counts > 1L]
-  if (length(missing) > 0 || length(several) > 0) {
-    bad <- c(missing, several)
-    stop(
-      "Residual condition lookup: '", condition_table, "' must have exactly ",
-      "one row per individual to read '", condition_column, "', but ",
-      if (length(missing) > 0) paste0(length(missing), " planned individual(s) have no row"),
-      if (length(missing) > 0 && length(several) > 0) " and ",
-      if (length(several) > 0) paste0(length(several), " have several rows"),
-      " (e.g. ", paste(head(bad, 5), collapse = ", "),
-      if (length(bad) > 5) paste0(" ... +", length(bad) - 5L, " more") else "",
-      ").", call. = FALSE)
-  }
-  v <- rows[[condition_column]][match(ids, rows$id_ind)]
+  v <- .read_one_per_id(conn, condition_table, condition_column, ids,
+                        what = "Residual condition lookup")
   out <- as.character(v)
   out[is.na(v)] <- NA_character_
   out
@@ -741,7 +693,7 @@ NULL
              "' / phenotype '", phenotype_name, "'.", call. = FALSE)
       }
       new_draws <- switch(
-        r$distribution %||% "normal",
+        r$distribution,
         normal  = stats::rnorm(length(new_lvls), sd = sqrt(effect_var)),
         gamma   = stats::rgamma(length(new_lvls), shape = 1,
                                 rate = 1 / sqrt(effect_var)),

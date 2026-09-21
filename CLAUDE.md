@@ -536,6 +536,11 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 `add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
+`group_table` must have exactly one row per focal individual (error otherwise).
+All contributor lookups — self, dam, sire, group, and `formula_tbv`'s
+`dam()`/`sire()`/`group_sum()`/`group_mean()` — go through `R/contributor_tbv.R`
+(`.tbv_by_id()`, `.group_mate_tbv()`, `.group_members()`), one registered-view
+SQL each; ids never enter SQL text.
 
 **Reserved**: all columns (managed exclusively by
 `define_phenotype(..., components = ...)`).

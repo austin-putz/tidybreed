@@ -2,35 +2,36 @@
 % Please edit documentation in R/add_phenotype.R
 \name{.assemble_composite_tbv}
 \alias{.assemble_composite_tbv}
-\title{Assemble composite TBV from phenotype_components for a single phenotype}
+\title{Assemble the composite TBV of one phenotype from \code{phenotype_components}}
 \usage{
 .assemble_composite_tbv(
   pop,
   phenotype_name,
   comp_rows,
   subset_df,
-  missing_component_action = "skip"
+  missing_component_action
 )
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
+\item{comp_rows}{The phenotype's \code{phenotype_components} rows.}
 
-\item{phenotype_name}{Character. The composite phenotype name.}
+\item{subset_df}{The planned \code{ind_meta} rows (needs \code{id_ind},
+\code{id_parent_1}, \code{id_parent_2}).}
 
-\item{comp_rows}{Data frame. Rows from \code{phenotype_components} for this phenotype.}
-
-\item{subset_df}{Data frame. Sex-filtered (and skip-masked) \code{ind_meta} rows.}
-
-\item{missing_component_action}{Character. \code{"skip"} (default) to warn and
-exclude individuals with any missing component (dam/sire/group TBV
-unavailable, no group assignment, etc.); \code{"error"} to stop immediately.}
+\item{missing_component_action}{\code{"skip"} warns and returns \code{NA} for the
+excluded individuals; \code{"error"} stops. Both name the count and up to
+five ids.}
 }
 \value{
-A list with \code{composite_tbv}: named numeric vector (NA = excluded).
+Numeric vector named by \code{id_ind}; \code{NA} marks an excluded
+individual.
 }
 \description{
-Reads contributor TBVs from \code{ind_tbv} (which must already be populated by
-\code{add_tbv()} for all relevant source traits and contributor IDs) and
-multiplies by component weights, summing across all components.
+Sums \verb{weight * contributor TBV} over the phenotype's component rows, one
+contributor lookup per row (see \code{?contributor_tbv}). \code{ind_tbv} must
+already hold the source traits for every contributor
+(\code{.ap_materialize_tbvs()}). A missing piece — a \code{NULL} dam or sire, a
+contributor with no TBV, a \code{NULL} group value, a \code{NULL} covariate —
+makes the individual's composite \code{NA}.
 }
 \keyword{internal}

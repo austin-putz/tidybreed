@@ -244,190 +244,73 @@ add_phenotype <- function(tbl,
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
-#' Assemble composite TBV from phenotype_components for a single phenotype
+#' Assemble the composite TBV of one phenotype from `phenotype_components`
 #'
-#' Reads contributor TBVs from `ind_tbv` (which must already be populated by
-#' `add_tbv()` for all relevant source traits and contributor IDs) and
-#' multiplies by component weights, summing across all components.
+#' Sums `weight * contributor TBV` over the phenotype's component rows, one
+#' contributor lookup per row (see `?contributor_tbv`). `ind_tbv` must
+#' already hold the source traits for every contributor
+#' (`.ap_materialize_tbvs()`). A missing piece — a `NULL` dam or sire, a
+#' contributor with no TBV, a `NULL` group value, a `NULL` covariate —
+#' makes the individual's composite `NA`.
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param phenotype_name Character. The composite phenotype name.
-#' @param comp_rows Data frame. Rows from `phenotype_components` for this phenotype.
-#' @param subset_df Data frame. Sex-filtered (and skip-masked) `ind_meta` rows.
-#' @param missing_component_action Character. `"skip"` (default) to warn and
-#'   exclude individuals with any missing component (dam/sire/group TBV
-#'   unavailable, no group assignment, etc.); `"error"` to stop immediately.
-#' @return A list with `composite_tbv`: named numeric vector (NA = excluded).
+#' @param comp_rows The phenotype's `phenotype_components` rows.
+#' @param subset_df The planned `ind_meta` rows (needs `id_ind`,
+#'   `id_parent_1`, `id_parent_2`).
+#' @param missing_component_action `"skip"` warns and returns `NA` for the
+#'   excluded individuals; `"error"` stops. Both name the count and up to
+#'   five ids.
+#' @return Numeric vector named by `id_ind`; `NA` marks an excluded
+#'   individual.
 #' @keywords internal
 .assemble_composite_tbv <- function(pop, phenotype_name, comp_rows, subset_df,
-                                    missing_component_action = "skip") {
-  focal_ids <- subset_df$id_ind
+                                    missing_component_action) {
+  conn      <- pop$db_conn
+  focal_ids <- as.character(subset_df$id_ind)
   n         <- length(focal_ids)
-  composite <- stats::setNames(rep(0, n), focal_ids)
+  composite <- rep(0, n)
 
   for (i in seq_len(nrow(comp_rows))) {
-    comp           <- comp_rows[i, ]
-    source_trait   <- as.character(comp$source_trait_name)
-    contr_type     <- as.character(comp$contributor_type)
-    weight_val     <- if (is.null(comp$weight)       || is.na(comp$weight))       1.0     else as.numeric(comp$weight)
-    weight_type_c  <- if (is.null(comp$weight_type)  || is.na(comp$weight_type))  "fixed" else as.character(comp$weight_type)
+    comp  <- comp_rows[i, , drop = FALSE]
+    trait <- comp$source_trait_name
+    what  <- paste0("Phenotype '", phenotype_name, "', component '", trait,
+                    "' (", comp$contributor_type, ")")
 
-    # Compute effective per-individual weight (used by all contributor types)
-    if (weight_type_c == "covariate" &&
-        !is.null(comp$covariate_name) && !is.na(comp$covariate_name) &&
-        nzchar(comp$covariate_name)) {
-      cov_col <- as.character(comp$covariate_name)
-      cov_tbl <- if (is.null(comp$covariate_table) || is.na(comp$covariate_table) ||
-                     !nzchar(comp$covariate_table)) "ind_meta"
-                 else as.character(comp$covariate_table)
-      if (cov_tbl == "ind_meta") {
-        cov_vals <- as.numeric(subset_df[[cov_col]])
-      } else {
-        ids_sql2 <- paste0("'", focal_ids, "'", collapse = ", ")
-        cv_df    <- DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, ", cov_col, " FROM ", cov_tbl,
-          " WHERE id_ind IN (", ids_sql2, ")"
-        ))
-        cov_vals <- as.numeric(cv_df[[cov_col]][match(focal_ids, cv_df$id_ind)])
-      }
-      eff_weight <- cov_vals * weight_val
-    } else {
-      eff_weight <- rep(weight_val, n)
-    }
-
-    # Resolve contributor IDs (parallel to focal_ids, NA where missing)
-    if (contr_type == "self") {
-      contr_ids <- focal_ids
-    } else if (contr_type == "dam") {
-      contr_ids <- as.character(subset_df$id_parent_2)
-    } else if (contr_type == "sire") {
-      contr_ids <- as.character(subset_df$id_parent_1)
-    } else if (contr_type == "group") {
-      # ── Group contributor (SGE / Bijma model) ───────────────────────────────
-      grp_col    <- as.character(comp$group_column)
-      grp_tbl    <- if (is.na(comp$group_table) || !nzchar(comp$group_table))
-                      "ind_meta" else as.character(comp$group_table)
-      agg_method <- if (is.na(comp$aggregation) || !nzchar(comp$aggregation))
-                      "sum" else as.character(comp$aggregation)
-      st_safe    <- gsub("'", "''", source_trait)
-
-      focal_sql    <- paste0("'", focal_ids, "'", collapse = ", ")
-      focal_grp_df <- DBI::dbGetQuery(pop$db_conn, paste0(
-        "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_tbl,
-        " WHERE id_ind IN (", focal_sql, ")"
-      ))
-      focal_grp_map <- stats::setNames(
-        as.character(focal_grp_df$group_val),
-        focal_grp_df$id_ind
-      )
-
-      non_na_grps <- unique(focal_grp_map[
-        !is.na(focal_grp_map) & nzchar(focal_grp_map)
-      ])
-
-      all_members_df <- if (length(non_na_grps) > 0) {
-        gv_sql <- paste0("'", non_na_grps, "'", collapse = ", ")
-        DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_tbl,
-          " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
-        ))
-      } else {
-        data.frame(id_ind = character(0), group_val = character(0),
-                   stringsAsFactors = FALSE)
-      }
-      all_members_df$group_val <- as.character(all_members_df$group_val)
-
-      all_member_ids <- unique(all_members_df$id_ind)
-      tbv_map_grp    <- stats::setNames(numeric(0), character(0))
-      if (length(all_member_ids) > 0) {
-        mem_sql  <- paste0("'", all_member_ids, "'", collapse = ", ")
-        tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = '",
-          st_safe, "' AND id_ind IN (", mem_sql, ")"
-        ))
-        if (nrow(tbv_rows) > 0)
-          tbv_map_grp <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-      }
-
-      for (j in seq_len(n)) {
-        fid <- focal_ids[j]
-        if (is.na(composite[fid])) next  # already excluded
-
-        grp_val <- focal_grp_map[fid]
-        if (is.na(grp_val) || !nzchar(grp_val)) {
-          composite[fid] <- NA_real_   # no group assignment
-          next
+    weight <- if (is.na(comp$weight)) 1 else comp$weight
+    wt <- switch(
+      comp$weight_type,
+      fixed = rep(weight, n),
+      covariate = {
+        if (is.na(comp$covariate_name)) {
+          stop(what, ": weight_type = 'covariate' needs covariate_name.",
+               call. = FALSE)
         }
+        cov_tbl <- if (is.na(comp$covariate_table)) "ind_meta" else comp$covariate_table
+        weight * as.numeric(.read_one_per_id(conn, cov_tbl, comp$covariate_name,
+                                             focal_ids, what))
+      },
+      stop(what, ": weight_type '", comp$weight_type, "' is not implemented; ",
+           "use 'fixed' or 'covariate'.", call. = FALSE))
 
-        mate_ids   <- all_members_df$id_ind[
-          all_members_df$group_val == grp_val & all_members_df$id_ind != fid
-        ]
-        valid_tbvs <- tbv_map_grp[mate_ids]
-        valid_tbvs <- valid_tbvs[!is.na(valid_tbvs)]
-
-        social_val <- if (length(valid_tbvs) == 0) 0
-                      else if (agg_method == "mean") mean(valid_tbvs)
-                      else sum(valid_tbvs)
-
-        composite[fid] <- composite[fid] + eff_weight[j] * social_val
-      }
-      next   # skip the generic contr_ids path below
-    } else {
-      warning("contributor_type '", contr_type, "' is not yet implemented; ",
-              "skipping component '", source_trait, "'.", call. = FALSE)
-      next
-    }
-
-    missing_contr <- is.na(contr_ids) | contr_ids == "NA" | !nzchar(contr_ids)
-
-    # Fetch TBVs for non-missing contributors
-    notna_ids <- unique(contr_ids[!missing_contr])
-    tbv_map   <- stats::setNames(numeric(0), character(0))
-
-    if (length(notna_ids) > 0) {
-      st_safe  <- gsub("'", "''", source_trait)
-      ids_sql  <- paste0("'", notna_ids, "'", collapse = ", ")
-      tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-        "SELECT id_ind, tbv_value FROM ind_tbv ",
-        "WHERE trait_name = '", st_safe, "' AND id_ind IN (", ids_sql, ")"
-      ))
-      if (nrow(tbv_rows) > 0) {
-        tbv_map <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-      }
-    }
-
-    # Add contribution per focal individual
-    for (j in seq_len(n)) {
-      fid <- focal_ids[j]
-      if (is.na(composite[fid])) next  # already excluded by a prior component
-
-      if (missing_contr[j]) {
-        composite[fid] <- NA_real_
-        next
-      }
-      cid     <- contr_ids[j]
-      tbv_val <- tbv_map[cid]
-      if (is.na(tbv_val)) {
-        composite[fid] <- NA_real_
-        next
-      }
-      composite[fid] <- composite[fid] + eff_weight[j] * tbv_val
-    }
+    vec <- switch(
+      comp$contributor_type,
+      self  = .tbv_by_id(conn, trait, focal_ids),
+      dam   = .tbv_by_id(conn, trait, subset_df$id_parent_2),
+      sire  = .tbv_by_id(conn, trait, subset_df$id_parent_1),
+      group = .group_mate_tbv(conn, trait, focal_ids, comp$group_column,
+                              comp$group_table, comp$aggregation, what))
+    composite <- composite + wt * vec
   }
 
-  # Generic missing-component handler (covers group, dam, sire, any future type)
   n_missing <- sum(is.na(composite))
-  if (n_missing > 0) {
+  if (n_missing > 0L) {
     missing_ids <- focal_ids[is.na(composite)]
     msg <- paste0(
-      n_missing, " individual(s) had one or more missing components for phenotype '",
-      phenotype_name, "' and were excluded.",
-      " (IDs: ", paste(head(missing_ids, 5), collapse = ", "),
-      if (n_missing > 5) paste0(" ... +", n_missing - 5L, " more") else "", ")"
-    )
+      n_missing, " individual(s) had one or more missing components for ",
+      "phenotype '", phenotype_name, "' and were excluded. (IDs: ",
+      paste(utils::head(missing_ids, 5L), collapse = ", "),
+      if (n_missing > 5L) paste0(" ... +", n_missing - 5L, " more") else "", ")")
     if (missing_component_action == "error") stop(msg, call. = FALSE)
-    else warning(msg, call. = FALSE)
+    warning(msg, call. = FALSE)
   }
-
-  list(composite_tbv = composite)
+  stats::setNames(composite, focal_ids)
 }
