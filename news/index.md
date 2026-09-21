@@ -1,5 +1,110 @@
 # Changelog
 
+## tidybreed 0.64.3 (2026-09-20)
+
+### Documentation
+
+- **Hex sticker.** Package logo added at `man/figures/logo.png` (pkgdown
+  picks it up as the site logo automatically); the README header now
+  shows the sticker beside the title and badges. Favicons generated with
+  [`pkgdown::build_favicons()`](https://pkgdown.r-lib.org/reference/build_favicons.html)
+  into `pkgdown/favicon/`, which is no longer gitignored (the site is
+  built in CI, so favicons must be tracked). The full-resolution
+  original lives in `dev/logo/` (build-ignored).
+
+## tidybreed 0.64.2 (2026-09-04)
+
+Makes
+[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+work on every table it should, and stops it reporting success when it
+deleted nothing.
+
+### Bug fixes
+
+- **[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  could not delete from five system tables.** `phenotype_meta`,
+  `phenotype_components`, `phenotype_random_effects` and
+  `founder_haplotypes` had no `TABLE_ROW_KEYS` entry, so single-table
+  deletion stopped with *“table is not registered in TABLE_ROW_KEYS”* —
+  even for `phenotype_meta` and `phenotype_components`, which have a
+  perfectly good integer primary key. All four are now registered, and
+  `phenotype_meta` / `phenotype_components` are also registered in
+  `TABLE_PRIMARY_KEYS` so
+  [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md)
+  can do vector and filtered updates on them.
+
+- **[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  silently deleted nothing from rows with `NULL` key columns.**
+  `delete_exact_rows()` joined the key columns with `=`, and
+  `NULL = NULL` is `NULL`, not `TRUE`. The default `chr_inheritance` and
+  `chr_recombination` rows seeded by
+  [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  have `NULL` in both `offspring_sex` / `parent_sex` and `line_name`, so
+  deleting one reported *“Deleted 0 rows”* as a success while leaving
+  the row in place. The join now uses `IS NOT DISTINCT FROM`, the same
+  NULL-safe idiom
+  [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  already uses for its upsert. Non-`NULL` keys are unaffected.
+
+### New internal registry
+
+- **`TABLE_NO_ROW_DELETE`** records the tables where row deletion is
+  refused on purpose, with the reason shown to the user. A table missing
+  from `TABLE_ROW_KEYS` is ambiguous — a deliberate refusal and an
+  oversight look identical — and this makes the difference explicit.
+  `_schema_meta` is its only entry: descriptions are package-managed and
+  rebuilt by
+  [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md),
+  so
+  [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  now points at
+  [`define_schema_description()`](https://austin-putz.github.io/tidybreed/reference/define_schema_description.md)
+  instead of erroring generically.
+
+  `founder_haplotypes` is deliberately **not** listed. Deleting a single
+  `(haplotype_id, locus_name)` row would leave a non-rectangular pool,
+  but dropping one line’s whole pool (`filter(line_name == "B")`) is
+  well-defined and useful for crossbreeding setups, and a blanket
+  refusal would foreclose it.
+
+- `tests/testthat/test-schema-registries.R` now asserts that
+  `TABLE_ROW_KEYS` and `TABLE_NO_ROW_DELETE` together name every table
+  in `SYSTEM_TABLES`, so a new table cannot be added without deciding
+  whether it can be deleted from. Same visible-degradation principle as
+  [`.schema_table_order()`](https://austin-putz.github.io/tidybreed/reference/dot-schema_table_order.md).
+
+## tidybreed 0.64.1 (2026-09-04)
+
+Fixes a correctness bug that made replicates non-independent.
+
+### Bug fixes
+
+- **`phenotype_random_effects` is now archived and cleared by
+  [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md).**
+  The table was absent from all three of
+  [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)’s
+  default table lists, so its rows were neither copied to the archive
+  nor deleted from the working database. Because
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  samples a draw the first time it sees a grouping level and **reuses**
+  the stored draw thereafter, every replicate after the first inherited
+  the previous replicate’s random-effect draws for any level name that
+  recurred — which, for `sex`, `line_name`, HYS, litter and pen grouping
+  columns, is essentially all of them. The random effects were therefore
+  not re-drawn and the replicates were not independent.
+
+  `phenotype_random_effects` has been added to the `store_and_reset`
+  default: the draws are archived with a `replicate` stamp (so a run
+  stays auditable) and then cleared, and the next replicate re-draws
+  from scratch. Reuse *within* a replicate is unchanged and remains
+  correct — that is what makes every animal in one HYS level receive the
+  same shift across repeated
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  calls.
+
+  Simulations that ran more than one replicate with a random effect
+  should be re-run.
+
 ## tidybreed 0.64.0 (2026-08-31)
 
 Renames the two misnamed phenotype-layer tables, deletes all remaining

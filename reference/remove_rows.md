@@ -70,7 +70,18 @@ via `confirm_all = TRUE`.
 the internal `TABLE_ROW_KEYS` registry to delete exactly the rows
 matched by the filter — no more, no less. For example, filtering
 `ind_tbv` by `trait_name == "ADG"` deletes only the ADG rows, not all
-TBV rows for those animals.
+TBV rows for those animals. Key columns are matched with
+`IS NOT DISTINCT FROM`, so rows whose key is `NULL` — the default
+`chr_inheritance` / `chr_recombination` rows seeded by
+[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md),
+or the shared (`line_name IS NULL`) `founder_haplotypes` pool — delete
+correctly.
+
+Every system table is registered for single-table deletion except
+`_schema_meta`, which is package-managed; `remove_rows()` refuses it
+with a pointer to
+[`define_schema_description()`](https://austin-putz.github.io/tidybreed/reference/define_schema_description.md)
+rather than a generic error.
 
 **Cross-table mode** (`tables != NULL`): extracts unique `id_ind` values
 from the filtered table and issues a `DELETE ... WHERE id_ind IN (...)`

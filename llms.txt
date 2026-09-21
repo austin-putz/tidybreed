@@ -1,4 +1,6 @@
-# `tidybreed` R Package
+# tidybreed
+
+[TABLE]
 
 📖 **Documentation:** <https://austin-putz.github.io/tidybreed/>
 
