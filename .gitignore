@@ -51,6 +51,6 @@ src/*.rds
 /doc/
 /Meta/
 
-# pkgdown site (built by CI, deployed to the gh-pages branch)
+# pkgdown site (built by CI, deployed to the gh-pages branch).
+# pkgdown/ itself is source (favicons, extra.css) and stays tracked.
 /docs/
-/pkgdown/

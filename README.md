@@ -1,21 +1,34 @@
-# `tidybreed` R Package
-
 <!-- badges: start -->
-<div align="center">
+<table align="center" border="0">
+<tr>
+<td width="230" align="center" valign="middle">
+<img src="man/figures/logo.png" alt="tidybreed hex sticker" width="210" />
+</td>
+<td valign="middle">
 
-[![R-CMD-check](https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&style=for-the-badge&label=R-CMD-check&logo=githubactions&logoColor=white)](https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&style=for-the-badge&label=pkgdown&logo=githubactions&logoColor=white)](https://austin-putz.github.io/tidybreed/)
-[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![Version](https://img.shields.io/badge/version-0.62.0-4ecdc4.svg?style=for-the-badge)](https://github.com/austin-putz/tidybreed/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+<h1 align="left" style="border-bottom: none;">tidybreed</h1>
 
-[![R](https://img.shields.io/badge/R-%3E%3D%204.1-276DC3.svg?style=for-the-badge&logo=r&logoColor=white)](https://www.r-project.org)
-[![DuckDB](https://img.shields.io/badge/database-DuckDB-FFF000.svg?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=for-the-badge&logo=cplusplus&logoColor=white)](https://isocpp.org)
-[![tidyverse](https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&logo=tidyverse&logoColor=white)](https://www.tidyverse.org)
-[![Testing: testthat](https://img.shields.io/badge/testing-testthat-1f9c5a.svg?style=for-the-badge)](https://testthat.r-lib.org)
+<p align="left"><strong>Breeding program simulation, backed by DuckDB, driven by <code>dplyr</code>.</strong></p>
 
-</div>
+<p align="left">
+<a href="https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&style=for-the-badge&label=R-CMD-check&logo=githubactions&logoColor=white" alt="R-CMD-check" /></a>
+<a href="https://austin-putz.github.io/tidybreed/"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&style=for-the-badge&label=pkgdown&logo=githubactions&logoColor=white" alt="pkgdown" /></a>
+<a href="https://lifecycle.r-lib.org/articles/stages.html#experimental"><img src="https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge" alt="Lifecycle: experimental" /></a>
+<a href="https://github.com/austin-putz/tidybreed/releases"><img src="https://img.shields.io/badge/version-0.70.0-4ecdc4.svg?style=for-the-badge" alt="Version" /></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" /></a>
+</p>
+
+<p align="left">
+<a href="https://www.r-project.org"><img src="https://img.shields.io/badge/R-%3E%3D%204.1-276DC3.svg?style=for-the-badge&logo=r&logoColor=white" alt="R" /></a>
+<a href="https://duckdb.org"><img src="https://img.shields.io/badge/database-DuckDB-FFF000.svg?style=for-the-badge&logo=duckdb&logoColor=black" alt="DuckDB" /></a>
+<a href="https://isocpp.org"><img src="https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=for-the-badge&logo=cplusplus&logoColor=white" alt="C++17" /></a>
+<a href="https://www.tidyverse.org"><img src="https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&logo=tidyverse&logoColor=white" alt="tidyverse" /></a>
+<a href="https://testthat.r-lib.org"><img src="https://img.shields.io/badge/testing-testthat-1f9c5a.svg?style=for-the-badge" alt="Testing: testthat" /></a>
+</p>
+
+</td>
+</tr>
+</table>
 <!-- badges: end -->
 
 📖 **Documentation:** <https://austin-putz.github.io/tidybreed/>

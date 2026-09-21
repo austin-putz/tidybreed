@@ -30,6 +30,14 @@ accumulates until the feature ships.
   `(j, i)` rows are bit-identical. `add_phenotype()` is unchanged until
   Phases 5–6.
 
+## Documentation
+
+- **Hex sticker.** Package logo added at `man/figures/logo.png` (pkgdown picks it
+  up as the site logo automatically); the README header now shows the sticker
+  beside the title and badges, and the version badge reads `0.70.0`. Favicons
+  generated with `pkgdown::build_favicons()` into `pkgdown/favicon/`. The
+  full-resolution original lives in `dev/logo/` (build-ignored).
+
 ## Breaking
 
 - **Phase 1 — schema.** `ind_phenotype` now has nine base columns:
