@@ -20,19 +20,20 @@ define_residual_cov(
 \code{rownames(cov_matrix)} and \code{colnames(cov_matrix)}). For a single
 phenotype, a scalar is accepted.}
 
-\item{cov_matrix}{Numeric matrix. Must be symmetric with
-\code{dimnames(cov_matrix)} matching \code{phenotype_names}. For a single phenotype
-the matrix is \verb{1×1}.}
+\item{cov_matrix}{Numeric matrix with \code{dimnames(cov_matrix)} matching
+\code{phenotype_names}. For a single phenotype the matrix is \verb{1×1}.}
 
 \item{condition_column}{Character or \code{NULL}. Column in \code{condition_table} used
-to look up group membership at phenotype time. \code{NULL} (default) stores an
-unconditional default row (the fallback when no group-specific row exists).}
+to look up group membership at phenotype time. \code{NULL} (default) declares
+the unconditional stratum. Must be supplied together with
+\code{condition_level}.}
 
 \item{condition_table}{Character. Table containing \code{condition_column}.
-Default \code{"ind_meta"}.}
+Default \code{"ind_meta"}. Ignored (stored as \code{NULL}) for the unconditional
+stratum.}
 
-\item{condition_level}{Character or \code{NULL}. Specific level of \code{condition_column}
-this row applies to. \code{NULL} (default) = unconditional fallback row.}
+\item{condition_level}{Character or \code{NULL}. Level of \code{condition_column} this
+stratum applies to. \code{NULL} (default) = unconditional stratum.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -48,11 +49,35 @@ Three typical call patterns:
 \item \strong{Called by \code{\link[=define_phenotype]{define_phenotype()}} internally} when \code{residual_var} is
 supplied (scalar diagonal, unconditional).
 \item \strong{Called by \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}} when \code{effect_name = "residual"}
-to store a full multi-trait unconditional R matrix.
-\item \strong{Called directly} to add group-specific (heterogeneous) residual rows
-after \code{\link[=define_phenotype]{define_phenotype()}} has written the unconditional default.
+to store a full multi-phenotype unconditional R matrix.
+\item \strong{Called directly} to declare group-specific (heterogeneous) residual
+strata, one call per \code{condition_level}.
 }
 }
+\section{A block is declared in one call, as a complete matrix}{
+
+The phenotypes that share any stored residual pair row form a \emph{covariance
+block}; a pair written as an explicit \code{0} still joins its two phenotypes.
+A call must name a whole block: declaring \verb{\{A, B\}} and then \verb{\{B, C\}} is an
+error (the block would be \verb{\{A, B, C\}} with \code{Cov(A, C)} undeclared), and so is
+redeclaring \verb{\{A, B\}} or \code{A} alone once \verb{\{A, B, C\}} exists. Redeclare the
+complete block instead, writing \code{0} for uncorrelated pairs. The matrix must
+be symmetric, finite and positive semi-definite; a rejected call changes
+nothing.
+
+\strong{Strata.} Conditional calls (\code{condition_column} + \code{condition_level}) add
+strata to the block. Every stratum names the same phenotypes and a block has
+one \code{condition_column}; to grow a block that already has several strata,
+clear its rows from \code{phenotype_var_comp} with \code{\link[=remove_rows]{remove_rows()}} and redeclare
+each stratum.
+
+\strong{Realized draws lock the block.} Once any \code{ind_phenotype} row of a member
+has a non-\code{NULL} \code{residual_value}, the block cannot be redefined; the error
+gives the \code{\link[=remove_rows]{remove_rows()}} call that clears those rows. Every phenotype in
+the block that is already defined must carry the same
+\code{condition_change_action} (see \code{\link[=define_phenotype]{define_phenotype()}}).
+}
+
 \examples{
 \dontrun{
 # Heterogeneous residual by sex for turkey BW

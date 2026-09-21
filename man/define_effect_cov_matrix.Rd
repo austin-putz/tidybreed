@@ -56,8 +56,16 @@ residual matrix; for a single scalar residual use \code{residual_var} in
 \code{define_effect_cov_matrix()} can be called \strong{before} \code{\link[=define_trait]{define_trait()}} or
 \code{\link[=define_effect_random]{define_effect_random()}} — no prior setup is required.
 
-All n² pairs are stored. Previous entries for this \code{effect_name} × names
-combination are replaced.
+All n² pairs are stored. For \code{phenotype_var_comp} effects the names form a
+\emph{covariance block} that is declared in one call, as a complete matrix: a
+call that names a fragment or a strict subset of an existing block is an
+error, the matrix must be positive semi-definite, and a block cannot be
+redefined once draws exist under it (the error gives the \code{\link[=remove_rows]{remove_rows()}}
+call that clears them). In a block of two or more phenotypes every
+\code{\link[=define_effect_random]{define_effect_random()}} row for the effect must use
+\code{distribution = "normal"} and read the same \verb{(source_column, source_table)}.
+See \code{\link[=define_residual_cov]{define_residual_cov()}} for the full rules. A rejected call changes
+nothing.
 }
 \examples{
 \dontrun{

@@ -9,7 +9,12 @@
 #'
 #' To correlate this effect across multiple phenotypes (e.g. the same herd
 #' affects both ADG and BW), call [define_effect_cov_matrix()] with the
-#' appropriate `effect_name` — either before or after this call.
+#' appropriate `effect_name` — either before or after this call. Once the
+#' phenotype belongs to a block of two or more phenotypes for `effect_name`,
+#' this call must use `distribution = "normal"` and the same
+#' `(source_column, source_table)` as the block's other members, and
+#' `variance` can no longer be set here — the block is redeclared as a whole
+#' with [define_effect_cov_matrix()].
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_name Character. Name of an existing phenotype in
@@ -18,13 +23,18 @@
 #'   phenotype.
 #' @param source_column Character. Column in `source_table` whose distinct
 #'   values define the groups (e.g. `"herd_id"`, `"litter"`, `"id_ind"` for PE).
-#' @param variance Numeric scalar. Variance of the random effect. Optional if
-#'   already stored via [define_effect_cov_matrix()]; required otherwise.
+#' @param variance Numeric scalar or `NULL`. Variance of the random effect.
+#'   `NULL` (default) uses the value already stored in `phenotype_var_comp` via
+#'   [define_effect_cov_matrix()] and errors if there is none. A number writes
+#'   (or overwrites) a 1 × 1 block for this phenotype; it is an error when the
+#'   phenotype is already in a multi-phenotype block for `effect_name`.
 #' @param distribution Character. Sampling distribution: `"normal"` (default),
 #'   `"gamma"`, or `"uniform"`.
 #' @param source_table Character. Table containing `source_column`. Default
 #'   `"ind_meta"`.
 #' @param overwrite Logical. Replace an existing effect with the same name.
+#'   The stored draws of that effect for this phenotype in
+#'   `phenotype_random_effects` are discarded with it.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -62,28 +72,18 @@ define_effect_random <- function(pop,
   validate_sql_identifier(source_column,  what = "source_column")
   stopifnot(is.character(source_table), nzchar(source_table))
   distribution <- match.arg(distribution)
-
-  # Resolve variance: check phenotype_var_comp first
-  stored_var <- get_phenotype_var(pop, effect_name, phenotype_name)
-  if (!is.na(stored_var)) {
-    variance <- stored_var
-  } else {
-    if (is.null(variance)) {
-      stop("No variance found in phenotype_var_comp for effect '", effect_name,
-           "' / phenotype '", phenotype_name, "'. ",
-           "Either call define_effect_cov_matrix() first or supply `variance`.",
-           call. = FALSE)
-    }
-    if (!is.numeric(variance) || length(variance) != 1 ||
-        is.na(variance) || variance < 0) {
-      stop("`variance` must be a non-negative number.", call. = FALSE)
-    }
-    pop <- write_phenotype_var_diag(pop, effect_name, phenotype_name,
-                                    as.numeric(variance))
+  if (identical(effect_name, "residual")) {
+    stop("'residual' is reserved for the residual; use define_residual_cov().",
+         call. = FALSE)
+  }
+  if (!is.null(variance) &&
+      (!is.numeric(variance) || length(variance) != 1 ||
+       is.na(variance) || variance < 0)) {
+    stop("`variance` must be a non-negative number.", call. = FALSE)
   }
 
   .check_phenotype_exists(pop, phenotype_name)
-  .handle_effect_overwrite(pop, phenotype_name, effect_name, overwrite)
+  conn <- pop$db_conn
 
   row <- tibble::tibble(
     phenotype_name    = phenotype_name,
@@ -99,7 +99,45 @@ define_effect_random <- function(pop,
     poly_order        = NA_integer_,
     null_class_action = NA_character_
   )
-  DBI::dbWriteTable(pop$db_conn, "phenotype_effects", row, append = TRUE)
+
+  # One transaction: drop the effect being overwritten (and its draws), write
+  # the variance through the block writer, check the block, insert the row.
+  DBI::dbExecute(conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
+          add = TRUE)
+
+  .handle_effect_overwrite(pop, phenotype_name, effect_name, overwrite)
+
+  if (!is.null(variance)) {
+    .pvc_write_block(
+      conn, effect_name, phenotype_name,
+      matrix(as.numeric(variance), 1L, 1L,
+             dimnames = list(phenotype_name, phenotype_name)),
+      caller = "define_effect_random(variance = )")
+  } else {
+    variance <- get_phenotype_var(pop, effect_name, phenotype_name)
+    if (is.na(variance)) {
+      stop("No variance found in phenotype_var_comp for effect '", effect_name,
+           "' / phenotype '", phenotype_name, "'. ",
+           "Either call define_effect_cov_matrix() first or supply `variance`.",
+           call. = FALSE)
+    }
+  }
+
+  block <- .pvc_block_members(conn, effect_name, phenotype_name)
+  validate_named_effect_block(conn, effect_name, block,
+                              pending = as.data.frame(row),
+                              caller  = "define_effect_random()")
+
+  tmp <- "__define_effect_random_tmp"
+  duckdb::duckdb_register(conn, tmp, as.data.frame(row))
+  on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
+  DBI::dbExecute(conn, sprintf(
+    "INSERT INTO phenotype_effects (%s) SELECT %s FROM %s",
+    paste(names(row), collapse = ", "), paste(names(row), collapse = ", "), tmp))
+  DBI::dbExecute(conn, "COMMIT")
+  committed <- TRUE
 
   message("Added random effect '", effect_name, "' to phenotype '", phenotype_name,
           "' (variance = ", variance, ", distribution = ", distribution, ").")

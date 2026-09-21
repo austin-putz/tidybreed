@@ -1,8 +1,9 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.1, approved; implementation in progress.** Phases 0 and 1
+**Status**: **v3.2, approved; implementation in progress.** Phases 0, 1 and 2
 shipped 2026-09-20 (`sample_correlated_effects_phase_0.md`,
-`sample_correlated_effects_phase_1.md`); Phases 2–8 not started.
+`sample_correlated_effects_phase_1.md`, `sample_correlated_effects_phase_2.md`);
+Phases 3–8 not started.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -62,6 +63,40 @@ implementation-level clarifications found in the final read-through (marked
   predicate depends on it); "tests before the fix" made practical; `_schema_meta`
   column descriptions added to the schema phase; three tests added.
 
+**What changed from v3.1 to v3.2** (Phase 2 implementation, no decision
+changes; details in §5.9, D1, D5, D6):
+
+- The validator runs **before** the `DELETE`, inside the writer's transaction —
+  D1's steps 1–5 on the current table state, then step 6 — rather than as a
+  post-write table check. Same guarantee (a rejected call changes nothing),
+  better messages (the omitted coordinates are known before anything moves).
+- D1 strata: **growing** a block that already has two or more strata
+  (`{A, B}` unconditional + `{A, B}` for `M`, then `{A, B, C}`) is an error in
+  every call order, because each stratum is checked against the others. The
+  message gives the `remove_rows()` call on `phenotype_var_comp` that clears the
+  block so every stratum can be redeclared. Blocks are declared once, from REML
+  output; this is not a workflow worth a special case.
+- D5: `define_phenotype(overwrite = TRUE)` **used to delete** the phenotype's
+  unconditional residual rows (half of a multi-phenotype block's pair rows)
+  whether or not `residual_var` was supplied — the plan's "as today" was wrong.
+  It now leaves `phenotype_var_comp` untouched; only `residual_var` writes.
+- D5: `define_effect_random(variance = )` **used to ignore** a supplied
+  `variance` whenever a stored value existed. It now always writes through the
+  block writer (singleton: overwrite; multi-member block: D1 error). Its D3 row
+  is reached through `overwrite = TRUE`, which discards that phenotype's stored
+  draws for the effect before the variance is rewritten — documented on the
+  argument.
+- `write_phenotype_var_diag()` is deleted rather than thinned; its only caller,
+  `define_effect_random()`, calls the block writer directly inside its own
+  transaction (which now also covers the `phenotype_effects` row and the
+  overwrite deletes).
+- §5.6 at the writers also refuses to join a **non-random** effect (a
+  `fixed_class`/`fixed_cov` row sharing the `effect_name`) into a block.
+- Unconditional rows store `condition_table = NULL` (previously `'ind_meta'`
+  from `define_residual_cov()` and `NULL` from `define_effect_cov_matrix()`).
+- All three writers are RNG-neutral (register + `INSERT`; `define_residual_cov()`
+  used `dbWriteTable()`).
+
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
 or non-Gaussian dependence framework. Saying so up front matters, because the
@@ -85,7 +120,7 @@ v2 was written against ~v0.60. Nine releases later:
 | Dead `dbExistsTable`/`has_meta` guards removed across `define_effect_*`, `schema()`, `add_phenotype()` | v0.63.x (`d882556`) | Same |
 | `trait_effects` → `phenotype_effects`; `trait_random_effects` → `phenotype_random_effects` | v0.64.0 | Every reference in this plan renamed |
 | `TABLE_RESERVED_COLS` gained entries for `phenotype_random_effects`, `phenotype_components`, `founder_haplotypes` | v0.64.0 | New `ind_phenotype` columns must be added to the reserved list (§8) |
-| RNG discipline: `dbWriteTable()` advances R's RNG by a fixed amount (random temp-name generation); `duckdb_register()` + `INSERT` is RNG-neutral. Documented in `define_genome.R`, `founder_haplotype_helpers.R`, `add_offspring.R`, [define_effect_cov_matrix.R:129](../R/define_effect_cov_matrix.R#L129) | v0.5x–0.6x | New hard requirement in §5.5 |
+| RNG discipline: `dbWriteTable()` advances R's RNG by a fixed amount (random temp-name generation); `duckdb_register()` + `INSERT` is RNG-neutral. Documented in `define_genome.R`, `founder_haplotype_helpers.R`, `add_offspring.R`, [define_effect_cov_matrix.R:129](../R/define_effect_cov_matrix.R#L129) | v0.5x–0.6x | New hard requirement in §5.5; the three `phenotype_var_comp` writers comply since Phase 2 |
 | Transaction idiom standardized: `BEGIN TRANSACTION` + `on.exit(ROLLBACK unless committed)` + validator + `COMMIT` ([define_chromosome.R:219-227](../R/define_chromosome.R#L219-L227)) | v0.6x | §5.5 adopts it verbatim |
 | `resolve_subset_ids()` — one SQL statement, ids returned **sorted** ([sql_utils.R:494](../R/sql_utils.R#L494)) | v0.70.0 | Residual entity keys arrive sorted; §5.5 ordering requirement narrows to blocks, patterns, coordinates, and named-effect levels |
 | `remove_rows()` supports single-table deletion on every table except `_schema_meta`, keyed by `TABLE_ROW_KEYS` | v0.6x | The escape hatch that replaces D3's `force` (§6 D3) |
@@ -170,6 +205,16 @@ through **silently** to the independent `rnorm()` at
 [add_phenotype.R:793](../R/add_phenotype.R#L793). The silence is the worst part —
 a user cannot tell their covariance was ignored.
 
+*(Found in the Phase 2 review, 2026-09-20.)* The same joint path crashes when
+the multi-phenotype call has **zero** individuals left after the skips (e.g.
+re-calling `add_phenotype(c("A", "B"))` on non-repeatable phenotypes everyone
+already has): `sample_residuals()`
+([phenotype_helpers.R:62](../R/phenotype_helpers.R#L62)) calls
+`MASS::mvrnorm(n = 0, …)`, which fails with "non-conformable arguments" instead
+of writing nothing. The single-phenotype path is fine (`rnorm(0)` is empty).
+Not patched — Phase 5 deletes `sample_residuals()`, and the resolver's
+empty-entity-set contract (§7 Numerical 6: RNG-neutral no-op) covers it.
+
 ### Defect 3 — correlated *named* random effects lose correlation on partial re-draw
 
 Live bug, independent of time separation. Draws are persisted per
@@ -220,7 +265,7 @@ tested before the fix, and tested after.
 ### Observation — `distribution` is ignored in the correlated path
 
 `define_effect_random()` accepts `"normal" | "gamma" | "uniform"`
-([define_effect_random.R:23](../R/define_effect_random.R#L23)) and the marginal
+([define_effect_random.R:31](../R/define_effect_random.R#L31)) and the marginal
 path honours it, but [add_phenotype.R:539](../R/add_phenotype.R#L539) calls
 `MASS::mvrnorm()` unconditionally. A gamma effect inside a covariance block is
 silently drawn normal.
@@ -233,11 +278,13 @@ silently drawn normal.
 |---|---|---|
 | `define_residual_cov()` | user | full `n × n` residual block, one condition slice |
 | `define_effect_cov_matrix()` | user | full `n × n` block for a named effect |
-| `write_phenotype_var_diag()` ([define_effect_cov_matrix.R:320-340](../R/define_effect_cov_matrix.R#L320-L340)) | `define_phenotype(residual_var = )`, `define_effect_random(variance = )` | **one diagonal cell**, in place, off-diagonals untouched |
+| `write_phenotype_var_diag()` (deleted in Phase 2) | `define_phenotype(residual_var = )`, `define_effect_random(variance = )` | **one diagonal cell**, in place, off-diagonals untouched |
 
 Called after a block exists, the third writer can turn a valid `R` into a
 non-PSD one, and it can do so after draws have been realized. v2's D1 and D3
 named only the first two writers. Closed in §6 (D1 sharpened, D5 added).
+*(Phase 2)* All three paths now go through one writer,
+[phenotype_cov_block.R](../R/phenotype_cov_block.R).
 
 ### Observation (new in v3, from Codex) — individuals are excluded *after* the draw
 
@@ -487,7 +534,7 @@ it is rejected at definition time.
 the resolver, and for one coordinate with nothing observed the resolver *is*
 `rnorm(sd = sqrt(v))`. A phenotype with **no** residual row at all is an error,
 as it is today ("No residual variance found"). `load_phenotype_cov()` returning
-`NULL` ([define_effect_cov_matrix.R:275](../R/define_effect_cov_matrix.R#L275))
+`NULL` ([define_effect_cov_matrix.R:256](../R/define_effect_cov_matrix.R#L256))
 therefore has exactly one meaning: no rows exist.
 
 Per **D1**, a discovered block is guaranteed complete and PSD — that is enforced
@@ -733,7 +780,12 @@ error the moment `define_effect_cov_matrix()` tries to join it to a second
 phenotype — at the writer, with a message naming the non-normal coordinate.
 
 **Where these checks run** *(clarified in v3; v2 placed them inconsistently)*:
-in **both** writers and again in `add_phenotype()`.
+in **both** writers and again in `add_phenotype()`. *(Phase 2)* The writer
+sites are shipped: `validate_named_effect_block()` in
+[phenotype_cov_block.R](../R/phenotype_cov_block.R), called by
+`define_effect_cov_matrix()` (through the block validator) and by
+`define_effect_random()` with its pending row. The `add_phenotype()` backstop
+lands in Phase 6 and calls the same function.
 
 - `define_effect_cov_matrix(effect_name, ...)` checks the `phenotype_effects`
   rows that already exist for `(effect_name, each phenotype)`.
@@ -756,7 +808,7 @@ Narrow, explicit v1 contract:
 - Persistent within-animal covariance is the job of a permanent-environment named
   effect, `define_effect_random(..., source_column = "id_ind")` — which already
   exists and is already documented
-  ([define_effect_random.R:42-47](../R/define_effect_random.R#L42-L47)).
+  ([define_effect_random.R:52-57](../R/define_effect_random.R#L52-L57)).
 
 Conflating p.e. with residual covariance would double-count.
 
@@ -866,21 +918,37 @@ Two conditional-covariance computations, one per pattern.
 **Permanent-environment effects get all of this for free.** A p.e. effect is a
 named effect with `source_column = "id_ind"`, so its entity is `("pe", <id_ind>)`.
 
-### 5.9 The three `phenotype_var_comp` writers
+### 5.9 The three `phenotype_var_comp` writers — ✅ shipped (Phase 2, 2026-09-20)
 
-All validation in §5.4 is implemented once, in an internal
-`validate_phenotype_cov_block(conn, effect_name, phenotype_names, stratum)`,
-and called by all three writers **inside their write transaction, before
-`COMMIT`** — the same shape as `validate_chr_inheritance()` and
-`validate_genome_effects()`. None of the three writers currently opens a
-transaction ([define_residual_cov.R:103](../R/define_residual_cov.R#L103),
-[define_effect_cov_matrix.R:154](../R/define_effect_cov_matrix.R#L154),
-[define_effect_cov_matrix.R:325](../R/define_effect_cov_matrix.R#L325) are all
-bare `DELETE` then `INSERT`); each gets one, so a rejected block rolls back
-instead of leaving a half-written matrix.
+All validation in §5.4 is implemented once, in
+`validate_phenotype_cov_block(conn, effect_name, phenotype_names, cov_matrix,
+condition_column, condition_table, condition_level, caller)` in
+[phenotype_cov_block.R](../R/phenotype_cov_block.R), and every write to the
+table goes through `write_phenotype_cov_block()` (own transaction) or
+`.pvc_write_block()` (caller's transaction), which call the validator **before
+the `DELETE`**. The validator, in order: matrix (dimnames, finite, symmetric,
+diagonal ≥ 0, PSD with a scale-aware tolerance); block discovery by pair-row
+existence across every stratum (`.pvc_block_members()`, a fixpoint over
+`phenotype_name_1 IN (…) OR phenotype_name_2 IN (…)`); `N == U`; for the
+residual, the strata rules and D6; for a named effect, §5.6; then the D3 lock.
+The write is `DELETE` of the stratum's rows for the block, then
+`duckdb_register()` + `INSERT … SELECT` — RNG-neutral, same shape as
+`validate_chr_inheritance()` and `validate_genome_effects()`.
 
-`write_phenotype_var_diag()` is not a user-facing function, but its two callers
-are. Their behaviour under D1/D3/D5 is spelled out in §6.
+The three entry points:
+
+| Entry point | Calls | Transaction |
+|---|---|---|
+| `define_residual_cov()` ([define_residual_cov.R](../R/define_residual_cov.R)) | `write_phenotype_cov_block("residual", …, stratum)` | its own |
+| `define_effect_cov_matrix()` ([define_effect_cov_matrix.R:148-158](../R/define_effect_cov_matrix.R#L148-L158)) | `define_residual_cov()` for `"residual"`; `write_phenotype_cov_block(effect_name, …)` otherwise; the genetic route to `trait_var_comp` is unchanged | its own (phenotype routes) |
+| `define_effect_random(variance = )` ([define_effect_random.R](../R/define_effect_random.R)) | `.pvc_write_block()` with a 1 × 1 matrix | one transaction around overwrite-delete, variance, §5.6 check and the `phenotype_effects` row |
+
+`define_phenotype(residual_var = )` runs the validator once **before** the
+`phenotype_meta` write (so a D1/D3 rejection leaves the metadata untouched)
+and then calls `define_residual_cov()`, which validates again inside its
+transaction. `write_phenotype_var_diag()` no longer exists. The
+`get_phenotype_var()` reader drops its legacy `condition_column = ''`
+predicate; writers never wrote `''`.
 
 ---
 
@@ -944,6 +1012,14 @@ There is no operation that removes a phenotype from a block, and none is needed.
   same block is an error;
 - `define_residual_cov("BW", ..., condition_level = "M")` followed by the `"F"`
   stratum is fine — each is a complete 1 × 1 block over `{BW}`.
+- *(v3.2)* Once a block has two or more strata it cannot be **grown**: with
+  `{A, B}` unconditional and `{A, B}` for `M` on disk, `{A, B, C}` in any
+  stratum errors (the other strata would be over a strict subset), and
+  `{A, B, C}` cannot be written stratum-by-stratum either, because each write is
+  checked against the strata that still name `{A, B}`. The error gives the
+  `remove_rows()` call on `phenotype_var_comp` that clears the block; every
+  stratum is then redeclared over `{A, B, C}`. A block with a single stratum
+  grows freely (`N ⊋ U` passes `N == U` after the closure).
 
 **Rationale.** The rule states in one sentence: *a residual covariance block is
 declared in one call, as a complete matrix.* It matches the domain — breeders get
@@ -1116,12 +1192,22 @@ Making the user restate the block costs one line and produces a database whose
 **No `force` anywhere** (D3). `define_phenotype()` keeps `overwrite`, which
 governs the `phenotype_meta` row only. On an overwrite call that supplies
 `residual_var`, the residual write goes through the table above independently;
-an overwrite with no `residual_var` leaves `phenotype_var_comp` untouched, as
-today.
+an overwrite with no `residual_var` leaves `phenotype_var_comp` untouched.
+*(v3.2 correction: before Phase 2 an overwrite deleted the phenotype's
+unconditional residual rows unconditionally, which would have torn half the
+pair rows out of a multi-phenotype block. That `DELETE` is gone.)*
 
-**Implementation.** `write_phenotype_var_diag()` becomes a thin call into the
-same `validate_phenotype_cov_block()` that the matrix writers use, with a 1 × 1
-matrix, so the four rows above are not a fourth code path.
+**Implementation** *(as shipped in Phase 2)*. Both diagonal writers call the
+block writer with a 1 × 1 matrix, so the four rows above are not a fourth code
+path; `write_phenotype_var_diag()` is deleted. `define_phenotype()` runs the
+validator before its `phenotype_meta` write and then calls
+`define_residual_cov()`. `define_effect_random()` always writes a supplied
+`variance` (it used to ignore it when a stored value existed) and, with
+`variance = NULL`, requires a stored one; with `overwrite = TRUE` it first
+discards that phenotype's stored draws for the effect, so the "singleton with
+draws" row of the table is reached only through an explicit overwrite, which is
+documented on the argument. Every rejection rolls back the whole call,
+including the `phenotype_effects` delete an overwrite performs.
 
 ### D6 — `condition_change_action` must agree across a residual block — **decided: option 1**
 
@@ -1153,6 +1239,11 @@ whenever the metadata exist: `define_residual_cov()` checks the
 `define_phenotype()` checks whether the phenotype is already in a multi-member
 block whose other members disagree. Because a block can be declared before its
 phenotypes, the sampling-time check is the one that cannot be skipped.
+*(Phase 2)* Both definition-time sites are shipped, as
+`.check_condition_change_agreement(conn, block, pending, caller)` in
+[phenotype_cov_block.R](../R/phenotype_cov_block.R); `define_phenotype()`
+passes its pending row so the check runs before the `phenotype_meta` write.
+Stage 2 (Phase 5) calls the same function without `pending`.
 
 ### D7 — RNG state on failure — **decided: option 1**
 
@@ -1196,6 +1287,14 @@ fine (same seed + same call sequence reproduces), but it constrains the tests:
 
 Distributional tests should use enough entities for stable estimates and derive
 tolerances from sampling uncertainty, not fixed arbitrary margins.
+
+*(Phase 2)* `tests/testthat/test-phenotype_cov_block.R` (110 expectations)
+covers: Residual blocks 10–15; Named effects 5–6 at the two writer sites (the
+`add_phenotype()` site lands with Phase 6) and the writer half of 7; Diagonal
+writers 1–5; Reproducibility and integrity 6–8 (the residual half of 6–7 with a
+`residual_value` set by SQL, since Phase 5 is what writes it; 8 by mocking
+`next_int_id()` to fail after the `DELETE`); plus RNG-neutrality of the writers,
+the strata rules, and D6 at both definition-time sites.
 
 ### Residual blocks
 
@@ -1392,13 +1491,22 @@ column descriptions updated; CLAUDE.md schema tables updated. New
 no-`ALTER TABLE` write, NULL-ness of the two residual columns before Phase 5,
 reservation, descriptions, and the new argument. Full suite green.
 
-**Phase 2 — centralize covariance definitions.** `validate_phenotype_cov_block()`
-implementing the D1 algorithm (pair-row block discovery, `N == U`, per-stratum
-completeness, one condition column per block, PSD) and the D3 realization lock
-with the predicate defined in D3; the three writers wrapped in transactions and
-calling it (§5.9); D5 for the two diagonal writers; distribution (blocks ≥ 2
-only) and source checks in `define_effect_cov_matrix()` and
-`define_effect_random()`; D6 agreement check at definition time.
+**Phase 2 — centralize covariance definitions.** ✅ **Shipped 2026-09-20** —
+see `sample_correlated_effects_phase_2.md`. New `R/phenotype_cov_block.R`:
+`validate_phenotype_cov_block()` (D1 pair-row block discovery, `N == U`,
+per-stratum completeness, one condition column per block, symmetry/finite/PSD;
+D3 lock with the D3 predicate; D6; §5.6) and the single writer
+`write_phenotype_cov_block()` / `.pvc_write_block()` (validate → `DELETE` →
+register + `INSERT`, one transaction). `define_residual_cov()`,
+`define_effect_cov_matrix()` (phenotype routes) and `define_effect_random()`
+all write through it; `define_phenotype(residual_var = )` pre-validates and
+delegates; `write_phenotype_var_diag()` deleted. First user-visible behaviour
+change of the plan (fragments, subsets, non-PSD matrices, locked blocks,
+disagreeing `condition_change_action`, and incompatible named-effect rows are
+now errors; `define_phenotype(overwrite = TRUE)` no longer deletes residual
+rows; `define_effect_random(variance = )` no longer ignores a supplied value).
+110 new expectations; full suite green. Details and the v3.2 clarifications in
+the header.
 
 **On "tests before the fix".** *(v3.1)* Defects 1–3 cannot be committed as
 failing tests, and a characterization test that asserts the *wrong* behaviour

@@ -596,6 +596,29 @@ condition). Both (i,j) and (j,i) pairs stored for off-diagonal entries. Populate
 The `condition_column` / `condition_level` columns are used only for `'residual'`
 to model heterogeneous residual variance by sex, group, etc.
 
+**Covariance blocks.** For one `effect_name`, the phenotypes joined by any stored
+pair row (an explicit `0` counts) form a *block*, and every writer goes through
+`write_phenotype_cov_block()` / `validate_phenotype_cov_block()` in
+`R/phenotype_cov_block.R` inside one transaction:
+
+- A block is **declared in one call, as a complete matrix** (D1). A call naming
+  a fragment or a strict subset of an existing block is an error naming the
+  omitted phenotypes; the matrix must be symmetric, finite and PSD.
+- Conditional `'residual'` rows form **strata** `(condition_table,
+  condition_column, condition_level)` of the same block: every stratum names the
+  same phenotypes and a block has one condition column. Unconditional rows have
+  `condition_column`, `condition_table` and `condition_level` all `NULL`.
+- A block is **locked once realized** (D3): any `ind_phenotype` row of a member
+  with `residual_value IS NOT NULL`, or any `phenotype_random_effects` row for
+  `(effect_name, member)`. The error gives the `remove_rows()` call that clears
+  the realizations. There is no `force`.
+- Every defined member of a residual block carries the same
+  `phenotype_meta.condition_change_action` (D6); in a named-effect block of two
+  or more, every `phenotype_effects` row is `random`, `normal`, and reads the
+  same `(source_column, source_table)`.
+
+See `plans/sample_correlated_effects.md` §5.9 and D1/D3/D5/D6.
+
 | Column               | Type    | Notes                                                              |
 |----------------------|---------|--------------------------------------------------------------------|
 | id_phenotype_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()`              |
@@ -603,9 +626,9 @@ to model heterogeneous residual variance by sex, group, etc.
 | phenotype_name_1     | VARCHAR |                                                                    |
 | phenotype_name_2     | VARCHAR |                                                                    |
 | cov_value            | DOUBLE  |                                                                    |
-| condition_column     | VARCHAR | NULL = unconditional; used only for `effect_name = 'residual'`     |
-| condition_table      | VARCHAR | Default `"ind_meta"`                                               |
-| condition_level      | VARCHAR | Value of `condition_column` for this row                           |
+| condition_column     | VARCHAR | NULL = unconditional stratum; used only for `effect_name = 'residual'` |
+| condition_table      | VARCHAR | Table holding `condition_column`; `NULL` on unconditional rows      |
+| condition_level      | VARCHAR | Value of `condition_column` for this stratum; `NULL` on unconditional rows |
 | weight_type          | VARCHAR | Default `"fixed"`                                                  |
 | poly_order           | INTEGER | Polynomial order for `"legendre"` weight type                      |
 
@@ -1227,7 +1250,13 @@ pop |> define_genome_effects(
   `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
   any other name → `phenotype_var_comp` with that `effect_name`.
   Can be called before `define_trait()` or `define_effect_random()`.
-- `define_effect_random()` — `variance` optional if already in `phenotype_var_comp`.
+- `define_effect_random()` — `variance = NULL` (default) requires a value
+  already in `phenotype_var_comp`; a number writes a 1 × 1 block and is an error
+  when the phenotype is already in a multi-phenotype block for that effect
+  (redeclare it with `define_effect_cov_matrix()`). Once in a block of two or
+  more, the row must be `distribution = "normal"` and share the block's
+  `(source_column, source_table)`. `overwrite = TRUE` discards that phenotype's
+  stored draws for the effect. One transaction.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
 - `define_effect_intercept()` — sets intercept (`target_add_mean`) for a trait.
@@ -1243,9 +1272,13 @@ pop |> define_genome_effects(
   prior `define_trait()` call is needed for it.
 
   Key arguments:
-  - `residual_var` — scalar; writes one unconditional diagonal entry to
-    `phenotype_var_comp` (with `effect_name = 'residual'`). For correlated or
-    heterogeneous residuals use `define_residual_cov()` afterwards.
+  - `residual_var` — scalar; writes a 1 × 1 unconditional residual block to
+    `phenotype_var_comp` (with `effect_name = 'residual'`). Error if the
+    phenotype is already in a multi-phenotype residual block (redeclare it with
+    `define_residual_cov()`) or if its residual has realized draws.
+    `overwrite = TRUE` without `residual_var` leaves `phenotype_var_comp`
+    untouched. Every defined member of the phenotype's residual block must
+    share its `condition_change_action`; checked before anything is written.
   - `components` — data frame with columns `source_trait_name` and
     `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
     columns: `weight`, `weight_type`, `aggregation`, `group_column`,
@@ -1258,11 +1291,13 @@ pop |> define_genome_effects(
     example IDs. `"error"` stops immediately.
 
 - `define_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, ...)` —
-  writes conditional or unconditional residual (co)variance entries to
-  `phenotype_var_comp` (always with `effect_name = 'residual'`). Supply a named
-  matrix for multi-phenotype correlated residuals, or call once per sex/group
-  level with `condition_column = "sex"` and `condition_level = "M"` / `"F"` for
-  heterogeneous residuals.
+  writes one stratum of a residual covariance block to `phenotype_var_comp`
+  (always with `effect_name = 'residual'`). Supply a named matrix for
+  multi-phenotype correlated residuals, or call once per sex/group level with
+  `condition_column = "sex"` and `condition_level = "M"` / `"F"` (both together)
+  for heterogeneous residuals. The block rules under `phenotype_var_comp` apply:
+  whole block per call, one condition column, same phenotypes in every stratum,
+  locked once realized. Rejected calls change nothing.
 
 ### `add_phenotype()` / `add_tbv()` / `add_tgv()`
 

@@ -42,11 +42,15 @@
 #' @param store_liability Logical. When `TRUE`, the underlying liability value
 #'   is written to the reserved `liability_value` column in `ind_phenotype`.
 #'   Only meaningful for categorical traits.
-#' @param residual_var Numeric. Scalar residual variance. When supplied, writes
-#'   one unconditional row to `phenotype_var_comp`
-#'   (`effect_name = "residual"`, `condition_column = NULL`). For heterogeneous
-#'   residuals or multi-phenotype correlated residuals, use
-#'   [define_residual_cov()] afterwards.
+#' @param residual_var Numeric or `NULL`. Scalar residual variance. When
+#'   supplied, writes a 1 × 1 unconditional residual block for this phenotype
+#'   to `phenotype_var_comp` (`effect_name = "residual"`). It is an error when
+#'   the phenotype already belongs to a multi-phenotype residual block — that
+#'   block is redeclared as a whole with [define_residual_cov()] — or when the
+#'   phenotype's existing residual has realized draws in `ind_phenotype`. With
+#'   `overwrite = TRUE` and no `residual_var`, `phenotype_var_comp` is left
+#'   untouched. For heterogeneous or correlated residuals use
+#'   [define_residual_cov()].
 #' @param components A data frame or `tibble` with one row per genetic
 #'   component. Columns:
 #'   - `source_trait_name` (required): component trait name in `trait_meta`.
@@ -364,15 +368,45 @@ define_phenotype <- function(pop,
     )
   }
 
+  # ── Residual block checks, before anything is written ─────────────────────
+  #
+  # `residual_var` is the D1 algorithm with N = {phenotype_name}: it writes a
+  # 1 x 1 block, overwrites an unrealized singleton, and errors when the
+  # phenotype is in a multi-phenotype block or the singleton has realized
+  # draws. Validating here (the writer validates again inside its transaction)
+  # means a rejected call leaves phenotype_meta untouched too.
+
+  resid_matrix <- NULL
+  if (!is.null(residual_var)) {
+    if (!is.numeric(residual_var) || length(residual_var) != 1 ||
+        is.na(residual_var) || residual_var < 0) {
+      stop("`residual_var` must be a non-negative number.", call. = FALSE)
+    }
+    resid_matrix <- matrix(as.numeric(residual_var), 1L, 1L,
+                           dimnames = list(phenotype_name, phenotype_name))
+    validate_phenotype_cov_block(pop$db_conn, "residual", phenotype_name,
+                                 resid_matrix,
+                                 caller = "define_phenotype(residual_var = )")
+  }
+
+  # D6: every defined phenotype in this one's residual block agrees on
+  # condition_change_action (the block may have been declared before the
+  # phenotypes, so the same check runs again at sampling time).
+  .check_condition_change_agreement(
+    pop$db_conn,
+    .pvc_block_members(pop$db_conn, "residual", phenotype_name),
+    pending = list(phenotype_name          = phenotype_name,
+                   condition_change_action = condition_change_action),
+    caller  = "define_phenotype()")
+
+  # Overwrite replaces the phenotype_meta row and its components. It leaves
+  # phenotype_var_comp alone: the residual block is only ever rewritten through
+  # `residual_var` (above) or define_residual_cov().
   if (existing_n > 0 && overwrite) {
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM phenotype_meta WHERE phenotype_name = '", pn_safe, "'"))
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM phenotype_components WHERE phenotype_name = '", pn_safe, "'"))
-    DBI::dbExecute(pop$db_conn,
-      paste0("DELETE FROM phenotype_var_comp ",
-             "WHERE effect_name = 'residual' AND phenotype_name_1 = '", pn_safe, "'",
-             " AND condition_column IS NULL"))
   }
 
   # ── Serialize categorical fields ──────────────────────────────────────────
@@ -425,16 +459,11 @@ define_phenotype <- function(pop,
 
   # ── Residual variance ──────────────────────────────────────────────────────
 
-  if (!is.null(residual_var)) {
-    if (!is.numeric(residual_var) || length(residual_var) != 1 ||
-        is.na(residual_var) || residual_var < 0) {
-      stop("`residual_var` must be a non-negative number.", call. = FALSE)
-    }
+  if (!is.null(resid_matrix)) {
     pop <- define_residual_cov(
       pop,
       phenotype_names  = phenotype_name,
-      cov_matrix       = matrix(as.numeric(residual_var), 1L, 1L,
-                                dimnames = list(phenotype_name, phenotype_name)),
+      cov_matrix       = resid_matrix,
       condition_column = NULL
     )
   }

@@ -27,8 +27,11 @@ phenotype.}
 \item{source_column}{Character. Column in \code{source_table} whose distinct
 values define the groups (e.g. \code{"herd_id"}, \code{"litter"}, \code{"id_ind"} for PE).}
 
-\item{variance}{Numeric scalar. Variance of the random effect. Optional if
-already stored via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}; required otherwise.}
+\item{variance}{Numeric scalar or \code{NULL}. Variance of the random effect.
+\code{NULL} (default) uses the value already stored in \code{phenotype_var_comp} via
+\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} and errors if there is none. A number writes
+(or overwrites) a 1 × 1 block for this phenotype; it is an error when the
+phenotype is already in a multi-phenotype block for \code{effect_name}.}
 
 \item{distribution}{Character. Sampling distribution: \code{"normal"} (default),
 \code{"gamma"}, or \code{"uniform"}.}
@@ -36,7 +39,9 @@ already stored via \code{\link[=define_effect_cov_matrix]{define_effect_cov_matr
 \item{source_table}{Character. Table containing \code{source_column}. Default
 \code{"ind_meta"}.}
 
-\item{overwrite}{Logical. Replace an existing effect with the same name.}
+\item{overwrite}{Logical. Replace an existing effect with the same name.
+The stored draws of that effect for this phenotype in
+\code{phenotype_random_effects} are discarded with it.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -50,7 +55,12 @@ requiring a fixed \code{seed}.
 
 To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} with the
-appropriate \code{effect_name} — either before or after this call.
+appropriate \code{effect_name} — either before or after this call. Once the
+phenotype belongs to a block of two or more phenotypes for \code{effect_name},
+this call must use \code{distribution = "normal"} and the same
+\verb{(source_column, source_table)} as the block's other members, and
+\code{variance} can no longer be set here — the block is redeclared as a whole
+with \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}.
 }
 \examples{
 \dontrun{

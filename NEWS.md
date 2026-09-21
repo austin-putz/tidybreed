@@ -29,6 +29,39 @@ accumulates until the feature ships.
   `define_phenotype()` the argument that sets it. Databases created before this
   change are regenerated, not migrated.
 
+- **Phase 2 — covariance blocks are declared whole and locked once realized.**
+  Every write to `phenotype_var_comp` (`define_residual_cov()`,
+  `define_effect_cov_matrix()`, `define_phenotype(residual_var = )`,
+  `define_effect_random(variance = )`) now goes through one validator and one
+  transactional, RNG-neutral writer (`R/phenotype_cov_block.R`). The phenotypes
+  joined by any stored pair row form a *block*, and:
+  - a block is declared in one call, as a complete, symmetric, finite, PSD
+    matrix — a fragment (`{A,B}` then `{B,C}`), a strict subset, or a 1 × 1
+    rewrite of a member is an error naming the omitted phenotypes and the call
+    to make; an explicit `0` is how two members are declared uncorrelated;
+  - residual strata (`condition_column` / `condition_level`, now required
+    together) all name the same phenotypes and share one condition column;
+    growing a block that already has several strata requires clearing it;
+  - a block cannot be redefined once realized (`ind_phenotype.residual_value`
+    non-`NULL`, or any `phenotype_random_effects` row for the effect); the error
+    gives the `remove_rows()` call that clears the realizations. No `force`;
+  - every defined member of a residual block must carry the same
+    `condition_change_action`, and a named-effect block of two or more admits
+    only `random`, `normal`, source-compatible `phenotype_effects` rows — checked
+    by `define_effect_cov_matrix()`, `define_effect_random()` and
+    `define_phenotype()` before anything is written.
+
+  Behaviour changes beyond the new errors: `define_phenotype(overwrite = TRUE)`
+  no longer deletes the phenotype's unconditional residual rows;
+  `define_effect_random(variance = )` always writes a supplied value instead of
+  silently ignoring it when one was stored, runs as one transaction, and
+  discards the phenotype's stored draws for the effect on `overwrite = TRUE`;
+  `define_effect_cov_matrix(trait_names = )` is honoured for `"residual"`;
+  unconditional `phenotype_var_comp` rows store `condition_table = NULL`. The
+  internal `write_phenotype_var_diag()` is removed, as are the two comment-only
+  tombstone files left behind when `set_residual_cov()` and
+  `set_random_effect_cov()` were removed in v0.7.0.
+
 # tidybreed 0.70.0 (2026-09-20)
 
 ## Breaking

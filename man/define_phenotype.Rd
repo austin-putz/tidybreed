@@ -69,11 +69,15 @@ category, e.g. \code{c("Alive", "Dead")}. Must not contain commas.}
 is written to the reserved \code{liability_value} column in \code{ind_phenotype}.
 Only meaningful for categorical traits.}
 
-\item{residual_var}{Numeric. Scalar residual variance. When supplied, writes
-one unconditional row to \code{phenotype_var_comp}
-(\code{effect_name = "residual"}, \code{condition_column = NULL}). For heterogeneous
-residuals or multi-phenotype correlated residuals, use
-\code{\link[=define_residual_cov]{define_residual_cov()}} afterwards.}
+\item{residual_var}{Numeric or \code{NULL}. Scalar residual variance. When
+supplied, writes a 1 × 1 unconditional residual block for this phenotype
+to \code{phenotype_var_comp} (\code{effect_name = "residual"}). It is an error when
+the phenotype already belongs to a multi-phenotype residual block — that
+block is redeclared as a whole with \code{\link[=define_residual_cov]{define_residual_cov()}} — or when the
+phenotype's existing residual has realized draws in \code{ind_phenotype}. With
+\code{overwrite = TRUE} and no \code{residual_var}, \code{phenotype_var_comp} is left
+untouched. For heterogeneous or correlated residuals use
+\code{\link[=define_residual_cov]{define_residual_cov()}}.}
 
 \item{components}{A data frame or \code{tibble} with one row per genetic
 component. Columns:

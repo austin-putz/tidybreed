@@ -25,8 +25,16 @@
 #' `define_effect_cov_matrix()` can be called **before** [define_trait()] or
 #' [define_effect_random()] — no prior setup is required.
 #'
-#' All n² pairs are stored. Previous entries for this `effect_name` × names
-#' combination are replaced.
+#' All n² pairs are stored. For `phenotype_var_comp` effects the names form a
+#' *covariance block* that is declared in one call, as a complete matrix: a
+#' call that names a fragment or a strict subset of an existing block is an
+#' error, the matrix must be positive semi-definite, and a block cannot be
+#' redefined once draws exist under it (the error gives the [remove_rows()]
+#' call that clears them). In a block of two or more phenotypes every
+#' [define_effect_random()] row for the effect must use
+#' `distribution = "normal"` and read the same `(source_column, source_table)`.
+#' See [define_residual_cov()] for the full rules. A rejected call changes
+#' nothing.
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param effect_name Character. Label for the variance component, e.g.
@@ -71,17 +79,6 @@ define_effect_cov_matrix <- function(pop,
                                    tol         = 1e-9) {
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
-
-  # Residuals route to phenotype_var_comp via define_residual_cov()
-  if (identical(effect_name, "residual")) {
-    pn <- if (!is.null(dimnames(cov_matrix))) rownames(cov_matrix) else NULL
-    if (!is.null(attr(cov_matrix, "dimnames"))) pn <- rownames(cov_matrix)
-    return(define_residual_cov(pop,
-      phenotype_names  = pn,
-      cov_matrix       = cov_matrix,
-      condition_column = NULL))
-  }
-
   validate_sql_identifier(effect_name, what = "effect name")
 
   if (!is.matrix(cov_matrix) || !is.numeric(cov_matrix)) {
@@ -97,15 +94,18 @@ define_effect_cov_matrix <- function(pop,
       stop("`trait_names` length (", length(trait_names),
            ") must equal matrix dimension (", n, ").", call. = FALSE)
     }
-    lapply(trait_names, validate_sql_identifier, what = "trait name")
   } else {
     trait_names <- rownames(cov_matrix)
     if (is.null(trait_names) || any(!nzchar(trait_names))) {
       stop("`cov_matrix` must have row names, or supply `trait_names`.",
            call. = FALSE)
     }
-    lapply(trait_names, validate_sql_identifier, what = "trait name")
   }
+  lapply(trait_names, validate_sql_identifier, what = "trait name")
+  if (anyDuplicated(trait_names)) {
+    stop("`trait_names` must not contain duplicates.", call. = FALSE)
+  }
+  dimnames(cov_matrix) <- list(trait_names, trait_names)
 
   if (!isSymmetric(unname(cov_matrix), tol = tol)) {
     stop("`cov_matrix` must be symmetric (max discrepancy: ",
@@ -115,7 +115,7 @@ define_effect_cov_matrix <- function(pop,
     stop("Diagonal entries (variances) must be non-negative.", call. = FALSE)
   }
 
-  # Genetic effects → trait_var_comp; phenotype-level effects → phenotype_var_comp
+  # Genetic effects -> trait_var_comp; phenotype-level effects -> phenotype_var_comp
   genetic_effects <- c("gen_add", "dominance", "epistasis")
 
   if (effect_name %in% genetic_effects) {
@@ -145,35 +145,16 @@ define_effect_cov_matrix <- function(pop,
              "(id_trait_var_comp, effect_name, trait_name_1, trait_name_2, cov_value) VALUES ",
              paste(value_rows, collapse = ", "))
     )
+  } else if (identical(effect_name, "residual")) {
+    define_residual_cov(pop,
+      phenotype_names  = trait_names,
+      cov_matrix       = cov_matrix,
+      condition_column = NULL)
   } else {
-    # Phenotype-level named random effects → phenotype_var_comp
-    quoted_names <- paste0("'", trait_names, "'", collapse = ", ")
-    eff_safe <- gsub("'", "''", effect_name)
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0("DELETE FROM phenotype_var_comp WHERE effect_name = '", eff_safe,
-             "' AND phenotype_name_1 IN (", quoted_names,
-             ") AND phenotype_name_2 IN (", quoted_names, ")")
-    )
-    # Build multi-row INSERT
-    n_rows    <- n * n
-    start_id  <- next_int_id(pop$db_conn, "phenotype_var_comp", "id_phenotype_var_comp")
-    value_rows <- character(n_rows)
-    k <- 1L
-    for (i in seq_len(n)) {
-      for (j in seq_len(n)) {
-        value_rows[k] <- paste0("(", start_id + k - 1L, ", '", eff_safe, "', '",
-                                trait_names[i], "', '", trait_names[j], "', ",
-                                format(cov_matrix[i, j], scientific = FALSE), ")")
-        k <- k + 1L
-      }
-    }
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0("INSERT INTO phenotype_var_comp ",
-             "(id_phenotype_var_comp, effect_name, phenotype_name_1, phenotype_name_2, cov_value) VALUES ",
-             paste(value_rows, collapse = ", "))
-    )
+    # Named random effect: one complete, unconditional block (D1/D3/section 5.6)
+    write_phenotype_cov_block(
+      pop$db_conn, effect_name, trait_names, cov_matrix,
+      caller = "define_effect_cov_matrix()", tol = tol)
   }
 
   message("Stored '", effect_name, "' covariance matrix for: ",
@@ -217,7 +198,7 @@ get_phenotype_var <- function(pop, effect_name, phenotype_name) {
            "WHERE effect_name = '", eff_safe, "' ",
            "AND phenotype_name_1 = '", pn_safe, "' ",
            "AND phenotype_name_2 = '", pn_safe, "' ",
-           "AND (condition_column IS NULL OR condition_column = '')")
+           "AND condition_column IS NULL")
   )
   if (nrow(row) == 0L) NA_real_ else row$cov_value[[1L]]
 }
@@ -300,39 +281,6 @@ write_trait_var_diag <- function(pop, effect_name, trait_name, variance) {
     paste0("INSERT INTO trait_var_comp ",
            "(id_trait_var_comp, effect_name, trait_name_1, trait_name_2, cov_value) VALUES (",
            new_id, ", '", effect_name, "', '", trait_name, "', '", trait_name, "', ",
-           format(as.numeric(variance), scientific = FALSE), ")")
-  )
-  invisible(pop)
-}
-
-
-#' Write a single diagonal entry to phenotype_var_comp
-#'
-#' Used internally by define_effect_random() to write a per-phenotype variance.
-#' Uses dbExecute() to avoid consuming R's RNG.
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param effect_name Character.
-#' @param phenotype_name Character.
-#' @param variance Numeric scalar.
-#' @return The modified `tidybreed_pop` (invisibly).
-#' @keywords internal
-write_phenotype_var_diag <- function(pop, effect_name, phenotype_name, variance) {
-  eff_safe <- gsub("'", "''", effect_name)
-  pn_safe  <- gsub("'", "''", phenotype_name)
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("DELETE FROM phenotype_var_comp WHERE effect_name = '", eff_safe,
-           "' AND phenotype_name_1 = '", pn_safe,
-           "' AND phenotype_name_2 = '", pn_safe,
-           "' AND (condition_column IS NULL OR condition_column = '')")
-  )
-  new_id <- next_int_id(pop$db_conn, "phenotype_var_comp", "id_phenotype_var_comp")
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("INSERT INTO phenotype_var_comp ",
-           "(id_phenotype_var_comp, effect_name, phenotype_name_1, phenotype_name_2, cov_value) VALUES (",
-           new_id, ", '", eff_safe, "', '", pn_safe, "', '", pn_safe, "', ",
            format(as.numeric(variance), scientific = FALSE), ")")
   )
   invisible(pop)
