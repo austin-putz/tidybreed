@@ -17,6 +17,19 @@ accumulates until the feature ships.
   the long-removed `phenotype_residual_cov` table. Every phenotype-layer table
   now has exactly one `CREATE TABLE`.
 
+- **Phase 3 — the conditional resolver.** Internal, no caller changed yet:
+  `R/correlated_draws.R` adds `find_covariance_blocks()` (loads every
+  covariance block touching a set of phenotypes, one matrix per stratum,
+  re-checking the block invariants so a hand-removed pair row is an error with
+  the redeclaration call, not a silent hole) and `resolve_correlated_draws()`
+  (draws the requested coordinates of a Gaussian block conditional on each
+  entity's already-realized coordinates; Cholesky when positive definite, eigen
+  pseudoinverse with a support check when singular; relative tolerance; every
+  check before the first `rnorm()`; exactly `n × m` normals consumed). The
+  block writer now stores the symmetrized matrix, so stored `(i, j)` and
+  `(j, i)` rows are bit-identical. `add_phenotype()` is unchanged until
+  Phases 5–6.
+
 ## Breaking
 
 - **Phase 1 — schema.** `ind_phenotype` now has nine base columns:

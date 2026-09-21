@@ -445,7 +445,10 @@ validate_phenotype_cov_block <- function(conn, effect_name, phenotype_names,
                                     cov_matrix, condition_column,
                                     condition_table, condition_level,
                                     caller = caller, tol = tol)
+  # Symmetrize so the stored (i, j) and (j, i) rows are bit-identical (exact
+  # for an already-symmetric input); find_covariance_blocks() relies on it.
   M <- cov_matrix[N, N, drop = FALSE]
+  M <- (M + t(M)) / 2
   n <- length(N)
 
   eff_lit <- DBI::dbQuoteLiteral(conn, effect_name)

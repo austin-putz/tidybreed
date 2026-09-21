@@ -617,7 +617,14 @@ pair row (an explicit `0` counts) form a *block*, and every writer goes through
   or more, every `phenotype_effects` row is `random`, `normal`, and reads the
   same `(source_column, source_table)`.
 
-See `plans/sample_correlated_effects.md` §5.9 and D1/D3/D5/D6.
+Stored matrices are exactly symmetric (the writer stores `(M + t(M)) / 2`).
+`find_covariance_blocks(conn, effect_name, phenotype_names)` in
+`R/correlated_draws.R` is the one reader that turns stored rows back into
+matrices — one entry per block touching the targets, every stratum assembled,
+invariants re-checked — and `resolve_correlated_draws()` beside it is the pure
+conditional-MVN sampler the phenotype layer will draw through.
+
+See `plans/sample_correlated_effects.md` §5.2, §5.4, §5.9 and D1/D3/D5/D6.
 
 | Column               | Type    | Notes                                                              |
 |----------------------|---------|--------------------------------------------------------------------|

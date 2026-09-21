@@ -1,9 +1,8 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.2, approved; implementation in progress.** Phases 0, 1 and 2
-shipped 2026-09-20 (`sample_correlated_effects_phase_0.md`,
-`sample_correlated_effects_phase_1.md`, `sample_correlated_effects_phase_2.md`);
-Phases 3–8 not started.
+**Status**: **v3.3, approved; implementation in progress.** Phases 0–3
+shipped 2026-09-20 (`sample_correlated_effects_phase_0.md` …
+`sample_correlated_effects_phase_3.md`); Phases 4–8 not started.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -96,6 +95,36 @@ changes; details in §5.9, D1, D5, D6):
   from `define_residual_cov()` and `NULL` from `define_effect_cov_matrix()`).
 - All three writers are RNG-neutral (register + `INSERT`; `define_residual_cov()`
   used `dbWriteTable()`).
+
+**What changed from v3.2 to v3.3** (Phase 3 implementation, no decision
+changes; details in §5.2 and §5.4):
+
+- The block loader is `find_covariance_blocks()` — **plural**, taking a
+  connection — because the phenotypes of one `add_phenotype()` call can fall
+  into several components. It returns one entry per component touching the
+  targets, each with every stratum already assembled as a matrix
+  (`unconditional`, `conditional[[level]]`); phenotypes with no rows are simply
+  absent. It re-checks the D1 invariants on load (rows can be removed by hand
+  with `remove_rows()`) and errors with the redeclaration call rather than
+  guessing around a hole.
+- The **pattern grouping lives inside the resolver**, not the adapter: the
+  adapter passes one `observed` matrix per `(stratum, sample set)` with `NA`
+  for "not observed", and the resolver groups by non-`NA` pattern itself.
+  Adapter steps 6–7 in §5.4 collapse to "one call per `(stratum, sample set)`". The RNG contract is what makes this safe:
+  a call consumes exactly `n × m` normals in entity order, whatever the
+  patterns, so grouping is invisible to the stream.
+- The resolver runs **every check before the first `rnorm()`** — a rejected
+  call leaves `.Random.seed` untouched — and a coordinate with zero conditional
+  variance still consumes its normal (multiplied by zero), so the accounting
+  test in §7 is `n × m`, not a data-dependent count.
+- Tolerance is **relative**: `tolerance × λ_max`, default
+  `nrow(R) × sqrt(.Machine$double.eps)`. The PD/PSD decision for `R_oo` and
+  for the conditional covariance uses it; Cholesky on the PD side, eigen with
+  a **sign-normalized** `V` on the PSD side, so a seeded draw through the
+  singular path does not depend on the LAPACK build.
+- The writer now stores `(M + t(M)) / 2` (bit-identical for an already
+  symmetric input), so stored `(i, j)` and `(j, i)` rows are exactly equal and
+  the loader can require it.
 
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
@@ -498,18 +527,30 @@ the Phase 1 tests assert (`test-phenotype_schema.R`).
 `store_and_reset`, so every replicate begins with no stored coordinates; the new
 columns are copied with the table. No change.
 
-### 5.2 Covariance block discovery
+### 5.2 Covariance block discovery — ✅ shipped (Phase 3, 2026-09-20)
 
 The single most important thing missing from v1. When the user calls
 `add_phenotype("off_test_wt")`, the requested vector contains one name; the
 sampler must still find `on_test_wt`.
 
 ```r
-find_covariance_block(pop, effect_name, target_phenotypes)
+find_covariance_blocks(conn, effect_name, phenotype_names)
+# → list of blocks, one per connected component touching phenotype_names:
+#   list(effect_name, phenotypes (sorted), condition_table, condition_column,
+#        unconditional = R or NULL, conditional = list(<level> = R, ...))
 ```
 
-Returns the **connected component** of the covariance graph containing the
-targets. **The graph is defined by the existence of a stored pair row, never by
+*(v3.3: plural, and a connection rather than `pop`, because one call's
+phenotypes may span several components and the adapters run on `pop$db_conn`.
+Implemented in [correlated_draws.R](../R/correlated_draws.R) over
+`.pvc_block_members()` from Phase 2; the loader re-checks completeness, one
+condition column, exact symmetry and finiteness per stratum, since
+`remove_rows()` can remove pair rows by hand, and errors with the
+redeclaration call. Phenotypes with no rows are absent from the result:
+`setdiff(targets, unlist(lapply(blocks, `[[`, "phenotypes")))`.)*
+
+Each block is the **connected component** of the covariance graph containing
+its targets. **The graph is defined by the existence of a stored pair row, never by
 `cov_value != 0`** (Codex B2): if the user declared {A, B, C} together, the block
 for A is {A, B, C} even where `Cov(A,C)` was written as an explicit `0`. Same
 rule for residual and named-effect blocks. Restricting the lookup to phenotypes
@@ -533,8 +574,10 @@ it is rejected at definition time.
 "no block" marginal path: every phenotype with any residual row goes through
 the resolver, and for one coordinate with nothing observed the resolver *is*
 `rnorm(sd = sqrt(v))`. A phenotype with **no** residual row at all is an error,
-as it is today ("No residual variance found"). `load_phenotype_cov()` returning
-`NULL` ([define_effect_cov_matrix.R:256](../R/define_effect_cov_matrix.R#L256))
+as it is today ("No residual variance found"). A phenotype absent from
+`find_covariance_blocks()`'s result (and, until Phase 6 retires it,
+`load_phenotype_cov()` returning `NULL` at
+[define_effect_cov_matrix.R:256](../R/define_effect_cov_matrix.R#L256))
 therefore has exactly one meaning: no rows exist.
 
 Per **D1**, a discovered block is guaranteed complete and PSD — that is enforced
@@ -579,6 +622,8 @@ Named-effect adapter    entity = (effect_name, level)     coordinate = phenotype
 Group entities by identical `(stratum, observed coordinates, sample
 coordinates)` pattern; compute the conditional coefficients and covariance
 **once per pattern**. In practice there are one to three patterns per call.
+*(v3.3: the adapter groups by stratum and sample set; the observed-pattern
+grouping is done inside the resolver from the `NA` pattern of `observed`.)*
 
 This state model is what makes all of these fall out of one mechanism: A and B
 together on identical sets; A on more individuals than B; B later on a culled
@@ -588,19 +633,45 @@ phenotypes; **and a size-1 block with heterogeneous variance (Defect 4)** — a
 single sample coordinate, zero observed, drawn from the stratum matching the
 entity's condition level.
 
-### 5.4 The resolver
+### 5.4 The resolver — ✅ shipped (Phase 3, 2026-09-20)
 
 Database-independent, opaque entity keys, no writes, no knowledge of strata
-(the adapter has already picked one matrix per pattern):
+(the adapter has already picked one matrix per stratum):
 
 ```r
 resolve_correlated_draws <- function(covariance,          # one stratum's R: validated, complete, dimnamed
-                                     sample_coordinates,  # chr; coordinates to draw
-                                     entity_keys,         # opaque; sorted by caller
-                                     observed,            # entity x coordinate; stored + fixed; NA = not observed
-                                     tolerance)
+                                     sample_coordinates,  # chr; coordinates to draw (same set for every entity)
+                                     entity_keys,         # opaque; vector/list or data frame; sorted by caller
+                                     observed = NULL,     # entity x coordinate; stored + fixed; NA = not observed
+                                     tolerance = NULL)    # relative; default nrow(R) * sqrt(eps)
 # returns entity x sample_coordinates, in the caller's entity order
 ```
+
+*(v3.3, as shipped in [correlated_draws.R](../R/correlated_draws.R).)* The
+contract the adapters and the §7 tests rely on:
+
+- **Every check precedes the first random number.** Validation, the PSD check
+  on `R`, the support check on every entity, and the conditional-covariance
+  factorization for every pattern all run first; a rejected call leaves
+  `.Random.seed` untouched.
+- **A successful call consumes exactly `n × m` standard normals** (`n`
+  entities, `m` sample coordinates) from `stats::rnorm()`, in entity order and
+  `sample_coordinates` order within an entity — whatever the observed
+  patterns, and even for a coordinate with zero conditional variance (its
+  normal is multiplied by zero and it is returned at its conditional mean
+  exactly). Zero entities or zero sample coordinates consume nothing. The
+  accounting test replays `rnorm(n * m)`.
+- **Patterns are grouped inside.** Entities are grouped by the non-`NA`
+  columns of `observed`; coefficients and the factor are computed once per
+  pattern; the pre-drawn `z` rows are applied per pattern, so grouping cannot
+  reorder the stream.
+- **Tolerance is relative**: absolute `tolerance × λ_max(R)`. `R_oo` is
+  inverted by Cholesky when its smallest eigenvalue exceeds it, else by an
+  eigen pseudoinverse with the support check
+  `‖V_null' e_o‖ ≤ tolerance × max(‖e_o‖, √λ_max)`. The conditional covariance
+  is symmetrized, eigenvalues in `[−tol, 0)` are zeroed, anything below is an
+  error; it is factored by Cholesky when PD and by `V √D` (eigenvector signs
+  normalized so the largest-magnitude component is positive) otherwise.
 
 **Resolver responsibilities** (and nothing else):
 
@@ -625,13 +696,16 @@ resolve_correlated_draws <- function(covariance,          # one stratum's R: val
 
 **Adapter responsibilities** (residual adapter and named-effect adapter; Codex R):
 
-1. Discover the complete block by pair-row existence.
+1. Discover the complete block by pair-row existence
+   (`find_covariance_blocks()`).
 2. Select the exact stratum for every planned entity.
 3. Produce stable entity and coordinate order.
 4. Load stored values and check their stratum compatibility (D2).
 5. Add fixed current values (`user_residual`).
-6. Group entities by `(stratum, observed coordinates, sample coordinates)`.
-7. Call the resolver once per pattern.
+6. Group entities by `(stratum, sample coordinates)` and build one `observed`
+   matrix per group with `NA` for "not observed" *(v3.3: the observed-pattern
+   split is the resolver's job)*.
+7. Call the resolver once per group.
 8. Merge fixed and sampled values into the planned rows.
 9. Persist only inside the outer transaction.
 
@@ -666,12 +740,12 @@ for each phenotype t:
 
 ── Stage 2: RESOLVE — RNG, no writes ──────────────────────────────────────────
 for each named-effect block (persistent per-level entities):
-    block  <- find_covariance_block(pop, effect, phenos)
+    block  <- find_covariance_blocks(conn, effect, phenos)     # one per component
     validate: every coordinate normal; compatible (source_column, source_table)
     stored <- SELECT level, phenotype_name, draw_value FROM phenotype_random_effects
-    draws  <- adapter → resolve_correlated_draws(...)  per pattern
+    draws  <- adapter → resolve_correlated_draws(...)  per (stratum, sample set)
 
-block  <- find_covariance_block(pop, "residual", phenos)
+blocks <- find_covariance_blocks(conn, "residual", phenos)   # one per component
 stored <- SELECT id_ind, phenotype_name, pheno_number,
                  residual_value, residual_condition_level
             FROM ind_phenotype
@@ -683,7 +757,7 @@ per entity: stratum from plan; compare with stored residual_condition_level (D2)
     'error'       → stop
     'independent' → drop only the stored coordinates whose stratum differs,
                     warn with count + <=5 example IDs
-resid  <- adapter → resolve_correlated_draws(...)  per pattern
+resid  <- adapter → resolve_correlated_draws(...)  per (block, stratum, sample set)
 liability / type conversion / record assembly, in memory              (as today, no writes)
 
 ── Stage 3: COMMIT — writes, no RNG ───────────────────────────────────────────
@@ -863,7 +937,7 @@ the ADG half in favour of the stored `+8.3`.
 
 #### What happens under this plan
 
-**Day 0.** `find_covariance_block(pop, "pen", "ADG")` returns `{ADG, BF}`. For pen
+**Day 0.** `find_covariance_blocks(conn, "pen", "ADG")` returns the block `{ADG, BF}`. For pen
 `P1`: stored `{}`, sample `{ADG}`, latent `{BF}`. Zero observed coordinates ⇒
 marginal draw from `R[ADG, ADG] = 150`. Store `(ADG, pen, P1, +8.3)`. **`BF`
 stays latent — not drawn, not stored**, per §5.3.
@@ -1032,7 +1106,8 @@ something the package inferred.
 
 1. Completeness and PSD validation live entirely in the writers, never in the
    sampler.
-2. `load_phenotype_cov()` returning `NULL` now has exactly **one** meaning —
+2. A phenotype absent from `find_covariance_blocks()` (and, until Phase 6,
+   `load_phenotype_cov()` returning `NULL`) has exactly **one** meaning —
    *no rows exist*.
 3. `resolve_correlated_draws()` may assume a complete, validated, PSD matrix as a
    precondition.
@@ -1383,6 +1458,14 @@ the strata rules, and D6 at both definition-time sites.
 
 ### Numerical
 
+*(Phase 3)* `tests/testthat/test-correlated_draws.R` (115 expectations, no
+database for the resolver half) covers 1–7 below, the mixed-pattern and latent
+cases of §5.3, the `n × m` RNG accounting, RNG-neutrality of rejected calls,
+the exact-mean return at zero conditional variance, a 20 000-entity
+conditional-covariance check with sampling-error tolerances, input
+validation, and `find_covariance_blocks()` (components, strata, sorted
+members, absent phenotypes, hand-broken blocks, RNG-neutrality).
+
 1. One-dimensional conditional and unconditional draws.
 2. Perfect and near-perfect correlation; zero conditional variance.
 3. Tiny negative eigenvalues absorbed within tolerance; materially negative
@@ -1518,11 +1601,16 @@ check noted in the commit message, not a committed artefact. The one exception
 is the Defect 4 assertion strengthening on the existing composite test, which
 lands with Phase 5 for the same reason.
 
-**Phase 3 — pure resolver.** `find_covariance_block()` and
-`resolve_correlated_draws()` in a new `R/correlated_draws.R`, including
-support-consistency validation and the scale-aware tolerance. Test **without
-any database access**, across every coordinate pattern and numerical edge case,
-including RNG-neutrality of the nothing-to-draw cases.
+**Phase 3 — pure resolver.** ✅ **Shipped 2026-09-20** — see
+`sample_correlated_effects_phase_3.md`. New `R/correlated_draws.R`:
+`find_covariance_blocks()` (one entry per component touching the targets,
+every stratum as a matrix, D1 invariants re-checked on load) and
+`resolve_correlated_draws()` (per-pattern conditional moments, Cholesky/eigen
+with support consistency and relative tolerance, all checks before the first
+`rnorm()`, exactly `n × m` normals consumed). No caller changed yet —
+`add_phenotype()` still runs §7.5/§8.5 until Phases 5–6. The Phase 2 writer
+now stores the symmetrized matrix. 115 new expectations; full suite green.
+Details and the v3.3 clarifications in the header.
 
 **Phase 4 — extract record planning (Stage 1).** Pull sex expression, the
 repeatable guard, covariate skip, formula/composite exclusion, path
