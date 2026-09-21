@@ -511,3 +511,20 @@ test_that("loader output feeds the resolver directly", {
                                  observed = cbind(A = c(1, NA, 0.5)))
   expect_equal(x1, x2)
 })
+
+test_that(".blupf90_residual_cov(): block-diagonal over the unconditional strata; strata-only and absent traits error", {
+  pop <- make_cov_pop("fcb_blup")
+  on.exit(close_pop(pop))
+  pop <- define_residual_cov(pop, c("A", "B"), sym(c("A", "B"), c(2, .3, .3, 1)))
+  pop <- define_residual_cov(pop, "C", sym("C", 4))
+  pop <- define_residual_cov(pop, "D", sym("D", 9),
+                             condition_column = "sex", condition_level = "M")
+
+  R <- .blupf90_residual_cov(pop, c("C", "B", "A"))
+  expect_equal(R, matrix(c(4, 0, 0, 0, 1, .3, 0, .3, 2), 3, 3,
+                         dimnames = list(c("C", "B", "A"), c("C", "B", "A"))))
+  expect_error(.blupf90_residual_cov(pop, c("A", "E")),
+               "Residual covariance matrix not found for traits: E")
+  expect_error(.blupf90_residual_cov(pop, c("A", "D")),
+               "block \\{D\\} has only conditional strata")
+})

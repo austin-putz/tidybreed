@@ -106,6 +106,35 @@ accumulates until the feature ships.
   residuals, one block at a time. `get_residual_cov()`,
   `sample_residuals()` and `.ap_joint_residuals()` removed. New
   `tests/testthat/test-add_phenotype_residuals.R`.
+- **Phase 6 — named random effects are correlated across phenotypes and
+  sequential in time.** A level of a random effect (a pen, a herd, an
+  `id_ind` for a permanent-environment effect) is a persistent entity: its
+  draw is realized the first time a planned record touches it and reused
+  by every later record with that level. When the effect is correlated
+  across phenotypes (`define_effect_cov_matrix(effect_name, …)`), a level's
+  draw for one phenotype is now drawn conditional on the draws it already
+  has stored for the block's other phenotypes — `add_phenotype("ADG")`
+  today and `add_phenotype("BF")` next season gives pen `P1` a
+  `(ADG, BF)` pair with the declared covariance. Previously the two
+  single-phenotype calls drew independently (the covariance was used only
+  when both phenotypes were in one call), and a call naming both
+  phenotypes redrew a level that already had a stored draw for one of
+  them and discarded half of the fresh pair, leaving the stored pair
+  uncorrelated. A block member with no draw stays latent (no row) until a
+  record needs it; a member with no random term for the effect is not
+  drawn but its stored draws condition. The §5.6 checks (every member
+  `normal`, `random`, one `(source_column, source_table)`) are re-run at
+  `add_phenotype()` on every block of two or more, so a `phenotype_effects`
+  row edited between the two `define_*` calls is refused before any draw.
+  A 1 × 1 `gamma` / `uniform` effect keeps its marginal sampler. Stage-2
+  draw order is final: effects in byte-sorted `effect_name` order, then
+  residuals. `phenotype_random_effects` is written only by
+  `add_phenotype()`. The BLUPF90 residual matrix (`write_renum_par()`) is
+  now assembled from the residual covariance blocks — block-diagonal
+  across independent blocks, and an error (instead of a possibly
+  conditional row's value) for a trait with only conditional strata.
+  `load_phenotype_cov()` removed; `define_effect_random()` documents the
+  persistence rule. New `tests/testthat/test-add_phenotype_named_effects.R`.
 
 ## Documentation
 

@@ -34,7 +34,10 @@ values define the groups (e.g. \code{"herd_id"}, \code{"litter"}, \code{"id_ind"
 phenotype is already in a multi-phenotype block for \code{effect_name}.}
 
 \item{distribution}{Character. Sampling distribution: \code{"normal"} (default),
-\code{"gamma"}, or \code{"uniform"}.}
+\code{"gamma"} (shape 1, rate \code{1 / sqrt(variance)}), or \code{"uniform"} (on
+\verb{± sqrt(3 * variance)}). The last two are marginal samplers for a
+phenotype alone in its block; a block of two or more requires
+\code{"normal"}.}
 
 \item{source_table}{Character. Table containing \code{source_column}. Default
 \code{"ind_meta"}.}
@@ -53,6 +56,16 @@ receive the same shift. Drawn values are stored in \code{phenotype_random_effect
 so they are reproducible across repeated calls to \code{\link[=add_phenotype]{add_phenotype()}} without
 requiring a fixed \code{seed}.
 
+\strong{A level's draw is persistent.} The realized value for pen \code{P1} applies
+to \emph{every} individual that is ever in \code{P1} — across batches and seasons,
+in every later \code{\link[=add_phenotype]{add_phenotype()}} call, forever. That is the model
+declared by using \code{pen_id} as the level. An effect that should be
+re-realized per batch is a \strong{different level} — \code{pen_batch_id}, or an
+\code{interaction(pen_id, batch_id)} column written to \code{ind_meta} — not a
+different feature. A level is drawn the first time a planned record
+touches it; a level touched only by individuals that end up without a
+record is never drawn.
+
 To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} with the
 appropriate \code{effect_name} — either before or after this call. Once the
@@ -60,7 +73,15 @@ phenotype belongs to a block of two or more phenotypes for \code{effect_name},
 this call must use \code{distribution = "normal"} and the same
 \verb{(source_column, source_table)} as the block's other members, and
 \code{variance} can no longer be set here — the block is redeclared as a whole
-with \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}.
+with \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}. Within such a block a level's draw for
+one phenotype is conditional on the draws it already has stored for the
+block's other phenotypes, whichever phenotype was generated first and
+however many calls apart: \code{add_phenotype("ADG")} today and
+\code{add_phenotype("BF")} next season gives pen \code{P1} a \verb{(ADG, BF)} pair with
+the declared covariance. A block member that is not in a call, or that
+has no random term for the effect, is simply not drawn — its coordinate
+stays latent until it is needed. A \code{"gamma"} or \code{"uniform"} effect is
+supported only while its phenotype is alone in its block.
 }
 \examples{
 \dontrun{

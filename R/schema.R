@@ -477,7 +477,7 @@ register_schema_meta <- function(conn, entries) {
             "Behavior when grouping column is NULL: 'skip' excludes the individual"),
     # phenotype_random_effects
     .sm_tbl("phenotype_random_effects",
-            "Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency."),
+            "Sampled random effect levels. One row per phenotype x effect x level. Written by add_phenotype() the first time a record touches the level; every later record with that level reuses it. In a covariance block a level's draw for one phenotype is conditional on those it has stored for the block's other phenotypes"),
     .sm_col("phenotype_random_effects", "phenotype_name",
             "Phenotype this random effect belongs to; FK to phenotype_meta.phenotype_name"),
     .sm_col("phenotype_random_effects", "effect_name",
@@ -485,7 +485,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_random_effects", "level",
             "The grouping level (e.g. herd ID, sire ID) as a string"),
     .sm_col("phenotype_random_effects", "draw_value",
-            "The sampled random effect value for this level"),
+            "The realized value for this level (liability scale); persistent across calls"),
     .sm_col("phenotype_random_effects", "date_sampled",
             "Date the value was first sampled")
   )

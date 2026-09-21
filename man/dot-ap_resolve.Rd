@@ -17,13 +17,14 @@ possibly empty) and \code{random_effects} (a data frame of new
 \code{phenotype_random_effects} rows, possibly empty).
 }
 \description{
-Order of RNG consumption, fixed regardless of database row order: every
-named-effect draw first — the joint pre-draw of correlated named effects
-across phenotypes, then per phenotype in plan order the marginal draws of
-any remaining new random-effect levels — then the residual adapter (one
-block at a time, in \code{find_covariance_blocks()} order; within a block one
-resolver call per \verb{(stratum, sample set)} group in sorted group order).
-Record assembly (derived formulas, liability, type conversion) follows in
-plan order and draws nothing. Nothing is written.
+Order of RNG consumption, fixed regardless of database row order: the
+named-effect adapter first (\code{.ap_resolve_named_effects()}: effects in
+byte-sorted \code{effect_name} order, blocks in \code{find_covariance_blocks()}
+order, one resolver call per sample-set group in sorted group order),
+then the residual adapter (\code{.ap_resolve_residuals()}: one block at a
+time, in loader order; within a block one resolver call per
+\verb{(stratum, sample set)} group in sorted group order). Record assembly
+(derived formulas, liability, type conversion) follows in plan order and
+draws nothing. Nothing is written.
 }
 \keyword{internal}

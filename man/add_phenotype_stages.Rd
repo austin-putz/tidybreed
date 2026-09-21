@@ -17,11 +17,16 @@ drawn and nothing is written} (the one prerequisite write is
 RNG-neutral).
 \item \strong{Stage 2 — RESOLVE} (\code{.ap_resolve()}): every random draw of the call,
 in a fixed order, and the liability / type conversion — all in memory.
-Nothing is written. Residuals go through the residual adapter
-(\code{.ap_resolve_residuals()}): one covariance block at a time, each
-record drawn from its stratum conditional on the residuals its
-\verb{(id_ind, pheno_number)} entity has already realized (stored on disk or
-fixed by \code{user_residual}), through \code{\link[=resolve_correlated_draws]{resolve_correlated_draws()}}.
+Nothing is written. Two adapters over \code{\link[=find_covariance_blocks]{find_covariance_blocks()}} and
+\code{\link[=resolve_correlated_draws]{resolve_correlated_draws()}} draw everything: the named-effect adapter
+(\code{.ap_resolve_named_effects()}, entity \verb{(effect_name, level)}, stored
+in \code{phenotype_random_effects}, one draw per level reused forever), then
+the residual adapter (\code{.ap_resolve_residuals()}, entity
+\verb{(id_ind, pheno_number)}, stored in \code{ind_phenotype}, one draw per
+record). In both, an entity draws its planned coordinates from the
+block's Gaussian conditional on the coordinates it has already
+realized — stored on disk from an earlier call, or (residuals only)
+fixed by \code{user_residual}.
 \item \strong{Stage 3 — COMMIT} (\code{.ap_commit()}): one transaction that inserts the
 new \code{phenotype_random_effects} rows and the \code{ind_phenotype} records via
 \code{duckdb_register()} + \code{INSERT}. No random number is drawn, so the stream

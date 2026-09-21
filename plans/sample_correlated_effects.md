@@ -1,8 +1,8 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.5, approved; implementation in progress.** Phases 0–5
-shipped (0–3 on 2026-09-20, 4–5 on 2026-09-21; `sample_correlated_effects_phase_0.md`
-… `sample_correlated_effects_phase_5.md`); Phases 6–8 not started.
+**Status**: **v3.6, approved; implementation in progress.** Phases 0–6
+shipped (0–3 on 2026-09-20, 4–6 on 2026-09-21; `sample_correlated_effects_phase_0.md`
+… `sample_correlated_effects_phase_6.md`); Phases 7–8 not started.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -225,6 +225,51 @@ changes; details in §5.5 and `sample_correlated_effects_phase_4.md`):
   declared, or dropping and redefining the phenotypes. A same-call
   "set on all members" path is the obvious fix; noted in §8 Phase 8.
 
+**What changed from v3.5 to v3.6** (Phase 6 implementation; details in
+§5.6, §5.8 and `sample_correlated_effects_phase_6.md`):
+
+- The **named-effect adapter** exists: `.ap_resolve_named_effects()` →
+  `.ap_named_effect_block()` in `R/add_phenotype_stages.R`, the residual
+  adapter's block loop with entity `(effect_name, level)`, storage
+  `phenotype_random_effects`, no strata, no fixed coordinates, no D2. The
+  §7.5 joint pre-draw (`.ap_predraw_named_effects()`, the last
+  `MASS::mvrnorm()` on the phenotype path), the marginal path
+  (`.ap_resolve_random_terms()`), `.ap_existing_draws()` and
+  `load_phenotype_cov()` are deleted. **Defect 3 is closed**: a level with
+  a stored `ADG` draw gets its `BF` draw conditional on it, whether the two
+  phenotypes arrive in one call or a season apart, and a stored draw is
+  never redrawn.
+- **Stage-1 loads the named-effect blocks once**, one
+  `find_covariance_blocks()` call per effect (byte-sorted), targeting only
+  the phenotypes whose planned records carry a random term for it
+  (`.ap_named_effect_targets()`). A block member with no such term is a
+  latent coordinate: not drawn, but its stored draws condition.
+- **Stage-2 RNG order, final**: effects in byte-sorted `effect_name` order
+  → blocks in loader order → one resolver call per sample-set group in
+  sorted group order (`n × m` normals, entity = level order) → then the
+  residual adapter. A pen touched only by a `NULL`-level or excluded record
+  is still never drawn (Phase 4's property, kept).
+- **§5.6 backstop** is in: `validate_named_effect_block()` runs in Stage 2
+  on every block of two or more, so a `phenotype_effects` row edited
+  between the two `define_*` calls is refused at `add_phenotype()` before
+  any draw. A named-effect block found with conditional strata (hand
+  edit) is an integrity error, as is a random term whose variance rows are
+  gone ("No variance stored for random effect").
+- **1 × 1 `gamma` / `uniform` blocks** keep their marginal sampler (moved
+  into the adapter, not rewritten); a 1 × 1 `normal` block goes through the
+  resolver, which for one coordinate and nothing observed *is*
+  `sqrt(v) · z` — the Phase 4 RNG-accounting test holds unchanged.
+- **`load_phenotype_cov()` retired**: its one remaining caller,
+  `write_renum_par()` (BLUPF90), now assembles the residual matrix from
+  `find_covariance_blocks()` (`.blupf90_residual_cov()`): block-diagonal
+  with explicit zeros between independent blocks, an error for a trait
+  with only conditional strata (the old reader ignored `condition_column`
+  and could return a conditional row's value).
+- Docs: `define_effect_random()` carries the §5.8 persistence note ("a
+  level's draw is persistent"; occasion goes in the level) and the
+  conditional-sampling paragraph; `define_effect_cov_matrix()` and
+  `add_phenotype()` describe the sequential named-effect draw.
+
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
 or non-Gaussian dependence framework. Saying so up front matters, because the
@@ -347,7 +392,11 @@ of writing nothing. The single-phenotype path is fine (`rnorm(0)` is empty).
 Not patched — Phase 5 deletes `sample_residuals()`, and the resolver's
 empty-entity-set contract (§7 Numerical 6: RNG-neutral no-op) covers it.
 
-### Defect 3 — correlated *named* random effects lose correlation on partial re-draw
+### Defect 3 — correlated *named* random effects lose correlation on partial re-draw — ✅ closed (Phase 6, 2026-09-21)
+
+*(v3.6: fixed by the named-effect adapter; `test-add_phenotype_named_effects.R`
+"Defect 3 closed" pins the exact conditional draw and the untouched stored
+value. The description below is of the pre-Phase-6 code.)*
 
 Live bug, independent of time separation. Draws are persisted per
 `(phenotype_name, effect_name, level)`
@@ -678,10 +727,9 @@ it is rejected at definition time.
 the resolver, and for one coordinate with nothing observed the resolver *is*
 `rnorm(sd = sqrt(v))`. A phenotype with **no** residual row at all is an error,
 as it is today ("No residual variance found"). A phenotype absent from
-`find_covariance_blocks()`'s result (and, until Phase 6 retires it,
-`load_phenotype_cov()` returning `NULL` at
-[define_effect_cov_matrix.R:256](../R/define_effect_cov_matrix.R#L256))
-therefore has exactly one meaning: no rows exist.
+`find_covariance_blocks()`'s result therefore has exactly one meaning: no
+rows exist. *(v3.6: `find_covariance_blocks()` is now the only reader of
+`phenotype_var_comp` matrices — `load_phenotype_cov()` is gone.)*
 
 Per **D1**, a discovered block is guaranteed complete and PSD — that is enforced
 by the writers — so the sampler never has to reason about a partial matrix.
@@ -742,7 +790,9 @@ entity's condition level.
 
 *(v3.5: every residual case in that list is a test in
 `test-add_phenotype_residuals.R`, most of them exact replays of the
-resolver's `n × m` stream. The named-effect cases land with Phase 6.)*
+resolver's `n × m` stream. v3.6: the named-effect cases — partial
+vectors, mixed stored/new levels, three-coordinate blocks — are the same
+kind of test in `test-add_phenotype_named_effects.R`.)*
 
 ### 5.4 The resolver — ✅ shipped (Phase 3, 2026-09-20)
 
@@ -827,14 +877,15 @@ entries, non-negative diagonal, PSD within tolerance, **block replacement rule
 discover a malformed matrix deep inside phenotype generation, and must never
 interpret one as an instruction to draw independently.
 
-### 5.5 `add_phenotype()` control flow — three stages — ✅ Stages 1 and 3, and the residual half of Stage 2, shipped (Phases 4–5, 2026-09-21)
+### 5.5 `add_phenotype()` control flow — three stages — ✅ shipped in full (Phases 4–6, 2026-09-21)
 
 *(v3.4: `.ap_plan()` / `.ap_resolve()` / `.ap_commit()` in
 `R/add_phenotype_stages.R` implement this structure. Stage 1 is complete as
 specified. Stage 3 is the single register + `INSERT` transaction. v3.5: the
 residual part of Stage 2 is the adapter `.ap_resolve_residuals()` /
-`.ap_residual_block()` below; the named-effect part still holds the
-pre-Phase-4 pre-draw and marginal draws, which Phase 6 replaces.)*
+`.ap_residual_block()`. v3.6: the named-effect part is
+`.ap_resolve_named_effects()` / `.ap_named_effect_block()`; nothing of the
+pre-Phase-4 draw code remains.)*
 
 *(Restructured in v3 per Codex B1.)* Today the final population for each phenotype is only known deep
 inside the per-phenotype loop, after §8.5 has already drawn for everyone. The new
@@ -974,7 +1025,7 @@ phenotype is a valid, supported model today, drawn by the marginal sampler
 plan the named-effect adapter dispatches: a 1 × 1 block whose coordinate is
 non-normal keeps that marginal sampler (moved, not rewritten, and still
 persisted per level in the Stage-3 transaction); every other block goes to the
-resolver. The block-size check is what turns a legal gamma singleton into an
+resolver. *(v3.6: as shipped in `.ap_named_effect_block()`.)* The block-size check is what turns a legal gamma singleton into an
 error the moment `define_effect_cov_matrix()` tries to join it to a second
 phenotype — at the writer, with a message naming the non-normal coordinate.
 
@@ -983,8 +1034,10 @@ in **both** writers and again in `add_phenotype()`. *(Phase 2)* The writer
 sites are shipped: `validate_named_effect_block()` in
 [phenotype_cov_block.R](../R/phenotype_cov_block.R), called by
 `define_effect_cov_matrix()` (through the block validator) and by
-`define_effect_random()` with its pending row. The `add_phenotype()` backstop
-lands in Phase 6 and calls the same function.
+`define_effect_random()` with its pending row. *(Phase 6)* The
+`add_phenotype()` backstop is `.ap_named_effect_block()`'s first check,
+calling the same function with `caller = "add_phenotype()"` on every block
+of two or more, before any draw.
 
 - `define_effect_cov_matrix(effect_name, ...)` checks the `phenotype_effects`
   rows that already exist for `(effect_name, each phenotype)`.
@@ -1016,7 +1069,11 @@ simulated-time matching**, and code must not assume `pheno_number` will later
 become the time coordinate. Irregular longitudinal data needs an explicit
 occasion/time model (Layer 2).
 
-### 5.8 Worked example — a pen effect across two time points
+### 5.8 Worked example — a pen effect across two time points — ✅ this is what ships (Phase 6)
+
+*(v3.6: the three days below are `test-add_phenotype_named_effects.R`'s
+first test, exact to the resolver's stream; the mixed-pattern table is its
+second. "What happens today" describes the pre-Phase-6 code.)*
 
 Most of this plan is written in terms of residuals, which makes it easy to miss
 that **named random effects go through the identical machinery with a different
@@ -1041,14 +1098,14 @@ pop <- pop |>
 > feature. "Effects at different times" can mean *completing one persistent
 > pen vector* (this plan) or *a new time-indexed pen realization* (Layer 2, not
 > this plan). The `define_effect_random()` docs must say this next to the
-> example.
+> example. *(v3.6: they do — "A level's draw is persistent".)*
 
-#### What happens today
+#### What happened before Phase 6
 
-**Day 0 — `add_phenotype("ADG")`.** §7.5 is gated on `length(phenos) >= 2`
-(since Phase 4: `.ap_predraw_named_effects()`), so a single-phenotype call
-skips the correlated path entirely. The marginal path
-(`.ap_resolve_random_terms()`) draws
+**Day 0 — `add_phenotype("ADG")`.** §7.5 was gated on `length(phenos) >= 2`
+(Phases 4–5: `.ap_predraw_named_effects()`), so a single-phenotype call
+skipped the correlated path entirely. The marginal path
+(`.ap_resolve_random_terms()`, deleted in Phase 6) drew
 `rnorm(sd = sqrt(150))` for each pen level and stores
 `(ADG, pen, P1, +8.3)`, `(ADG, pen, P2, -4.1)`, …
 
@@ -1231,9 +1288,8 @@ something the package inferred.
 
 1. Completeness and PSD validation live entirely in the writers, never in the
    sampler.
-2. A phenotype absent from `find_covariance_blocks()` (and, until Phase 6,
-   `load_phenotype_cov()` returning `NULL`) has exactly **one** meaning —
-   *no rows exist*.
+2. A phenotype absent from `find_covariance_blocks()` has exactly **one**
+   meaning — *no rows exist*.
 3. `resolve_correlated_draws()` may assume a complete, validated, PSD matrix as a
    precondition.
 
@@ -1494,7 +1550,7 @@ tolerances from sampling uncertainty, not fixed arbitrary margins.
 
 *(Phase 2)* `tests/testthat/test-phenotype_cov_block.R` (110 expectations)
 covers: Residual blocks 10–15; Named effects 5–6 at the two writer sites (the
-`add_phenotype()` site lands with Phase 6) and the writer half of 7; Diagonal
+`add_phenotype()` site is Phase 6) and the writer half of 7; Diagonal
 writers 1–5; Reproducibility and integrity 6–8 (the residual half of 6–7 with a
 `residual_value` set by SQL, since Phase 5 is what writes it; 8 by mocking
 `next_int_id()` to fail after the `DELETE`); plus RNG-neutrality of the writers,
@@ -1579,7 +1635,17 @@ exactly-one-row contract.)*
 2. Repeated records of the same phenotype stay residual-independent.
 3. Unequal record counts never condition on the wrong record.
 
-### Named effects
+### Named effects — ✅ covered (Phase 6, `test-add_phenotype_named_effects.R`; 5–7 writer halves in Phase 2)
+
+*(v3.6 mapping: 1 → "day 0 / day 100 / day 200" and "Defect 3 closed"
+(exact draws; the covariance is exact by construction of the resolver, so
+the statistical reproduction is asserted on the conditional coefficients
+rather than a Monte-Carlo estimate); 2 → "mixed patterns" and "three-
+phenotype block"; 3 → "Defect 3 closed"; 4 → "day 200" and the
+permanent-environment test (a new level is a new entity by definition of
+the entity key); 5–6 → "§5.6 backstop" (the `add_phenotype()` site, with
+rows edited by SQL between the two `define_*` calls); 7 → "1 x 1 gamma or
+uniform".)*
 
 1. Defect 3 directly: pen `P1` stored for ADG only, then a BW call; across many
    pens the realized `(ADG, BW)` pairs reproduce `R_eff`.
@@ -1796,7 +1862,19 @@ adapter over the plan: stratum per entity, stored + fixed observed set, D2/D6
 checks, per-pattern resolver calls; delete the `all_equal` restriction, §8.5,
 and the zero-residual fallback; rewrite `get_residual_cov()` around strata.
 
-**Phase 6 — named-effect integration.** Replace §7.5 and the normal branch of
+**Phase 6 — named-effect integration.** ✅ **Shipped 2026-09-21** — see
+`sample_correlated_effects_phase_6.md`. The named-effect adapter
+`.ap_resolve_named_effects()` / `.ap_named_effect_block()` over
+`find_covariance_blocks()` and `resolve_correlated_draws()`: blocks loaded
+once in Stage 1 per effect, entity = level, stored coordinates via a
+registered view, §5.6 backstop per block, one resolver call per sample-set
+group, 1 × 1 gamma/uniform marginal sampler kept; draws before the
+residual adapter. `.ap_predraw_named_effects()`,
+`.ap_resolve_random_terms()`, `.ap_existing_draws()`,
+`.ap_append_random_effects()` and `load_phenotype_cov()` deleted. 65 new
+expectations in `test-add_phenotype_named_effects.R`; full suite green.
+
+*(Original scope:)* Replace §7.5 and the normal branch of
 the marginal path (*v3.4:* `.ap_predraw_named_effects()` and the normal
 branch of `.ap_resolve_random_terms()`) with the named-effect
 adapter over the same resolver, persistent per-level entity identity, source and

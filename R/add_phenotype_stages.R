@@ -14,11 +14,16 @@
 #'   RNG-neutral).
 #' * **Stage 2 — RESOLVE** (`.ap_resolve()`): every random draw of the call,
 #'   in a fixed order, and the liability / type conversion — all in memory.
-#'   Nothing is written. Residuals go through the residual adapter
-#'   (`.ap_resolve_residuals()`): one covariance block at a time, each
-#'   record drawn from its stratum conditional on the residuals its
-#'   `(id_ind, pheno_number)` entity has already realized (stored on disk or
-#'   fixed by `user_residual`), through [resolve_correlated_draws()].
+#'   Nothing is written. Two adapters over [find_covariance_blocks()] and
+#'   [resolve_correlated_draws()] draw everything: the named-effect adapter
+#'   (`.ap_resolve_named_effects()`, entity `(effect_name, level)`, stored
+#'   in `phenotype_random_effects`, one draw per level reused forever), then
+#'   the residual adapter (`.ap_resolve_residuals()`, entity
+#'   `(id_ind, pheno_number)`, stored in `ind_phenotype`, one draw per
+#'   record). In both, an entity draws its planned coordinates from the
+#'   block's Gaussian conditional on the coordinates it has already
+#'   realized — stored on disk from an earlier call, or (residuals only)
+#'   fixed by `user_residual`.
 #' * **Stage 3 — COMMIT** (`.ap_commit()`): one transaction that inserts the
 #'   new `phenotype_random_effects` rows and the `ind_phenotype` records via
 #'   `duckdb_register()` + `INSERT`. No random number is drawn, so the stream
@@ -216,8 +221,38 @@ NULL
     }
   }
 
+  # ── Named-effect blocks: one loader call per effect, in sorted order ────
+  # Only phenotypes that carry a random term for the effect are targets; a
+  # block member without such a term is a latent coordinate.
+  named_targets <- .ap_named_effect_targets(entries)
+  named_blocks  <- lapply(names(named_targets), function(eff)
+    find_covariance_blocks(conn, eff, named_targets[[eff]]))
+  names(named_blocks) <- names(named_targets)
+
   list(pop = pop, phenos = phenos, pheno_meta = pheno_meta, entries = entries,
-       residual_blocks = residual_blocks)
+       residual_blocks = residual_blocks, named_targets = named_targets,
+       named_blocks = named_blocks)
+}
+
+
+#' The model-path phenotypes carrying each random effect, by effect name
+#'
+#' @return A list named by `effect_name` (byte-sorted) of the phenotypes
+#'   whose planned records touch that effect, in plan order.
+#' @keywords internal
+.ap_named_effect_targets <- function(entries) {
+  pairs <- do.call(rbind, lapply(names(entries), function(t) {
+    e <- entries[[t]]
+    if (e$path != "model" || length(e$random) == 0L) return(NULL)
+    data.frame(effect_name = vapply(e$random, `[[`, character(1), "effect_name"),
+               phenotype_name = t, stringsAsFactors = FALSE)
+  }))
+  if (is.null(pairs)) return(list())
+  effs <- sort(unique(pairs$effect_name), method = "radix")
+  out <- lapply(effs, function(eff)
+    pairs$phenotype_name[pairs$effect_name == eff])
+  names(out) <- effs
+  out
 }
 
 
@@ -497,14 +532,15 @@ NULL
 
 #' Stage 2: every random draw and the in-memory record assembly
 #'
-#' Order of RNG consumption, fixed regardless of database row order: every
-#' named-effect draw first — the joint pre-draw of correlated named effects
-#' across phenotypes, then per phenotype in plan order the marginal draws of
-#' any remaining new random-effect levels — then the residual adapter (one
-#' block at a time, in `find_covariance_blocks()` order; within a block one
-#' resolver call per `(stratum, sample set)` group in sorted group order).
-#' Record assembly (derived formulas, liability, type conversion) follows in
-#' plan order and draws nothing. Nothing is written.
+#' Order of RNG consumption, fixed regardless of database row order: the
+#' named-effect adapter first (`.ap_resolve_named_effects()`: effects in
+#' byte-sorted `effect_name` order, blocks in `find_covariance_blocks()`
+#' order, one resolver call per sample-set group in sorted group order),
+#' then the residual adapter (`.ap_resolve_residuals()`: one block at a
+#' time, in loader order; within a block one resolver call per
+#' `(stratum, sample set)` group in sorted group order). Record assembly
+#' (derived formulas, liability, type conversion) follows in plan order and
+#' draws nothing. Nothing is written.
 #'
 #' @param plan The Stage-1 plan.
 #' @param user_residual The `user_residual` argument, or `NULL`.
@@ -530,15 +566,10 @@ NULL
   random_contrib <- list()
   residuals <- list()
   if (any(is_model)) {
-    pending_re <- .ap_predraw_named_effects(pop, plan, pending_re)
-    for (t in phenos[is_model]) {
-      e  <- entries[[t]]
-      rr <- .ap_resolve_random_terms(pop, t, e$random, length(e$id_ind),
-                                     pending_re)
-      pending_re          <- rr$pending
-      random_contrib[[t]] <- rr$contribution
-    }
-    residuals <- .ap_resolve_residuals(plan, fixed)
+    ne <- .ap_resolve_named_effects(plan)
+    pending_re     <- ne$pending
+    random_contrib <- ne$contribution
+    residuals      <- .ap_resolve_residuals(plan, fixed)
   }
 
   # ── Record assembly, in plan order (no RNG) ──────────────────────────────
@@ -579,138 +610,187 @@ NULL
 }
 
 
+# ── Stage 2: the named-effect adapter ─────────────────────────────────────────
+
+#' The named-effect adapter: every random-effect draw of the call
+#'
+#' Implements `plans/sample_correlated_effects.md` §5.6 and §5.8 for every
+#' `effect_name` other than `'residual'`. The entity is the *level* — a pen,
+#' a herd, an `id_ind` for a permanent-environment effect — and a level's
+#' draw is realized once and reused by every record that ever touches it,
+#' in this call or any later one. Effects are processed in byte-sorted
+#' order, each through its blocks (from the plan, in
+#' [find_covariance_blocks()] order): a level draws its planned coordinates
+#' conditional on the coordinates already stored in
+#' `phenotype_random_effects` for the block's other phenotypes. Every
+#' model-path phenotype with a random term for the effect must be in a
+#' block (else "No variance stored"); the §5.6 checks are re-run here as
+#' the backstop; a 1 x 1 block whose effect is `gamma` or `uniform` keeps
+#' its marginal sampler.
+#'
+#' @param plan The Stage-1 plan.
+#' @return A list with `contribution` (named by model-path phenotype with
+#'   planned records: the summed random-effect value per record, `0` for a
+#'   record whose level is `NULL`) and `pending` (the new
+#'   `phenotype_random_effects` rows for Stage 3).
+#' @keywords internal
+.ap_resolve_named_effects <- function(plan) {
+  entries <- plan$entries
+  targets_all <- names(entries)[vapply(entries, function(e)
+    e$path == "model" && length(e$id_ind) > 0L, logical(1))]
+  contribution <- lapply(targets_all, function(t)
+    rep(0, length(entries[[t]]$id_ind)))
+  names(contribution) <- targets_all
+  pending <- .ap_empty_random_effects()
+
+  for (eff in names(plan$named_targets)) {
+    targets <- plan$named_targets[[eff]]
+    blocks  <- Filter(function(b) any(b$phenotypes %in% targets),
+                      plan$named_blocks[[eff]])
+    covered <- unlist(lapply(blocks, `[[`, "phenotypes"))
+    missing <- setdiff(targets, covered)
+    if (length(missing) > 0L) {
+      stop("No variance stored for random effect '", eff, "' / phenotype '",
+           missing[[1L]], "'. Specify via define_effect_random(variance = ...) ",
+           "or define_effect_cov_matrix().", call. = FALSE)
+    }
+    for (b in blocks) {
+      res <- .ap_named_effect_block(plan, b, targets)
+      pending <- rbind(pending, res$pending)
+      for (t in names(res$contribution)) {
+        contribution[[t]] <- contribution[[t]] + res$contribution[[t]]
+      }
+    }
+  }
+  list(contribution = contribution, pending = pending)
+}
+
+
 .ap_empty_random_effects <- function() {
   data.frame(phenotype_name = character(0), effect_name = character(0),
              level = character(0), draw_value = numeric(0),
              stringsAsFactors = FALSE)
 }
 
-.ap_append_random_effects <- function(pending, phenotype_name, effect_name,
-                                      level, draw_value) {
-  if (length(level) == 0) return(pending)
-  rbind(pending, data.frame(
-    phenotype_name = phenotype_name, effect_name = effect_name,
-    level = as.character(level), draw_value = as.numeric(draw_value),
-    stringsAsFactors = FALSE))
-}
 
-#' Stored draws of one (phenotype, effect): on disk plus pending this call
-#' @keywords internal
-.ap_existing_draws <- function(conn, phenotype_name, effect_name, pending) {
-  db <- DBI::dbGetQuery(conn, paste0(
-    "SELECT level, draw_value FROM phenotype_random_effects ",
-    "WHERE phenotype_name = ", DBI::dbQuoteLiteral(conn, phenotype_name),
-    " AND effect_name = ", DBI::dbQuoteLiteral(conn, effect_name)))
-  pend <- pending[pending$phenotype_name == phenotype_name &
-                  pending$effect_name == effect_name, , drop = FALSE]
-  stats::setNames(c(db$draw_value, pend$draw_value), c(db$level, pend$level))
-}
-
-
-#' Joint pre-draw of correlated named random effects across phenotypes
+#' Resolve the draws of one named-effect covariance block
 #'
-#' Kept from the pre-Phase-4 code (§7.5 of the plan) until Phase 6 replaces it
-#' with the named-effect adapter over the shared resolver. Levels come from
-#' the planned records only, sorted, and the draws are staged in memory.
-#'
+#' @param plan The Stage-1 plan.
+#' @param b One block from [find_covariance_blocks()] for a named effect.
+#' @param targets The model-path phenotypes of the call with planned
+#'   records and a random term for `b$effect_name`.
+#' @return A list with `contribution` (named by the block's in-call
+#'   phenotypes, one value per planned record) and `pending` (new
+#'   `phenotype_random_effects` rows: every level drawn here, by coordinate
+#'   then level).
 #' @keywords internal
-.ap_predraw_named_effects <- function(pop, plan, pending) {
-  phenos <- plan$phenos
-  if (length(phenos) < 2) return(pending)
-  conn       <- pop$db_conn
-  phenos_sql <- .pvc_in_list(conn, phenos)
-  cov_effects <- DBI::dbGetQuery(conn, paste0(
-    "SELECT DISTINCT effect_name FROM phenotype_var_comp ",
-    "WHERE effect_name <> 'residual' ",
-    "AND phenotype_name_1 IN (", phenos_sql, ") ",
-    "AND phenotype_name_2 IN (", phenos_sql, ") ",
-    "ORDER BY effect_name"))$effect_name
+.ap_named_effect_block <- function(plan, b, targets) {
+  conn    <- plan$pop$db_conn
+  entries <- plan$entries
+  eff     <- b$effect_name
+  coords  <- b$phenotypes
+  in_call <- intersect(coords, targets)      # sorted (block order)
 
-  for (eff in cov_effects) {
-    eff_phenos_q <- DBI::dbGetQuery(conn, paste0(
-      "SELECT DISTINCT phenotype_name_1 AS p FROM phenotype_var_comp ",
-      "WHERE effect_name = ", DBI::dbQuoteLiteral(conn, eff), " ",
-      "AND phenotype_name_1 IN (", phenos_sql, ") ",
-      "AND phenotype_name_2 IN (", phenos_sql, ")"))$p
-    eff_phenos <- intersect(phenos, eff_phenos_q)
-    if (length(eff_phenos) < 2) next
+  # A named-effect block has exactly one, unconditional stratum: the writers
+  # never store a condition on it, so anything else was edited by hand.
+  if (is.null(b$unconditional) || length(b$conditional) > 0L) {
+    stop("The '", eff, "' covariance block ", .pvc_set(coords),
+         " has conditional strata; condition_column is residual-only. ",
+         "Redeclare the block with define_effect_cov_matrix().", call. = FALSE)
+  }
+  R <- b$unconditional
 
-    R_eff <- load_phenotype_cov(pop, eff, eff_phenos)
-    if (is.null(R_eff)) next
+  # §5.6 backstop: normal, random, one (source_column, source_table)
+  validate_named_effect_block(conn, eff, coords, caller = "add_phenotype()")
 
-    all_levels <- character(0)
-    for (et in eff_phenos) {
-      for (r in plan$entries[[et]]$random) {
-        if (r$effect_name == eff) all_levels <- c(all_levels, r$level[!is.na(r$level)])
-      }
+  # ── The block's random term of each in-call phenotype ───────────────────
+  terms <- lapply(in_call, function(t) {
+    r <- entries[[t]]$random
+    r[[which(vapply(r, `[[`, character(1), "effect_name") == eff)]]
+  })
+  names(terms) <- in_call
+
+  # ── Entities: the planned levels, sorted ─────────────────────────────────
+  planned <- do.call(rbind, lapply(in_call, function(t) {
+    lv <- terms[[t]]$level
+    data.frame(level = unique(lv[!is.na(lv)]), phenotype_name = t,
+               stringsAsFactors = FALSE)
+  }))
+  levels <- sort(unique(planned$level), method = "radix")
+  n_ent  <- length(levels)
+  contribution <- lapply(in_call, function(t)
+    rep(0, length(entries[[t]]$id_ind)))
+  names(contribution) <- in_call
+  pending <- .ap_empty_random_effects()
+  if (n_ent == 0L) return(list(contribution = contribution, pending = pending))
+
+  # ── Stored coordinates of every block member at the planned levels ──────
+  tmp <- "__ap_levels"
+  duckdb::duckdb_register(conn, tmp, data.frame(level = levels,
+                                                stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
+  stored <- DBI::dbGetQuery(conn, paste0(
+    "SELECT r.phenotype_name, r.level, r.draw_value ",
+    "FROM phenotype_random_effects AS r JOIN ", tmp, " AS l USING (level) ",
+    "WHERE r.effect_name = ", DBI::dbQuoteLiteral(conn, eff), " ",
+    "AND r.phenotype_name IN (", .pvc_in_list(conn, coords), ")"))
+
+  value <- matrix(NA_real_, n_ent, length(coords), dimnames = list(NULL, coords))
+  value[cbind(match(stored$level, levels),
+              match(stored$phenotype_name, coords))] <- stored$draw_value
+
+  # ── Sample set per entity: planned and not yet stored ───────────────────
+  sample <- matrix(FALSE, n_ent, length(in_call), dimnames = list(NULL, in_call))
+  for (t in in_call) {
+    rows <- match(planned$level[planned$phenotype_name == t], levels)
+    sample[rows, t] <- is.na(value[rows, t])
+  }
+
+  # A 1 x 1 block is the one place a non-normal distribution is legal
+  # (§5.6); its marginal sampler is kept. Everything else is the resolver.
+  dist <- if (length(coords) == 1L) terms[[1L]]$distribution else "normal"
+  if (!is.na(dist) && dist %in% c("gamma", "uniform")) {
+    new <- which(sample[, 1L])
+    v   <- R[1L, 1L]
+    value[new, 1L] <- switch(
+      dist,
+      gamma   = stats::rgamma(length(new), shape = 1, rate = 1 / sqrt(v)),
+      uniform = stats::runif(length(new), min = -sqrt(3 * v),
+                             max = sqrt(3 * v)))
+  } else {
+    # ── One resolver call per sample set, in sorted order ─────────────────
+    sample_key <- rep("", n_ent)
+    for (t in in_call) {
+      sample_key <- ifelse(sample[, t], paste(sample_key, t, sep = ","),
+                           sample_key)
     }
-    all_levels <- sort(unique(all_levels), method = "radix")
-    if (length(all_levels) == 0) next
-
-    existing <- lapply(eff_phenos, function(et)
-      names(.ap_existing_draws(conn, et, eff, pending)))
-    names(existing) <- eff_phenos
-    new_levels <- sort(unique(unlist(lapply(existing, function(ex)
-      setdiff(all_levels, ex)))), method = "radix")
-    if (length(new_levels) == 0) next
-
-    draws_mat <- MASS::mvrnorm(n = length(new_levels),
-                               mu = rep(0, length(eff_phenos)), Sigma = R_eff)
-    if (!is.matrix(draws_mat)) draws_mat <- matrix(draws_mat, nrow = 1)
-    colnames(draws_mat) <- eff_phenos
-    rownames(draws_mat) <- new_levels
-
-    for (et in eff_phenos) {
-      new_for_pheno <- setdiff(new_levels, existing[[et]])
-      pending <- .ap_append_random_effects(pending, et, eff, new_for_pheno,
-                                           draws_mat[new_for_pheno, et])
+    for (g in sort(unique(sample_key[nzchar(sample_key)]), method = "radix")) {
+      rows     <- which(sample_key == g)
+      S        <- in_call[sample[rows[[1L]], ]]
+      obs_cols <- setdiff(coords, S)
+      obs <- if (length(obs_cols) > 0L)
+        value[rows, obs_cols, drop = FALSE] else NULL
+      value[rows, S] <- resolve_correlated_draws(
+        R, S, entity_keys = data.frame(level = levels[rows],
+                                       stringsAsFactors = FALSE),
+        observed = obs)
     }
   }
-  pending
-}
 
-
-#' Resolve the random-effect terms of one phenotype's planned records
-#'
-#' Reuses draws already on disk or pending from this call; draws the new
-#' levels marginally from the effect's stored variance and distribution
-#' (the pre-Phase-4 marginal path, kept until Phase 6). Levels are sorted
-#' before any draw.
-#'
-#' @return `list(contribution = numeric(n), pending = <updated pending rows>)`
-#' @keywords internal
-.ap_resolve_random_terms <- function(pop, phenotype_name, terms, n, pending) {
-  conn  <- pop$db_conn
-  total <- rep(0, n)
-  for (r in terms) {
-    existing <- .ap_existing_draws(conn, phenotype_name, r$effect_name, pending)
-    lvls     <- sort(unique(r$level[!is.na(r$level)]), method = "radix")
-    new_lvls <- setdiff(lvls, names(existing))
-    if (length(new_lvls) > 0) {
-      effect_var <- get_phenotype_var(pop, r$effect_name, phenotype_name)
-      if (is.na(effect_var)) {
-        stop("No variance stored for random effect '", r$effect_name,
-             "' / phenotype '", phenotype_name, "'.", call. = FALSE)
-      }
-      new_draws <- switch(
-        r$distribution,
-        normal  = stats::rnorm(length(new_lvls), sd = sqrt(effect_var)),
-        gamma   = stats::rgamma(length(new_lvls), shape = 1,
-                                rate = 1 / sqrt(effect_var)),
-        uniform = stats::runif(length(new_lvls),
-                               min = -sqrt(3 * effect_var),
-                               max =  sqrt(3 * effect_var)),
-        stats::rnorm(length(new_lvls), sd = sqrt(effect_var))
-      )
-      pending  <- .ap_append_random_effects(pending, phenotype_name,
-                                            r$effect_name, new_lvls, new_draws)
-      existing <- c(existing, stats::setNames(new_draws, new_lvls))
+  # ── New rows for Stage 3, and the per-record contribution ───────────────
+  for (t in in_call) {
+    new <- which(sample[, t])
+    if (length(new) > 0L) {
+      pending <- rbind(pending, data.frame(
+        phenotype_name = t, effect_name = eff, level = levels[new],
+        draw_value = unname(value[new, t]), stringsAsFactors = FALSE))
     }
-    per_ind <- unname(existing[r$level])
-    per_ind[is.na(per_ind)] <- 0
-    total <- total + per_ind
+    lv <- terms[[t]]$level
+    per_record <- unname(value[match(lv, levels), t])
+    per_record[is.na(lv)] <- 0
+    contribution[[t]] <- per_record
   }
-  list(contribution = total, pending = pending)
+  list(contribution = contribution, pending = pending)
 }
 
 

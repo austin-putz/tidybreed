@@ -574,8 +574,15 @@ table, keyed by `phenotype_name` (FK to `phenotype_meta`), not by `trait_name`.
 ### `phenotype_random_effects`
 
 Sampled draws for the random effects declared in `phenotype_effects`. One row per
-(phenotype × effect × level), written by `define_effect_random()` and read by
-`add_phenotype()`. Pure observation-layer noise — no genetic content.
+(phenotype × effect × level), written by `add_phenotype()` (Stage 3) and
+deleted by `define_effect_random(overwrite = TRUE)` or `remove_rows()`. Pure
+observation-layer noise — no genetic content. A level is a **persistent
+entity**: its draw is realized the first time a planned record touches it
+and reused by every later record with that level, in every later call. In a
+covariance block (`define_effect_cov_matrix(effect_name, …)`) a level's draw
+for one phenotype is drawn conditional on the draws it already has stored
+for the block's other phenotypes; a member with no draw stays latent (no
+row) until a record needs it.
 
 | Column         | Type    | Notes                                              |
 |----------------|---------|-----------------------------------------------------|
@@ -587,7 +594,7 @@ Sampled draws for the random effects declared in `phenotype_effects`. One row pe
 
 **Primary key**: `(phenotype_name, effect_name, level)`.
 
-**Reserved**: all columns (managed exclusively by `define_effect_random()`).
+**Reserved**: all columns (written only by `add_phenotype()`).
 
 ### `phenotype_var_comp`
 
@@ -1268,7 +1275,9 @@ pop |> define_genome_effects(
   (redeclare it with `define_effect_cov_matrix()`). Once in a block of two or
   more, the row must be `distribution = "normal"` and share the block's
   `(source_column, source_table)`. `overwrite = TRUE` discards that phenotype's
-  stored draws for the effect. One transaction.
+  stored draws for the effect. One transaction. A level's draw is persistent
+  (see `phenotype_random_effects`): an effect that should be re-realized per
+  batch needs the batch in the level (`pen_batch`), not a new feature.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
 - `define_effect_intercept()` — sets intercept (`target_add_mean`) for a trait.
@@ -1329,19 +1338,27 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
      `missing_component_action`, `pheno_number`, the residual condition value
      and the random-effect level of every planned record.
   2. **RESOLVE** (`.ap_resolve()`, RNG, no writes): every draw in a fixed
-     order — named effects first (the pre-Phase-6 joint pre-draw, then the
-     marginal draws for new levels), then the **residual adapter**
-     (`.ap_resolve_residuals()`): one residual covariance block at a time,
-     entity = `(id_ind, pheno_number)`, coordinates = the block's
-     phenotypes; each entity draws its planned coordinates from the stratum
-     its condition value selects (unconditional `R` as fallback, stored as
+     order, through two adapters over `find_covariance_blocks()` and
+     `resolve_correlated_draws()`. First the **named-effect adapter**
+     (`.ap_resolve_named_effects()` → `.ap_named_effect_block()`): effects
+     in byte-sorted `effect_name` order, blocks in loader order, entity =
+     the level, coordinates = the block's phenotypes; a level draws its
+     planned coordinates conditional on the draws it already has stored in
+     `phenotype_random_effects` for the block's other members, one resolver
+     call per sample-set group; `validate_named_effect_block()` re-runs per
+     block as the §5.6 backstop; a 1 × 1 `gamma`/`uniform` block keeps its
+     marginal sampler. Then the **residual adapter**
+     (`.ap_resolve_residuals()` → `.ap_residual_block()`): one residual
+     covariance block at a time, entity = `(id_ind, pheno_number)`; each
+     entity draws its planned coordinates from the stratum its condition
+     value selects (unconditional `R` as fallback, stored as
      `residual_condition_level = NULL`; error if there is none), conditional
      on the residuals it has already realized — stored on disk for any
      block member at the same `pheno_number`, or fixed by `user_residual` —
-     through `resolve_correlated_draws()`, one call per `(stratum, sample
-     set)` group. D6 (agreement) and D2 (stratum change: error, or drop with
-     a warning under `'independent'`) run here on the stored coordinates.
-     Then liability and type conversion, all in memory.
+     one call per `(stratum, sample set)` group. D6 (agreement) and D2
+     (stratum change: error, or drop with a warning under `'independent'`)
+     run here on the stored coordinates. Then liability and type
+     conversion, all in memory.
   3. **COMMIT** (`.ap_commit()`, writes, no RNG): one transaction, register +
      `INSERT` into `phenotype_random_effects` and `ind_phenotype`; rollback on
      failure.

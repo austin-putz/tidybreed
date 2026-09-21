@@ -74,7 +74,21 @@ value (TBV) per individual per trait in \code{ind_tbv}.
 }
 \itemize{
 \item \code{mean} comes from \code{phenotype_meta.mean}.
-\item Fixed and random shifts come from \code{phenotype_effects} rows.
+\item Fixed shifts come from the \code{fixed_class} / \code{fixed_cov} rows of
+\code{phenotype_effects}.
+\item Random shifts come from its \code{random} rows (see \code{\link[=define_effect_random]{define_effect_random()}}):
+one draw per distinct level of the effect's \code{source_column}, realized
+the first time any record touches the level and stored in
+\code{phenotype_random_effects}, then reused by every later record with that
+level — in this call or any later one. A level is persistent: a pen
+that is re-realized per batch is a different level (\code{pen_batch}), not a
+different feature. When the effect is correlated across phenotypes
+(\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} with the effect's name), a level's draw
+for one phenotype is conditional on the draws it already has stored for
+the block's other phenotypes — \code{add_phenotype("ADG")} today and
+\code{add_phenotype("BF")} next season gives pen \code{P1} a \verb{(ADG, BF)} pair with
+the declared covariance, whichever came first. A record whose level is
+\code{NULL} gets no draw and a shift of \code{0}.
 \item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{TBV_i} is the
 standard additive TBV from \code{genome_effects} (computed via \code{\link[=add_tbv]{add_tbv()}},
 which this function calls internally for every source trait it needs).

@@ -20,7 +20,12 @@
 #'   [define_phenotype()] instead.
 #' * Any named random effect (`"hys"`, `"litter"`, `"pen"`, …) — written to
 #'   `phenotype_var_comp`. Must match the `effect_name` used in
-#'   [define_effect_random()]. Row/column names are phenotype names.
+#'   [define_effect_random()]. Row/column names are phenotype names. Each
+#'   level of the effect (each pen) then carries one draw per phenotype with
+#'   this covariance, realized sequentially: whichever phenotype
+#'   [add_phenotype()] generates first for a level draws marginally, and the
+#'   others are later drawn conditional on what the level has stored —
+#'   however many calls apart (see [define_effect_random()]).
 #'
 #' `define_effect_cov_matrix()` can be called **before** [define_trait()] or
 #' [define_effect_random()] — no prior setup is required.
@@ -190,16 +195,13 @@ get_trait_var <- function(pop, effect_name, trait_name) {
 #' @return Numeric scalar, or `NA_real_` if not found.
 #' @keywords internal
 get_phenotype_var <- function(pop, effect_name, phenotype_name) {
-  eff_safe <- gsub("'", "''", effect_name)
-  pn_safe  <- gsub("'", "''", phenotype_name)
-  row <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT cov_value FROM phenotype_var_comp ",
-           "WHERE effect_name = '", eff_safe, "' ",
-           "AND phenotype_name_1 = '", pn_safe, "' ",
-           "AND phenotype_name_2 = '", pn_safe, "' ",
-           "AND condition_column IS NULL")
-  )
+  conn <- pop$db_conn
+  pn   <- DBI::dbQuoteLiteral(conn, phenotype_name)
+  row  <- DBI::dbGetQuery(conn, paste0(
+    "SELECT cov_value FROM phenotype_var_comp ",
+    "WHERE effect_name = ", DBI::dbQuoteLiteral(conn, effect_name), " ",
+    "AND phenotype_name_1 = ", pn, " AND phenotype_name_2 = ", pn, " ",
+    "AND condition_column IS NULL"))
   if (nrow(row) == 0L) NA_real_ else row$cov_value[[1L]]
 }
 
@@ -224,34 +226,6 @@ load_trait_cov <- function(pop, effect_name, trait_names) {
   if (nrow(rows) == 0L) return(NULL)
   for (i in seq_len(nrow(rows))) {
     R[rows$trait_name_1[i], rows$trait_name_2[i]] <- rows$cov_value[i]
-  }
-  if (any(is.na(R))) return(NULL)
-  R
-}
-
-
-#' Load a full covariance matrix from phenotype_var_comp for a named random effect
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param effect_name Character. The random effect name (not "residual").
-#' @param phenotype_names Character vector of phenotype names.
-#' @return Named numeric matrix, or `NULL` if any entry is missing.
-#' @keywords internal
-load_phenotype_cov <- function(pop, effect_name, phenotype_names) {
-  n <- length(phenotype_names)
-  R <- matrix(NA_real_, nrow = n, ncol = n,
-              dimnames = list(phenotype_names, phenotype_names))
-  eff_safe <- gsub("'", "''", effect_name)
-  rows <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT phenotype_name_1, phenotype_name_2, cov_value FROM phenotype_var_comp ",
-           "WHERE effect_name = '", eff_safe, "' ",
-           "AND phenotype_name_1 IN (", paste0("'", phenotype_names, "'", collapse = ", "), ") ",
-           "AND phenotype_name_2 IN (", paste0("'", phenotype_names, "'", collapse = ", "), ")")
-  )
-  if (nrow(rows) == 0L) return(NULL)
-  for (i in seq_len(nrow(rows))) {
-    R[rows$phenotype_name_1[i], rows$phenotype_name_2[i]] <- rows$cov_value[i]
   }
   if (any(is.na(R))) return(NULL)
   R

@@ -11,7 +11,21 @@
 #' }
 #'
 #' * `mean` comes from `phenotype_meta.mean`.
-#' * Fixed and random shifts come from `phenotype_effects` rows.
+#' * Fixed shifts come from the `fixed_class` / `fixed_cov` rows of
+#'   `phenotype_effects`.
+#' * Random shifts come from its `random` rows (see [define_effect_random()]):
+#'   one draw per distinct level of the effect's `source_column`, realized
+#'   the first time any record touches the level and stored in
+#'   `phenotype_random_effects`, then reused by every later record with that
+#'   level — in this call or any later one. A level is persistent: a pen
+#'   that is re-realized per batch is a different level (`pen_batch`), not a
+#'   different feature. When the effect is correlated across phenotypes
+#'   ([define_effect_cov_matrix()] with the effect's name), a level's draw
+#'   for one phenotype is conditional on the draws it already has stored for
+#'   the block's other phenotypes — `add_phenotype("ADG")` today and
+#'   `add_phenotype("BF")` next season gives pen `P1` a `(ADG, BF)` pair with
+#'   the declared covariance, whichever came first. A record whose level is
+#'   `NULL` gets no draw and a shift of `0`.
 #' * For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is the
 #'   standard additive TBV from `genome_effects` (computed via [add_tbv()],
 #'   which this function calls internally for every source trait it needs).

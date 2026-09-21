@@ -30,8 +30,9 @@ rows from \code{phenotype_effects}, as returned by \code{\link[=build_data_file]
 
 \item{trait}{character vector of trait names (in model order)}
 
-\item{pop}{tidybreed_pop; used to look up residual and additive genetic
-(co)variance matrices via \code{\link[=load_phenotype_cov]{load_phenotype_cov()}} and \code{\link[=load_trait_cov]{load_trait_cov()}}}
+\item{pop}{tidybreed_pop; used to look up the residual (co)variance
+matrix via \code{.blupf90_residual_cov()} and the additive genetic one via
+\code{\link[=load_trait_cov]{load_trait_cov()}}}
 
 \item{chip_name}{character or NULL; when non-NULL, adds a \code{SNP_FILE} line
 for single-step GBLUP}

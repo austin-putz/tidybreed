@@ -259,6 +259,42 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 }
 
 
+#' The unconditional residual (co)variance matrix of a set of traits
+#'
+#' Assembled from the residual covariance blocks in `phenotype_var_comp`
+#' ([find_covariance_blocks()]): traits in different blocks are independent,
+#' so the matrix is block-diagonal with explicit zeros between blocks. A
+#' trait in no block, or in a block with only conditional strata, is an
+#' error — BLUPF90 takes one residual matrix.
+#'
+#' @return Numeric `trait` x `trait` matrix with dimnames.
+#' @keywords internal
+.blupf90_residual_cov <- function(pop, trait) {
+  blocks <- find_covariance_blocks(pop$db_conn, "residual", trait)
+  R <- matrix(0, length(trait), length(trait), dimnames = list(trait, trait))
+  covered <- character(0)
+  for (b in blocks) {
+    common <- intersect(b$phenotypes, trait)
+    if (is.null(b$unconditional)) {
+      stop("The residual covariance block ", .pvc_set(b$phenotypes),
+           " has only conditional strata; BLUPF90 needs an unconditional ",
+           "residual (co)variance for ", .pvc_set(common), ". Declare one ",
+           "with define_residual_cov() (condition_column = NULL).",
+           call. = FALSE)
+    }
+    R[common, common] <- b$unconditional[common, common]
+    covered <- c(covered, common)
+  }
+  missing <- setdiff(trait, covered)
+  if (length(missing) > 0L) {
+    stop("Residual covariance matrix not found for traits: ",
+         paste(missing, collapse = ", "),
+         ". Call define_effect_cov_matrix(pop, 'residual', ...) first.",
+         call. = FALSE)
+  }
+  R
+}
+
 #' Write the renumf90 parameter file (renum.par)
 #'
 #' @param eval_dir path to evaluation folder; writes renum.par there
@@ -269,8 +305,9 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 #' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
 #'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
-#' @param pop tidybreed_pop; used to look up residual and additive genetic
-#'   (co)variance matrices via [load_phenotype_cov()] and [load_trait_cov()]
+#' @param pop tidybreed_pop; used to look up the residual (co)variance
+#'   matrix via `.blupf90_residual_cov()` and the additive genetic one via
+#'   [load_trait_cov()]
 #' @param chip_name character or NULL; when non-NULL, adds a `SNP_FILE` line
 #'   for single-step GBLUP
 #' @param estimate_var logical; if TRUE, sets `OPTION method VCE` instead of
@@ -285,13 +322,9 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
   n_fixed_effs <- nrow(distinct_effects)
 
   # Load variance components
-  R_mat <- load_phenotype_cov(pop, "residual", trait)
+  R_mat <- .blupf90_residual_cov(pop, trait)
   G_mat <- load_trait_cov(pop, "gen_add",  trait)
 
-  if (is.null(R_mat))
-    stop("Residual covariance matrix not found for traits: ",
-         paste(trait, collapse = ", "),
-         ". Call define_effect_cov_matrix(pop, 'residual', ...) first.", call. = FALSE)
   if (is.null(G_mat))
     stop("Additive genetic covariance matrix not found for traits: ",
          paste(trait, collapse = ", "),

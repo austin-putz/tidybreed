@@ -11,8 +11,10 @@
 #'   entities with possibly different observed coordinates, returns draws of the
 #'   requested coordinates from the Gaussian conditional on what each entity has
 #'   already realized. It has no notion of individuals, strata or tables — the
-#'   adapters in `add_phenotype()` own those (the residual adapter in
-#'   `R/add_phenotype_stages.R`; the named-effect adapter lands in Phase 6).
+#'   two adapters in `R/add_phenotype_stages.R` own those: the residual
+#'   adapter (`.ap_resolve_residuals()`, entity `(id_ind, pheno_number)`)
+#'   and the named-effect adapter (`.ap_resolve_named_effects()`, entity
+#'   `(effect_name, level)`).
 #'
 #' Neither function writes. The resolver is the only one that consumes RNG, and
 #' it does so only after every check has passed and only when there is

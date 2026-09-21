@@ -14,8 +14,10 @@ matrix per stratum. It is the only place a stored block becomes a matrix.
 entities with possibly different observed coordinates, returns draws of the
 requested coordinates from the Gaussian conditional on what each entity has
 already realized. It has no notion of individuals, strata or tables — the
-adapters in \code{add_phenotype()} own those (the residual adapter in
-\code{R/add_phenotype_stages.R}; the named-effect adapter lands in Phase 6).
+two adapters in \code{R/add_phenotype_stages.R} own those: the residual
+adapter (\code{.ap_resolve_residuals()}, entity \verb{(id_ind, pheno_number)})
+and the named-effect adapter (\code{.ap_resolve_named_effects()}, entity
+\verb{(effect_name, level)}).
 }
 
 Neither function writes. The resolver is the only one that consumes RNG, and
