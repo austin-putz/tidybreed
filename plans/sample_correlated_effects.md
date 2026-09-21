@@ -1,13 +1,14 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: Draft **v3** — for author review. **Nothing in this plan has been
-implemented.** v3 is a re-baseline against the codebase as of v0.70.0
-(2026-09-20) plus the Codex review of v2
+**Status**: Draft **v3.1** — approved design, awaiting the author's go-ahead
+to implement. **Nothing in this plan has been implemented.** v3 is a re-baseline
+against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
 except one: D3's `force = TRUE` escape hatch, which Codex showed to be
-incoherent and which v3 recommends removing (**author decision required**, §6
-D3). Two further author decisions are new in v3 (D6, D7). Do not begin
-implementation until v3 is approved.
+incoherent and which is now removed. **D3, D6 and D7 were decided by the author
+on 2026-09-20, accepting the v3 recommendations** (§6). v3.1 adds six
+implementation-level clarifications found in the final read-through (marked
+*v3.1* inline); none changes a decision.
 
 **What changed from v2** (details in §0 and §4.5):
 
@@ -29,7 +30,7 @@ implementation until v3 is approved.
 7. The distribution check (§5.6) was placed at `add_phenotype()` in one section
    and at `define_*` time in another. Now placed at both, with the reason.
 8. `liability_value` and `cat_name` are still added by on-demand `ALTER TABLE`,
-   which the plan's own §4(a) rule forbids. Folded into the Phase 2 schema change.
+   which the plan's own §4(a) rule forbids. Folded into the Phase 1 schema change.
 9. All file:line references refreshed to v0.70.0.
 10. **Codex's v2 review folded in** (§4.5): record planning before any draw
     (three-stage `add_phenotype()`), block identity by pair-row existence with
@@ -38,6 +39,26 @@ implementation until v3 is approved.
     block-level agreement on `condition_change_action`, precise `'independent'`
     semantics, the RNG-on-error contract, thirteen more tests, and a
     re-sequenced implementation. One v2 decision is reopened: **D3's `force`**.
+
+**What changed from v3 to v3.1** (final read-through, no decision changes):
+
+- §5.1: the "no `ALTER TABLE` left in `add_phenotype.R`" claim is scoped to
+  reserved columns — user `...` columns still go through
+  `prepare_extra_cols()`, inside the Stage-3 transaction.
+- §5.5: planned ids are registered as a temporary view and joined, never
+  pasted into SQL text; the stratum lookup's contract for `condition_table`
+  (one row per planned `id_ind`, `NULL` = no matching stratum) is stated; the
+  resolver draws with `stats::rnorm()` through a factor of the conditional
+  covariance, not `MASS::mvrnorm()`.
+- §5.6: the `"normal"` requirement applies to blocks of **two or more**
+  coordinates; a 1 × 1 non-normal named effect keeps the existing marginal
+  gamma/uniform sampler.
+- D3: the realization-lock predicate is defined (`residual_value IS NOT NULL`);
+  `archive_replicate()` resets it, so between-replicate redefinition needs no
+  `remove_rows()`.
+- §7/§8: schema phase moved ahead of the writer phase (the residual lock
+  predicate depends on it); "tests before the fix" made practical; `_schema_meta`
+  column descriptions added to the schema phase; three tests added.
 
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
@@ -364,8 +385,15 @@ CREATE TABLE ind_phenotype (
 ```
 
 After this change there are **no** `dbListFields()` checks or `ALTER TABLE`
-statements left in `add_phenotype.R`. The `store_liability` and `cat_names`
-paths simply populate columns that already exist.
+statements for **reserved** columns left in `add_phenotype.R`. The
+`store_liability` and `cat_names` paths simply populate columns that already
+exist. *(v3.1)* User `...` columns are a different matter and are unchanged:
+they still go through `prepare_extra_cols()` ([sql_utils.R:402](../R/sql_utils.R#L402)),
+which issues `ALTER TABLE ADD COLUMN` for a column the table has not seen
+before. Under §5.5 that call moves inside the Stage-3 transaction (DuckDB DDL is
+transactional), ahead of the column-listed `INSERT`, and it is RNG-neutral. The
+§7 "no `ALTER TABLE` is issued" assertion is therefore for a call **without**
+`...`.
 
 **Scale matters.** `resid` enters the model on the *liability* scale
 ([add_phenotype.R:804](../R/add_phenotype.R#L804):
@@ -648,6 +676,32 @@ applies to the marginal named-effect path at
 A failed record write must not leave a pen draw on disk that conditions the next
 call. What the transaction does **not** cover — the RNG state — is D7.
 
+Three more, added in v3.1:
+
+**Planned ids never appear in SQL text.** The Stage-2 pseudocode's
+`WHERE id_ind IN <planned ids>` is shorthand. The plan's `(id_ind, pheno_number)`
+list is registered with `duckdb_register()` as a temporary view and the stored
+lookup is a `JOIN` against it — the same discipline as the genome-effects
+evaluator, where individual identifiers never enter the statement. The current
+code pastes id lists at [add_phenotype.R:606](../R/add_phenotype.R#L606); that
+goes with it. `duckdb_register()` is RNG-neutral.
+
+**Stratum lookup contract.** `condition_table` defaults to `ind_meta` and may be
+any table with an `id_ind` column. Stage 1 reads `(id_ind, <condition_column>)`
+from it for the planned ids by the same registered-view join and requires
+**exactly one row per planned `id_ind`**; zero or several rows is an error
+naming the table, the column, and up to 5 example ids (the current code at
+[add_phenotype.R:605-613](../R/add_phenotype.R#L605-L613) silently takes the
+first match). A `NULL` condition value, or a value matching no stratum, is "no
+matching stratum" and follows D2's fallback rule: unconditional `R` if one
+exists, stored as `residual_condition_level = NULL`; otherwise an error.
+
+**The resolver draws with base R's RNG.** `stats::rnorm()` on a vector of
+standard normals, multiplied through a Cholesky (PD) or eigen (PSD) factor of
+the conditional covariance. Not `MASS::mvrnorm()`: it has its own
+eigen-decomposition and sign conventions that the RNG-accounting test in §7
+would have to replay. `MASS` stays in `Imports` for `define_additive_effects()`.
+
 ### 5.6 Named-effect block validation
 
 Before treating two coordinates as members of the same named-effect vector,
@@ -655,10 +709,21 @@ validate that their `phenotype_effects` rows agree on
 `(source_column, source_table)`. A pen identifier must not be paired with a herd
 identifier merely because both effects were given the same `effect_name` string.
 
-Also validate that every coordinate in a correlated block uses
-`distribution = "normal"` — error otherwise, until an explicit copula or
+Also validate that every coordinate in a block of **two or more** coordinates
+uses `distribution = "normal"` — error otherwise, until an explicit copula or
 multivariate non-Gaussian API exists. This fixes the silent gamma→normal
 substitution.
+
+*(v3.1)* A **1 × 1 block is exempt.** `define_effect_random(distribution =
+"gamma" | "uniform")` on a phenotype that shares its `effect_name` with no other
+phenotype is a valid, supported model today, drawn by the marginal sampler at
+[phenotype_helpers.R:230-239](../R/phenotype_helpers.R#L230-L239). Under this
+plan the named-effect adapter dispatches: a 1 × 1 block whose coordinate is
+non-normal keeps that marginal sampler (moved, not rewritten, and still
+persisted per level in the Stage-3 transaction); every other block goes to the
+resolver. The block-size check is what turns a legal gamma singleton into an
+error the moment `define_effect_cov_matrix()` tries to join it to a second
+phenotype — at the writer, with a message naming the non-normal coordinate.
 
 **Where these checks run** *(clarified in v3; v2 placed them inconsistently)*:
 in **both** writers and again in `add_phenotype()`.
@@ -817,8 +882,8 @@ are. Their behaviour under D1/D3/D5 is spelled out in §6.
 D1–D4 were decided by the author at v2. D1 is **sharpened** in v3. D3 is
 **reopened** by Codex's v2 review with a recommendation to reverse it. D5–D7
 are new; D5 records the recommendation the author asked for, D6 and D7 record
-recommendations on questions Codex raised. **Author decisions required: D3, D6,
-D7.**
+recommendations on questions Codex raised. **D3, D6 and D7 were decided by the
+author on 2026-09-20, accepting each recommendation as written.**
 
 ### D1 — A covariance block is declared in one call, as a complete matrix
 
@@ -941,10 +1006,10 @@ not currently the case for single-phenotype calls. Under §5.5 every residual
 draw — one phenotype or ten — selects its stratum by the entity's condition
 level, so D2 becomes meaningful for the first time.)*
 
-### D3 — Covariance redefinition is rejected once draws exist — **decision required**
+### D3 — Covariance redefinition is rejected once draws exist — **decided**
 
 **v2 decision: error by default, `force = TRUE` to override.**
-**v3 recommendation: error, no override in v1. Remove `force`.**
+**v3 decision (author, 2026-09-20): error, no override in v1. `force` is removed.**
 
 Codex's v2 review shows the override is not merely lossy but **incoherent**
 (B3): suppose `A` was drawn under `R1`, the block is forced to `R2`, and `B` is
@@ -989,12 +1054,23 @@ be explainable from stored state — remove them too if the population must stay
 coherent. Deleting realizations is a user's explicit, visible act on named rows;
 that is the right shape for the sharp knife, not a flag on a `define_*` call.
 
-**What the author is deciding.** Whether to accept the reversal. If `force` is
-kept despite the above, the plan must add covariance-definition versioning
-(sketched in the paragraph above) — v3 does not include it, and I recommend
-against it.
+**The lock predicate** *(v3.1)*. A residual block is *realized* when any row of
+`ind_phenotype` with `phenotype_name` in the block has `residual_value IS NOT
+NULL`. Rows written by `user_values` or `derived_formula` carry `NULL` and do
+not lock the block — nothing was drawn under `R`, so nothing is made incoherent
+by changing it. The `remove_rows()` recipe in the error text filters the same
+way (`!is.na(residual_value)`), so it removes exactly the rows that hold the
+lock. A named-effect block is realized when any `phenotype_random_effects` row
+exists for `(effect_name, phenotype ∈ block)`. Because the residual predicate
+reads a column that Phase 1 (schema) introduces, the schema phase precedes the
+writer phase in §8.
 
-`force` therefore appears nowhere in this plan's API. D5's messages point at
+**Replicates.** `archive_replicate()` moves and resets both realization tables,
+so at the start of every replicate no block is locked. Redefining `R` between
+replicates — the one legitimate mid-simulation redefinition workflow — needs no
+`remove_rows()` call at all.
+
+`force` appears nowhere in this plan's API. D5's messages point at
 `remove_rows()` rather than at a `force` argument.
 
 ### D4 — Column names
@@ -1040,7 +1116,7 @@ today.
 same `validate_phenotype_cov_block()` that the matrix writers use, with a 1 × 1
 matrix, so the four rows above are not a fourth code path.
 
-### D6 — `condition_change_action` must agree across a residual block — **decision required**
+### D6 — `condition_change_action` must agree across a residual block — **decided: option 1**
 
 **Question (Codex B6a).** D2 stores the action per phenotype, but the decision
 is taken for a block: when `B` is drawn conditionally on a stored `A` from a
@@ -1054,7 +1130,7 @@ different stratum, whose setting applies?
 3. **Move the setting to the block** — an argument of `define_residual_cov()`,
    stored on the `phenotype_var_comp` rows.
 
-**Recommendation: option 1, require agreement.** It keeps D2's deliberate
+**Decision (author, 2026-09-20): option 1, require agreement.** It keeps D2's deliberate
 placement (per phenotype, mirroring `missing_component_action`), and it fails
 loudly at the right moment with a message that says what to fix. Option 2
 produces the same *outcome* for the forgetful user (an error at sampling) but
@@ -1071,7 +1147,7 @@ whenever the metadata exist: `define_residual_cov()` checks the
 block whose other members disagree. Because a block can be declared before its
 phenotypes, the sampling-time check is the one that cannot be skipped.
 
-### D7 — RNG state on failure — **decision required**
+### D7 — RNG state on failure — **decided: option 1**
 
 **Question (Codex T).** Stage 3's transaction makes the *database* atomic. It
 does not make the *operation* atomic: an R error after Stage 2 — including a
@@ -1084,7 +1160,7 @@ failed write — leaves `.Random.seed` advanced while the database rolls back.
 2. **Capture `.Random.seed` before Stage 2 and restore it on any error before
    `COMMIT`.** Retrying after an error reproduces the draws.
 
-**Recommendation: option 1.** Nothing in `R/` touches `.Random.seed` today;
+**Decision (author, 2026-09-20): option 1.** Nothing in `R/` touches `.Random.seed` today;
 every other RNG-consuming function in the package (`add_founders()`,
 `add_offspring()`, `define_additive_effects()`, `define_founder_haplotypes()`)
 advances the stream on failure, as does every base R function. Making
@@ -1192,8 +1268,12 @@ tolerances from sampling uncertainty, not fixed arbitrary margins.
 5. Incompatible `(source_column, source_table)` within a block is rejected —
    by `define_effect_cov_matrix()`, by `define_effect_random()`, and by
    `add_phenotype()` when the rows were changed between the two.
-6. Non-normal distribution in a correlated block is rejected at all three
+6. Non-normal distribution in a block of two or more is rejected at all three
    sites.
+7. *(v3.1)* A **1 × 1** `gamma` or `uniform` named effect still draws from that
+   distribution (assert the sign/shape of the realized draws), is persisted per
+   level, and is reused on the next call; joining it to a second phenotype with
+   `define_effect_cov_matrix()` errors naming the coordinate.
 
 ### Numerical
 
@@ -1224,8 +1304,13 @@ tolerances from sampling uncertainty, not fixed arbitrary margins.
    rejected at sampling; and at `define_residual_cov()` when the metadata
    already exist.
 6. Threshold traits condition on latent liabilities, not observed categories.
-7. `store_liability` and `cat_names` populate the now-base columns; no
-   `ALTER TABLE` is issued (assert on `dbListFields()` before and after).
+7. `store_liability` and `cat_names` populate the now-base columns; for a call
+   without `...`, no `ALTER TABLE` is issued (assert on `dbListFields()` before
+   and after). A call **with** `...` still adds the user column, inside the
+   Stage-3 transaction, and a forced Stage-3 failure rolls the column back too.
+8. *(v3.1)* `condition_table` other than `ind_meta`: a planned `id_ind` with two
+   rows in it errors naming the table and ids; a `NULL` condition value falls
+   to the unconditional `R` and stores `residual_condition_level = NULL`.
 
 ### Diagonal writers (D5)
 
@@ -1278,21 +1363,34 @@ landed in v0.63.x–v0.64.0. What is left:
 | [add_phenotype.R:635](../R/add_phenotype.R#L635) | Warning text names `phenotype_residual_cov`, a table that no longer exists | Stale string |
 | [phenotype_helpers.R:279](../R/phenotype_helpers.R#L279) | `get_residual_cov(subset_df = )` documented as "currently unused" | Function is rewritten in Phase 5; note it here so the parameter is not carried over |
 
-**Phase 1 — centralize covariance definitions.** `validate_phenotype_cov_block()`
+**Phase 1 — schema.** *(v3.1: swapped with the writer phase — the residual
+realization lock reads `residual_value`, so the column must exist first; the
+schema change has no dependencies of its own.)* Base `ind_phenotype` gains
+`liability_value`, `cat_name`, `residual_value`, `residual_condition_level`; the
+two `ALTER TABLE` blocks in `add_phenotype()` are deleted and the two paths
+write the base columns directly; `phenotype_meta` gains
+`condition_change_action` with the `define_phenotype()` argument that sets it
+(D2); `TABLE_RESERVED_COLS` updated; `.sm_col()` entries for all five new
+columns in `R/schema.R` so `describe_table()` does not print
+`(no description)` for them.
+
+**Phase 2 — centralize covariance definitions.** `validate_phenotype_cov_block()`
 implementing the D1 algorithm (pair-row block discovery, `N == U`, per-stratum
 completeness, one condition column per block, PSD) and the D3 realization lock
-(no override); the three writers wrapped in transactions and calling it (§5.9);
-D5 for the two diagonal writers; distribution and source checks in
-`define_effect_cov_matrix()` and `define_effect_random()`; D6 agreement check
-at definition time. **Tests that demonstrate all four current silent-fallback
-defects before fixing them**, including the strengthened Defect 4 assertion on
-the existing composite test.
+with the predicate defined in D3; the three writers wrapped in transactions and
+calling it (§5.9); D5 for the two diagonal writers; distribution (blocks ≥ 2
+only) and source checks in `define_effect_cov_matrix()` and
+`define_effect_random()`; D6 agreement check at definition time.
 
-**Phase 2 — schema.** Base `ind_phenotype` gains `liability_value`, `cat_name`,
-`residual_value`, `residual_condition_level`; the two `ALTER TABLE` blocks in
-`add_phenotype()` are deleted; `phenotype_meta` gains `condition_change_action`
-with the `define_phenotype()` argument that sets it (D2); `TABLE_RESERVED_COLS`
-updated.
+**On "tests before the fix".** *(v3.1)* Defects 1–3 cannot be committed as
+failing tests, and a characterization test that asserts the *wrong* behaviour
+would have to be deleted two phases later. The practical form: each defect's
+test is written in the phase that fixes it (Defect 3 and the Phase 6 named-effect
+work; Defects 1, 2 and 4 with Phase 5), and the implementer runs the new test
+file once against the pre-change commit to confirm it fails there — a manual
+check noted in the commit message, not a committed artefact. The one exception
+is the Defect 4 assertion strengthening on the existing composite test, which
+lands with Phase 5 for the same reason.
 
 **Phase 3 — pure resolver.** `find_covariance_block()` and
 `resolve_correlated_draws()` in a new `R/correlated_draws.R`, including
@@ -1314,11 +1412,13 @@ checks, per-pattern resolver calls; delete the `all_equal` restriction, §8.5,
 and the zero-residual fallback; rewrite `get_residual_cov()` around strata; one
 transaction, register + `INSERT` only.
 
-**Phase 6 — named-effect integration.** Replace §7.5 and the marginal path in
-`compute_covariate_contribution()` with the named-effect adapter over the same
-resolver, persistent per-level entity identity, source and distribution checks
-as the `add_phenotype()` backstop. Named-effect and phenotype writes in the same
-transaction.
+**Phase 6 — named-effect integration.** Replace §7.5 and the normal branch of
+the marginal path in `compute_covariate_contribution()` with the named-effect
+adapter over the same resolver, persistent per-level entity identity, source and
+distribution checks as the `add_phenotype()` backstop. The gamma/uniform branch
+of the marginal path is kept for 1 × 1 blocks (§5.6) and its `dbWriteTable()`
+write moves into the Stage-3 transaction with everything else. Named-effect and
+phenotype writes in the same transaction.
 
 **Phase 7 — transaction/RNG boundary.** Implement D7 exactly as decided; the
 two-part integrity test (database unchanged, seed advanced by the Stage-2 draws).
@@ -1332,7 +1432,11 @@ two-part integrity test (database unchanged, seed advanced by the Stage-2 draws)
   `add_phenotype()`; the `user_residual` subset-list contract.
 - CLAUDE.md: `ind_phenotype` and `phenotype_meta` schema tables; the D1/D5
   rules in the `define_phenotype()` / `define_residual_cov()` sections; the
-  `add_phenotype()` description of the three-stage flow and residual model.
+  `add_phenotype()` description of the three-stage flow and residual model;
+  the `phenotype_var_comp` note that `condition_column` rows form strata of one
+  block.
+- `R/schema.R` column descriptions are added in Phase 1; confirm
+  `test-schema-print.R` still passes (table lists are unchanged).
 - `NEWS.md` under **0.71.0**, `DESCRIPTION` version bump.
 - Benchmark under `dev/benchmarks/` for large populations, optimizing the
   observation-pattern query and batched writes **without changing RNG
