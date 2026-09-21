@@ -301,6 +301,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       cat_names                VARCHAR,
       store_liability          BOOLEAN DEFAULT FALSE,
       missing_component_action VARCHAR DEFAULT 'skip',
+      condition_change_action  VARCHAR DEFAULT 'error',
       formula_tbv              VARCHAR,
       formula                  VARCHAR
     )

@@ -265,10 +265,6 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_names Character vector of phenotype names.
-#' @param subset_df Currently unused inside this function (accepted for a
-#'   future per-subset lookup); callers such as [add_phenotype()] separately
-#'   look up each individual's `condition_column` value and match it against
-#'   `R_by_level`'s names to pick the right (co)variance matrix.
 #' @return A list:
 #'   - `R_unconditional`: numeric matrix (the unconditional residual R) or NULL.
 #'   - `condition_column`: character scalar or NULL.
@@ -276,16 +272,9 @@ compute_covariate_contribution <- function(pop, phenotype_name, subset_df) {
 #'   - `R_by_level`: named list of matrices keyed by condition_level, or NULL.
 #'   - `residual_var_unconditional`: named numeric vector of diagonal variances.
 #' @keywords internal
-get_residual_cov <- function(pop, phenotype_names, subset_df = NULL) {
+get_residual_cov <- function(pop, phenotype_names) {
   n <- length(phenotype_names)
   pn_in <- paste0("'", gsub("'", "''", phenotype_names), "'", collapse = ", ")
-
-  if (!"phenotype_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
-    return(list(R_unconditional = NULL, condition_column = NULL,
-                condition_table = NULL, R_by_level = NULL,
-                residual_var_unconditional = stats::setNames(rep(NA_real_, n),
-                                                             phenotype_names)))
-  }
 
   all_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
     "SELECT * FROM phenotype_var_comp ",

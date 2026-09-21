@@ -1,7 +1,9 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: Draft **v3.1** — approved design, awaiting the author's go-ahead
-to implement. **Nothing in this plan has been implemented.** v3 is a re-baseline
+**Status**: **v3.1, approved; implementation in progress.** Phases 0 and 1
+shipped 2026-09-20 (`sample_correlated_effects_phase_0.md`,
+`sample_correlated_effects_phase_1.md`); Phases 2–8 not started.
+File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
 except one: D3's `force = TRUE` escape hatch, which Codex showed to be
@@ -83,7 +85,7 @@ v2 was written against ~v0.60. Nine releases later:
 | Dead `dbExistsTable`/`has_meta` guards removed across `define_effect_*`, `schema()`, `add_phenotype()` | v0.63.x (`d882556`) | Same |
 | `trait_effects` → `phenotype_effects`; `trait_random_effects` → `phenotype_random_effects` | v0.64.0 | Every reference in this plan renamed |
 | `TABLE_RESERVED_COLS` gained entries for `phenotype_random_effects`, `phenotype_components`, `founder_haplotypes` | v0.64.0 | New `ind_phenotype` columns must be added to the reserved list (§8) |
-| RNG discipline: `dbWriteTable()` advances R's RNG by a fixed amount (random temp-name generation); `duckdb_register()` + `INSERT` is RNG-neutral. Documented in `define_genome.R`, `founder_haplotype_helpers.R`, `add_offspring.R`, [define_effect_cov_matrix.R:130](../R/define_effect_cov_matrix.R#L130) | v0.5x–0.6x | New hard requirement in §5.5 |
+| RNG discipline: `dbWriteTable()` advances R's RNG by a fixed amount (random temp-name generation); `duckdb_register()` + `INSERT` is RNG-neutral. Documented in `define_genome.R`, `founder_haplotype_helpers.R`, `add_offspring.R`, [define_effect_cov_matrix.R:129](../R/define_effect_cov_matrix.R#L129) | v0.5x–0.6x | New hard requirement in §5.5 |
 | Transaction idiom standardized: `BEGIN TRANSACTION` + `on.exit(ROLLBACK unless committed)` + validator + `COMMIT` ([define_chromosome.R:219-227](../R/define_chromosome.R#L219-L227)) | v0.6x | §5.5 adopts it verbatim |
 | `resolve_subset_ids()` — one SQL statement, ids returned **sorted** ([sql_utils.R:494](../R/sql_utils.R#L494)) | v0.70.0 | Residual entity keys arrive sorted; §5.5 ordering requirement narrows to blocks, patterns, coordinates, and named-effect levels |
 | `remove_rows()` supports single-table deletion on every table except `_schema_meta`, keyed by `TABLE_ROW_KEYS` | v0.6x | The escape hatch that replaces D3's `force` (§6 D3) |
@@ -91,8 +93,8 @@ v2 was written against ~v0.60. Nine releases later:
 | Genome-effects Phases B–E reshaped `add_phenotype()`'s TBV section | v0.65–0.68 | Line numbers shifted ~11 lines; no design impact |
 
 `add_phenotype()` still has **no transaction** around its writes and still calls
-`dbWriteTable()` at [add_phenotype.R:567](../R/add_phenotype.R#L567) (named-effect
-draws) and [add_phenotype.R:887](../R/add_phenotype.R#L887) (records), both of
+`dbWriteTable()` at [add_phenotype.R:565](../R/add_phenotype.R#L565) (named-effect
+draws) and [add_phenotype.R:869](../R/add_phenotype.R#L869) (records), both of
 which sit *between* RNG draws. That interleaving is one of the things §5.5
 removes.
 
@@ -130,7 +132,7 @@ The off-diagonal of 20 is never used.
 
 There is currently **no way to express this scenario correctly**, including by
 sampling both phenotypes in one call: the joint path requires *byte-identical*
-`id_ind` sets ([add_phenotype.R:581-586](../R/add_phenotype.R#L581-L586)), and
+`id_ind` sets ([add_phenotype.R:579-584](../R/add_phenotype.R#L579-L584)), and
 culling guarantees they differ.
 
 **The two ways to fix it, and which one this plan takes.** Either (a) draw both
@@ -154,18 +156,18 @@ against v0.70.0. Defect 4 is new in v3.
 
 `sample_residuals()` ([phenotype_helpers.R:46-66](../R/phenotype_helpers.R#L46-L66))
 returns an in-memory matrix, consumed at
-[add_phenotype.R:777-804](../R/add_phenotype.R#L777-L804) to build the liability
+[add_phenotype.R:775-798](../R/add_phenotype.R#L775-L798) to build the liability
 and then discarded. A later call has nothing to condition on, so cross-call
 correlation is not merely unimplemented — it is *unimplementable* without a
 storage change. **This is a storage problem, not a missing sampling branch.**
 
 ### Defect 2 — the joint residual MVN is gated on same-call *and* identical ID sets
 
-[add_phenotype.R:577-651](../R/add_phenotype.R#L577-L651) draws a joint
+[add_phenotype.R:575-649](../R/add_phenotype.R#L575-L649) draws a joint
 `MVN(0, R)` only when `length(phenos) >= 2`, `all_equal` (byte-identical sorted
 `id_ind` vectors), and `R_unconditional` is non-`NULL`. Otherwise it falls
 through **silently** to the independent `rnorm()` at
-[add_phenotype.R:799](../R/add_phenotype.R#L799). The silence is the worst part —
+[add_phenotype.R:793](../R/add_phenotype.R#L793). The silence is the worst part —
 a user cannot tell their covariance was ignored.
 
 ### Defect 3 — correlated *named* random effects lose correlation on partial re-draw
@@ -173,7 +175,7 @@ a user cannot tell their covariance was ignored.
 Live bug, independent of time separation. Draws are persisted per
 `(phenotype_name, effect_name, level)`
 ([phenotype_helpers.R:208-250](../R/phenotype_helpers.R#L208-L250)), but the
-correlated path at [add_phenotype.R:465-571](../R/add_phenotype.R#L465-L571) does:
+correlated path at [add_phenotype.R:463-569](../R/add_phenotype.R#L463-L569) does:
 
 ```text
 all_levels  = union of levels across the correlated phenotypes
@@ -190,11 +192,11 @@ The realized pair on disk is uncorrelated. This needs conditioning, not storage.
 
 ### Defect 4 (new in v3) — heterogeneous residual variance is ignored on single-phenotype calls
 
-`get_residual_cov()` ([phenotype_helpers.R:279-371](../R/phenotype_helpers.R#L279-L371))
+`get_residual_cov()` ([phenotype_helpers.R:275-358](../R/phenotype_helpers.R#L275-L358))
 builds `R_by_level` from the `condition_column` rows, but the only consumer is
 the §8.5 branch, which is inside `if (length(phenos) >= 2 && all_equal)`. A
 single-phenotype call — the overwhelmingly common case — reaches the independent
-draw at [add_phenotype.R:789-799](../R/add_phenotype.R#L789-L799), which reads
+draw at [add_phenotype.R:787-793](../R/add_phenotype.R#L787-L793), which reads
 `residual_var_unconditional[t]` and never looks at the level. So
 
 ```r
@@ -219,7 +221,7 @@ tested before the fix, and tested after.
 
 `define_effect_random()` accepts `"normal" | "gamma" | "uniform"`
 ([define_effect_random.R:23](../R/define_effect_random.R#L23)) and the marginal
-path honours it, but [add_phenotype.R:541](../R/add_phenotype.R#L541) calls
+path honours it, but [add_phenotype.R:539](../R/add_phenotype.R#L539) calls
 `MASS::mvrnorm()` unconditionally. A gamma effect inside a covariance block is
 silently drawn normal.
 
@@ -231,7 +233,7 @@ silently drawn normal.
 |---|---|---|
 | `define_residual_cov()` | user | full `n × n` residual block, one condition slice |
 | `define_effect_cov_matrix()` | user | full `n × n` block for a named effect |
-| `write_phenotype_var_diag()` ([define_effect_cov_matrix.R:380-400](../R/define_effect_cov_matrix.R#L380-L400)) | `define_phenotype(residual_var = )`, `define_effect_random(variance = )` | **one diagonal cell**, in place, off-diagonals untouched |
+| `write_phenotype_var_diag()` ([define_effect_cov_matrix.R:320-340](../R/define_effect_cov_matrix.R#L320-L340)) | `define_phenotype(residual_var = )`, `define_effect_random(variance = )` | **one diagonal cell**, in place, off-diagonals untouched |
 
 Called after a block exists, the third writer can turn a valid `R` into a
 non-PSD one, and it can do so after draws have been realized. v2's D1 and D3
@@ -241,10 +243,10 @@ named only the first two writers. Closed in §6 (D1 sharpened, D5 added).
 
 Three exclusion points run inside the per-phenotype loop, **after** the §8.5
 joint draw has already consumed RNG for them: `null_class_action = "skip"`
-([add_phenotype.R:657-672](../R/add_phenotype.R#L657-L672)), formula-TBV
-missing components ([add_phenotype.R:708-727](../R/add_phenotype.R#L708-L727)),
+([add_phenotype.R:655-670](../R/add_phenotype.R#L655-L670)), formula-TBV
+missing components ([add_phenotype.R:706-725](../R/add_phenotype.R#L706-L725)),
 and composite-TBV missing components
-([add_phenotype.R:737-751](../R/add_phenotype.R#L737-L751)). Today that only
+([add_phenotype.R:735-749](../R/add_phenotype.R#L735-L749)). Today that only
 wastes draws. Under Option A it is worse: a residual for an excluded animal has
 no `ind_phenotype` row to live in, and seeded output depends on downstream
 filtering details. This is why §5.5 plans records **before** drawing anything.
@@ -362,13 +364,12 @@ or extend an author decision and are written up in §6 with a recommendation.
 
 ## 5. Revised design
 
-### 5.1 Schema
+### 5.1 Schema — ✅ shipped (Phase 1, 2026-09-20)
 
 `ind_phenotype`'s base `CREATE TABLE`
-([define_trait.R:204-210](../R/define_trait.R#L204-L210)) gains **four**
-columns — the two this plan needs, plus the two that are currently added by
-on-demand `ALTER TABLE` at
-[add_phenotype.R:862-884](../R/add_phenotype.R#L862-L884) in violation of §4(a):
+([define_trait.R:204-214](../R/define_trait.R#L204-L214)) gained **four**
+columns — the two this plan needs, plus the two that were previously added by
+on-demand `ALTER TABLE` in violation of §4(a):
 
 ```sql
 CREATE TABLE ind_phenotype (
@@ -384,11 +385,12 @@ CREATE TABLE ind_phenotype (
 )
 ```
 
-After this change there are **no** `dbListFields()` checks or `ALTER TABLE`
-statements for **reserved** columns left in `add_phenotype.R`. The
-`store_liability` and `cat_names` paths simply populate columns that already
-exist. *(v3.1)* User `...` columns are a different matter and are unchanged:
-they still go through `prepare_extra_cols()` ([sql_utils.R:402](../R/sql_utils.R#L402)),
+There are now **no** `dbListFields()` checks or `ALTER TABLE` statements for
+**reserved** columns in `add_phenotype.R`. The `store_liability` and `cat_names`
+paths populate columns that already exist
+([add_phenotype.R:855-866](../R/add_phenotype.R#L855-L866)). *(v3.1)* User `...`
+columns are a different matter and are unchanged: they still go through
+`prepare_extra_cols()` ([sql_utils.R:403](../R/sql_utils.R#L403)),
 which issues `ALTER TABLE ADD COLUMN` for a column the table has not seen
 before. Under §5.5 that call moves inside the Stage-3 transaction (DuckDB DDL is
 transactional), ahead of the column-listed `INSERT`, and it is RNG-neutral. The
@@ -396,7 +398,7 @@ transactional), ahead of the column-listed `INSERT`, and it is RNG-neutral. The
 `...`.
 
 **Scale matters.** `resid` enters the model on the *liability* scale
-([add_phenotype.R:804](../R/add_phenotype.R#L804):
+([add_phenotype.R:798](../R/add_phenotype.R#L798):
 `liability <- pheno_mean + covariate_contrib + tbv + resid`), before any
 categorical/count conversion. `residual_value` therefore stores the
 liability-scale residual, which is the only scale on which conditioning is valid.
@@ -429,16 +431,21 @@ latent residual.
 `phenotype_random_effects` is unchanged: logical identity stays
 `(phenotype_name, effect_name, level)`, values stay in `draw_value`.
 
-`phenotype_meta` ([define_trait.R:288-306](../R/define_trait.R#L288-L306)) gains
-one column, per **D2**, alongside the existing `missing_component_action`:
+`phenotype_meta` ([open_pop.R:289-308](../R/open_pop.R#L289-L308)) gained
+one column, per **D2**, alongside the existing `missing_component_action`, and
+`define_phenotype()` the `condition_change_action = c("error", "independent")`
+argument that sets it (validated with `match.arg()`, stored on the row,
+replaced by `overwrite = TRUE` like every other field):
 
 ```sql
 condition_change_action VARCHAR DEFAULT 'error'   -- 'error' | 'independent'
 ```
 
-`TABLE_RESERVED_COLS$ind_phenotype` ([sql_utils.R:110-111](../R/sql_utils.R#L110-L111))
-gains `residual_value` and `residual_condition_level` (`liability_value` and
-`cat_name` are already there). `phenotype_meta` is already all-reserved.
+`TABLE_RESERVED_COLS` ([sql_utils.R:110-112](../R/sql_utils.R#L110-L112))
+covers all nine `ind_phenotype` columns and `condition_change_action`; all
+five new columns have `_schema_meta` descriptions. Until Phase 5 writes them,
+`residual_value` and `residual_condition_level` are `NULL` on every row, which
+the Phase 1 tests assert (`test-phenotype_schema.R`).
 
 `archive_replicate()` already lists both realization tables under
 `store_and_reset`, so every replicate begins with no stored coordinates; the new
@@ -480,7 +487,7 @@ it is rejected at definition time.
 the resolver, and for one coordinate with nothing observed the resolver *is*
 `rnorm(sd = sqrt(v))`. A phenotype with **no** residual row at all is an error,
 as it is today ("No residual variance found"). `load_phenotype_cov()` returning
-`NULL` ([define_effect_cov_matrix.R:334](../R/define_effect_cov_matrix.R#L334))
+`NULL` ([define_effect_cov_matrix.R:275](../R/define_effect_cov_matrix.R#L275))
 therefore has exactly one meaning: no rows exist.
 
 Per **D1**, a discovered block is guaranteed complete and PSD — that is enforced
@@ -650,7 +657,7 @@ The payoff is that Stage 2 and Stage 3 become short and testable in isolation.
 **Same-call differing subsets are resolved before anything is written.** If A is
 planned for individuals 1–100 and B for 51–100, then 1–50 get a marginal A draw,
 51–100 get a joint A/B draw, and no B row is created for 1–50. The `all_equal`
-restriction at [add_phenotype.R:581-586](../R/add_phenotype.R#L581-L586) is
+restriction at [add_phenotype.R:579-584](../R/add_phenotype.R#L579-L584) is
 **deleted**.
 
 **Stable ordering before every RNG-consuming step.** Sort blocks, patterns,
@@ -663,8 +670,8 @@ the sort on the other four.
 **All writes are register + `INSERT`, never `dbWriteTable()`.**
 `dbWriteTable()` advances R's RNG by a fixed amount through its random temp-name
 generation. Today `add_phenotype()` calls it at
-[add_phenotype.R:567](../R/add_phenotype.R#L567) and
-[add_phenotype.R:887](../R/add_phenotype.R#L887), interleaved with draws. Under
+[add_phenotype.R:565](../R/add_phenotype.R#L565) and
+[add_phenotype.R:869](../R/add_phenotype.R#L869), interleaved with draws. Under
 this plan every draw happens in Stage 2 and every write in Stage 3, and Stage 3
 is RNG-neutral, so the stream a call consumes is a function of the model and the
 plan only. Follow the idiom at
@@ -683,7 +690,7 @@ Three more, added in v3.1:
 list is registered with `duckdb_register()` as a temporary view and the stored
 lookup is a `JOIN` against it — the same discipline as the genome-effects
 evaluator, where individual identifiers never enter the statement. The current
-code pastes id lists at [add_phenotype.R:606](../R/add_phenotype.R#L606); that
+code pastes id lists at [add_phenotype.R:605](../R/add_phenotype.R#L605); that
 goes with it. `duckdb_register()` is RNG-neutral.
 
 **Stratum lookup contract.** `condition_table` defaults to `ind_meta` and may be
@@ -691,7 +698,7 @@ any table with an `id_ind` column. Stage 1 reads `(id_ind, <condition_column>)`
 from it for the planned ids by the same registered-view join and requires
 **exactly one row per planned `id_ind`**; zero or several rows is an error
 naming the table, the column, and up to 5 example ids (the current code at
-[add_phenotype.R:605-613](../R/add_phenotype.R#L605-L613) silently takes the
+[add_phenotype.R:601-612](../R/add_phenotype.R#L601-L612) silently takes the
 first match). A `NULL` condition value, or a value matching no stratum, is "no
 matching stratum" and follows D2's fallback rule: unconditional `R` if one
 exists, stored as `residual_condition_level = NULL`; otherwise an error.
@@ -788,7 +795,7 @@ pop <- pop |>
 #### What happens today
 
 **Day 0 — `add_phenotype("ADG")`.** §7.5 is gated on `length(phenos) >= 2`
-([add_phenotype.R:467](../R/add_phenotype.R#L467)), so a single-phenotype call
+([add_phenotype.R:465](../R/add_phenotype.R#L465)), so a single-phenotype call
 skips the correlated path entirely. The marginal path
 ([phenotype_helpers.R:208-250](../R/phenotype_helpers.R#L208-L250)) draws
 `rnorm(sd = sqrt(150))` for each pen level and stores
@@ -866,9 +873,9 @@ All validation in §5.4 is implemented once, in an internal
 and called by all three writers **inside their write transaction, before
 `COMMIT`** — the same shape as `validate_chr_inheritance()` and
 `validate_genome_effects()`. None of the three writers currently opens a
-transaction ([define_residual_cov.R:104](../R/define_residual_cov.R#L104),
-[define_effect_cov_matrix.R:156](../R/define_effect_cov_matrix.R#L156),
-[define_effect_cov_matrix.R:386](../R/define_effect_cov_matrix.R#L386) are all
+transaction ([define_residual_cov.R:103](../R/define_residual_cov.R#L103),
+[define_effect_cov_matrix.R:154](../R/define_effect_cov_matrix.R#L154),
+[define_effect_cov_matrix.R:325](../R/define_effect_cov_matrix.R#L325) are all
 bare `DELETE` then `INSERT`); each gets one, so a rejected block rolls back
 instead of leaving a half-written matrix.
 
@@ -995,7 +1002,7 @@ matches and an unconditional stratum exists, the unconditional `R` is used and
 raw column value. If no stratum matches and there is no unconditional stratum,
 **error** naming the unmatched level and count. The current code's
 "residuals set to 0 (no unconditional fallback)" at
-[add_phenotype.R:642-646](../R/add_phenotype.R#L642-L646) is not an acceptable
+[add_phenotype.R:640-644](../R/add_phenotype.R#L640-L644) is not an acceptable
 fallback and is deleted.
 
 Sex as a condition column never triggers the change path, because an entity's
@@ -1350,29 +1357,40 @@ tolerances from sampling uncertainty, not fixed arbitrary margins.
 *(Re-sequenced in v3 per Codex S: covariance definitions first, record planning
 extracted as its own phase.)*
 
-**Phase 0 — remaining legacy code in the phenotype layer.** The v2 Phase 0 list
-landed in v0.63.x–v0.64.0. What is left:
+**Phase 0 — remaining legacy code in the phenotype layer.** ✅ **Shipped
+2026-09-20** — see `sample_correlated_effects_phase_0.md`. The v2 Phase 0 list
+landed in v0.63.x–v0.64.0; the six stragglers listed in v3, plus five more of
+the same two kinds found while removing them, are gone:
 
-| Location | What | Why it is dead |
-|---|---|---|
-| [add_phenotype.R:790-793](../R/add_phenotype.R#L790-L793) | "Backward-compat fallback for databases without `phenotype_var_comp` residual rows" → second `get_phenotype_var()` lookup | Both lookups read the same table; Phase 5 replaces the branch anyway |
-| [phenotype_helpers.R:282](../R/phenotype_helpers.R#L282) | `if (!"phenotype_var_comp" %in% dbListTables())` early return in `get_residual_cov()` | `open_pop()` → `ensure_trait_tables()` creates it unconditionally |
-| [define_effect_cov_matrix.R:318](../R/define_effect_cov_matrix.R#L318) | Same guard in `load_phenotype_cov()` | Same |
-| [define_effect_cov_matrix.R:214-233](../R/define_effect_cov_matrix.R#L214-L233) | `ensure_phenotype_var_comp()` — a second `CREATE TABLE phenotype_var_comp` | Can never fire; the DDL is duplicated from `ensure_trait_tables()` and would drift. Delete the function and its three call sites |
-| [define_effect_cov_matrix.R:192](../R/define_effect_cov_matrix.R#L192) | `ensure_trait_var_comp()` — same pattern for `trait_var_comp`, which `open_pop()` creates unconditionally ([open_pop.R:279](../R/open_pop.R#L279)) | Same; two call sites |
-| [add_phenotype.R:635](../R/add_phenotype.R#L635) | Warning text names `phenotype_residual_cov`, a table that no longer exists | Stale string |
-| [phenotype_helpers.R:279](../R/phenotype_helpers.R#L279) | `get_residual_cov(subset_df = )` documented as "currently unused" | Function is rewritten in Phase 5; note it here so the parameter is not carried over |
+| What was removed | Kind |
+|---|---|
+| "Backward-compat fallback" second `get_phenotype_var()` lookup in `add_phenotype()`'s independent residual branch | dead branch — both lookups read the same unconditional diagonal |
+| `dbListTables()` existence guards in `get_residual_cov()`, `load_phenotype_cov()`, `load_trait_cov()`, `get_phenotype_var()`, `get_trait_var()`, `add_phenotype()` (`phenotype_components`), `delete_existing_effect()` (`phenotype_random_effects`) | dead guard — `open_pop()` creates every one of these tables unconditionally |
+| `ensure_phenotype_var_comp()` (3 call sites), `ensure_trait_var_comp()` (2 call sites), and their `man/` pages | duplicate DDL that could drift |
+| The `phenotype_meta`, `phenotype_components`, `phenotype_var_comp` entries of `ensure_trait_tables()`'s DDL list — byte-identical copies of `open_pop()`'s | duplicate DDL that could drift |
+| Warning text naming `phenotype_residual_cov` | stale string → `phenotype_var_comp` |
+| `get_residual_cov(subset_df = )` and the argument `add_phenotype()` passed to it | unused parameter |
 
-**Phase 1 — schema.** *(v3.1: swapped with the writer phase — the residual
-realization lock reads `residual_value`, so the column must exist first; the
-schema change has no dependencies of its own.)* Base `ind_phenotype` gains
-`liability_value`, `cat_name`, `residual_value`, `residual_condition_level`; the
-two `ALTER TABLE` blocks in `add_phenotype()` are deleted and the two paths
-write the base columns directly; `phenotype_meta` gains
-`condition_change_action` with the `define_phenotype()` argument that sets it
-(D2); `TABLE_RESERVED_COLS` updated; `.sm_col()` entries for all five new
-columns in `R/schema.R` so `describe_table()` does not print
-`(no description)` for them.
+Net −182 lines; no behaviour change; full suite green. The phenotype-layer
+DDL now has exactly one home per table: `open_pop.R` for `trait_var_comp`,
+`phenotype_meta`, `phenotype_components`, `phenotype_var_comp`;
+`ensure_trait_tables()` for `trait_meta`, `phenotype_effects`,
+`phenotype_random_effects`, `ind_phenotype`, `ind_tbv`, `ind_tgv`, `ind_ebv`,
+`ind_index`, `ind_true_index`. Phase 1 edits the `ind_phenotype` DDL in the
+second and the `phenotype_meta` DDL in the first.
+
+**Phase 1 — schema.** ✅ **Shipped 2026-09-20** — see
+`sample_correlated_effects_phase_1.md`. *(v3.1: swapped with the writer phase —
+the residual realization lock reads `residual_value`, so the column must exist
+first.)* Base `ind_phenotype` has `liability_value`, `cat_name`,
+`residual_value`, `residual_condition_level`; the two `ALTER TABLE` blocks in
+`add_phenotype()` are gone and the two paths write the base columns directly;
+`phenotype_meta` has `condition_change_action` and `define_phenotype()` the
+argument that sets it (D2); `TABLE_RESERVED_COLS` and the `_schema_meta`
+column descriptions updated; CLAUDE.md schema tables updated. New
+`test-phenotype_schema.R` (21 expectations) covers the base column set, the
+no-`ALTER TABLE` write, NULL-ness of the two residual columns before Phase 5,
+reservation, descriptions, and the new argument. Full suite green.
 
 **Phase 2 — centralize covariance definitions.** `validate_phenotype_cov_block()`
 implementing the D1 algorithm (pair-row block discovery, `N == U`, per-stratum

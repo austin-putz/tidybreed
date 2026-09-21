@@ -91,7 +91,6 @@ define_residual_cov <- function(pop,
   }
 
   pop <- ensure_trait_tables(pop)
-  pop <- ensure_phenotype_var_comp(pop)
 
   # Delete existing rows for this exact (phenotype pair, effect, condition) combination
   pn1_in <- paste0("'", gsub("'", "''", phenotype_names), "'", collapse = ", ")

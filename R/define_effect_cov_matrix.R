@@ -119,7 +119,6 @@ define_effect_cov_matrix <- function(pop,
   genetic_effects <- c("gen_add", "dominance", "epistasis")
 
   if (effect_name %in% genetic_effects) {
-    pop <- ensure_trait_var_comp(pop)
     quoted_names <- paste0("'", trait_names, "'", collapse = ", ")
     DBI::dbExecute(
       pop$db_conn,
@@ -148,7 +147,6 @@ define_effect_cov_matrix <- function(pop,
     )
   } else {
     # Phenotype-level named random effects → phenotype_var_comp
-    pop <- ensure_phenotype_var_comp(pop)
     quoted_names <- paste0("'", trait_names, "'", collapse = ", ")
     eff_safe <- gsub("'", "''", effect_name)
     DBI::dbExecute(
@@ -184,55 +182,6 @@ define_effect_cov_matrix <- function(pop,
 }
 
 
-#' Ensure the trait_var_comp table exists in the database
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @return The `tidybreed_pop` with `$tables` updated.
-#' @keywords internal
-ensure_trait_var_comp <- function(pop) {
-  if (!"trait_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
-    DBI::dbExecute(pop$db_conn, "
-      CREATE TABLE trait_var_comp (
-        id_trait_var_comp INTEGER PRIMARY KEY,
-        effect_name       VARCHAR,
-        trait_name_1      VARCHAR,
-        trait_name_2      VARCHAR,
-        cov_value         DOUBLE
-      )
-    ")
-  }
-  pop$tables <- unique(c(pop$tables, "trait_var_comp"))
-  pop
-}
-
-
-#' Ensure the phenotype_var_comp table exists in the database
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @return The `tidybreed_pop` with `$tables` updated.
-#' @keywords internal
-ensure_phenotype_var_comp <- function(pop) {
-  if (!"phenotype_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
-    DBI::dbExecute(pop$db_conn, "
-      CREATE TABLE phenotype_var_comp (
-        id_phenotype_var_comp INTEGER PRIMARY KEY,
-        effect_name           VARCHAR NOT NULL DEFAULT 'residual',
-        phenotype_name_1      VARCHAR NOT NULL,
-        phenotype_name_2      VARCHAR NOT NULL,
-        cov_value             DOUBLE NOT NULL,
-        condition_column      VARCHAR,
-        condition_table       VARCHAR DEFAULT 'ind_meta',
-        condition_level       VARCHAR,
-        weight_type           VARCHAR DEFAULT 'fixed',
-        poly_order            INTEGER
-      )
-    ")
-  }
-  pop$tables <- unique(c(pop$tables, "phenotype_var_comp"))
-  pop
-}
-
-
 #' Get the variance (diagonal) for one trait from trait_var_comp
 #'
 #' @param pop A `tidybreed_pop` object.
@@ -241,9 +190,6 @@ ensure_phenotype_var_comp <- function(pop) {
 #' @return Numeric scalar, or `NA_real_` if not found.
 #' @keywords internal
 get_trait_var <- function(pop, effect_name, trait_name) {
-  if (!"trait_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
-    return(NA_real_)
-  }
   row <- DBI::dbGetQuery(
     pop$db_conn,
     paste0("SELECT cov_value FROM trait_var_comp ",
@@ -263,9 +209,6 @@ get_trait_var <- function(pop, effect_name, trait_name) {
 #' @return Numeric scalar, or `NA_real_` if not found.
 #' @keywords internal
 get_phenotype_var <- function(pop, effect_name, phenotype_name) {
-  if (!"phenotype_var_comp" %in% DBI::dbListTables(pop$db_conn)) {
-    return(NA_real_)
-  }
   eff_safe <- gsub("'", "''", effect_name)
   pn_safe  <- gsub("'", "''", phenotype_name)
   row <- DBI::dbGetQuery(
@@ -288,7 +231,6 @@ get_phenotype_var <- function(pop, effect_name, phenotype_name) {
 #' @return Named numeric matrix, or `NULL` if any entry is missing.
 #' @keywords internal
 load_trait_cov <- function(pop, effect_name, trait_names) {
-  if (!"trait_var_comp" %in% DBI::dbListTables(pop$db_conn)) return(NULL)
   n <- length(trait_names)
   R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(trait_names, trait_names))
   rows <- DBI::dbGetQuery(
@@ -315,7 +257,6 @@ load_trait_cov <- function(pop, effect_name, trait_names) {
 #' @return Named numeric matrix, or `NULL` if any entry is missing.
 #' @keywords internal
 load_phenotype_cov <- function(pop, effect_name, phenotype_names) {
-  if (!"phenotype_var_comp" %in% DBI::dbListTables(pop$db_conn)) return(NULL)
   n <- length(phenotype_names)
   R <- matrix(NA_real_, nrow = n, ncol = n,
               dimnames = list(phenotype_names, phenotype_names))
@@ -348,7 +289,6 @@ load_phenotype_cov <- function(pop, effect_name, phenotype_names) {
 #' @return The modified `tidybreed_pop` (invisibly).
 #' @keywords internal
 write_trait_var_diag <- function(pop, effect_name, trait_name, variance) {
-  pop <- ensure_trait_var_comp(pop)
   DBI::dbExecute(
     pop$db_conn,
     paste0("DELETE FROM trait_var_comp WHERE effect_name = '", effect_name,
@@ -378,7 +318,6 @@ write_trait_var_diag <- function(pop, effect_name, trait_name, variance) {
 #' @return The modified `tidybreed_pop` (invisibly).
 #' @keywords internal
 write_phenotype_var_diag <- function(pop, effect_name, phenotype_name, variance) {
-  pop <- ensure_phenotype_var_comp(pop)
   eff_safe <- gsub("'", "''", effect_name)
   pn_safe  <- gsub("'", "''", phenotype_name)
   DBI::dbExecute(

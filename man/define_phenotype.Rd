@@ -23,6 +23,7 @@ define_phenotype(
   formula_tbv = NULL,
   formula = NULL,
   missing_component_action = c("skip", "error"),
+  condition_change_action = c("error", "independent"),
   overwrite = FALSE
 )
 }
@@ -140,6 +141,18 @@ this is unrelated to \code{null_class_action} (set via
 \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}), which handles \code{NULL} levels for
 fixed-class covariate effects, and does not affect random-effect draws
 (new levels always get a fresh draw).}
+
+\item{condition_change_action}{Character. Applies only when this phenotype
+is in a residual covariance block with a \code{condition_column} (see
+\code{\link[=define_residual_cov]{define_residual_cov()}}) and a correlated phenotype's residual was stored
+under a \strong{different} condition level than the one the current record
+resolves to — e.g. an animal moved farms between the two records.
+\code{"error"} (default) stops, because no covariance is defined between the two
+strata. \code{"independent"} drops the incompatible stored residual from the
+conditioning set (stored residuals from the same stratum still condition
+the draw) and warns with a count. Stored in \code{phenotype_meta}; every
+phenotype in one residual block must carry the same value. An immutable
+condition column such as \code{sex} never triggers either action.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a phenotype with the same name
 already exists, replace its rows in \code{phenotype_meta} and

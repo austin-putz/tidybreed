@@ -1,3 +1,34 @@
+# tidybreed 0.71.0 (in development)
+
+Correlated random effects sampled across simulation stages — see
+`plans/sample_correlated_effects.md`. Landing in phases; this section
+accumulates until the feature ships.
+
+## Changed
+
+- **Phase 0 — legacy code removed from the phenotype layer.** No behaviour
+  change. Deleted: the dead "backward-compat" second residual-variance lookup in
+  `add_phenotype()`; seven `dbListTables()` existence guards for tables that
+  `open_pop()` creates unconditionally; the internal `ensure_trait_var_comp()`
+  and `ensure_phenotype_var_comp()` helpers and the `phenotype_meta` /
+  `phenotype_components` / `phenotype_var_comp` entries of
+  `ensure_trait_tables()` — all duplicate DDL of what `open_pop()` runs; the
+  unused `subset_df` parameter of `get_residual_cov()`; a warning that named
+  the long-removed `phenotype_residual_cov` table. Every phenotype-layer table
+  now has exactly one `CREATE TABLE`.
+
+## Breaking
+
+- **Phase 1 — schema.** `ind_phenotype` now has nine base columns:
+  `liability_value` and `cat_name` (previously added by on-demand
+  `ALTER TABLE` the first time a categorical phenotype was recorded) plus
+  `residual_value` and `residual_condition_level` (the realized liability-scale
+  residual and the residual-covariance stratum it was drawn under; `NULL` until
+  the sampler lands in a later phase). All nine are reserved. `phenotype_meta`
+  gains `condition_change_action` (`'error'` default, or `'independent'`) and
+  `define_phenotype()` the argument that sets it. Databases created before this
+  change are regenerated, not migrated.
+
 # tidybreed 0.70.0 (2026-09-20)
 
 ## Breaking

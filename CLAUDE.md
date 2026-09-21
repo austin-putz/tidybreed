@@ -503,6 +503,7 @@ SGE ADG) appear only here.
 | cat_names                | VARCHAR | Comma-separated labels per category                           |
 | store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |
 | missing_component_action | VARCHAR | `"skip"` (default) or `"error"` — what to do when any component of a composite phenotype cannot be resolved for an individual |
+| condition_change_action  | VARCHAR | `"error"` (default) or `"independent"` — what to do when a correlated phenotype's stored residual was drawn under a different residual `condition_level` than the current record resolves to (see `plans/sample_correlated_effects.md` D2/D6). Must agree across every phenotype in one residual covariance block |
 
 **Reserved**: all columns (managed by `define_phenotype()`).
 
@@ -612,14 +613,21 @@ to model heterogeneous residual variance by sex, group, etc.
 
 Phenotype records in long format. Populated by `add_phenotype()`.
 
-| Column         | Type    | Notes                                             |
-|----------------|---------|---------------------------------------------------|
-| id_phenotype   | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
-| id_ind         | VARCHAR |                                                   |
-| phenotype_name | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
-| pheno_value    | DOUBLE  | Phenotype value                                   |
-| pheno_number   | INTEGER | 1 = first record for this individual × trait, etc.|
-| *user cols*    | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+| Column                   | Type    | Notes                                             |
+|--------------------------|---------|---------------------------------------------------|
+| id_phenotype             | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
+| id_ind                   | VARCHAR |                                                   |
+| phenotype_name           | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
+| pheno_value              | DOUBLE  | Phenotype value                                   |
+| pheno_number             | INTEGER | 1 = first record for this individual × trait, etc. Ordinal identity, **not** simulated time |
+| liability_value          | DOUBLE  | Raw liability for categorical phenotypes with `store_liability = TRUE`; NULL otherwise |
+| cat_name                 | VARCHAR | Category label for categorical phenotypes defined with `cat_names`; NULL otherwise |
+| residual_value           | DOUBLE  | Realized **liability-scale** residual for model-generated and `user_residual` records; NULL for `user_values` / `derived_formula` records. Conditions later draws of correlated phenotypes (`plans/sample_correlated_effects.md`). *Written from Phase 5 onward* |
+| residual_condition_level | VARCHAR | `condition_level` of the residual (co)variance stratum the residual was drawn under; NULL when the unconditional `R` was used. *Written from Phase 5 onward* |
+| *user cols*              | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+
+All nine columns are in the base `CREATE TABLE` (in `ensure_trait_tables()`);
+nothing is added by on-demand `ALTER TABLE`. **Reserved**: all nine.
 
 ### `ind_tbv`
 

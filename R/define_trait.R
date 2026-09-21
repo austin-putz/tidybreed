@@ -202,11 +202,15 @@ ensure_trait_tables <- function(pop) {
 
     ind_phenotype = "
       CREATE TABLE ind_phenotype (
-        id_phenotype   INTEGER PRIMARY KEY,
-        id_ind         VARCHAR,
-        phenotype_name VARCHAR,
-        pheno_value    DOUBLE,
-        pheno_number   INTEGER
+        id_phenotype             INTEGER PRIMARY KEY,
+        id_ind                   VARCHAR,
+        phenotype_name           VARCHAR,
+        pheno_value              DOUBLE,
+        pheno_number             INTEGER,
+        liability_value          DOUBLE,
+        cat_name                 VARCHAR,
+        residual_value           DOUBLE,
+        residual_condition_level VARCHAR
       )
     ",
 
@@ -280,66 +284,6 @@ ensure_trait_tables <- function(pop) {
         index_name       VARCHAR NOT NULL,
         weight_type      VARCHAR NOT NULL,
         true_index_value DOUBLE
-      )
-    ",
-
-    # ── New tables introduced in v0.31.0 ──────────────────────────────────────
-
-    phenotype_meta = "
-      CREATE TABLE phenotype_meta (
-        id_phenotype_meta        INTEGER PRIMARY KEY,
-        phenotype_name           VARCHAR UNIQUE NOT NULL,
-        type                     VARCHAR,
-        mean                     DOUBLE DEFAULT 0,
-        expressed_sex            VARCHAR DEFAULT 'both',
-        repeatable               BOOLEAN DEFAULT FALSE,
-        min_value                DOUBLE,
-        max_value                DOUBLE,
-        prevalence               DOUBLE,
-        thresholds               VARCHAR,
-        cat_values               VARCHAR,
-        cat_names                VARCHAR,
-        store_liability          BOOLEAN DEFAULT FALSE,
-        missing_component_action VARCHAR DEFAULT 'skip',
-        formula_tbv              VARCHAR,
-        formula                  VARCHAR
-      )
-    ",
-
-    phenotype_components = "
-      CREATE TABLE phenotype_components (
-        id_phenotype_comp   INTEGER PRIMARY KEY,
-        phenotype_name      VARCHAR NOT NULL,
-        source_trait_name   VARCHAR NOT NULL,
-        contributor_type    VARCHAR NOT NULL,
-        group_column        VARCHAR,
-        group_table         VARCHAR DEFAULT 'ind_meta',
-        aggregation         VARCHAR DEFAULT 'sum',
-        weight              DOUBLE  DEFAULT 1.0,
-        weight_type         VARCHAR DEFAULT 'fixed',
-        covariate_name      VARCHAR,
-        covariate_table     VARCHAR,
-        poly_order          INTEGER,
-        poly_scale_min      DOUBLE,
-        poly_scale_max      DOUBLE,
-        component_names     VARCHAR DEFAULT 'order1_additive',
-        missing_action      VARCHAR DEFAULT 'skip',
-        contributor_filter  VARCHAR
-      )
-    ",
-
-    phenotype_var_comp = "
-      CREATE TABLE phenotype_var_comp (
-        id_phenotype_var_comp INTEGER PRIMARY KEY,
-        effect_name           VARCHAR NOT NULL DEFAULT 'residual',
-        phenotype_name_1      VARCHAR NOT NULL,
-        phenotype_name_2      VARCHAR NOT NULL,
-        cov_value             DOUBLE  NOT NULL,
-        condition_column      VARCHAR,
-        condition_table       VARCHAR DEFAULT 'ind_meta',
-        condition_level       VARCHAR,
-        weight_type           VARCHAR DEFAULT 'fixed',
-        poly_order            INTEGER
       )
     "
   )

@@ -224,16 +224,14 @@ add_phenotype <- function(tbl,
   has_components       <- stats::setNames(logical(length(phenos)), phenos)
   components_by_pheno  <- stats::setNames(vector("list", length(phenos)), phenos)
 
-  if ("phenotype_components" %in% DBI::dbListTables(pop$db_conn)) {
-    for (t in phenos) {
-      comp_rows <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT * FROM phenotype_components WHERE phenotype_name = '",
-               gsub("'", "''", t), "'")
-      )
-      has_components[t]      <- nrow(comp_rows) > 0
-      components_by_pheno[[t]] <- comp_rows
-    }
+  for (t in phenos) {
+    comp_rows <- DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT * FROM phenotype_components WHERE phenotype_name = '",
+             gsub("'", "''", t), "'")
+    )
+    has_components[t]      <- nrow(comp_rows) > 0
+    components_by_pheno[[t]] <- comp_rows
   }
 
   # ── 4b. Classify formula types for each phenotype ─────────────────────────
@@ -572,7 +570,7 @@ add_phenotype <- function(tbl,
 
   # ── 8. Residual covariance info (G3) ──────────────────────────────────────
 
-  resid_info <- get_residual_cov(pop, phenos, ind_meta_subset)
+  resid_info <- get_residual_cov(pop, phenos)
 
   # ── 8.5. Joint residual draw for multi-phenotype case (G3 + G5) ───────────
 
@@ -632,7 +630,7 @@ add_phenotype <- function(tbl,
           if (!is.null(resid_info$R_unconditional)) {
             warning(length(no_match),
                     " individual(s) have no matching condition level in ",
-                    "phenotype_residual_cov; using unconditional R.",
+                    "phenotype_var_comp; using unconditional R.",
                     call. = FALSE)
             var_vec <- stats::setNames(diag(resid_info$R_unconditional), phenos)
             fb_draws <- sample_residuals(length(no_match), var_vec,
@@ -788,10 +786,6 @@ add_phenotype <- function(tbl,
       # Independent per-phenotype draw
       resid_var <- resid_info$residual_var_unconditional[t]
       if (is.na(resid_var)) {
-        # Backward-compat fallback for databases without phenotype_var_comp residual rows
-        resid_var <- get_phenotype_var(pop, "residual", t)
-      }
-      if (is.na(resid_var)) {
         stop("No residual variance found for phenotype '", t, "'. ",
              "Specify via define_phenotype(residual_var = ...) or ",
              "define_residual_cov().", call. = FALSE)
@@ -858,24 +852,17 @@ add_phenotype <- function(tbl,
       for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
     }
 
-    # Optional: store raw liability for categorical traits
+    # Optional: store raw liability for categorical traits (base column;
+    # NULL for every other record)
     if (isTRUE(m$store_liability) && !is.null(cat_idx)) {
-      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
-      if (!"liability_value" %in% pheno_cols)
-        DBI::dbExecute(pop$db_conn,
-          "ALTER TABLE ind_phenotype ADD COLUMN liability_value DOUBLE")
       records$liability_value <- as.numeric(liability)
     }
 
-    # Optional: store category label for categorical traits
+    # Optional: store category label for categorical traits (base column)
     has_cn <- !is.null(cat_idx) &&
               !is.null(m$cat_names) && !is.na(m$cat_names) && nzchar(m$cat_names)
     if (has_cn) {
       cn <- strsplit(m$cat_names, ",", fixed = TRUE)[[1]]
-      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
-      if (!"cat_name" %in% pheno_cols)
-        DBI::dbExecute(pop$db_conn,
-          "ALTER TABLE ind_phenotype ADD COLUMN cat_name VARCHAR")
       records$cat_name <- cn[cat_idx]
     }
 

@@ -108,6 +108,17 @@
 #'   [define_effect_fixed_class()]), which handles `NULL` levels for
 #'   fixed-class covariate effects, and does not affect random-effect draws
 #'   (new levels always get a fresh draw).
+#' @param condition_change_action Character. Applies only when this phenotype
+#'   is in a residual covariance block with a `condition_column` (see
+#'   [define_residual_cov()]) and a correlated phenotype's residual was stored
+#'   under a **different** condition level than the one the current record
+#'   resolves to — e.g. an animal moved farms between the two records.
+#'   `"error"` (default) stops, because no covariance is defined between the two
+#'   strata. `"independent"` drops the incompatible stored residual from the
+#'   conditioning set (stored residuals from the same stratum still condition
+#'   the draw) and warns with a count. Stored in `phenotype_meta`; every
+#'   phenotype in one residual block must carry the same value. An immutable
+#'   condition column such as `sex` never triggers either action.
 #' @param overwrite Logical. If `TRUE` and a phenotype with the same name
 #'   already exists, replace its rows in `phenotype_meta` and
 #'   `phenotype_components`. Default `FALSE` errors on duplicate.
@@ -207,6 +218,7 @@ define_phenotype <- function(pop,
                              formula_tbv              = NULL,
                              formula                  = NULL,
                              missing_component_action = c("skip", "error"),
+                             condition_change_action  = c("error", "independent"),
                              overwrite                = FALSE) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
@@ -219,6 +231,7 @@ define_phenotype <- function(pop,
   type                     <- match.arg(type)
   expressed_sex            <- match.arg(expressed_sex)
   missing_component_action <- match.arg(missing_component_action)
+  condition_change_action  <- match.arg(condition_change_action)
 
   # ── Categorical validation ─────────────────────────────────────────────────
 
@@ -403,6 +416,7 @@ define_phenotype <- function(pop,
     cat_names                = cat_names_str,
     store_liability          = as.logical(store_liability),
     missing_component_action = missing_component_action,
+    condition_change_action  = condition_change_action,
     formula_tbv              = if (is.null(formula_tbv)) NA_character_ else formula_tbv,
     formula                  = if (is.null(formula))     NA_character_ else formula
   )

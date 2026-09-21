@@ -4,17 +4,12 @@
 \alias{get_residual_cov}
 \title{Look up residual covariance information from phenotype_var_comp}
 \usage{
-get_residual_cov(pop, phenotype_names, subset_df = NULL)
+get_residual_cov(pop, phenotype_names)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
 
 \item{phenotype_names}{Character vector of phenotype names.}
-
-\item{subset_df}{Currently unused inside this function (accepted for a
-future per-subset lookup); callers such as \code{\link[=add_phenotype]{add_phenotype()}} separately
-look up each individual's \code{condition_column} value and match it against
-\code{R_by_level}'s names to pick the right (co)variance matrix.}
 }
 \value{
 A list:
