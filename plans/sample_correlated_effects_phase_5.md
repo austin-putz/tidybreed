@@ -21,14 +21,14 @@ The stage boundaries from Phase 4 did not move.
 
 | Piece | Where | Notes |
 |---|---|---|
-| `.ap_resolve_residuals()` | `R/add_phenotype_stages.R` | Entry point of the residual adapter. Validates `user_residual` against the plan, loads the blocks touching the model-path phenotypes (`find_covariance_blocks()`), errors "No residual variance found" for a phenotype in no block, and runs `.ap_residual_block()` per block in loader order. Returns per phenotype `value`, `level` (the selected stratum per record) and `var_unconditional`. |
+| `.ap_resolve_residuals()` | `R/add_phenotype_stages.R` | Entry point of the residual adapter. Takes the plan's `residual_blocks` (loaded once in Stage 1), errors "No residual variance found" for a phenotype that must draw but is in no block, and runs `.ap_residual_block()` per block in loader order. Returns per phenotype `value`, `level` (the selected stratum per record) and `var_unconditional`. |
 | `.ap_residual_block()` | same | One block: planned `(entity, phenotype)` rows → sorted entities `(id_ind, pheno_number)` → stratum per entity (D2 selection, fallback, error) → stored coordinates of every block member at the same `pheno_number` via a registered view → D6 (every call) then D2 on the stored set → `observed` = stored + fixed → one `resolve_correlated_draws()` call per `(stratum, sample set)` group in sorted group order → values back in planned-record order. |
-| `.ap_fixed_residuals()` | same | The `user_residual` contract (§5.3): plain vector iff exactly one model-path phenotype; otherwise a named list over any subset of the model-path phenotypes; length = planned records; finite; no per-`id_ind` names. |
+| `.ap_fixed_residuals()` | same | The `user_residual` contract (§5.3): plain vector iff exactly one model-path phenotype; otherwise a named list over any subset of the model-path phenotypes; length = planned records; finite; no per-`id_ind` names. Runs before any draw, on every call. A phenotype whose residuals are all supplied needs no residual block. |
 | `.ap_resolve()` | same | Reordered: every named-effect draw (pre-draw, then marginal new levels in plan order) **before** the residual adapter; record assembly afterwards in plan order with no RNG. `records` gain `residual_value` / `residual_condition_level` on the model path. |
 | `.ap_liability_records()` | same | Takes the adapter's element instead of `resid_info`; writes the two residual columns; the `prevalence` threshold errors when there is no unconditional variance. |
 | `add_phenotype()` | `R/add_phenotype.R` | `user_values` + `user_residual` together is an error. Roxygen: the residual model paragraph and the `user_residual` argument rewritten for the new contract. |
 | Deleted | `R/add_phenotype_stages.R`, `R/phenotype_helpers.R` | `.ap_joint_residuals()` (ex-§8.5 and its equal-planned-sets restriction), the independent `rnorm` residual branch, `sample_residuals()` (the last `MASS::mvrnorm()` on the residual path), `get_residual_cov()` (and with it the `condition_column == ""` tolerance noted in Phase 4). Three `man/` pages go with them. |
-| Tests | `tests/testthat/test-add_phenotype_residuals.R` (new) | 87 expectations; see below. Three existing tests that pinned the pre-Phase-5 `NULL` residuals updated (`test-phenotype_schema.R`, two in `test-phenotype_cov_block.R`), the Defect 4 assertions added to the composite test, one warning text in `test-add_phenotype_stages.R`. |
+| Tests | `tests/testthat/test-add_phenotype_residuals.R` (new) | 93 expectations; see below. Three existing tests that pinned the pre-Phase-5 `NULL` residuals updated (`test-phenotype_schema.R`, two in `test-phenotype_cov_block.R`), the Defect 4 assertions added to the composite test, one warning text in `test-add_phenotype_stages.R`. |
 | Docs | `man/dot-ap_resolve_residuals.Rd`, `dot-ap_residual_block.Rd`, `dot-ap_fixed_residuals.Rd` new; `add_phenotype.Rd`, `add_phenotype_stages.Rd`, `dot-ap_resolve.Rd`, `dot-ap_liability_records.Rd`, `define_residual_cov.Rd` ("How the block is sampled"), `correlated_draws.Rd` updated; `get_residual_cov.Rd`, `sample_residuals.Rd`, `dot-ap_joint_residuals.Rd` removed | `NAMESPACE` unchanged. CLAUDE.md: the `add_phenotype()` Stage 2 description and the two `ind_phenotype` column notes. The Phase 8 roxygen pass still owns the rest of the user-facing narrative. |
 
 ## What a user sees differently
@@ -123,7 +123,7 @@ records it as a refinement.
 the wrong place silently. An error with the two fixes is better than a
 guess, and this path was unreachable before Phase 5 anyway.
 
-## Tests (`test-add_phenotype_residuals.R`, 87 expectations)
+## Tests (`test-add_phenotype_residuals.R`, 93 expectations)
 
 Exact tests replay the resolver's contract (`n × m` normals in entity
 order, applied through `chol(C)`), so for `R = [1 .8; .8 1]` a conditioned
@@ -179,17 +179,48 @@ recipe unlocks it.
 
 ## Verification
 
-- `test-add_phenotype_residuals.R`: 87/87.
+- `test-add_phenotype_residuals.R`: 93/93.
 - `test-add_phenotype_stages.R` 57, `test-add_phenotype.R` 45,
   `test-phenotype_composite.R` 39 (4 added), `test-phenotype_schema.R` 21,
   `test-phenotype_cov_block.R` 109 (D3 residual test rewritten around the
   live lock), `test-correlated_draws.R` 115, `test-formula_phenotype.R` 41,
   `test-define_phenotype.R` 38, `test-mutate_derived.R` 37 — all green.
-- Full suite: 3304 passed, 0 failed, 1 skipped (a mid-work snapshot ran
-  3303/0/1; the one added expectation is the named-vector guard).
+- Full suite at the first commit (`c7d273a`): 3304 passed, 0 failed,
+  1 skipped. After the second review pass: 3310 passed, 0 failed, 1 skipped.
 - `roxygen2::roxygenise(roclets = "rd")` clean; `NAMESPACE` unchanged.
 
 ## Review pass
+
+Second pass (after the commit), fixes applied:
+
+- **`user_residual` was validated only when something drew.** A call whose
+  phenotypes are all `derived_formula` never reached the adapter, so a
+  supplied `user_residual` was silently ignored. `.ap_fixed_residuals()`
+  now runs in `.ap_resolve()` before any draw, unconditionally; a plain
+  vector with no model-path phenotype is its own error.
+- **A phenotype whose residuals are all supplied needs no block.** The
+  first draft demanded a residual block for every model-path phenotype,
+  which made `user_residual` useless for a phenotype with no declared
+  residual variance (the pre-Phase-5 code allowed it). Now only a
+  phenotype that must *draw* needs a block; a fixed-only phenotype outside
+  any block stores its values with `residual_condition_level = NULL` and
+  conditions nothing. Test added.
+- **Blocks are loaded once.** Stage 1 already called
+  `find_covariance_blocks()` for the stratum lookup; Stage 2 called it
+  again. The plan now carries `residual_blocks` and Stage 2 filters it to
+  the phenotypes that draw, so both stages see the same block list.
+- `model_call` (any non-`user_values` path) collapsed into `any(is_model)`:
+  a derived-only call ran the named-effect pre-draw for nothing.
+- The prevalence-threshold error no longer claims "only conditional strata
+  are stored" when the phenotype has no block at all.
+- Unused test helper removed.
+- Left alone, flagged: `.assemble_composite_tbv()` (composite TBV assembly,
+  `R/add_phenotype.R`) still pastes ids into SQL, loops per individual,
+  and keeps `!is.null()` / `"NA"`-string guards. It is TBV code the plan
+  scoped out in v3.4; it deserves its own rewrite with the SGE tests
+  beside it.
+
+First pass (before the commit):
 
 - The first draft built the per-entity sample set with an R-level loop
   over planned rows (`sample_of[[r]] <- c(...)`); replaced by a logical

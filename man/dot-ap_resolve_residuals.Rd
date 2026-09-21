@@ -4,12 +4,13 @@
 \alias{.ap_resolve_residuals}
 \title{The residual adapter: every model-path residual of the call}
 \usage{
-.ap_resolve_residuals(plan, user_residual = NULL)
+.ap_resolve_residuals(plan, fixed = list())
 }
 \arguments{
 \item{plan}{The Stage-1 plan.}
 
-\item{user_residual}{The \code{user_residual} argument, or \code{NULL}.}
+\item{fixed}{The validated \code{user_residual} list from
+\code{.ap_fixed_residuals()}.}
 }
 \value{
 A list named by model-path phenotype (those with planned
@@ -23,7 +24,9 @@ stratum is stored).
 Implements \code{plans/sample_correlated_effects.md} §5.3–§5.5 for
 \code{effect_name = 'residual'}. Every model-path phenotype with at least one
 planned record must belong to a residual covariance block (else "No
-residual variance found"). Blocks are processed in
+residual variance found") unless its residuals are all fixed by
+\code{user_residual}, in which case nothing is drawn or conditioned for it.
+Blocks are the plan's, processed in
 \code{\link[=find_covariance_blocks]{find_covariance_blocks()}} order; within a block the entity is
 \verb{(id_ind, pheno_number)}, the coordinates are the block's phenotypes, and
 each entity's residual is drawn from the stratum its condition value

@@ -36,6 +36,8 @@ record as character (\code{NA} = \code{NULL} in the table).}
 \item{\code{user_values}}{Numeric per record (\code{"user_values"} path).}
 \item{\code{formula}}{The derived formula string (\code{"derived_formula"} path).}
 }
+and \code{residual_blocks}: the residual covariance blocks touching the
+call's phenotypes, from \code{\link[=find_covariance_blocks]{find_covariance_blocks()}}.
 }
 \description{
 Stage 1: plan every record of an \code{add_phenotype()} call

@@ -36,9 +36,10 @@ equal the planned record count, which may be smaller than the filtered
 \strong{any subset} of the model-generated phenotypes, each element following
 the same positional rule; the phenotypes not named are drawn conditional
 on the supplied values. Supplied residuals are stored in
-\code{residual_value} like drawn ones and condition later calls. A value
-outside the support of a singular covariance (e.g. non-zero for a
-zero-variance phenotype) is an error. Named (per-\code{id_ind}) vectors are
+\code{residual_value} like drawn ones and condition later calls; a phenotype
+whose residuals are all supplied needs no residual variance declared.
+A value outside the support of a singular covariance (e.g. non-zero
+for a zero-variance phenotype) is an error. Named (per-\code{id_ind}) vectors are
 \strong{not} supported here; cannot be combined with \code{user_values}.}
 
 \item{user_values}{Optional override for the full phenotype value —

@@ -68,6 +68,8 @@ NULL
 #'     \item{`user_values`}{Numeric per record (`"user_values"` path).}
 #'     \item{`formula`}{The derived formula string (`"derived_formula"` path).}
 #'   }
+#'   and `residual_blocks`: the residual covariance blocks touching the
+#'   call's phenotypes, from [find_covariance_blocks()].
 #' @keywords internal
 .ap_plan <- function(tbl, phenos, user_values = NULL) {
   pop  <- tbl$pop
@@ -199,7 +201,9 @@ NULL
   }
 
   # ── Residual stratum of every planned record ────────────────────────────
-  for (b in find_covariance_blocks(conn, "residual", phenos)) {
+  # The blocks are loaded once, here; Stage 2 draws through the same list.
+  residual_blocks <- find_covariance_blocks(conn, "residual", phenos)
+  for (b in residual_blocks) {
     if (is.null(b$condition_column)) next
     for (t in intersect(b$phenotypes, phenos)) {
       e <- entries[[t]]
@@ -212,7 +216,8 @@ NULL
     }
   }
 
-  list(pop = pop, phenos = phenos, pheno_meta = pheno_meta, entries = entries)
+  list(pop = pop, phenos = phenos, pheno_meta = pheno_meta, entries = entries,
+       residual_blocks = residual_blocks)
 }
 
 
@@ -560,18 +565,19 @@ NULL
   phenos  <- plan$phenos
   entries <- plan$entries
 
-  # user_values skips the model entirely: no named-effect or residual draws
-  model_call <- any(vapply(entries, function(e) e$path != "user_values",
-                           logical(1)))
-
+  # Only model-path phenotypes with planned records draw anything; a
+  # user_values or derived_formula call is RNG-neutral.
   is_model <- vapply(entries, function(e) e$path == "model" &&
                                              length(e$id_ind) > 0L, logical(1))
+
+  # user_residual is checked against the plan whether or not anything draws
+  fixed <- .ap_fixed_residuals(entries, user_residual)
 
   # ── Draws: named effects, then residuals ─────────────────────────────────
   pending_re <- .ap_empty_random_effects()
   random_contrib <- list()
   residuals <- list()
-  if (model_call) {
+  if (any(is_model)) {
     pending_re <- .ap_predraw_named_effects(pop, plan, pending_re)
     for (t in phenos[is_model]) {
       e  <- entries[[t]]
@@ -580,7 +586,7 @@ NULL
       pending_re          <- rr$pending
       random_contrib[[t]] <- rr$contribution
     }
-    residuals <- .ap_resolve_residuals(plan, user_residual)
+    residuals <- .ap_resolve_residuals(plan, fixed)
   }
 
   # ── Record assembly, in plan order (no RNG) ──────────────────────────────
@@ -763,7 +769,9 @@ NULL
 #' Implements `plans/sample_correlated_effects.md` §5.3–§5.5 for
 #' `effect_name = 'residual'`. Every model-path phenotype with at least one
 #' planned record must belong to a residual covariance block (else "No
-#' residual variance found"). Blocks are processed in
+#' residual variance found") unless its residuals are all fixed by
+#' `user_residual`, in which case nothing is drawn or conditioned for it.
+#' Blocks are the plan's, processed in
 #' [find_covariance_blocks()] order; within a block the entity is
 #' `(id_ind, pheno_number)`, the coordinates are the block's phenotypes, and
 #' each entity's residual is drawn from the stratum its condition value
@@ -772,7 +780,8 @@ NULL
 #' `user_residual` values fixed in this call.
 #'
 #' @param plan The Stage-1 plan.
-#' @param user_residual The `user_residual` argument, or `NULL`.
+#' @param fixed The validated `user_residual` list from
+#'   `.ap_fixed_residuals()`.
 #' @return A list named by model-path phenotype (those with planned
 #'   records). Each element has `value` (numeric per planned record),
 #'   `level` (the `residual_condition_level` per record: the selected
@@ -780,25 +789,28 @@ NULL
 #'   phenotype's unconditional residual variance, `NA` if no unconditional
 #'   stratum is stored).
 #' @keywords internal
-.ap_resolve_residuals <- function(plan, user_residual = NULL) {
-  conn    <- plan$pop$db_conn
+.ap_resolve_residuals <- function(plan, fixed = list()) {
   entries <- plan$entries
-  model   <- names(entries)[vapply(entries, function(e) e$path == "model",
+  targets <- names(entries)[vapply(entries, function(e) e$path == "model" &&
+                                                length(e$id_ind) > 0L,
                                    logical(1))]
-  fixed   <- .ap_fixed_residuals(entries, model, user_residual)
-
-  targets <- model[vapply(model, function(t) length(entries[[t]]$id_ind) > 0L,
-                          logical(1))]
   out <- list()
   if (length(targets) == 0L) return(out)
 
-  blocks  <- find_covariance_blocks(conn, "residual", targets)
+  blocks  <- Filter(function(b) any(b$phenotypes %in% targets),
+                    plan$residual_blocks)
   covered <- unlist(lapply(blocks, `[[`, "phenotypes"))
   missing <- setdiff(targets, covered)
-  if (length(missing) > 0L) {
-    stop("No residual variance found for phenotype '", missing[[1L]], "'. ",
+  needs_draw <- setdiff(missing, names(fixed))
+  if (length(needs_draw) > 0L) {
+    stop("No residual variance found for phenotype '", needs_draw[[1L]], "'. ",
          "Specify via define_phenotype(residual_var = ...) or ",
          "define_residual_cov().", call. = FALSE)
+  }
+  for (t in missing) {                      # fixed by the caller, no block
+    out[[t]] <- list(value = fixed[[t]],
+                     level = rep(NA_character_, length(fixed[[t]])),
+                     var_unconditional = NA_real_)
   }
 
   for (b in blocks) {
@@ -820,11 +832,15 @@ NULL
 #' phenotypes. Each vector is positional over that phenotype's planned
 #' records.
 #'
+#' @param entries The plan's entries.
+#' @param user_residual The `user_residual` argument, or `NULL`.
 #' @return A list named by phenotype of finite numeric vectors (possibly
 #'   empty).
 #' @keywords internal
-.ap_fixed_residuals <- function(entries, model, user_residual) {
+.ap_fixed_residuals <- function(entries, user_residual) {
   if (is.null(user_residual)) return(list())
+  model <- names(entries)[vapply(entries, function(e) e$path == "model",
+                                 logical(1))]
   if (is.list(user_residual)) {
     nm <- names(user_residual)
     if (length(user_residual) > 0L &&
@@ -840,7 +856,12 @@ NULL
     }
     vals <- user_residual
   } else {
-    if (length(model) != 1L) {
+    if (length(model) == 0L) {
+      stop("user_residual was supplied but no phenotype in the call is ",
+           "generated from the model (derived_formula phenotypes have no ",
+           "residual).", call. = FALSE)
+    }
+    if (length(model) > 1L) {
       stop("user_residual must be a named list keyed by phenotype_name when ",
            "more than one phenotype is generated from the model in the call ",
            "(", .pvc_set(model), ").", call. = FALSE)
@@ -1062,11 +1083,12 @@ NULL
       # with Ve the unconditional (marginal) residual variance.
       if (is.na(r$var_unconditional)) {
         stop("Phenotype '", t, "': the prevalence threshold needs an ",
-             "unconditional residual variance, but only conditional residual ",
-             "strata are stored. Add an unconditional stratum ",
-             "(define_phenotype(residual_var = ) or define_residual_cov() ",
-             "without condition_column) or give explicit thresholds ",
-             "(define_phenotype(thresholds = )).", call. = FALSE)
+             "unconditional residual variance, but none is stored for it ",
+             "(only conditional strata, or no residual block at all). Add ",
+             "an unconditional stratum (define_phenotype(residual_var = ) or ",
+             "define_residual_cov() without condition_column) or give ",
+             "explicit thresholds (define_phenotype(thresholds = )).",
+             call. = FALSE)
       }
       pheno_mean <- if (is.na(m$mean)) 0 else m$mean
       va <- get_trait_var(pop, "gen_add", t)

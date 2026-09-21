@@ -52,9 +52,6 @@ level_of <- function(pop, t, pheno_number = 1L) {
   stats::setNames(r$residual_condition_level, r$id_ind)
 }
 
-phen_ids <- function(pop, t) sort(DBI::dbGetQuery(pop$db_conn, paste0(
-  "SELECT DISTINCT id_ind FROM ind_phenotype WHERE phenotype_name = '", t, "'"))$id_ind)
-
 ids_of <- function(pop, where = "") sort(DBI::dbGetQuery(pop$db_conn,
   paste0("SELECT id_ind FROM ind_meta ", where))$id_ind)
 
@@ -370,6 +367,7 @@ test_that("user_residual is validated against the plan", {
                "not generated from the model.*\\{Z\\}")
   expect_error(add_ph(pop, c("A", "D"), user_residual = list(D = 1:12)),
                "not generated from the model.*\\{D\\}")
+  expect_error(add_ph(pop, "D", user_residual = 1:12), "no phenotype in the call")
   expect_error(add_ph(pop, "A", user_residual = 1:3),
                "must equal 12 \\(the planned records")
   expect_error(add_ph(pop, "A", user_residual = c(1:11, NA)), "must be finite")
@@ -385,6 +383,20 @@ test_that("user_residual is validated against the plan", {
   expect_equal(unname(resid_of(pop, "A")), seq_len(12) / 10)
   expect_true(all(is.na(DBI::dbGetQuery(pop$db_conn,
     "SELECT residual_value FROM ind_phenotype WHERE phenotype_name = 'D'")$residual_value)))
+})
+
+test_that("a phenotype whose residuals are all supplied needs no residual block", {
+  pop <- make_resid_pop("rs_fixed_noblock", traits = c("A", "B"))
+  on.exit(close_pop(pop))
+  pop <- set_resid(pop, "B", matrix(1, 1, 1, dimnames = list("B", "B")))   # A has none
+  expect_error(add_ph(pop, "A"), "No residual variance found for phenotype 'A'")
+  expect_error(add_ph(pop, c("A", "B"), user_residual = list(B = rep(0, 12))),
+               "No residual variance found for phenotype 'A'")
+  expect_identical(state_after(35, add_ph(pop, c("A", "B"),
+                                          user_residual = list(A = seq_len(12) / 10))),
+                   state_after(35, stats::rnorm(12)))       # only B drawn
+  expect_equal(unname(resid_of(pop, "A")), seq_len(12) / 10)
+  expect_true(all(is.na(level_of(pop, "A"))))
 })
 
 test_that("a supplied value off the support of a singular R errors in the resolver, before any draw", {

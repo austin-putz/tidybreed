@@ -85,7 +85,8 @@ accumulates until the feature ships.
   model-generated, otherwise a named list that may name any subset (the
   rest are drawn conditional on it); it may not name a `derived_formula`
   phenotype, carry per-`id_ind` names, or be combined with `user_values`;
-  a supplied value off the support of a singular covariance is an error.
+  a supplied value off the support of a singular covariance is an error;
+  a phenotype whose residuals are all supplied needs no residual block.
   A categorical phenotype using `prevalence` now errors when it has only
   conditional residual strata (the threshold needs the marginal variance;
   use `thresholds =`). Stage-2 draw order: all named-effect draws, then

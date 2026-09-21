@@ -4,7 +4,12 @@
 \alias{.ap_fixed_residuals}
 \title{Validate \code{user_residual} against the plan}
 \usage{
-.ap_fixed_residuals(entries, model, user_residual)
+.ap_fixed_residuals(entries, user_residual)
+}
+\arguments{
+\item{entries}{The plan's entries.}
+
+\item{user_residual}{The \code{user_residual} argument, or \code{NULL}.}
 }
 \value{
 A list named by phenotype of finite numeric vectors (possibly

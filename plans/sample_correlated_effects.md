@@ -202,6 +202,9 @@ changes; details in §5.5 and `sample_correlated_effects_phase_4.md`):
   name a `derived_formula` or `user_values` phenotype; named
   (per-`id_ind`) vectors and `user_values` + `user_residual` together are
   errors. Fixed values are stored with the stratum the record resolved to.
+  A phenotype whose residuals are all supplied needs no residual block
+  (nothing is drawn or conditioned for it); the check runs before any
+  draw on every call.
 - **Prevalence thresholds need an unconditional variance.** The
   categorical `prevalence` cut-point is `mean + z·√(V_A + V_E)` with `V_E`
   the *marginal* residual variance. When a phenotype has only conditional
@@ -1785,7 +1788,7 @@ coordinates, D6 then D2 on the stored set, one resolver call per
 independent-draw branch, `sample_residuals()` and `get_residual_cov()` are
 deleted (there was nothing to "rewrite around strata" — the Phase 3 loader
 already is that). Named-effect draws now all precede the residual adapter.
-87 new expectations in `test-add_phenotype_residuals.R`; three Phase 1–2
+93 new expectations in `test-add_phenotype_residuals.R`; three Phase 1–2
 tests that pinned the pre-Phase-5 `NULL` residuals updated; full suite
 green.
 
