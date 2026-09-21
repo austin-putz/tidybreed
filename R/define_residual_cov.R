@@ -31,6 +31,16 @@
 #' clear its rows from `phenotype_var_comp` with [remove_rows()] and redeclare
 #' each stratum.
 #'
+#' **How the block is sampled.** [add_phenotype()] draws each record's
+#' residual from this block conditional on the residuals the same individual
+#' has already realized for the block's other phenotypes at the same
+#' `pheno_number` — in the same call or any earlier one — so the declared
+#' covariance holds whether the phenotypes are recorded together or a
+#' hundred simulated days apart with culling in between. With strata, each
+#' record draws from the stratum its `condition_column` value selects,
+#' falling back to the unconditional stratum when the value is `NULL` or
+#' matches none (an error if there is no unconditional stratum).
+#'
 #' **Realized draws lock the block.** Once any `ind_phenotype` row of a member
 #' has a non-`NULL` `residual_value`, the block cannot be redefined; the error
 #' gives the [remove_rows()] call that clears those rows. Every phenotype in

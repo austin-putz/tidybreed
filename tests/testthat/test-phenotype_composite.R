@@ -223,6 +223,15 @@ test_that("heterogeneous residuals by sex produce different variance groups", {
   ind <- dplyr::collect(get_table(pop, "ind_meta"))
   ph$sex <- ind$sex[match(ph$id_ind, ind$id_ind)]
   expect_equal(nrow(ph), 200)
+
+  # Defect 4 (plans/sample_correlated_effects.md): each record is drawn from
+  # its own stratum, and the stratum is stored. With n = 100 per sex the
+  # sample variance has SE ~ var * sqrt(2 / 99) ~ 14% of the variance.
+  expect_identical(ph$residual_condition_level, ph$sex)
+  v <- tapply(ph$residual_value, ph$sex, stats::var)
+  expect_lt(abs(v[["M"]] / 400 - 1), .5)
+  expect_lt(abs(v[["F"]] / 800 - 1), .5)
+  expect_lt(v[["M"]], v[["F"]])
 })
 
 

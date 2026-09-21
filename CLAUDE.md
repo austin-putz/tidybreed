@@ -652,8 +652,8 @@ Phenotype records in long format. Populated by `add_phenotype()`.
 | pheno_number             | INTEGER | 1 = first record for this individual × trait, etc. Ordinal identity, **not** simulated time |
 | liability_value          | DOUBLE  | Raw liability for categorical phenotypes with `store_liability = TRUE`; NULL otherwise |
 | cat_name                 | VARCHAR | Category label for categorical phenotypes defined with `cat_names`; NULL otherwise |
-| residual_value           | DOUBLE  | Realized **liability-scale** residual for model-generated and `user_residual` records; NULL for `user_values` / `derived_formula` records. Conditions later draws of correlated phenotypes (`plans/sample_correlated_effects.md`). *Written from Phase 5 onward* |
-| residual_condition_level | VARCHAR | `condition_level` of the residual (co)variance stratum the residual was drawn under; NULL when the unconditional `R` was used. *Written from Phase 5 onward* |
+| residual_value           | DOUBLE  | Realized **liability-scale** residual for model-generated and `user_residual` records; NULL for `user_values` / `derived_formula` records. Conditions later draws of correlated phenotypes (`plans/sample_correlated_effects.md`) |
+| residual_condition_level | VARCHAR | `condition_level` of the residual (co)variance stratum the residual was drawn under; NULL when the unconditional `R` was used (the *selected* stratum, not the raw column value) |
 | *user cols*              | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
 
 All nine columns are in the base `CREATE TABLE` (in `ensure_trait_tables()`);
@@ -1314,15 +1314,42 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
 
 - `add_phenotype()` — the workhorse. `phenotype_name` (formerly `trait_name`)
-  defaults to all phenotypes in `phenotype_meta` when omitted. Internally calls
-  `add_tbv()` first for all required source traits (including all composite
-  components and group-member IDs), then assembles the composite TBV via
-  `.assemble_composite_tbv()`. For group contributors (SGE model), all
-  group-member TBVs are pre-fetched so group aggregation is a single in-memory
-  pass. Adds fixed/random covariate contributions, samples residuals (joint
-  `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
-  otherwise independent). Converts liability to phenotype per `type`.
-  Writes `ind_phenotype` rows and updates `ind_tbv`.
+  defaults to all phenotypes in `phenotype_meta` when omitted. Runs in
+  **three stages** (`R/add_phenotype_stages.R`, `?add_phenotype_stages`):
+  1. **PLAN** (`.ap_plan()`, no RNG, no writes except the `add_tbv()`
+     prerequisite): sorted subset, metadata, topological sort of derived
+     formulas, sex expression, repeatable guard, fixed-effect terms with
+     `null_class_action`, TBV (simple from `ind_tbv`; composite via
+     `.assemble_composite_tbv()`; `formula_tbv` via the DSL) with
+     `missing_component_action`, `pheno_number`, the residual condition value
+     and the random-effect level of every planned record.
+  2. **RESOLVE** (`.ap_resolve()`, RNG, no writes): every draw in a fixed
+     order — named effects first (the pre-Phase-6 joint pre-draw, then the
+     marginal draws for new levels), then the **residual adapter**
+     (`.ap_resolve_residuals()`): one residual covariance block at a time,
+     entity = `(id_ind, pheno_number)`, coordinates = the block's
+     phenotypes; each entity draws its planned coordinates from the stratum
+     its condition value selects (unconditional `R` as fallback, stored as
+     `residual_condition_level = NULL`; error if there is none), conditional
+     on the residuals it has already realized — stored on disk for any
+     block member at the same `pheno_number`, or fixed by `user_residual` —
+     through `resolve_correlated_draws()`, one call per `(stratum, sample
+     set)` group. D6 (agreement) and D2 (stratum change: error, or drop with
+     a warning under `'independent'`) run here on the stored coordinates.
+     Then liability and type conversion, all in memory.
+  3. **COMMIT** (`.ap_commit()`, writes, no RNG): one transaction, register +
+     `INSERT` into `phenotype_random_effects` and `ind_phenotype`; rollback on
+     failure.
+
+  Rules that follow: planned ids never appear in SQL text (`.ap_read_by_id()`
+  registers them); never `dbWriteTable()` in this path (it advances the RNG);
+  sort before every RNG-consuming step; an individual without a record must
+  not consume RNG or leave stochastic state. Records are ordered by `id_ind`
+  within a phenotype — that is the positional order for `user_values` /
+  `user_residual` (a plain vector when one phenotype is model-generated,
+  else a named list that may name a subset; the rest are drawn conditional
+  on it). `residual_value` / `residual_condition_level` are written for
+  every model-path record. See `plans/sample_correlated_effects.md` §5.5.
 - `add_tbv()` — TBV-only; no phenotype records. **One filtered call into the
   same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
   `additive` — never a second implementation of the effect math. Computes

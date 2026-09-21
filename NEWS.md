@@ -30,6 +30,69 @@ accumulates until the feature ships.
   `(j, i)` rows are bit-identical. `add_phenotype()` is unchanged until
   Phases 5–6.
 
+- **Phase 4 — `add_phenotype()` runs in three stages.** Same arguments, same
+  columns, same messages; what changed is when things happen. Stage 1 plans
+  every record — sex expression, the repeatable guard, fixed-effect skips,
+  missing-component exclusions, `pheno_number`, the residual condition value
+  and the random-effect level of each record — with no random draw and no
+  write. Stage 2 makes every draw in memory, in a fixed order. Stage 3 writes
+  `phenotype_random_effects` and `ind_phenotype` in one transaction through
+  `duckdb_register()` + `INSERT`; a failure rolls both back. Consequences:
+  an individual that ends up without a record never consumes RNG and never
+  leaves a random-effect draw behind (a level touched only by an excluded
+  animal is not drawn); seeded output no longer depends on physical row
+  order — records are planned and written in `id_ind` order within each
+  phenotype, which is also the order `user_values` / `user_residual` match
+  positionally; a derived phenotype can read a feeder phenotype from the
+  same call; the residual `condition_table` must have exactly one row per
+  planned individual (it used to take the first match silently);
+  `next_pheno_numbers()` no longer advances the RNG; a named `user_values`
+  vector must name individuals in the planned subset, each once (unknown ids
+  used to be written as records); effects declared on a `derived_formula`
+  phenotype are ignored, as documented, instead of being evaluated (and
+  drawn) by accident. Seeded values differ from 0.70.0 (expected before
+  1.0.0). New `R/add_phenotype_stages.R`; `compute_covariate_contribution()`
+  → `.ap_covariate_terms()` (fixed effects only, random levels collected);
+  `write_user_phenotype_values()` removed; `sample_residuals()` reduced to
+  `(n, R)`; `upsert_ind_tbv()` moved to `add_tbv.R`.
+- **Phase 5 — residuals are correlated across phenotypes and sequential in
+  time.** Every record's residual is now drawn from its residual covariance
+  block conditional on the residuals the same individual has already
+  realized for the block's other phenotypes at the same `pheno_number` —
+  in this call, in an earlier call, or supplied through `user_residual`.
+  `add_phenotype("A")` today and `add_phenotype("B")` after culling gives
+  the survivors the stored `A`/`B` correlation and the culled no `B` record;
+  a mixed subset conditions where it can and draws marginally where it
+  cannot; two phenotypes with different planned sets in one call no longer
+  fall back to independent draws. Heterogeneous residual variance is
+  applied per record on single-phenotype calls too (previously ignored — the
+  documented composite example drew everyone from the unconditional
+  variance): each record draws from the stratum its condition value
+  selects, a `NULL` or unmatched value falls back to the unconditional `R`
+  (a warning for an unmatched non-`NULL` value; an error if there is no
+  unconditional stratum, instead of a silent `0`), and a phenotype with
+  only conditional strata can now be sampled. `ind_phenotype.residual_value`
+  and `residual_condition_level` are written for every model-generated
+  record (liability scale; the *selected* stratum, `NULL` for the
+  unconditional `R`), which also makes the Phase 2 realization lock live:
+  a residual block is locked by the first `add_phenotype()` call on a
+  member. A stored residual drawn under a different stratum than the
+  current record resolves to is an error, or is dropped from the
+  conditioning set with a warning when the block's phenotypes carry
+  `condition_change_action = "independent"`; `condition_change_action`
+  must agree across the block at sampling time. `user_residual` takes a
+  plain vector only when exactly one phenotype of the call is
+  model-generated, otherwise a named list that may name any subset (the
+  rest are drawn conditional on it); it may not name a `derived_formula`
+  phenotype, carry per-`id_ind` names, or be combined with `user_values`;
+  a supplied value off the support of a singular covariance is an error.
+  A categorical phenotype using `prevalence` now errors when it has only
+  conditional residual strata (the threshold needs the marginal variance;
+  use `thresholds =`). Stage-2 draw order: all named-effect draws, then
+  residuals, one block at a time. `get_residual_cov()`,
+  `sample_residuals()` and `.ap_joint_residuals()` removed. New
+  `tests/testthat/test-add_phenotype_residuals.R`.
+
 ## Documentation
 
 - **Hex sticker.** Package logo added at `man/figures/logo.png` (pkgdown picks it

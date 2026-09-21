@@ -17,6 +17,7 @@ next_pheno_numbers(pop, phenotype_name, ids)
 Integer vector, same length and order as \code{ids}.
 }
 \description{
-Compute the next pheno_number for each individual for a given phenotype
+RNG-neutral: the ids are registered as a temporary view and joined, never
+written to a table or pasted into SQL.
 }
 \keyword{internal}

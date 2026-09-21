@@ -1,8 +1,8 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.3, approved; implementation in progress.** Phases 0–3
-shipped 2026-09-20 (`sample_correlated_effects_phase_0.md` …
-`sample_correlated_effects_phase_3.md`); Phases 4–8 not started.
+**Status**: **v3.5, approved; implementation in progress.** Phases 0–5
+shipped (0–3 on 2026-09-20, 4–5 on 2026-09-21; `sample_correlated_effects_phase_0.md`
+… `sample_correlated_effects_phase_5.md`); Phases 6–8 not started.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -126,6 +126,102 @@ changes; details in §5.2 and §5.4):
   symmetric input), so stored `(i, j)` and `(j, i)` rows are exactly equal and
   the loader can require it.
 
+**What changed from v3.3 to v3.4** (Phase 4 implementation, no decision
+changes; details in §5.5 and `sample_correlated_effects_phase_4.md`):
+
+- `add_phenotype()` now **is** the three-stage flow: `.ap_plan()` (Stage 1),
+  `.ap_resolve()` (Stage 2), `.ap_commit()` (Stage 3) in the new
+  `R/add_phenotype_stages.R`. The pre-Phase-4 §7.5 pre-draw, §8.5 joint
+  residual draw, marginal named-effect draws and the independent residual
+  draw still exist, but as Stage-2 steps over the plan, with their writes
+  moved to Stage 3. Phases 5–6 replace their bodies; the stage boundaries
+  do not move again.
+- **Stage 3 is already one transaction, register + `INSERT` only.** The
+  plan had this arriving in Phases 5–7; building the commit stage once was
+  simpler than building it twice. Phase 7 is now the D7 integrity test plus
+  whatever D7 says about the RNG on failure, not a transaction rewrite.
+- **Random-effect levels are collected per planned record**, so a level
+  touched only by an excluded individual is never drawn (the pre-Phase-4
+  marginal path drew it). This is the §7 "no stochastic state" property,
+  and it is what the pre-draw and marginal paths consume in Stage 2.
+- **Stable ordering is now real**: the input subset is sorted by `id_ind`
+  before planning; random-effect levels and `phenotype_effects` rows are
+  sorted before any draw. Seeded output no longer depends on physical row
+  order. `user_values` / `user_residual` positional matching is over this
+  order, which the roxygen now states.
+- The **stratum lookup contract** (§5.5, v3.1) is implemented in Stage 1
+  for every planned record — exactly one row per planned id in the
+  condition table, registered-view join, error otherwise. Until Phase 5 the
+  value only feeds the retained §8.5 path; single-phenotype calls still
+  ignore strata (Defect 4 stays open until Phase 5, as planned).
+- The joint residual path (§8.5, retained) compares **planned** id sets,
+  i.e. after exclusions, rather than pre-exclusion subsets. Two phenotypes
+  whose exclusions differ now draw independently for that call instead of
+  jointly over a superset that includes non-records. Phase 5 removes the
+  equal-set restriction entirely, so this is a transient narrowing on a
+  path that is being deleted, accepted for the RNG property above.
+- `next_pheno_numbers()` and `.eval_derived_formula()` no longer write a
+  temp table / paste ids into SQL; both use a registered view. A derived
+  phenotype can read a feeder phenotype **planned in the same call** through
+  the in-memory records, which is what lets Stage 3 write everything at
+  once.
+- Review-pass tightenings: named `user_values` must name planned
+  individuals, each once (unknown ids used to be written as records);
+  effects declared on a `derived_formula` phenotype are ignored rather than
+  evaluated (and drawn) by accident; sorts before draws use byte order so
+  seeded output is locale-independent; `sample_residuals()` is now
+  `(n, R)` only, pending its Phase 5 deletion.
+
+**What changed from v3.4 to v3.5** (Phase 5 implementation; details in
+§5.3, §5.5, D2 and `sample_correlated_effects_phase_5.md`):
+
+- The **residual adapter** exists: `.ap_resolve_residuals()` →
+  `.ap_residual_block()` in `R/add_phenotype_stages.R`, over
+  `find_covariance_blocks()` and `resolve_correlated_draws()`. The §8.5
+  joint draw, its equal-planned-sets restriction, the independent residual
+  branch, `sample_residuals()` and `get_residual_cov()` are deleted.
+  Defects 1, 2 and 4 are closed; `residual_value` /
+  `residual_condition_level` are written for every model-path record.
+- **Stage-2 RNG order is now the plan's**: every named-effect draw (the
+  pre-Phase-6 joint pre-draw, then the marginal draws for new levels, in
+  plan order) precedes the residual adapter. Before Phase 5 the marginal
+  named-effect draws were interleaved per phenotype with the independent
+  residual draw. Phase 6 replaces the named-effect *bodies* without moving
+  this boundary, so the order will not change again.
+- **Stratum fallback reporting** (D2, refined): a record whose condition
+  value is `NULL` falls back to the unconditional `R` silently — `NULL` is
+  the documented "no group" state. A **non-`NULL` value matching no
+  stratum** also falls back, but with a warning (count, the unmatched
+  levels, ≤ 5 ids), since an unmodelled level is more likely a typo than a
+  design. Without an unconditional stratum both are the D2 error, naming
+  the levels and the count.
+- **`user_residual` contract** (§5.3) as shipped: a plain vector is
+  accepted only when exactly one phenotype of the call is on the model
+  path (the pre-Phase-5 code applied one vector to every phenotype); a
+  list must be named by `phenotype_name`, may name a subset, and may not
+  name a `derived_formula` or `user_values` phenotype; named
+  (per-`id_ind`) vectors and `user_values` + `user_residual` together are
+  errors. Fixed values are stored with the stratum the record resolved to.
+- **Prevalence thresholds need an unconditional variance.** The
+  categorical `prevalence` cut-point is `mean + z·√(V_A + V_E)` with `V_E`
+  the *marginal* residual variance. When a phenotype has only conditional
+  strata there is no single `V_E`; the pre-Phase-5 code silently used `0`.
+  It is now an error pointing at `thresholds =` or an unconditional
+  stratum. (Before Phase 5 such a phenotype could not be sampled at all —
+  Defect 4 — so nothing that worked stops working.)
+- **The D3 lock is now live** for residual blocks: the first model-path
+  `add_phenotype()` call on a block member locks the block. The Phase 2
+  tests that simulated a realized residual by `UPDATE` now use real
+  records; a `user_values` record carries no residual and does not lock.
+- **Open item found (not fixed here, for Phase 8):** the definition-time D6
+  check refuses to flip `condition_change_action` on any member of a
+  defined block, in either direction, so the value is immutable once every
+  member is defined (`test-phenotype_cov_block.R` pins "flipping one member
+  back is refused"). Changing a block from `'error'` to `'independent'`
+  currently requires setting it on the phenotypes *before* the block is
+  declared, or dropping and redefining the phenotypes. A same-call
+  "set on all members" path is the obvious fix; noted in §8 Phase 8.
+
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
 or non-Gaussian dependence framework. Saying so up front matters, because the
@@ -140,6 +236,10 @@ concepts.
 ---
 
 ## 0. What changed in the codebase since v2
+
+*(File:line references in §0–§2 describe the code as it was when the defects
+were found, before Phase 4 restructured `add_phenotype()`; they are kept as
+the record of what was wrong. §5 onward is refreshed.)*
 
 v2 was written against ~v0.60. Nine releases later:
 
@@ -607,7 +707,11 @@ and **the list may name only a subset of the current phenotypes** — the rest a
 sampled. Each vector is positional over that phenotype's *planned* record list
 (§5.5 Stage 1), which is the same "final per-phenotype individual list" the
 current docs describe ([add_phenotype.R:57-64](../R/add_phenotype.R#L57-L64)),
-now with a precise definition because planning precedes drawing.
+now with a precise definition because planning precedes drawing. *(v3.5,
+shipped in `.ap_fixed_residuals()`: "single phenotype" means exactly one
+phenotype of the call on the model path; the list may not name a
+`derived_formula` / `user_values` phenotype; per-`id_ind` names are
+refused; combining with `user_values` is an error.)*
 
 Entity identity, per adapter:
 
@@ -632,6 +736,10 @@ with a generated B; partial named-effect vectors; blocks of more than two
 phenotypes; **and a size-1 block with heterogeneous variance (Defect 4)** — a
 single sample coordinate, zero observed, drawn from the stratum matching the
 entity's condition level.
+
+*(v3.5: every residual case in that list is a test in
+`test-add_phenotype_residuals.R`, most of them exact replays of the
+resolver's `n × m` stream. The named-effect cases land with Phase 6.)*
 
 ### 5.4 The resolver — ✅ shipped (Phase 3, 2026-09-20)
 
@@ -716,7 +824,14 @@ entries, non-negative diagonal, PSD within tolerance, **block replacement rule
 discover a malformed matrix deep inside phenotype generation, and must never
 interpret one as an instruction to draw independently.
 
-### 5.5 `add_phenotype()` control flow — three stages
+### 5.5 `add_phenotype()` control flow — three stages — ✅ Stages 1 and 3, and the residual half of Stage 2, shipped (Phases 4–5, 2026-09-21)
+
+*(v3.4: `.ap_plan()` / `.ap_resolve()` / `.ap_commit()` in
+`R/add_phenotype_stages.R` implement this structure. Stage 1 is complete as
+specified. Stage 3 is the single register + `INSERT` transaction. v3.5: the
+residual part of Stage 2 is the adapter `.ap_resolve_residuals()` /
+`.ap_residual_block()` below; the named-effect part still holds the
+pre-Phase-4 pre-draw and marginal draws, which Phase 6 replaces.)*
 
 *(Restructured in v3 per Codex B1.)* Today the final population for each phenotype is only known deep
 inside the per-phenotype loop, after §8.5 has already drawn for everyone. The new
@@ -778,8 +893,9 @@ The payoff is that Stage 2 and Stage 3 become short and testable in isolation.
 **Same-call differing subsets are resolved before anything is written.** If A is
 planned for individuals 1–100 and B for 51–100, then 1–50 get a marginal A draw,
 51–100 get a joint A/B draw, and no B row is created for 1–50. The `all_equal`
-restriction at [add_phenotype.R:579-584](../R/add_phenotype.R#L579-L584) is
-**deleted**.
+restriction is **deleted** *(v3.5: done — `.ap_residual_block()` groups
+entities by `(stratum, sample set)`, so 1–50 and 51–100 are two resolver
+calls on the same block, in sorted group order)*.
 
 **Stable ordering before every RNG-consuming step.** Sort blocks, patterns,
 coordinates, and named-effect levels. DuckDB does not guarantee row order
@@ -790,15 +906,14 @@ the sort on the other four.
 
 **All writes are register + `INSERT`, never `dbWriteTable()`.**
 `dbWriteTable()` advances R's RNG by a fixed amount through its random temp-name
-generation. Today `add_phenotype()` calls it at
-[add_phenotype.R:565](../R/add_phenotype.R#L565) and
-[add_phenotype.R:869](../R/add_phenotype.R#L869), interleaved with draws. Under
+generation. Before Phase 4, `add_phenotype()` called it for named-effect draws
+and for records, interleaved with draws. Under
 this plan every draw happens in Stage 2 and every write in Stage 3, and Stage 3
 is RNG-neutral, so the stream a call consumes is a function of the model and the
 plan only. Follow the idiom at
-[define_chromosome.R:219-227](../R/define_chromosome.R#L219-L227). The same rule
-applies to the marginal named-effect path at
-[phenotype_helpers.R:247](../R/phenotype_helpers.R#L247), which this plan absorbs.
+[define_chromosome.R:219-227](../R/define_chromosome.R#L219-L227). *(v3.4:
+done — `.ap_commit()` is that idiom, and the marginal named-effect path's
+write now goes through it too.)*
 
 **One transaction covers named-effect draws and phenotype records together.**
 A failed record write must not leave a pen draw on disk that conditions the next
@@ -810,19 +925,27 @@ Three more, added in v3.1:
 `WHERE id_ind IN <planned ids>` is shorthand. The plan's `(id_ind, pheno_number)`
 list is registered with `duckdb_register()` as a temporary view and the stored
 lookup is a `JOIN` against it — the same discipline as the genome-effects
-evaluator, where individual identifiers never enter the statement. The current
-code pastes id lists at [add_phenotype.R:605](../R/add_phenotype.R#L605); that
-goes with it. `duckdb_register()` is RNG-neutral.
+evaluator, where individual identifiers never enter the statement. *(v3.4:
+Stage 1 already does this — `.ap_read_by_id()` is the one join helper for the
+repeatable guard, the TBV read, effect source tables and the stratum lookup,
+and `next_pheno_numbers()` / `.eval_derived_formula()` register their ids.
+The composite-TBV assembly in `.assemble_composite_tbv()` and
+`.eval_formula_tbv()` still pastes contributor ids; those are TBV reads, not
+residual lookups, and are out of this plan's scope.)*
+`duckdb_register()` is RNG-neutral.
 
 **Stratum lookup contract.** `condition_table` defaults to `ind_meta` and may be
 any table with an `id_ind` column. Stage 1 reads `(id_ind, <condition_column>)`
 from it for the planned ids by the same registered-view join and requires
 **exactly one row per planned `id_ind`**; zero or several rows is an error
-naming the table, the column, and up to 5 example ids (the current code at
-[add_phenotype.R:601-612](../R/add_phenotype.R#L601-L612) silently takes the
-first match). A `NULL` condition value, or a value matching no stratum, is "no
+naming the table, the column, and up to 5 example ids (the pre-Phase-4 code
+silently took the first match; *v3.4:* `.ap_condition_values()` implements
+the contract). A `NULL` condition value, or a value matching no stratum, is "no
 matching stratum" and follows D2's fallback rule: unconditional `R` if one
 exists, stored as `residual_condition_level = NULL`; otherwise an error.
+*(v3.5: the stratum is selected per entity in `.ap_residual_block()`; a
+non-`NULL` unmatched value warns on fallback, `NULL` does not — see the
+v3.5 header.)*
 
 **The resolver draws with base R's RNG.** `stats::rnorm()` on a vector of
 standard normals, multiplied through a Cholesky (PD) or eigen (PSD) factor of
@@ -844,8 +967,8 @@ substitution.
 
 *(v3.1)* A **1 × 1 block is exempt.** `define_effect_random(distribution =
 "gamma" | "uniform")` on a phenotype that shares its `effect_name` with no other
-phenotype is a valid, supported model today, drawn by the marginal sampler at
-[phenotype_helpers.R:230-239](../R/phenotype_helpers.R#L230-L239). Under this
+phenotype is a valid, supported model today, drawn by the marginal sampler
+(since Phase 4: `.ap_resolve_random_terms()`). Under this
 plan the named-effect adapter dispatches: a 1 × 1 block whose coordinate is
 non-normal keeps that marginal sampler (moved, not rewritten, and still
 persisted per level in the Stage-3 transaction); every other block goes to the
@@ -921,9 +1044,9 @@ pop <- pop |>
 #### What happens today
 
 **Day 0 — `add_phenotype("ADG")`.** §7.5 is gated on `length(phenos) >= 2`
-([add_phenotype.R:465](../R/add_phenotype.R#L465)), so a single-phenotype call
+(since Phase 4: `.ap_predraw_named_effects()`), so a single-phenotype call
 skips the correlated path entirely. The marginal path
-([phenotype_helpers.R:208-250](../R/phenotype_helpers.R#L208-L250)) draws
+(`.ap_resolve_random_terms()`) draws
 `rnorm(sd = sqrt(150))` for each pen level and stores
 `(ADG, pen, P1, +8.3)`, `(ADG, pen, P2, -4.1)`, …
 
@@ -1152,9 +1275,12 @@ matches and an unconditional stratum exists, the unconditional `R` is used and
 `residual_condition_level` is stored as `NULL` — the *selected* stratum, not the
 raw column value. If no stratum matches and there is no unconditional stratum,
 **error** naming the unmatched level and count. The current code's
-"residuals set to 0 (no unconditional fallback)" at
-[add_phenotype.R:640-644](../R/add_phenotype.R#L640-L644) is not an acceptable
-fallback and is deleted.
+"residuals set to 0 (no unconditional fallback)" is not an acceptable
+fallback and is deleted. *(v3.5: the real rule is in `.ap_residual_block()`:
+the error names the unmatched levels, the count, the strata stored and up
+to 5 ids. The `'independent'` warning and the `'error'` message both list
+up to 5 `id (coordinate: stored under X, now Y)` examples and, for
+`'independent'`, the dropped coordinates.)*
 
 Sex as a condition column never triggers the change path, because an entity's
 sex does not change between calls.
@@ -1318,7 +1444,8 @@ phenotypes, the sampling-time check is the one that cannot be skipped.
 `.check_condition_change_agreement(conn, block, pending, caller)` in
 [phenotype_cov_block.R](../R/phenotype_cov_block.R); `define_phenotype()`
 passes its pending row so the check runs before the `phenotype_meta` write.
-Stage 2 (Phase 5) calls the same function without `pending`.
+Stage 2 calls the same function without `pending` *(v3.5: shipped — run per
+block whenever a stored coordinate exists, before D2 is applied)*.
 
 ### D7 — RNG state on failure — **decided: option 1**
 
@@ -1371,7 +1498,7 @@ writers 1–5; Reproducibility and integrity 6–8 (the residual half of 6–7 w
 `next_int_id()` to fail after the `DELETE`); plus RNG-neutrality of the writers,
 the strata rules, and D6 at both definition-time sites.
 
-### Residual blocks
+### Residual blocks — ✅ 1–9 covered (Phase 5, `test-add_phenotype_residuals.R`); 10–15 in Phase 2
 
 1. Sequential A → B, identical individuals.
 2. A → B on a culled subset (the motivating scenario); realized correlation on the
@@ -1398,7 +1525,13 @@ the strata rules, and D6 at both definition-time sites.
     conditional stratum errors; `{A, B}` strata for each level succeed; a second
     `condition_column` on the same block errors.
 
-### Defect 4 — heterogeneous residuals on single-phenotype calls
+### Defect 4 — heterogeneous residuals on single-phenotype calls — ✅ covered (Phase 5)
+
+*(v3.5: item 1's "must fail on current code" holds by construction rather
+than by a re-run — the Phase 4 suite asserted `residual_value` and
+`residual_condition_level` were `NULL` on every record, and the strengthened
+composite assertions read both. Not a committed artefact, per §8 "On tests
+before the fix".)*
 
 1. **Before the fix**: the existing composite test is extended to assert
    `var(resid | sex == "M") ≈ 400` and `≈ 800` for `F`; it must fail on current
@@ -1410,7 +1543,7 @@ the strata rules, and D6 at both definition-time sites.
    and store `residual_condition_level = NULL`; with no unconditional `R` they
    **error** rather than receiving `0`.
 
-### Record planning (Stage 1)
+### Record planning (Stage 1) — ✅ covered (Phase 4, `test-add_phenotype_stages.R`)
 
 1. An individual excluded by `null_class_action = "skip"` consumes **no**
    residual RNG and leaves no stochastic state: seeded output is identical
@@ -1418,7 +1551,14 @@ the strata rules, and D6 at both definition-time sites.
 2. Same for formula-TBV and composite-TBV exclusions.
 3. `pheno_number` assigned in Stage 1 equals what is written in Stage 3.
 
-### Fixed coordinates (`user_residual`)
+*(v3.4 adds: the repeatable guard behaves the same way; records are planned
+and written in `id_ind` order; a call consumes exactly `n` residual normals
+plus one per new random-effect level and nothing else; `user_values` calls
+are RNG-neutral; Stage 3 rolls back both tables on failure; a derived
+phenotype reads a feeder planned in the same call; the condition-table
+exactly-one-row contract.)*
+
+### Fixed coordinates (`user_residual`) — ✅ covered (Phase 5)
 
 1. A supplied `A` residual conditions a generated `B` residual **in the same
    call**; across many animals the realized pairs reproduce `R`.
@@ -1431,7 +1571,7 @@ the strata rules, and D6 at both definition-time sites.
 5. A supplied value off the support of a singular `R` (e.g. nonzero for a
    zero-variance coordinate) errors in the resolver.
 
-### Repeated records
+### Repeated records — ✅ covered (Phase 5)
 
 1. Distinct phenotypes match on equal `pheno_number`.
 2. Repeated records of the same phenotype stay residual-independent.
@@ -1612,7 +1752,20 @@ with support consistency and relative tolerance, all checks before the first
 now stores the symmetrized matrix. 115 new expectations; full suite green.
 Details and the v3.3 clarifications in the header.
 
-**Phase 4 — extract record planning (Stage 1).** Pull sex expression, the
+**Phase 4 — extract record planning (Stage 1).** ✅ **Shipped 2026-09-21** —
+see `sample_correlated_effects_phase_4.md`. `add_phenotype()` is now
+`.ap_plan()` → `.ap_resolve()` → `.ap_commit()` (`R/add_phenotype_stages.R`).
+Stage 1 plans every record — sex expression, repeatable guard, fixed-effect
+skip, formula/composite exclusion, path, `pheno_number`, residual condition
+value, random-effect level per record — with no RNG and no writes (the
+`add_tbv()` prerequisite aside). Stage 2 holds the pre-Phase-4 draw paths
+over the plan; Stage 3 is one register + `INSERT` transaction. Seeded output
+is independent of physical row order, and an excluded individual consumes
+no RNG and leaves no random-effect draw behind. 57 new expectations in
+`test-add_phenotype_stages.R`; full suite green. Phases 5–6 replace the
+Stage-2 bodies; the transaction planned for Phases 5–7 already exists.
+
+*(Original scope:)* Pull sex expression, the
 repeatable guard, covariate skip, formula/composite exclusion, path
 classification, `pheno_number` assignment, stratum lookup, and named-effect
 level collection out of the per-phenotype loop into an in-memory plan, with no
@@ -1620,22 +1773,45 @@ RNG and no writes. Behaviour-preserving for the non-correlated path; verified
 by the existing suite plus the Stage-1 tests. This is the largest single step
 and should land as its own commit.
 
-**Phase 5 — residual integration (Stage 2 + 3 for residuals).** Residual
+**Phase 5 — residual integration (Stage 2 + 3 for residuals).** ✅
+**Shipped 2026-09-21** — see `sample_correlated_effects_phase_5.md`. The
+residual adapter `.ap_resolve_residuals()` / `.ap_residual_block()` over
+`find_covariance_blocks()` and `resolve_correlated_draws()`: stratum per
+entity with the D2 fallback rule, stored coordinates of every block member
+at the same `pheno_number` (registered-view join), `user_residual` as fixed
+coordinates, D6 then D2 on the stored set, one resolver call per
+`(stratum, sample set)` in sorted order, `residual_value` /
+`residual_condition_level` written by Stage 3. `.ap_joint_residuals()`, the
+independent-draw branch, `sample_residuals()` and `get_residual_cov()` are
+deleted (there was nothing to "rewrite around strata" — the Phase 3 loader
+already is that). Named-effect draws now all precede the residual adapter.
+87 new expectations in `test-add_phenotype_residuals.R`; three Phase 1–2
+tests that pinned the pre-Phase-5 `NULL` residuals updated; full suite
+green.
+
+*(Original scope:)* Residual
 adapter over the plan: stratum per entity, stored + fixed observed set, D2/D6
 checks, per-pattern resolver calls; delete the `all_equal` restriction, §8.5,
-and the zero-residual fallback; rewrite `get_residual_cov()` around strata; one
-transaction, register + `INSERT` only.
+and the zero-residual fallback; rewrite `get_residual_cov()` around strata.
 
 **Phase 6 — named-effect integration.** Replace §7.5 and the normal branch of
-the marginal path in `compute_covariate_contribution()` with the named-effect
+the marginal path (*v3.4:* `.ap_predraw_named_effects()` and the normal
+branch of `.ap_resolve_random_terms()`) with the named-effect
 adapter over the same resolver, persistent per-level entity identity, source and
 distribution checks as the `add_phenotype()` backstop. The gamma/uniform branch
-of the marginal path is kept for 1 × 1 blocks (§5.6) and its `dbWriteTable()`
-write moves into the Stage-3 transaction with everything else. Named-effect and
-phenotype writes in the same transaction.
+of the marginal path is kept for 1 × 1 blocks (§5.6); *(v3.4: its write
+already goes through the Stage-3 transaction, and Stage 1 already supplies
+the level per planned record via `.ap_covariate_terms()`.)* *(v3.5: the
+residual adapter is the template — same block loop, entity =
+`(effect_name, level)`, stored = `phenotype_random_effects`, no strata, no
+fixed coordinates, no D2. Its draws must stay **before** the residual
+adapter in `.ap_resolve()`, where the named-effect draws already are.)*
 
 **Phase 7 — transaction/RNG boundary.** Implement D7 exactly as decided; the
 two-part integrity test (database unchanged, seed advanced by the Stage-2 draws).
+*(v3.4: the Stage-3 transaction already exists since Phase 4 and
+`test-add_phenotype_stages.R` has a rollback test; what remains is the
+Stage-2-failure half of D7 and the seed-advanced assertion.)*
 
 **Phase 8 — documentation, housekeeping, performance.**
 - Roxygen: sequential sampling; ordinal repeated-record pairing; liability
@@ -1652,6 +1828,11 @@ two-part integrity test (database unchanged, seed advanced by the Stage-2 draws)
 - `R/schema.R` column descriptions are added in Phase 1; confirm
   `test-schema-print.R` still passes (table lists are unchanged).
 - `NEWS.md` under **0.71.0**, `DESCRIPTION` version bump.
+- *(v3.5)* Make `condition_change_action` changeable on a defined block:
+  today the definition-time D6 check refuses to flip any one member, so
+  once every member is defined the value is frozen. Either a same-call
+  "set on all members" form of `define_phenotype()` or a relaxation that
+  lets the *last* member's change go through. Decide and document.
 - Benchmark under `dev/benchmarks/` for large populations, optimizing the
   observation-pattern query and batched writes **without changing RNG
   semantics**.

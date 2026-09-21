@@ -301,7 +301,7 @@ test_that("D3 (named effect): a block with stored draws cannot be redefined unti
   expect_equal(effect_rows(pop, "pen")$cov_value[1L], 2)
 })
 
-test_that("D3 (residual): the lock reads residual_value IS NOT NULL, so today's NULL records do not lock", {
+test_that("D3 (residual): the records add_phenotype() writes lock the block; remove_rows() on residual_value clears it", {
   pop <- make_block_pop("d3_resid", traits = c("A", "B"))
   on.exit(close_pop(pop))
 
@@ -309,29 +309,24 @@ test_that("D3 (residual): the lock reads residual_value IS NOT NULL, so today's 
   pop <- define_residual_cov(pop, c("A", "B"), R)
   pop <- suppressMessages(define_phenotype(pop, "A"))
   pop <- suppressMessages(define_phenotype(pop, "B"))
-  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_phenotype(c("A", "B")))
-  expect_gt(DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM ind_phenotype")$n, 0L)
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_phenotype("A"))
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_phenotype WHERE residual_value IS NOT NULL")$n, 12L)
 
-  # residual_value is NULL until Phase 5 writes it: no lock
-  pop <- define_residual_cov(pop, c("A", "B"), 2 * R)
-  expect_equal(resid_rows(pop)$cov_value[1L], 2)
-
-  # Simulate one realized residual
-  DBI::dbExecute(pop$db_conn,
-    "UPDATE ind_phenotype SET residual_value = 0.5
-     WHERE id_phenotype = (SELECT MIN(id_phenotype) FROM ind_phenotype WHERE phenotype_name = 'A')")
-  err <- tryCatch(define_residual_cov(pop, c("A", "B"), 3 * R),
+  err <- tryCatch(define_residual_cov(pop, c("A", "B"), 2 * R),
                   error = function(e) conditionMessage(e))
-  expect_match(err, "has 1 realized draw in ind_phenotype")
+  expect_match(err, "has 12 realized draws in ind_phenotype")
   expect_match(err, "!is.na\\(residual_value\\)")
   expect_match(err, "remove_rows\\(\\)")
-  expect_equal(resid_rows(pop)$cov_value[1L], 2)
+  expect_equal(resid_rows(pop)$cov_value[1L], 1)
 
-  # The recipe clears exactly the locking rows; redefinition then succeeds
+  # A user_values record carries no residual and does not lock
   pop <- suppressMessages(
     pop |> get_table("ind_phenotype") |>
       dplyr::filter(phenotype_name %in% c("A", "B"), !is.na(residual_value)) |>
       remove_rows())
+  pop <- suppressMessages(pop |> get_table("ind_meta") |>
+    add_phenotype("B", user_values = rep(1, 12)))
   pop <- define_residual_cov(pop, c("A", "B"), 3 * R)
   expect_equal(resid_rows(pop)$cov_value[1L], 3)
 })
@@ -394,7 +389,6 @@ test_that("D5: define_phenotype(residual_var = ) on a realized singleton errors 
 
   pop <- suppressMessages(define_phenotype(pop, "A", residual_var = 1))
   pop <- suppressMessages(pop |> get_table("ind_meta") |> add_phenotype("A"))
-  DBI::dbExecute(pop$db_conn, "UPDATE ind_phenotype SET residual_value = 0.1")
 
   err <- tryCatch(define_phenotype(pop, "A", residual_var = 2, overwrite = TRUE),
                   error = function(e) conditionMessage(e))

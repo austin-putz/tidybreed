@@ -568,29 +568,45 @@
 
 # ── Top-level derived formula evaluator ──────────────────────────────────────
 
-#' Evaluate a derived formula over existing ind_phenotype records.
+#' Evaluate a derived formula over ind_phenotype records.
 #'
 #' @param pop A tidybreed_pop object.
 #' @param formula Character. Formula string from phenotype_meta.
 #' @param ids Character vector. Individual IDs to compute for.
 #' @param phenotype_name Character. Name of the derived phenotype (for messages).
+#' @param pending Optional data frame of records planned earlier in the same
+#'   `add_phenotype()` call (`id_ind`, `phenotype_name`, `pheno_value`,
+#'   `pheno_number`) that are not on disk yet. They are treated exactly as if
+#'   they had been written, so a derived phenotype can consume a feeder
+#'   phenotype from the same call.
 #' @return Numeric vector, same length as ids.
 #'         NA propagates naturally; Inf/NaN converted to NA with a warning.
 #' @keywords internal
-.eval_derived_formula <- function(pop, formula, ids, phenotype_name) {
+.eval_derived_formula <- function(pop, formula, ids, phenotype_name,
+                                  pending = NULL) {
   expr    <- parse(text = formula, keep.source = FALSE)[[1]]
   symbols <- .extract_all_symbols(expr)
   symbols <- setdiff(symbols, c(.FORMULA_MATH_WHITELIST, .FORMULA_ARITH_OPS))
 
   if (length(ids) == 0) return(numeric(0))
 
-  ids_sql    <- paste0("'", ids, "'", collapse = ", ")
-  phenos_sql <- paste0("'", gsub("'", "''", symbols), "'", collapse = ", ")
-  rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT id_ind, phenotype_name, pheno_value, pheno_number FROM ind_phenotype ",
-    "WHERE id_ind IN (", ids_sql, ") ",
-    "AND phenotype_name IN (", phenos_sql, ")"
-  ))
+  conn <- pop$db_conn
+  tmp  <- "__ap_derived_ids"
+  duckdb::duckdb_register(conn, tmp, data.frame(id_ind = unique(ids),
+                                                stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
+  rows <- DBI::dbGetQuery(conn, paste0(
+    "SELECT p.id_ind, p.phenotype_name, p.pheno_value, p.pheno_number ",
+    "FROM ind_phenotype AS p JOIN ", tmp, " AS f USING (id_ind) ",
+    "WHERE p.phenotype_name IN (", .pvc_in_list(conn, symbols), ")"))
+
+  if (!is.null(pending) && nrow(pending) > 0 &&
+      all(c("id_ind", "phenotype_name", "pheno_value", "pheno_number") %in%
+          names(pending))) {
+    keep <- pending$phenotype_name %in% symbols & pending$id_ind %in% ids
+    rows <- rbind(rows, as.data.frame(
+      pending[keep, c("id_ind", "phenotype_name", "pheno_value", "pheno_number")]))
+  }
 
   if (nrow(rows) == 0)
     stop(

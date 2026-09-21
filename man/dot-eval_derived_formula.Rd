@@ -2,9 +2,9 @@
 % Please edit documentation in R/formula_helpers.R
 \name{.eval_derived_formula}
 \alias{.eval_derived_formula}
-\title{Evaluate a derived formula over existing ind_phenotype records.}
+\title{Evaluate a derived formula over ind_phenotype records.}
 \usage{
-.eval_derived_formula(pop, formula, ids, phenotype_name)
+.eval_derived_formula(pop, formula, ids, phenotype_name, pending = NULL)
 }
 \arguments{
 \item{pop}{A tidybreed_pop object.}
@@ -14,12 +14,18 @@
 \item{ids}{Character vector. Individual IDs to compute for.}
 
 \item{phenotype_name}{Character. Name of the derived phenotype (for messages).}
+
+\item{pending}{Optional data frame of records planned earlier in the same
+\code{add_phenotype()} call (\code{id_ind}, \code{phenotype_name}, \code{pheno_value},
+\code{pheno_number}) that are not on disk yet. They are treated exactly as if
+they had been written, so a derived phenotype can consume a feeder
+phenotype from the same call.}
 }
 \value{
 Numeric vector, same length as ids.
 NA propagates naturally; Inf/NaN converted to NA with a warning.
 }
 \description{
-Evaluate a derived formula over existing ind_phenotype records.
+Evaluate a derived formula over ind_phenotype records.
 }
 \keyword{internal}

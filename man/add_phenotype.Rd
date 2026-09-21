@@ -25,27 +25,33 @@ individuals that have rows there. A table without \code{id_ind} is an error.}
 (default), all phenotypes in \code{phenotype_meta} are used in
 \code{id_phenotype_meta} order.}
 
-\item{user_residual}{Optional override for residual draws (skips the
-\code{MVN}/independent residual sampling step described above; the mean,
-covariate, and TBV contributions are still computed and added). For a single
-\code{phenotype_name}, a plain numeric vector matched \strong{by position} to the
-final per-phenotype individual list — i.e. after sex-expression
-filtering (\code{expressed_sex}), repeatable-record exclusion, and any
-missing-component exclusion, so its length must equal the resulting
-subset size, which may be smaller than the original filtered \code{tbl}. For
-multiple phenotypes, a named list keyed by \code{phenotype_name}, each element
-following the same positional rule for that phenotype's own subset.
-Unlike \code{user_values} below, named (per-\code{id_ind}) vectors are \strong{not}
-supported here.}
+\item{user_residual}{Optional residuals to use instead of drawing them
+(the mean, covariate and TBV contributions are still computed and
+added). When exactly one phenotype in the call is generated from the
+model, a plain numeric vector matched \strong{by position} to that
+phenotype's planned records — sorted \code{id_ind} order after sex
+expression, the repeatable guard and any exclusion, so its length must
+equal the planned record count, which may be smaller than the filtered
+\code{tbl}. Otherwise a named list keyed by \code{phenotype_name} that may name
+\strong{any subset} of the model-generated phenotypes, each element following
+the same positional rule; the phenotypes not named are drawn conditional
+on the supplied values. Supplied residuals are stored in
+\code{residual_value} like drawn ones and condition later calls. A value
+outside the support of a singular covariance (e.g. non-zero for a
+zero-variance phenotype) is an error. Named (per-\code{id_ind}) vectors are
+\strong{not} supported here; cannot be combined with \code{user_values}.}
 
 \item{user_values}{Optional override for the full phenotype value —
 skips the model entirely (mean, covariates, and residual are not
 evaluated), though TBVs are still computed and stored in \code{ind_tbv}. For a
-single \code{phenotype_name}: a plain numeric vector matching the filtered
-subset by position (\code{id_ind} order), or a named numeric vector (e.g.
-\code{c(id_1 = 555, id_2 = 560)}) to match by \code{id_ind} regardless of order.
-For multiple phenotypes: a named list keyed by \code{phenotype_name}, each
-element following the same (positional-or-named) rule.}
+single \code{phenotype_name}: a plain numeric vector matching the planned
+records by position (sorted \code{id_ind} order, after sex expression and the
+repeatable guard), or a named numeric vector (e.g.
+\code{c(id_1 = 555, id_2 = 560)}) to match by \code{id_ind} regardless of order —
+every name must be an individual in that planned set, each once, and
+only the named individuals receive a record. For multiple phenotypes: a
+named list keyed by \code{phenotype_name}, each element following the same
+(positional-or-named) rule.}
 
 \item{seed}{Optional integer for reproducibility.}
 
@@ -79,9 +85,31 @@ of contributor TBVs (self, dam, sire, or group) — see
 set, written by \code{define_phenotype(..., formula_tbv = ...)}), \code{TBV_i} is
 evaluated from a small DSL expression referencing self/dam/sire/group
 TBVs instead of a \code{phenotype_components} data frame.
-\item \code{e_i} is residual: drawn from \code{MVN(0, R)} across phenotypes when a
-covariance matrix is stored in \code{phenotype_var_comp} and multiple
-phenotypes share the same subset; otherwise drawn independently.
+\item \code{e_i} is the residual, drawn from the phenotype's residual covariance
+block in \code{phenotype_var_comp} (see \code{\link[=define_residual_cov]{define_residual_cov()}}). Within a
+block, residuals are \strong{correlated across phenotypes and sequential in
+time}: each record is drawn from the block's multivariate normal
+conditional on every residual the same individual has already realized
+for the other phenotypes of the block at the same \code{pheno_number} —
+whether those were drawn in this call, in an earlier call, or supplied
+through \code{user_residual}. So \code{add_phenotype("A")} today and
+\code{add_phenotype("B")} after culling gives the survivors' \code{B} residual
+the stored correlation with their \code{A} residual, with no \code{B} record for
+the culled. Heterogeneous residual variance (strata by
+\code{condition_column}) is applied per record: each record draws from the
+stratum its condition value selects, falling back to the unconditional
+\code{R} (with \code{residual_condition_level} stored as \code{NULL}) when the value
+is \code{NULL} or matches no stratum, and erroring if there is no
+unconditional stratum to fall back on. A stored residual drawn under a
+different stratum than the current record resolves to is an error, or
+is dropped from the conditioning set with a warning when the block's
+phenotypes have \code{condition_change_action = "independent"}. The realized
+residual and its stratum are written to \code{ind_phenotype.residual_value}
+/ \code{residual_condition_level} (liability scale; \code{NULL} for \code{user_values}
+and \code{derived_formula} records). \code{pheno_number} pairs records
+ordinally, not by simulated time; repeated records of the \emph{same}
+phenotype have independent residuals (use a permanent-environment
+random effect for within-animal covariance).
 }
 
 \strong{\code{derived_formula} phenotypes are the one exception to the model above.}
@@ -96,12 +124,21 @@ are written before the formulas that consume them.
 \strong{Subset selection}: pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and
 optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as the first argument.
 
+\strong{How a call runs.} Every record is planned first — sex expression, the
+repeatable guard, fixed-effect skips, missing-component exclusions and
+\code{pheno_number} are all decided before a single random number is drawn —
+then every draw is made in memory, then everything is written in one
+transaction. An individual that ends up without a record therefore never
+consumes RNG, and seeded output does not depend on physical row order:
+records are planned in \code{id_ind} order within each phenotype. See
+\code{?add_phenotype_stages}.
+
 \strong{Escape hatches}:
 \itemize{
 \item \code{user_values}: skip model computation and write these values as phenotype
 records for the subset.
-\item \code{user_residual}: supply a numeric vector (or named list) to override the
-residual draw.
+\item \code{user_residual}: supply the residuals of some or all phenotypes instead
+of drawing them; the rest are drawn conditional on the supplied values.
 }
 }
 \examples{

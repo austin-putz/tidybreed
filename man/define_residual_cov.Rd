@@ -71,6 +71,16 @@ one \code{condition_column}; to grow a block that already has several strata,
 clear its rows from \code{phenotype_var_comp} with \code{\link[=remove_rows]{remove_rows()}} and redeclare
 each stratum.
 
+\strong{How the block is sampled.} \code{\link[=add_phenotype]{add_phenotype()}} draws each record's
+residual from this block conditional on the residuals the same individual
+has already realized for the block's other phenotypes at the same
+\code{pheno_number} — in the same call or any earlier one — so the declared
+covariance holds whether the phenotypes are recorded together or a
+hundred simulated days apart with culling in between. With strata, each
+record draws from the stratum its \code{condition_column} value selects,
+falling back to the unconditional stratum when the value is \code{NULL} or
+matches none (an error if there is no unconditional stratum).
+
 \strong{Realized draws lock the block.} Once any \code{ind_phenotype} row of a member
 has a non-\code{NULL} \code{residual_value}, the block cannot be redefined; the error
 gives the \code{\link[=remove_rows]{remove_rows()}} call that clears those rows. Every phenotype in

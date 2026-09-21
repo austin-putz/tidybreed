@@ -55,8 +55,8 @@ test_that("store_liability and cat_names populate base columns without ALTER TAB
   # Liability and category agree: category 1 ("Dead") is the upper tail.
   expect_true(all(ph$liability_value[ph$pheno_value == 1] >
                     max(ph$liability_value[ph$pheno_value == 0])))
-  # Not written until Phase 5.
-  expect_true(all(is.na(ph$residual_value)))
+  # The liability-scale residual is stored; the unconditional R has no level.
+  expect_false(anyNA(ph$residual_value))
   expect_true(all(is.na(ph$residual_condition_level)))
 })
 
