@@ -1,3 +1,14 @@
+# tidybreed 0.64.3 (2026-09-20)
+
+## Documentation
+
+- **Hex sticker.** Package logo added at `man/figures/logo.png` (pkgdown picks it
+  up as the site logo automatically); the README header now shows the sticker
+  beside the title and badges. Favicons generated with
+  `pkgdown::build_favicons()` into `pkgdown/favicon/`, which is no longer
+  gitignored (the site is built in CI, so favicons must be tracked). The
+  full-resolution original lives in `dev/logo/` (build-ignored).
+
 # tidybreed 0.64.2 (2026-09-04)
 
 Makes `remove_rows()` work on every table it should, and stops it reporting
