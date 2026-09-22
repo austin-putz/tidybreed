@@ -1,8 +1,8 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.6, approved; implementation in progress.** Phases 0–6
-shipped (0–3 on 2026-09-20, 4–6 on 2026-09-21; `sample_correlated_effects_phase_0.md`
-… `sample_correlated_effects_phase_6.md`); Phases 7–8 not started.
+**Status**: **v3.7, approved; implementation in progress.** Phases 0–7
+shipped (0–3 on 2026-09-20, 4–7 on 2026-09-21–22; `sample_correlated_effects_phase_0.md`
+… `sample_correlated_effects_phase_7.md`); Phase 8 not started.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -269,6 +269,46 @@ changes; details in §5.5 and `sample_correlated_effects_phase_4.md`):
   level's draw is persistent"; occasion goes in the level) and the
   conditional-sampling paragraph; `define_effect_cov_matrix()` and
   `add_phenotype()` describe the sequential named-effect draw.
+
+**What changed from v3.6 to v3.7** (Phase 7 implementation, no decision
+changes and **no code change**; details in D7, §7 and
+`sample_correlated_effects_phase_7.md`):
+
+- **D7 is stated and tested as decided.** Nothing in `R/` touches
+  `.Random.seed` (verified); the Stage-3 transaction from Phase 4 is the
+  whole of the database half. `?add_phenotype` and `?add_phenotype_stages`
+  now carry the contract: any error — a Stage-1 rejection, a Stage-2 error
+  after some draws, a failed write — leaves `ind_phenotype` and
+  `phenotype_random_effects` exactly as they were, and `.Random.seed`
+  advanced by exactly the draws made before the error; a retry draws
+  different values unless it re-seeds.
+- **The database half is stronger than "no rows"**: a failed call also rolls
+  back the `ALTER TABLE ADD COLUMN` that `prepare_extra_cols()` may have
+  issued earlier in the same transaction for a new `...` column (DuckDB's
+  DDL is transactional). Both Rd pages say so. The one write a failed call
+  *does* leave is the Stage-1 `add_tbv()` upsert, which costs no RNG and is
+  rewritten by the retry; that is stated rather than hidden.
+- **The integrity test is a whole-database comparison**, not a row count:
+  `tests/testthat/test-add_phenotype_failure_contract.R` snapshots every
+  base table before the failing call and asserts identity after, for a
+  Stage-3 write failure (§7 item 3), a Stage-2 error in the named-effect
+  adapter after the preceding effect drew, a Stage-2 error in the residual
+  adapter (D2) after the named effect and the preceding residual block
+  drew — proving a block resolved before the failing one is never written
+  on its own — and three rejections before any draw (Stage 1; `user_residual`
+  length; the resolver's support check). Each asserts the seed against a
+  replay of the draws made.
+- **One observation outside this plan's scope**: `ind_tbv` is the one table
+  a failed call still touches (the Stage-1 `add_tbv()` upsert), and its
+  values are *not* bit-reproducible across identical runs — DuckDB's
+  multi-threaded `SUM()` in the genome-effects evaluator changes the
+  floating-point summation order (differences ≈ 5e-16 on a 60-locus
+  trait; identical with `SET threads = 1`). The test compares `ind_tbv`
+  with tolerance and every other table for identity. This is the
+  evaluator's concern (`R/genome_effects_eval.R`), not the phenotype
+  layer's; it is recorded in §8 Phase 8 as an open item because it bears on
+  the "same seed reproduces within the current code" contract at the last
+  bit of `pheno_value`.
 
 **Scope name**: this is **Layer 1 — fixed multivariate Gaussian blocks sampled
 across pipeline stages.** It is not a longitudinal, random-regression, survival,
@@ -972,6 +1012,11 @@ write now goes through it too.)*
 **One transaction covers named-effect draws and phenotype records together.**
 A failed record write must not leave a pen draw on disk that conditions the next
 call. What the transaction does **not** cover — the RNG state — is D7.
+*(v3.7: both halves tested in `test-add_phenotype_failure_contract.R`. The
+transaction also covers the **schema**: an `ALTER TABLE ADD COLUMN` issued by
+`prepare_extra_cols()` for a new `...` column rolls back with the rows.
+The one write outside it is Stage 1's `add_tbv()` upsert, which is
+RNG-neutral — verified — and idempotent.)*
 
 Three more, added in v3.1:
 
@@ -1505,7 +1550,7 @@ passes its pending row so the check runs before the `phenotype_meta` write.
 Stage 2 calls the same function without `pending` *(v3.5: shipped — run per
 block whenever a stored coordinate exists, before D2 is applied)*.
 
-### D7 — RNG state on failure — **decided: option 1**
+### D7 — RNG state on failure — **decided: option 1** ✅ *(v3.7: shipped as decided, Phase 7)*
 
 **Question (Codex T).** Stage 3's transaction makes the *database* atomic. It
 does not make the *operation* atomic: an R error after Stage 2 — including a
@@ -1532,7 +1577,13 @@ package-wide policy, not here.
 
 The contract is stated in the `add_phenotype()` docs and tested directly (§7):
 a forced Stage-3 failure leaves the database unchanged **and** `.Random.seed`
-advanced by exactly the Stage-2 draws.
+advanced by exactly the Stage-2 draws. *(v3.7: stated in `?add_phenotype`
+and `?add_phenotype_stages`; tested in
+`test-add_phenotype_failure_contract.R` for Stage-3, both Stage-2 adapters
+mid-stream, and three pre-draw rejections, each against a whole-database
+snapshot. The one write a failed call leaves is the Stage-1 `add_tbv()`
+upsert, which is deterministic and idempotent — see the v3.7 note on its
+bit-level reproducibility.)*
 
 ---
 
@@ -1728,12 +1779,21 @@ members, absent phenotypes, hand-broken blocks, RNG-neutrality).
 2. Joint and sequential paths reproduce the target covariance statistically.
 3. Forced Stage-3 write failure rolls back residuals, named draws, and phenotype
    rows together — **and** (D7) leaves `.Random.seed` advanced by exactly the
-   Stage-2 draws. Both halves asserted.
+   Stage-2 draws. Both halves asserted. ✅ *(v3.7:
+   `test-add_phenotype_failure_contract.R`, "a failed Stage-3 write";
+   also a Stage-2 failure in each adapter after earlier draws, and the
+   retry-draws-new-values consequence.)*
 4. Results are independent of database row order — shuffle `ind_meta` physical
-   order between two seeded runs and compare.
+   order between two seeded runs and compare. ✅ *(v3.7: `test-add_phenotype_stages.R`,
+   "seeded output is identical when ind_meta's physical row order is
+   reversed" — both adapters, records and draws compared. Phase 4's
+   neighbouring test asserts the **output** order only; the shuffle this
+   item asks for was missing until the Phase 7 review.)*
 5. **RNG accounting**: a seeded `add_phenotype()` call advances `.Random.seed`
    by exactly the draws it makes; no write in the call touches the RNG. Assert by
    comparing the post-call seed to one obtained by replaying the draws alone.
+   ✅ *(Phase 4: `test-add_phenotype_stages.R`, "a call consumes exactly its
+   draws"; Phases 5–7 add the per-block replays.)*
 6. **D3**: redefining a block errors once any realized draw exists; **there is
    no override**; the message contains the `remove_rows()` recipe.
 7. **D3**: after `remove_rows()` clears the realizations, redefinition succeeds.
@@ -1889,19 +1949,33 @@ residual adapter is the template — same block loop, entity =
 fixed coordinates, no D2. Its draws must stay **before** the residual
 adapter in `.ap_resolve()`, where the named-effect draws already are.)*
 
-**Phase 7 — transaction/RNG boundary.** Implement D7 exactly as decided; the
+**Phase 7 — transaction/RNG boundary.** ✅ *(v3.7, shipped 2026-09-21; see
+`sample_correlated_effects_phase_7.md`.)* Implement D7 exactly as decided; the
 two-part integrity test (database unchanged, seed advanced by the Stage-2 draws).
 *(v3.4: the Stage-3 transaction already exists since Phase 4 and
 `test-add_phenotype_stages.R` has a rollback test; what remains is the
-Stage-2-failure half of D7 and the seed-advanced assertion.)*
+Stage-2-failure half of D7 and the seed-advanced assertion.)* *(v3.7: no
+code change was needed — nothing in `R/` touches `.Random.seed`, and Stage
+3 is the only writer. Shipped: the D7 paragraphs in `?add_phenotype` and
+`?add_phenotype_stages`, the CLAUDE.md failure-contract note, and
+`test-add_phenotype_failure_contract.R` — 38 expectations over whole-database
+snapshots: Stage-3 write failure, Stage-2 failure in the named-effect
+adapter after `herd` drew, Stage-2 failure in the residual adapter (D2)
+after the pen level and residual block `{A}` drew, three pre-draw
+rejections, the retry / re-seed consequence, the rollback of an
+`ALTER TABLE` issued earlier in the failing transaction, and the one write
+a failed call does leave (the Stage-1 `add_tbv()` upsert). The review also
+added §7 item 4's missing physical-order shuffle to
+`test-add_phenotype_stages.R`.)*
 
 **Phase 8 — documentation, housekeeping, performance.**
 - Roxygen: sequential sampling; ordinal repeated-record pairing; liability
   scale; D1 whole-block rule; D2 `condition_change_action` and `'independent'`
   semantics; D3 lock and the `remove_rows()` recipe; D5 on `define_phenotype()`
-  and `define_effect_random()`; D6 agreement; D7 RNG contract; the persistent
-  pen-identity note on `define_effect_random()`; a culling example on
-  `add_phenotype()`; the `user_residual` subset-list contract.
+  and `define_effect_random()`; D6 agreement; D7 RNG contract *(v3.7: done
+  in Phase 7)*; the persistent
+  pen-identity note on `define_effect_random()` *(v3.6: done)*; a culling
+  example on `add_phenotype()`; the `user_residual` subset-list contract.
 - CLAUDE.md: `ind_phenotype` and `phenotype_meta` schema tables; the D1/D5
   rules in the `define_phenotype()` / `define_residual_cov()` sections; the
   `add_phenotype()` description of the three-stage flow and residual model;
@@ -1918,6 +1992,18 @@ Stage-2-failure half of D7 and the seed-advanced assertion.)*
 - Benchmark under `dev/benchmarks/` for large populations, optimizing the
   observation-pattern query and batched writes **without changing RNG
   semantics**.
+- *(v3.7, found in Phase 7; outside this plan's layer)* `add_tbv()` /
+  `add_tgv()` values are not bit-reproducible across identical runs: the
+  evaluator's `SUM()` runs multi-threaded in DuckDB, so the floating-point
+  summation order varies (≈ 5e-16 on a 60-locus trait; identical under
+  `SET threads = 1`). `pheno_value` inherits the wobble through the TBV
+  term. Decide whether the "same seed reproduces within the current code"
+  contract means bit-identical (then the evaluator needs an ordered
+  reduction — e.g. `SUM()` over a `locus_id`-ordered subquery is *not*
+  enough in DuckDB; it needs a single-threaded aggregate or an R-side
+  ordered sum) or identical within tolerance (then say so in CLAUDE.md).
+  `test-add_phenotype_failure_contract.R` compares `ind_tbv` with tolerance
+  for this reason.
 
 **Size.** v2's ~250 net lines covered Phases 5–6 only. With Phase 4's
 extraction, the three writers' transactions and validator, and the resolver

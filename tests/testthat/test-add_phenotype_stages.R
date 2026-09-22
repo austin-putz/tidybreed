@@ -190,6 +190,52 @@ test_that("records are planned and written in id_ind order, not physical row ord
   expect_identical(phen(pop)$id_phenotype, seq_along(ids))
 })
 
+# §7 "Reproducibility and integrity" item 4: shuffle ind_meta's physical order
+# between two seeded runs and compare. (The test above asserts the *output*
+# order; this one asserts the draws themselves do not depend on the input
+# order, which is what makes the id_ind sort load-bearing rather than
+# cosmetic. Both adapters run: a named effect with three levels and a
+# two-phenotype residual block.)
+test_that("seeded output is identical when ind_meta's physical row order is reversed", {
+  build <- function(name, reverse) {
+    pop <- make_stage_pop(name, traits = c("A", "B"))
+    pop <- suppressMessages(define_residual_cov(
+      pop, c("A", "B"), sym(c("A", "B"), c(2, .8, .8, 1))))
+    pop <- set_col(pop, "pen", "P1")
+    pop <- set_col(pop, "pen", "P2", ids = c("A_2", "A_4", "A_7"))
+    pop <- set_col(pop, "pen", "P3", ids = c("A_11"))
+    for (t in c("A", "B")) {
+      pop <- suppressMessages(define_effect_random(
+        pop, t, "pen", source_column = "pen", variance = 4))
+    }
+    if (reverse) {
+      # CREATE TABLE AS keeps the column types; nothing declares a SQL
+      # foreign key to ind_meta, so the table can be rebuilt in place.
+      DBI::dbExecute(pop$db_conn,
+        "CREATE TABLE __shuf AS SELECT * FROM ind_meta ORDER BY id_ind DESC")
+      DBI::dbExecute(pop$db_conn, "DROP TABLE ind_meta")
+      DBI::dbExecute(pop$db_conn, "ALTER TABLE __shuf RENAME TO ind_meta")
+    }
+    suppressMessages(pop |> get_table("ind_meta") |>
+                       add_phenotype(c("A", "B"), seed = 77))
+    pop
+  }
+  ordered  <- build("st_phys_a", FALSE)
+  on.exit(close_pop(ordered))
+  shuffled <- build("st_phys_b", TRUE)
+  on.exit(close_pop(shuffled), add = TRUE)
+
+  # The physical order really did change, and the records still come out sorted
+  expect_false(identical(
+    DBI::dbGetQuery(ordered$db_conn,  "SELECT id_ind FROM ind_meta")$id_ind,
+    DBI::dbGetQuery(shuffled$db_conn, "SELECT id_ind FROM ind_meta")$id_ind))
+
+  cols <- c("id_phenotype", "id_ind", "phenotype_name", "pheno_value",
+            "pheno_number", "residual_value")
+  expect_equal(phen(ordered)[cols], phen(shuffled)[cols])
+  expect_equal(re_rows(ordered), re_rows(shuffled))
+})
+
 test_that("user_residual is positional over the planned (id_ind-ordered) records", {
   pop <- make_stage_pop("st_ures")
   on.exit(close_pop(pop))
@@ -244,6 +290,8 @@ test_that("a call consumes exactly its draws: n residuals plus one normal per ne
   expect_identical(s_call, state_after(24, NULL))
 })
 
+# (The full D7 contract — every table unchanged, seed advanced by exactly the
+# draws made, for failures in every stage — is test-add_phenotype_failure_contract.R.)
 test_that("Stage 3 is atomic: a failed record write leaves no random-effect draws behind", {
   pop <- make_stage_pop("st_atomic")
   on.exit(close_pop(pop))

@@ -1372,6 +1372,15 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   else a named list that may name a subset; the rest are drawn conditional
   on it). `residual_value` / `residual_condition_level` are written for
   every model-path record. See `plans/sample_correlated_effects.md` §5.5.
+
+  **Failure contract (D7)**: the database is atomic, the RNG is not. Any
+  error — Stage-1 rejection, Stage-2 error after some draws, failed Stage-3
+  write — leaves `ind_phenotype` and `phenotype_random_effects` untouched
+  (the RNG-independent `add_tbv()` upsert is the one write that remains), and
+  `.Random.seed` advanced by exactly the draws made before the error.
+  Nothing in `R/` touches `.Random.seed`; never add seed restoration to one
+  function — if the package ever adopts it, it is a package-wide policy.
+  `tests/testthat/test-add_phenotype_failure_contract.R` asserts both halves.
 - `add_tbv()` — TBV-only; no phenotype records. **One filtered call into the
   same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
   `additive` — never a second implementation of the effect math. Computes

@@ -37,7 +37,22 @@
 #' positionally, and it does not depend on physical row order in the
 #' database.
 #'
-#' See `plans/sample_correlated_effects.md` §5.5.
+#' **On failure** (`plans/sample_correlated_effects.md` D7). The database is
+#' atomic and the RNG is not. An error anywhere in the call — a Stage-1
+#' rejection, a Stage-2 error after some draws (a missing variance, a
+#' residual stratum change under `condition_change_action = "error"`), or a
+#' failed Stage-3 write — leaves `ind_phenotype` and
+#' `phenotype_random_effects` exactly as they were: Stage 3 is the only
+#' writer and it rolls back as a whole, so a block resolved before the
+#' failing one is never written on its own, and a column `prepare_extra_cols()`
+#' added by `ALTER TABLE` earlier in the same transaction goes with it.
+#' `.Random.seed` is left advanced
+#' by exactly the draws made before the error; nothing in the package
+#' restores it, so a retry draws different values unless the caller
+#' re-seeds. (The [add_tbv()] upsert of Stage 1 is the one write that
+#' remains; it does not depend on the RNG and the retry rewrites it.)
+#'
+#' See `plans/sample_correlated_effects.md` §5.5 and D7.
 #'
 #' @name add_phenotype_stages
 #' @keywords internal

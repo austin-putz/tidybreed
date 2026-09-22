@@ -84,6 +84,18 @@
 #' records are planned in `id_ind` order within each phenotype. See
 #' `?add_phenotype_stages`.
 #'
+#' **If a call fails**, nothing is written: `ind_phenotype` and
+#' `phenotype_random_effects` are exactly as they were, whether the error
+#' came from validation, from sampling (a missing variance, a residual
+#' stratum change under `condition_change_action = "error"`) or from the
+#' write itself — down to the schema, so a new column named in `...` is
+#' rolled back with the rows it was added for. The random-number stream is **not** rewound: `.Random.seed`
+#' stays advanced by the draws made before the error, as after any other
+#' failed R call, so re-running the call draws different values. Pass `seed`
+#' (or call `set.seed()`) again if the retry must reproduce the failed call.
+#' The TBVs the call materialized through [add_tbv()] remain; they do not
+#' depend on the RNG, and the retry rewrites them.
+#'
 #' **Escape hatches**:
 #' * `user_values`: skip model computation and write these values as phenotype
 #'   records for the subset.

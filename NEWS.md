@@ -135,6 +135,25 @@ accumulates until the feature ships.
   conditional row's value) for a trait with only conditional strata.
   `load_phenotype_cov()` removed; `define_effect_random()` documents the
   persistence rule. New `tests/testthat/test-add_phenotype_named_effects.R`.
+- **Phase 7 — the failure contract of `add_phenotype()` is stated and
+  tested (D7).** No behaviour change. The database is atomic and the RNG is
+  not: an error anywhere in a call — a validation rejection, a sampling
+  error after some draws were made (a missing variance, a residual stratum
+  change under `condition_change_action = "error"`), or a failed write —
+  leaves `ind_phenotype` and `phenotype_random_effects` exactly as they
+  were, and leaves `.Random.seed` advanced by exactly the draws made before
+  the error, as after any other failed R call. Nothing restores the seed, so
+  a retry draws different values unless it re-seeds. `?add_phenotype` and
+  `?add_phenotype_stages` state the contract; new
+  `tests/testthat/test-add_phenotype_failure_contract.R` asserts both halves
+  for a Stage-1 rejection, a Stage-2 error in each adapter and a Stage-3
+  write failure, comparing every table of the database before and after.
+  "Unchanged" includes the schema: a new column named in `...` that was
+  added by `ALTER TABLE` earlier in the failing transaction is rolled back
+  with it. The one write a failed call does leave is the deterministic
+  Stage-1 `add_tbv()` upsert, now stated in the docs. Also added: the
+  physical-row-order reproducibility test the plan asks for (same seed,
+  `ind_meta` rebuilt in reverse order, identical records and draws).
 
 ## Documentation
 

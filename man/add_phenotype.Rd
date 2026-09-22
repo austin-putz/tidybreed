@@ -148,6 +148,18 @@ consumes RNG, and seeded output does not depend on physical row order:
 records are planned in \code{id_ind} order within each phenotype. See
 \code{?add_phenotype_stages}.
 
+\strong{If a call fails}, nothing is written: \code{ind_phenotype} and
+\code{phenotype_random_effects} are exactly as they were, whether the error
+came from validation, from sampling (a missing variance, a residual
+stratum change under \code{condition_change_action = "error"}) or from the
+write itself — down to the schema, so a new column named in \code{...} is
+rolled back with the rows it was added for. The random-number stream is \strong{not} rewound: \code{.Random.seed}
+stays advanced by the draws made before the error, as after any other
+failed R call, so re-running the call draws different values. Pass \code{seed}
+(or call \code{set.seed()}) again if the retry must reproduce the failed call.
+The TBVs the call materialized through \code{\link[=add_tbv]{add_tbv()}} remain; they do not
+depend on the RNG, and the retry rewrites them.
+
 \strong{Escape hatches}:
 \itemize{
 \item \code{user_values}: skip model computation and write these values as phenotype
