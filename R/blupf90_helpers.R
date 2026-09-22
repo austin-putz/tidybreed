@@ -418,8 +418,6 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 #' @param distinct_effects data.frame of fixed effects (one row per
 #'   effect_name), as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
-#' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
-#'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param chip_name character or NULL; chip name to report in the genotype
 #'   file section (omitted entirely when NULL)
 #' @param n_loci integer; number of loci written to the genotype file
@@ -430,7 +428,7 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 #' @return `NULL` invisibly; writes meta.txt as a side effect
 #' @keywords internal
 write_meta_file <- function(eval_dir, eval_id, col_map, distinct_effects,
-                             trait, effects_df, chip_name, n_loci, id_width,
+                             trait, chip_name, n_loci, id_width,
                              animal_effect_num) {
   lines <- c(
     paste0("=== tidybreed add_ebv() Evaluation: ", eval_id, " ==="),
@@ -601,20 +599,3 @@ parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
   result
 }
 
-
-#' Stub for VCE writeback — parse blupf90.out and update trait_var_comp
-#'
-#' Not yet implemented; called by [add_ebv()] when `estimate_var = TRUE` and
-#' `update_covars = TRUE`.
-#'
-#' @param pop tidybreed_pop
-#' @param eval_dir path to evaluation folder containing blupf90.out
-#' @param trait_name character vector of trait names
-#' @return `NULL` invisibly
-#' @keywords internal
-update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
-  message("VCE writeback: automated parsing not yet implemented. ",
-          "Inspect blupf90.out and update trait_var_comp manually via ",
-          "define_effect_cov_matrix().")
-  invisible(NULL)
-}

@@ -59,7 +59,7 @@ define_effect_fixed_cov <- function(pop,
   validate_sql_identifier(phenotype_name, what = "phenotype name")
   validate_sql_identifier(effect_name,    what = "effect name")
   validate_sql_identifier(source_column,  what = "source_column")
-  stopifnot(is.character(source_table), nzchar(source_table))
+  validate_sql_identifier(source_table,   what = "source_table")
   stopifnot(is.numeric(slope), length(slope) == 1, !is.na(slope))
 
   poly_order <- as.integer(poly_order)

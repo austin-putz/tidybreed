@@ -91,7 +91,7 @@ define_effect_random <- function(pop,
   validate_sql_identifier(phenotype_name, what = "phenotype name")
   validate_sql_identifier(effect_name,    what = "effect name")
   validate_sql_identifier(source_column,  what = "source_column")
-  stopifnot(is.character(source_table), nzchar(source_table))
+  validate_sql_identifier(source_table,   what = "source_table")
   distribution <- match.arg(distribution)
   if (identical(effect_name, "residual")) {
     stop("'residual' is reserved for the residual; use define_residual_cov().",

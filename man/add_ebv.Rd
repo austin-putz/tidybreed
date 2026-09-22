@@ -81,11 +81,10 @@ Applies only in \code{software = "blupf90"} mode.}
 
 \item{update_covars}{Logical. If \code{estimate_var = TRUE}, attempt to write
 estimated variance components back to \code{trait_var_comp}. Default \code{FALSE}.
-\strong{Not yet implemented}: the current writeback step
-(\code{update_covars_from_blupf90()}) is a stub that only prints a message
-pointing you to \code{blupf90.out} and \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} for a
-manual update — no rows are written automatically yet. Applies only in
-\code{software = "blupf90"} mode.}
+\strong{Not yet implemented}: \code{blupf90.out} is not parsed back into
+\code{trait_var_comp}. Setting this only prints a message pointing you to
+that file and to \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} for a manual update; no
+rows are written. Applies only in \code{software = "blupf90"} mode.}
 
 \item{phenotype}{Optional \code{tidybreed_table} from
 \code{get_table("ind_phenotype") |> filter(...)}. When supplied, only phenotype

@@ -303,8 +303,10 @@ NULL
     "block ", .pvc_set(sort(phenotype_names)), ": ",
     paste0(meta$phenotype_name, " = '", meta$condition_change_action, "'",
            collapse = ", "),
-    ". Set the same value on every phenotype in the block with ",
-    "define_phenotype(..., condition_change_action = , overwrite = TRUE).",
+    ". The value is block-scoped, so set it on the whole block at once with ",
+    "define_condition_change_action(pop, '", sort(phenotype_names)[1], "', ",
+    "'<action>'); define_phenotype() can only set it while the phenotype is ",
+    "still a block of one.",
     call. = FALSE
   )
 }

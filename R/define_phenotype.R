@@ -58,8 +58,8 @@
 #'     `"group"`.
 #'   - `weight` (optional, default `1.0`): scalar multiplier.
 #'   - `weight_type` (optional, default `"fixed"`): `"fixed"` or
-#'     `"covariate"` (`weight * covariate`). `"legendre"` and `"raw_poly"`
-#'     are reserved and rejected by [add_phenotype()].
+#'     `"covariate"` (`weight * covariate`). Nothing else is implemented, and
+#'     anything else is rejected here rather than at [add_phenotype()] time.
 #'   - `covariate_name` (optional): covariate key.
 #'   - `covariate_table` (optional, default `"ind_meta"`): table containing
 #'     the covariate column; it must have exactly one row per individual.
@@ -72,11 +72,6 @@
 #'     `group_column`.
 #'   - `aggregation` (optional, default `"sum"`): `"sum"` or `"mean"` for
 #'     group contributors.
-#'   - `missing_action` (optional, default `"skip"`): currently unused
-#'     per-component override — behaviour is governed uniformly by
-#'     `missing_component_action` below.
-#'   - `contributor_filter` (optional): reserved for future spatial/
-#'     neighborhood contributor lookup; not yet implemented.
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
 #'   written. Mutually exclusive with `formula_tbv`.
@@ -122,8 +117,12 @@
 #'   strata. `"independent"` drops the incompatible stored residual from the
 #'   conditioning set (stored residuals from the same stratum still condition
 #'   the draw) and warns with a count. Stored in `phenotype_meta`; every
-#'   phenotype in one residual block must carry the same value. An immutable
-#'   condition column such as `sex` never triggers either action.
+#'   phenotype in one residual block must carry the same value (D6), so this
+#'   argument only sets it while the phenotype is still a block of one. Once
+#'   the block has two or more members the value is block-scoped — change it
+#'   with [define_condition_change_action()], which writes every member in one
+#'   transaction and leaves the rest of their `phenotype_meta` rows alone. An
+#'   immutable condition column such as `sex` never triggers either action.
 #' @param overwrite Logical. If `TRUE` and a phenotype with the same name
 #'   already exists, replace its rows in `phenotype_meta` and
 #'   `phenotype_components`. Default `FALSE` errors on duplicate.
@@ -497,6 +496,34 @@ define_phenotype <- function(pop,
       if (any(bad_gc))
         stop("components with contributor_type = 'group' must specify group_column.",
              call. = FALSE)
+
+      # Both reach SQL through .group_members_sql(). The read-time existence
+      # checks in .read_one_per_id() would catch a bad name eventually, but
+      # define_effect_random() and define_effect_fixed_cov() validate their
+      # equivalents here, and a definition-time error names the real mistake.
+      for (g in unique(as.character(gcol))) {
+        validate_sql_identifier(g, what = "group_column")
+      }
+      gtab <- if ("group_table" %in% names(grp_rows)) {
+        as.character(grp_rows$group_table)
+      } else "ind_meta"
+      for (g in unique(gtab[!is.na(gtab) & nzchar(gtab)])) {
+        validate_sql_identifier(g, what = "group_table")
+      }
+    }
+
+    # add_phenotype() implements 'fixed' and 'covariate' and rejects the rest.
+    # Reject here too: a weight_type that can never be evaluated is a mistake
+    # in the model definition, and the error belongs at the call that made it.
+    if ("weight_type" %in% names(components)) {
+      wt  <- as.character(components$weight_type)
+      wt  <- wt[!is.na(wt) & nzchar(wt)]
+      bad <- setdiff(unique(wt), c("fixed", "covariate"))
+      if (length(bad) > 0) {
+        stop("components: weight_type ",
+             paste0("'", bad, "'", collapse = ", "),
+             " is not implemented. Use 'fixed' or 'covariate'.", call. = FALSE)
+      }
     }
 
     # Fill defaults for optional columns
@@ -512,8 +539,6 @@ define_phenotype <- function(pop,
     if (!"group_column"        %in% names(components)) components$group_column        <- NA_character_
     if (!"group_table"         %in% names(components)) components$group_table         <- "ind_meta"
     if (!"aggregation"         %in% names(components)) components$aggregation         <- "sum"
-    if (!"missing_action"      %in% names(components)) components$missing_action      <- "skip"
-    if (!"contributor_filter"  %in% names(components)) components$contributor_filter  <- NA_character_
 
     # Replace NA in group_table with default
     components$group_table[is.na(components$group_table)] <- "ind_meta"
@@ -535,9 +560,7 @@ define_phenotype <- function(pop,
       poly_order          = as.integer(components$poly_order),
       poly_scale_min      = as.numeric(components$poly_scale_min),
       poly_scale_max      = as.numeric(components$poly_scale_max),
-      component_names     = as.character(components$component_names),
-      missing_action      = as.character(components$missing_action),
-      contributor_filter  = as.character(components$contributor_filter)
+      component_names     = as.character(components$component_names)
     )
 
     DBI::dbWriteTable(pop$db_conn, "phenotype_components", comp_rows, append = TRUE)

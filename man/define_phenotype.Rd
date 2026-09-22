@@ -87,8 +87,8 @@ component. Columns:
 \code{"group"}.
 \item \code{weight} (optional, default \code{1.0}): scalar multiplier.
 \item \code{weight_type} (optional, default \code{"fixed"}): \code{"fixed"} or
-\code{"covariate"} (\code{weight * covariate}). \code{"legendre"} and \code{"raw_poly"}
-are reserved and rejected by \code{\link[=add_phenotype]{add_phenotype()}}.
+\code{"covariate"} (\code{weight * covariate}). Nothing else is implemented, and
+anything else is rejected here rather than at \code{\link[=add_phenotype]{add_phenotype()}} time.
 \item \code{covariate_name} (optional): covariate key.
 \item \code{covariate_table} (optional, default \code{"ind_meta"}): table containing
 the covariate column; it must have exactly one row per individual.
@@ -101,11 +101,6 @@ see \code{phenotype_components.component_names}.
 \code{group_column}.
 \item \code{aggregation} (optional, default \code{"sum"}): \code{"sum"} or \code{"mean"} for
 group contributors.
-\item \code{missing_action} (optional, default \code{"skip"}): currently unused
-per-component override — behaviour is governed uniformly by
-\code{missing_component_action} below.
-\item \code{contributor_filter} (optional): reserved for future spatial/
-neighborhood contributor lookup; not yet implemented.
 }
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
@@ -156,8 +151,12 @@ resolves to — e.g. an animal moved farms between the two records.
 strata. \code{"independent"} drops the incompatible stored residual from the
 conditioning set (stored residuals from the same stratum still condition
 the draw) and warns with a count. Stored in \code{phenotype_meta}; every
-phenotype in one residual block must carry the same value. An immutable
-condition column such as \code{sex} never triggers either action.}
+phenotype in one residual block must carry the same value (D6), so this
+argument only sets it while the phenotype is still a block of one. Once
+the block has two or more members the value is block-scoped — change it
+with \code{\link[=define_condition_change_action]{define_condition_change_action()}}, which writes every member in one
+transaction and leaves the rest of their \code{phenotype_meta} rows alone. An
+immutable condition column such as \code{sex} never triggers either action.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a phenotype with the same name
 already exists, replace its rows in \code{phenotype_meta} and

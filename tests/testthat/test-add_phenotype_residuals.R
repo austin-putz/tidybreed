@@ -76,6 +76,16 @@ z_mat <- function(n, m) matrix(stats::rnorm(n * m), n, m, byrow = TRUE)
 R_AB <- sym(c("A", "B"), c(1, .8, .8, 1))
 U_AB <- chol(R_AB)   # A = z1; B = .8 z1 + .6 z2
 
+# Every matrix above has a unit diagonal, where the covariance sigma_AB and
+# the correlation sigma_AB / sqrt(vA vB) are the same number -- so a resolver
+# that conditioned on the *correlation* would pass every test that uses them.
+# R_UNEQ exists to tell those two apart: beta = 1.8 / 4 = 0.45, while the
+# correlation is 1.8 / sqrt(36) = 0.30.
+R_UNEQ  <- sym(c("A", "B"), c(4, 1.8, 1.8, 9))
+BETA_BA <- R_UNEQ["A", "B"] / R_UNEQ["A", "A"]                       # 0.45
+COR_BA  <- R_UNEQ["A", "B"] / sqrt(R_UNEQ["A", "A"] * R_UNEQ["B", "B"])  # 0.30
+SD_B_A  <- sqrt(R_UNEQ["B", "B"] - R_UNEQ["A", "B"]^2 / R_UNEQ["A", "A"])
+
 
 # ── Residual blocks: sequential conditioning ────────────────────────────────
 
@@ -104,6 +114,79 @@ test_that("sequential A -> B on the same individuals: B is drawn conditional on 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_false(anyNA(ph$residual_value))
   expect_true(all(is.na(ph$residual_condition_level)))
+})
+
+test_that("unequal residual variances: B conditions on the covariance, not the correlation", {
+  n   <- 1000L
+  pop <- make_resid_pop("rs_uneq", n_males = n / 2, n_females = n / 2)
+  on.exit(close_pop(pop))
+  pop <- set_resid(pop, c("A", "B"), R_UNEQ)
+
+  pop <- add_ph(pop, "A", seed = 101)
+  a <- resid_of(pop, "A")
+  set.seed(101)
+  expect_equal(unname(a), sqrt(R_UNEQ["A", "A"]) * stats::rnorm(n))   # sd 2
+
+  pop <- add_ph(pop, "B", seed = 102)
+  b <- resid_of(pop, "B")
+  set.seed(102)
+  z <- stats::rnorm(n)
+  # E[B|A] = (sigma_AB / var_A) * A, Var(B|A) = var_B - sigma_AB^2 / var_A
+  expect_equal(unname(b), BETA_BA * unname(a) + SD_B_A * z)
+  # The regression guard: conditioning on the correlation would give this,
+  # and it must not be what came out.
+  expect_false(isTRUE(all.equal(unname(b), COR_BA * unname(a) + SD_B_A * z)))
+
+  # Distributional, tolerances from sampling SE (4 SE).
+  se_cov <- sqrt((R_UNEQ["A", "A"] * R_UNEQ["B", "B"] + R_UNEQ["A", "B"]^2) / n)
+  expect_lt(abs(stats::cov(a, b) - R_UNEQ["A", "B"]), 4 * se_cov)
+  expect_lt(abs(stats::var(a) - R_UNEQ["A", "A"]),
+            4 * R_UNEQ["A", "A"] * sqrt(2 / n))
+  expect_lt(abs(stats::var(b) - R_UNEQ["B", "B"]),
+            4 * R_UNEQ["B", "B"] * sqrt(2 / n))
+  # The slope is the selection-invariant quantity the docs point users at.
+  expect_lt(abs(unname(stats::coef(stats::lm(b ~ a))[2]) - BETA_BA), .05)
+})
+
+test_that("unequal residual variances: the joint call reproduces the same covariance", {
+  n   <- 1000L
+  pop <- make_resid_pop("rs_uneq_joint", n_males = n / 2, n_females = n / 2)
+  on.exit(close_pop(pop))
+  pop <- set_resid(pop, c("A", "B"), R_UNEQ)
+
+  pop <- add_ph(pop, c("A", "B"), seed = 103)
+  a <- resid_of(pop, "A"); b <- resid_of(pop, "B")
+  # Exact: n x 2 standard normals in entity order, through chol(R_UNEQ).
+  set.seed(103)
+  draws <- z_mat(n, 2L) %*% chol(R_UNEQ)
+  expect_equal(unname(a), draws[, 1])
+  expect_equal(unname(b), draws[, 2])
+
+  se_cov <- sqrt((R_UNEQ["A", "A"] * R_UNEQ["B", "B"] + R_UNEQ["A", "B"]^2) / n)
+  expect_lt(abs(stats::cov(a, b) - R_UNEQ["A", "B"]), 4 * se_cov)
+})
+
+test_that("a three-phenotype block with three different variances reproduces the whole matrix", {
+  n  <- 1500L
+  R3 <- sym(c("A", "B", "C"), c(2.0, 1.2, 0.5,
+                                1.2, 5.0, 2.0,
+                                0.5, 2.0, 3.0))
+  pop <- make_resid_pop("rs_uneq3", traits = c("A", "B", "C"),
+                        n_males = n / 2, n_females = n / 2)
+  on.exit(close_pop(pop))
+  pop <- set_resid(pop, c("A", "B", "C"), R3)
+
+  # Drawn one phenotype per call, so every off-diagonal is realized by the
+  # sequential conditional path rather than by one chol() of the full block.
+  for (i in seq_along(c("A", "B", "C"))) {
+    pop <- add_ph(pop, c("A", "B", "C")[i], seed = 200 + i)
+  }
+  m <- cbind(A = resid_of(pop, "A"), B = resid_of(pop, "B"),
+             C = resid_of(pop, "C"))
+  obs <- stats::cov(m)
+  # 4 SE per entry, each from its own (i, j).
+  se <- outer(diag(R3), diag(R3)) + R3^2
+  expect_true(all(abs(obs - R3) < 4 * sqrt(se / n)))
 })
 
 test_that("A -> B on a culled subset: survivors condition on their A, the culled get no B", {
@@ -518,6 +601,47 @@ test_that("D6 at sampling: disagreeing condition_change_action across the block 
     "UPDATE phenotype_meta SET condition_change_action = 'independent' WHERE phenotype_name = 'B'")
   expect_error(add_ph(pop, "B"),
                "add_phenotype\\(\\): `condition_change_action` must agree across residual covariance block \\{A, B\\}: A = 'error', B = 'independent'")
+})
+
+test_that("strata with different unequal-variance matrices each condition on their own covariance", {
+  # The other stratified tests use R_AB and 4 * R_AB -- scaled unit-diagonal
+  # matrices, where beta == r inside each stratum. These two do not, and they
+  # differ from each other, so a resolver that picked the wrong stratum's
+  # matrix or used a correlation would miss on both groups.
+  R1 <- sym(c("A", "B"), c(4, 1.8, 1.8, 9))     # beta 0.45, sd 2.86182
+  R2 <- sym(c("A", "B"), c(1, 0.9, 0.9, 16))    # beta 0.90, sd 3.89744
+  b1 <- R1["A", "B"] / R1["A", "A"]
+  b2 <- R2["A", "B"] / R2["A", "A"]
+  s1 <- sqrt(R1["B", "B"] - R1["A", "B"]^2 / R1["A", "A"])
+  s2 <- sqrt(R2["B", "B"] - R2["A", "B"]^2 / R2["A", "A"])
+
+  pop <- make_resid_pop("rs_strat_uneq", n_males = 6, n_females = 6)
+  on.exit(close_pop(pop))
+  ids <- ids_of(pop)
+  f2  <- ids[c(1L, 4L, 7L, 10L)]
+  pop <- suppressWarnings(suppressMessages(
+    pop |> get_table("ind_meta") |> mutate_table(farm = "F1")))
+  pop <- move_farm(pop, f2, "F2")
+  pop <- set_resid(pop, c("A", "B"), R1, condition_column = "farm",
+                   condition_level = "F1")
+  pop <- set_resid(pop, c("A", "B"), R2, condition_column = "farm",
+                   condition_level = "F2")
+
+  pop <- add_ph(pop, "A", seed = 61)
+  a <- resid_of(pop, "A")
+  g1 <- setdiff(names(a), f2); g2 <- intersect(names(a), f2)
+  expect_identical(unname(level_of(pop, "A")),
+                   ifelse(names(a) %in% f2, "F2", "F1"))
+  # Groups in sorted stratum order: F1 then F2.
+  set.seed(61)
+  expect_equal(unname(a[g1]), sqrt(R1["A", "A"]) * stats::rnorm(length(g1)))
+  expect_equal(unname(a[g2]), sqrt(R2["A", "A"]) * stats::rnorm(length(g2)))
+
+  pop <- add_ph(pop, "B", seed = 62)
+  b <- resid_of(pop, "B")
+  set.seed(62)
+  expect_equal(unname(b[g1]), b1 * unname(a[g1]) + s1 * stats::rnorm(length(g1)))
+  expect_equal(unname(b[g2]), b2 * unname(a[g2]) + s2 * stats::rnorm(length(g2)))
 })
 
 test_that("sex as a condition column never triggers the change path", {

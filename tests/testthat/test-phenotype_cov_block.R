@@ -576,3 +576,95 @@ test_that("D6: condition_change_action must agree across a residual block at def
   pop2 <- define_residual_cov(pop2, "B", matrix(1, 1, 1, dimnames = list("B", "B")))
   expect_equal(nrow(resid_rows(pop2)), 2L)
 })
+
+
+# ── D6 mutability: the value is block-scoped, so the writer is too ──────────
+# Once a block has two members neither one can be flipped on its own -- the
+# D6 check refuses the intermediate state, and there is no ordering of
+# define_phenotype() calls that gets there. define_condition_change_action()
+# writes every member at once. See plans/sample_correlated_effects.md D6.
+
+test_that("define_condition_change_action() sets the value on the whole residual block", {
+  pop <- make_block_pop("d6_set", traits = c("A", "B"))
+  on.exit(close_pop(pop))
+  for (t in c("A", "B")) pop <- suppressMessages(define_phenotype(pop, t, mean = 7))
+  pop <- define_residual_cov(pop, c("A", "B"), sym(c("A", "B"), c(1, .3, .3, 2)))
+
+  action <- function() DBI::dbGetQuery(pop$db_conn,
+    "SELECT condition_change_action FROM phenotype_meta
+     ORDER BY phenotype_name")$condition_change_action
+  expect_identical(action(), c("error", "error"))
+
+  # The deadlock this function exists to break: neither member can move alone.
+  expect_error(define_phenotype(pop, "A", condition_change_action = "independent",
+                                overwrite = TRUE), "must agree")
+  expect_error(define_phenotype(pop, "B", condition_change_action = "independent",
+                                overwrite = TRUE), "must agree")
+
+  expect_message(pop <- define_condition_change_action(pop, "A", "independent"),
+                 "one residual covariance block")
+  expect_identical(action(), c("independent", "independent"))
+
+  # And back again, naming either member.
+  pop <- suppressMessages(define_condition_change_action(pop, "B", "error"))
+  expect_identical(action(), c("error", "error"))
+})
+
+test_that("define_condition_change_action() changes only that column, and is idempotent", {
+  pop <- make_block_pop("d6_narrow", traits = c("A", "B"))
+  on.exit(close_pop(pop))
+  pop <- suppressMessages(define_phenotype(pop, "A", type = "continuous",
+                                           mean = 42, expressed_sex = "F",
+                                           repeatable = TRUE))
+  pop <- suppressMessages(define_phenotype(pop, "B", type = "continuous", mean = 7))
+  pop <- define_residual_cov(pop, c("A", "B"), sym(c("A", "B"), c(1, .3, .3, 2)))
+
+  before <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM phenotype_meta ORDER BY phenotype_name")
+  pop <- suppressMessages(define_condition_change_action(pop, "A", "independent"))
+  after <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM phenotype_meta ORDER BY phenotype_name")
+
+  # Everything except the one column survives the write -- this is what
+  # define_phenotype(overwrite = TRUE) could not promise.
+  keep <- setdiff(names(before), "condition_change_action")
+  expect_identical(after[keep], before[keep])
+  expect_identical(after$condition_change_action, c("independent", "independent"))
+
+  expect_message(define_condition_change_action(pop, "A", "independent"),
+                 "already 'independent'")
+})
+
+test_that("define_condition_change_action() is not locked by realized draws (D3 is about the matrix)", {
+  pop <- make_block_pop("d6_realized", traits = c("A", "B"))
+  on.exit(close_pop(pop))
+  for (t in c("A", "B")) pop <- suppressMessages(
+    define_phenotype(pop, t, type = "continuous", mean = 10))
+  pop <- define_residual_cov(pop, c("A", "B"), sym(c("A", "B"), c(1, .3, .3, 2)))
+  suppressMessages(pop |> get_table("ind_meta") |> add_phenotype(c("A", "B"), seed = 3))
+
+  before <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM ind_phenotype ORDER BY id_phenotype")
+  expect_gt(nrow(before), 0L)
+  # The matrix is locked ...
+  expect_error(define_residual_cov(pop, c("A", "B"), sym(c("A", "B"), c(2, 0, 0, 2))),
+               "realized|remove_rows")
+  # ... the action is not: it governs future records only.
+  pop <- suppressMessages(define_condition_change_action(pop, "A", "independent"))
+  expect_identical(
+    DBI::dbGetQuery(pop$db_conn, "SELECT * FROM ind_phenotype ORDER BY id_phenotype"),
+    before)
+})
+
+test_that("define_condition_change_action() rejects an unknown phenotype and a bad action", {
+  pop <- make_block_pop("d6_bad", traits = "A")
+  on.exit(close_pop(pop))
+  pop <- suppressMessages(define_phenotype(pop, "A", mean = 1))
+  expect_error(define_condition_change_action(pop, "Z", "error"), "not found")
+  expect_error(define_condition_change_action(pop, "A", "nonsense"), "should be one of")
+  expect_error(define_condition_change_action(pop, c("A", "A"), "error"),
+               "single non-missing")
+  # A phenotype in no block is a block of one.
+  expect_message(define_condition_change_action(pop, "A", "independent"),
+                 "set on \\{A\\}")
+})

@@ -192,6 +192,41 @@
 #'   dplyr::filter(gen == 1L) |>
 #'   add_phenotype("WW")
 #'
+#' # Culling between records. A and B share a residual covariance block, so
+#' # B's residual is drawn conditional on each survivor's stored A residual.
+#' # The culled animals simply get no B record -- and because a residual is
+#' # realized only when a record is planned, they consume no draw either.
+#' pop <- pop |>
+#'   define_phenotype("A", type = "continuous", mean = 100) |>
+#'   define_phenotype("B", type = "continuous", mean = 250) |>
+#'   define_residual_cov(c("A", "B"),
+#'     matrix(c(40, 18, 18, 30), 2, 2,
+#'            dimnames = list(c("A", "B"), c("A", "B"))))
+#'
+#' # 1. Record A on everyone
+#' pop <- pop |> get_table("ind_meta") |> add_phenotype("A", seed = 1)
+#'
+#' # 2. Cull on the realized A: keep the top half
+#' cut <- pop |> get_table("ind_phenotype") |>
+#'   dplyr::filter(phenotype_name == "A") |> dplyr::pull(pheno_value) |>
+#'   stats::median()
+#'
+#' # 3. Record B on the survivors only. Selecting from ind_phenotype means
+#' #    "the animals with this A record", not everyone.
+#' pop <- pop |>
+#'   get_table("ind_phenotype") |>
+#'   dplyr::filter(phenotype_name == "A", pheno_value >= cut) |>
+#'   add_phenotype("B", seed = 2)
+#'
+#' # Checking the result: do NOT expect the correlation between the two
+#' # stored residual_value columns to equal the declared 18/sqrt(40*30) =
+#' # 0.52. The survivors were selected on A, so their A residuals are
+#' # range-restricted and the observed correlation is attenuated (~0.35 for
+#' # a top-half cull). What selection does *not* change is the conditional
+#' # slope, so that is the quantity to check:
+#' #
+#' #   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45
+#'
 #' # Escape hatch: supply phenotype values directly (skips the model, but
 #' # still computes and stores TBVs); named vector matches by id_ind
 #' pop <- pop |>

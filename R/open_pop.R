@@ -210,12 +210,10 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
 #' @param pop A `tidybreed_pop` object with `run_dirs` populated.
 #' @param tool Character scalar. Which tool dir to use (must be a key in
 #'   `pop$run_dirs`).
-#' @param keep `FALSE`, `TRUE`, or `"on_error"`. Cleanup semantics (not yet
-#'   enforced automatically; reserved for a future release).
 #'
 #' @return Path to the newly created run directory (invisibly).
 #' @keywords internal
-.create_run_dir <- function(pop, tool, keep = "on_error") {
+.create_run_dir <- function(pop, tool) {
 
   if (!inherits(pop, "tidybreed_pop"))
     stop("pop must be a tidybreed_pop object", call. = FALSE)
@@ -323,9 +321,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       poly_order          INTEGER,
       poly_scale_min      DOUBLE,
       poly_scale_max      DOUBLE,
-      component_names     VARCHAR DEFAULT 'order1_additive',
-      missing_action      VARCHAR DEFAULT 'skip',
-      contributor_filter  VARCHAR
+      component_names     VARCHAR DEFAULT 'order1_additive'
     )
   ")
 

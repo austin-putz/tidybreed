@@ -1,8 +1,8 @@
-# tidybreed 0.71.0 (in development)
+# tidybreed 0.71.0
 
 Correlated random effects sampled across simulation stages — see
-`plans/sample_correlated_effects.md`. Landing in phases; this section
-accumulates until the feature ships.
+`plans/sample_correlated_effects.md`. Shipped across Phases 0–8; every
+decision D1–D8 in that plan is implemented and tested.
 
 ## Changed
 
@@ -155,7 +155,74 @@ accumulates until the feature ships.
   physical-row-order reproducibility test the plan asks for (same seed,
   `ind_meta` rebuilt in reverse order, identical records and draws).
 
+- **Phase 8 — seeded runs are now bit-identical (D8).** The RNG stream always
+  was; the genetic values were not. The genome-effect evaluator combines a
+  trait's terms with one `SUM()`, and DuckDB runs it multi-threaded, so the
+  partial sums were added in whatever order the threads finished — floating
+  point is not associative, and two runs of an identical population differed
+  in the last bits of `tbv_value` (about 1e-15 at 2000 loci). `pheno_value`
+  inherited it through the TBV term. That one aggregate now accumulates
+  exactly, which is order-independent by construction; it measures as free
+  (the join dominates) and, unlike an ordered reduction, keeps the aggregate
+  state at one value per individual rather than one per term, so nothing
+  about "larger than RAM" changes. Values move in the last bits relative to
+  0.70.0. A model whose values exceed the accumulator's range (1e20) is now a
+  tidybreed error naming the cause instead of a bare DuckDB conversion error.
+  New `tests/testthat/test-genome-effects-determinism.R`; CLAUDE.md now says
+  "identical" means bit-identical.
+
+- **Phase 8 — `condition_change_action` can be changed after a block is
+  declared (D6).** New `define_condition_change_action(pop, phenotype_name,
+  action)`. The value must agree across a residual covariance block, which
+  meant that once a block had two or more members no sequence of
+  `define_phenotype()` calls could change it — every single-member flip is the
+  disagreeing state the D6 check refuses. The new writer sets every member in
+  one transaction, and touches only that column, so unlike
+  `define_phenotype(overwrite = TRUE)` it cannot reset the rest of the row. It
+  is deliberately not locked by realized draws: D3 locks the covariance
+  matrix, while the action only governs how future records condition on
+  stored residuals. The D6 error message now names this function instead of a
+  recipe that could not work.
+
 ## Documentation
+
+- **Phase 8 — correlated-effects documentation and benchmarks.** A culling
+  example on `?add_phenotype` showing the sequential-conditional draw across
+  two calls (record A on everyone, cull on it, record B on the survivors
+  conditional on their stored A residual). New
+  `dev/benchmarks/benchmark_phenotype_scale.R`, which times PLAN / RESOLVE /
+  COMMIT separately across four block shapes and two passes, so the
+  observation-pattern query (reading back already-realized residuals) and the
+  batched writes can be read apart from planning; its `--check` mode prints
+  seeded values as the guard that no optimization changes RNG semantics. At
+  16,000 individuals the per-individual cost is below the 1,000-individual
+  cost in every stage and every shape.
+
+- **Phase 0-8 review pass: dead code removed.** A full re-read of the
+  correlated-effects work and the surfaces it touches. Removed: two write-only
+  columns from `phenotype_components` (`missing_action`, duplicating the
+  decided single `phenotype_meta.missing_component_action`, and
+  `contributor_filter`, reserved for a spatial lookup with no counterpart
+  anywhere); the `update_covars_from_blupf90()` stub, which ignored all three
+  of its arguments and only printed a message — `add_ebv()` now prints that
+  message itself; the unused `keep` parameter of `.create_run_dir()` and the
+  unused `effects_df` parameter of `write_meta_file()`; two dead local
+  variables (`.schema_group_of()`, `mutate_group_concatenate()`).
+  `component_names` stays: it is the one reserved column here whose
+  counterpart, `ind_tgv.component_name`, is already written by `add_tgv()`.
+
+- **Errors now arrive at the call that caused them.**
+  `define_phenotype(components = )` validates `group_column` and `group_table`
+  as SQL identifiers, as `define_effect_random()` and
+  `define_effect_fixed_cov()` already did for their equivalents, and rejects a
+  `weight_type` other than `"fixed"` or `"covariate"` instead of accepting it
+  and failing later inside `add_phenotype()`. `source_table` is now validated
+  the same way as `source_column` in both effect writers.
+
+- **pkgdown reference index completed.** `define_condition_change_action()`
+  added, along with five topics that were already missing (`ad_terms`,
+  `add_tgv`, `define_genome_effects`, `extract_allele_freq`,
+  `genotype_terms`). `pkgdown::check_pkgdown()` is clean again.
 
 - **Hex sticker.** Package logo added at `man/figures/logo.png` (pkgdown picks it
   up as the site logo automatically); the README header now shows the sticker

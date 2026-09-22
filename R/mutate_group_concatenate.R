@@ -85,7 +85,6 @@ mutate_group_concatenate <- function(tbl,
   conn       <- info$conn
   table_name <- info$table_name
   pk_col     <- info$pk_col
-  pks        <- info$pks
   n_total    <- info$n_total
 
   null_action <- match.arg(null_action, c("propagate", "skip", "literal"))

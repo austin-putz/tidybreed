@@ -42,6 +42,18 @@ before `1.0.0`; there is no downstream compatibility contract to protect.
    implementation. We do **not** care whether it matches any previous version's
    output — never write a test that compares against pre-change/"golden-from-old"
    output, and never contort a formula to stay "byte-identical to today."
+
+   **"Identical" means bit-identical, not "within tolerance."** This binds more
+   than the RNG stream: every value the simulation writes must be a function of
+   the stored inputs alone, never of how many threads DuckDB happened to use.
+   A parallel `SUM()` over more than two floating-point summands is the usual
+   way this breaks — partial sums combine in whatever order the threads finish,
+   which is not associative. The genome-effect evaluator therefore accumulates
+   its one many-summand sum exactly (`GEV_ACC_TYPE` in
+   `R/genome_effects_eval.R`); do not "optimize" that back to a plain `SUM()`.
+   `tests/testthat/test-genome-effects-determinism.R` pins it with
+   `expect_identical()`, which is the only assertion that can catch a
+   regression here — `expect_equal()` passes on the broken code.
 2. **R ↔ Rcpp parity.** Where the same algorithm exists in both R and C++, a given
    seed must produce identical output in both (this is a *within-current-code*
    guarantee, and the reason RNG choices like `dqrng` matter).
@@ -503,9 +515,11 @@ SGE ADG) appear only here.
 | cat_names                | VARCHAR | Comma-separated labels per category                           |
 | store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |
 | missing_component_action | VARCHAR | `"skip"` (default) or `"error"` — what to do when any component of a composite phenotype cannot be resolved for an individual |
-| condition_change_action  | VARCHAR | `"error"` (default) or `"independent"` — what to do when a correlated phenotype's stored residual was drawn under a different residual `condition_level` than the current record resolves to (see `plans/sample_correlated_effects.md` D2/D6). Must agree across every phenotype in one residual covariance block |
+| condition_change_action  | VARCHAR | `"error"` (default) or `"independent"` — what to do when a correlated phenotype's stored residual was drawn under a different residual `condition_level` than the current record resolves to (see `plans/sample_correlated_effects.md` D2/D6). Must agree across every phenotype in one residual covariance block, so it is **block-scoped**: `define_phenotype()` sets it while the phenotype is still a block of one, and `define_condition_change_action()` changes it afterwards, on every member in one transaction |
 
-**Reserved**: all columns (managed by `define_phenotype()`).
+**Reserved**: all columns (managed by `define_phenotype()`, except
+`condition_change_action`, which `define_condition_change_action()` also
+writes — block-scoped, one column, one transaction).
 
 ### `phenotype_components`
 
@@ -523,14 +537,12 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 | group_table        | VARCHAR | Table containing `group_column`; default `"ind_meta"`              |
 | aggregation        | VARCHAR | `"sum"` (default) or `"mean"` — how group-mates' TBVs are combined |
 | weight             | DOUBLE  | Scalar multiplier; default `1.0`                                   |
-| weight_type        | VARCHAR | `"fixed"` (default), `"covariate"`, `"legendre"`, `"raw_poly"`     |
+| weight_type        | VARCHAR | `"fixed"` (default) or `"covariate"`. Those are the only two implemented, and `define_phenotype()` rejects anything else |
 | covariate_name     | VARCHAR | Covariate column when `weight_type = "covariate"`                  |
 | covariate_table    | VARCHAR | Table containing `covariate_name`                                  |
 | poly_order         | INTEGER | Polynomial basis order                                             |
 | poly_scale_min/max | DOUBLE  | Legendre scaling bounds                                            |
-| component_names    | VARCHAR | Comma-separated `ind_tgv.component_name` values this component draws from; default `"order1_additive"`. **Reserved** — `add_phenotype()` reads only the additive breeding value today |
-| missing_action     | VARCHAR | Per-component fallback (currently unused; use `phenotype_meta.missing_component_action`) |
-| contributor_filter | VARCHAR | Reserved for spatial/neighborhood lookup — not yet implemented     |
+| component_names    | VARCHAR | Comma-separated `ind_tgv.component_name` values this component draws from; default `"order1_additive"`. **Reserved** — `add_phenotype()` reads only the additive breeding value today. This is the one reserved column here, kept because its counterpart (`ind_tgv.component_name`) is already written by `add_tgv()` |
 
 **Note on SGE (Social Genetic Effects / Bijma model)**: for `contributor_type = "group"`,
 `add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
@@ -1319,6 +1331,17 @@ pop |> define_genome_effects(
   for heterogeneous residuals. The block rules under `phenotype_var_comp` apply:
   whole block per call, one condition column, same phenotypes in every stratum,
   locked once realized. Rejected calls change nothing.
+
+- `define_condition_change_action(pop, phenotype_name, condition_change_action)` —
+  sets `phenotype_meta.condition_change_action` on **every member** of the
+  named phenotype's residual covariance block, in one transaction. D6 requires
+  the members to agree, so once a block has two or more there is no ordering of
+  `define_phenotype()` calls that changes it — each single-member flip is the
+  disagreeing state D6 refuses. This writer is the way (D6 mutability). It
+  touches one column and nothing else, so unlike
+  `define_phenotype(overwrite = TRUE)` it cannot reset the rest of the row. It
+  is **not** locked by realized draws: D3 locks the covariance *matrix*, while
+  the action only governs how future records condition on stored residuals.
 
 ### `add_phenotype()` / `add_tbv()` / `add_tgv()`
 

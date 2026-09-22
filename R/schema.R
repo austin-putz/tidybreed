@@ -421,10 +421,6 @@ register_schema_meta <- function(conn, entries) {
             "Upper bound for Legendre polynomial scaling"),
     .sm_col("phenotype_components", "component_names",
             "Comma-separated ind_tgv.component_name values this component draws from; default 'order1_additive'. Reserved: add_phenotype() reads only the additive breeding value today"),
-    .sm_col("phenotype_components", "missing_action",
-            "Per-component fallback; currently unused, governed by phenotype_meta.missing_component_action"),
-    .sm_col("phenotype_components", "contributor_filter",
-            "Reserved for spatial/neighbourhood lookup; not yet implemented"),
     # phenotype_var_comp
     .sm_tbl("phenotype_var_comp",
             "Phenotype-level variance component storage. One row per (effect_name, phenotype pair, optional condition). Stores residual covariances (effect_name = 'residual') and named random effects (hys, litter, pen, etc.). Populated by define_phenotype(), define_residual_cov(), and define_effect_random()."),
@@ -797,9 +793,8 @@ register_schema_meta <- function(conn, entries) {
 #'   `table_names`.
 #' @keywords internal
 .schema_group_of <- function(table_names) {
-  groups   <- .schema_table_order()
-  g_names  <- names(groups)
-  user_pos <- match("User tables", g_names)
+  groups  <- .schema_table_order()
+  g_names <- names(groups)
 
   grp  <- character(length(table_names))
   rank <- integer(length(table_names))

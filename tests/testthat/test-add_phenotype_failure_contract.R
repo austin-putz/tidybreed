@@ -56,14 +56,13 @@ db_snapshot <- function(pop) {
 }
 
 # `ind_tbv` is the one table a failed call still touches: `.ap_plan()` runs
-# the add_tbv() upsert, which rewrites the same values up to floating-point
-# summation order (DuckDB sums in parallel). Every other table must be
-# identical, row for row.
+# the add_tbv() upsert, which rewrites the same values. Those values are
+# bit-identical, so this compares every table the same way -- row for row,
+# `expect_identical()`. (Phase 7 had to give `ind_tbv` a tolerance, because
+# the evaluator's parallel `SUM()` re-ordered the summation; Phase 8's exact
+# accumulator removed the reason. See test-genome-effects-determinism.R.)
 expect_db_unchanged <- function(pop, before) {
-  after <- db_snapshot(pop)
-  keep  <- setdiff(names(before), "ind_tbv")
-  expect_identical(after[keep], before[keep])
-  expect_equal(after$ind_tbv, before$ind_tbv)
+  expect_identical(db_snapshot(pop), before)
 }
 
 resid_of <- function(pop, t, pheno_number = 1L) {

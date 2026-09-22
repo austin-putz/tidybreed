@@ -60,11 +60,10 @@
 #'   Applies only in `software = "blupf90"` mode.
 #' @param update_covars Logical. If `estimate_var = TRUE`, attempt to write
 #'   estimated variance components back to `trait_var_comp`. Default `FALSE`.
-#'   **Not yet implemented**: the current writeback step
-#'   (`update_covars_from_blupf90()`) is a stub that only prints a message
-#'   pointing you to `blupf90.out` and [define_effect_cov_matrix()] for a
-#'   manual update — no rows are written automatically yet. Applies only in
-#'   `software = "blupf90"` mode.
+#'   **Not yet implemented**: `blupf90.out` is not parsed back into
+#'   `trait_var_comp`. Setting this only prints a message pointing you to
+#'   that file and to [define_effect_cov_matrix()] for a manual update; no
+#'   rows are written. Applies only in `software = "blupf90"` mode.
 #' @param phenotype Optional `tidybreed_table` from
 #'   `get_table("ind_phenotype") |> filter(...)`. When supplied, only phenotype
 #'   records matching the filter are included in the BLUPF90 data file. The
@@ -496,7 +495,6 @@ ebv_blupf90 <- function(pop, subset_ids, trait_name, model, eval_nums,
     col_map           = data_res$col_map,
     distinct_effects  = data_res$distinct_effects,
     trait             = trait,
-    effects_df        = data_res$effects_df,
     chip_name         = chip_name,
     n_loci            = if (!is.null(geno_res)) geno_res$n_loci  else 0L,
     id_width          = if (!is.null(geno_res)) geno_res$id_width else 0L,
@@ -524,9 +522,14 @@ ebv_blupf90 <- function(pop, subset_ids, trait_name, model, eval_nums,
     eval_nums         = eval_nums
   )
 
-  # Optional VCE writeback
+  # VCE writeback is not implemented: blupf90.out is not parsed back into
+  # trait_var_comp. Say so where the user asked for it, rather than carrying
+  # a stub function that ignores its arguments.
   if (isTRUE(estimate_var) && isTRUE(update_covars))
-    update_covars_from_blupf90(pop, eval_dir, trait)
+    message("VCE writeback: automated parsing not yet implemented. ",
+            "Inspect ", file.path(eval_dir, "blupf90.out"),
+            " and update trait_var_comp manually via ",
+            "define_effect_cov_matrix().")
 
   ebv_df
 }

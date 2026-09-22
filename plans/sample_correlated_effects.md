@@ -1,8 +1,9 @@
 # Sampling correlated random effects at different points in simulated time
 
-**Status**: **v3.7, approved; implementation in progress.** Phases 0–7
-shipped (0–3 on 2026-09-20, 4–7 on 2026-09-21–22; `sample_correlated_effects_phase_0.md`
-… `sample_correlated_effects_phase_7.md`); Phase 8 not started.
+**Status**: **v3.8 — complete.** Phases 0–8 shipped (0–3 on 2026-09-20,
+4–7 on 2026-09-21–22, 8 on 2026-09-22; `sample_correlated_effects_phase_0.md`
+… `sample_correlated_effects_phase_8.md`). Every decision D1–D8 is decided,
+implemented and tested.
 File:line references are refreshed after each phase. v3 is a re-baseline
 against the codebase as of v0.70.0 (2026-09-20) plus the Codex review of v2
 (`sample_correlated_effects_v2_review.md`). Every v2 design decision stands
@@ -11,6 +12,21 @@ incoherent and which is now removed. **D3, D6 and D7 were decided by the author
 on 2026-09-20, accepting the v3 recommendations** (§6). v3.1 adds six
 implementation-level clarifications found in the final read-through (marked
 *v3.1* inline); none changes a decision.
+
+**What changed from v3.7 to v3.8** (Phase 8, the closing phase):
+
+1. **D8 is new and decided**: seeded output is **bit-identical**, not
+   identical-within-tolerance. The v3.7 note that `add_tbv()`/`add_tgv()` were
+   not bit-reproducible is resolved rather than documented-as-a-limitation —
+   the cause was one parallel `SUM()` in the genome-effect evaluator, and an
+   exact accumulator fixes it for free. See D8.
+2. **D6 gains a mutability rule.** The agreement requirement made the value
+   unchangeable once a block had two members; a block-scoped writer,
+   `define_condition_change_action()`, is the answer. The v3.5 open question in
+   §8 is closed.
+3. The Phase 7 whole-database snapshot test no longer needs a tolerance on
+   `ind_tbv`; it compares every table with `expect_identical()`.
+4. §8 Phase 8 is marked shipped, with its list.
 
 **What changed from v2** (details in §0 and §4.5):
 
@@ -1513,7 +1529,7 @@ draws" row of the table is reached only through an explicit overwrite, which is
 documented on the argument. Every rejection rolls back the whole call,
 including the `phenotype_effects` delete an overwrite performs.
 
-### D6 — `condition_change_action` must agree across a residual block — **decided: option 1**
+### D6 — `condition_change_action` must agree across a residual block — **decided: option 1** ✅ *(v3.8: mutability resolved, Phase 8)*
 
 **Question (Codex B6a).** D2 stores the action per phenotype, but the decision
 is taken for a block: when `B` is drawn conditionally on a stored `A` from a
@@ -1550,6 +1566,49 @@ passes its pending row so the check runs before the `phenotype_meta` write.
 Stage 2 calls the same function without `pending` *(v3.5: shipped — run per
 block whenever a stored coordinate exists, before D2 is applied)*.
 
+**Mutability** *(v3.5 raised it; v3.8 decided and shipped it)*. Option 1 has a
+consequence the decision did not spell out: agreement makes the value
+**immutable** once a block has two or more defined members. Every route to
+changing it goes through one member at a time, and each single-member change is
+exactly the disagreeing state the check refuses — so the block is frozen at
+whatever value its members happened to be registered with, and the error
+message's advice ("set the same value on every phenotype") named an impossible
+sequence.
+
+The two candidates in §8 were a same-call "set on all members" form of
+`define_phenotype()` and a relaxation letting the *last* member's change
+through. Neither was taken:
+
+- The relaxation is order-dependent (which member is "last" depends on the
+  call history, not on the model) and it leaves the database in the
+  disagreeing state between the two calls, where any `add_phenotype()` would
+  fail. A mid-sequence invalid state is exactly what D1's whole-block rule
+  exists to prevent.
+- Overloading `define_phenotype()` looks smaller than it is: `overwrite = TRUE`
+  replaces the whole `phenotype_meta` row, so flipping one flag means restating
+  `type`, `mean`, `expressed_sex` and the rest, and forgetting one silently
+  resets it to a default. A one-column change must not be spelled as a
+  re-registration.
+
+**Decision: the writer matches the scope of the property.**
+`condition_change_action` is block-scoped, so
+`define_condition_change_action(pop, phenotype_name, action)` writes every
+member of the named phenotype's residual block in one transaction, touching
+that column and nothing else. Agreement then holds by construction on this
+path, and the D6 check remains the backstop for the case it was written for — a
+`define_residual_cov()` call that *joins* phenotypes which already disagree,
+where the user genuinely must choose. A phenotype in no block is a block of
+one, so the same call works before a block exists and `define_phenotype()`
+keeps setting the value at registration time.
+
+The action is deliberately **not** subject to the D3 realization lock. D3 locks
+the covariance *matrix*, because changing it would invalidate draws already
+taken from it. The action changes nothing about a stored residual; it decides
+how a *future* record treats one whose stratum no longer matches. Changing it
+mid-simulation is a legitimate modelling choice — "from here on, animals that
+moved farm draw independently rather than stopping the run" — and it leaves
+`ind_phenotype` and `phenotype_random_effects` untouched.
+
 ### D7 — RNG state on failure — **decided: option 1** ✅ *(v3.7: shipped as decided, Phase 7)*
 
 **Question (Codex T).** Stage 3's transaction makes the *database* atomic. It
@@ -1582,8 +1641,87 @@ and `?add_phenotype_stages`; tested in
 `test-add_phenotype_failure_contract.R` for Stage-3, both Stage-2 adapters
 mid-stream, and three pre-draw rejections, each against a whole-database
 snapshot. The one write a failed call leaves is the Stage-1 `add_tbv()`
-upsert, which is deterministic and idempotent — see the v3.7 note on its
-bit-level reproducibility.)*
+upsert, which is idempotent and RNG-independent.)* *(v3.8: that upsert is
+bit-identical too, so the snapshot test no longer gives `ind_tbv` a
+tolerance — see D8.)*
+
+### D8 — "Same seed reproduces" means bit-identical — **decided, shipped (Phase 8)** ✅
+
+**Question** *(raised in v3.7, from a Phase 7 finding)*. The Phase 7 integrity
+test could not compare `ind_tbv` with `expect_identical()`: two runs of an
+identical population differed by about 1e-15. CLAUDE.md's first reproducibility
+contract says a seed "must produce identical output on repeated runs of the
+current implementation". Does *identical* mean bit-identical, or identical
+within tolerance?
+
+**Cause** *(localized in Phase 8, not guessed)*. Every step of the evaluator's
+one statement is bit-stable on its own except the last. `add_red` sums at most
+two allele copies per group — floating-point addition **is** commutative; it is
+associativity that fails, and with two summands there is no associativity
+question. `state` sums integers, `string_agg` carries an explicit `ORDER BY`,
+and `product()` runs over a fixed member count. The final
+`SUM(genome_value * prod)` over a trait's terms is the only reduction with
+enough summands for the order to matter, and DuckDB's parallel hash aggregate
+combines partial sums in whatever order the threads finish. Measured: stable
+under `SET threads = 1`, and the divergence grows with term count
+(8.9e-16 at 60 loci, 2.2e-15 at 2000). The RNG stream was never involved —
+residuals and random-effect draws were already bit-identical; `pheno_value`
+inherited the wobble through its TBV term.
+
+**Options.**
+
+1. **Tolerance** — say in CLAUDE.md that evaluator-derived values reproduce
+   within tolerance, and leave the evaluator alone.
+2. **Ordered reduction** — `list_reduce(list(x ORDER BY id_genome_effect), ...)`.
+   Deterministic, measured at 1.3× the plain `SUM()`.
+3. **Single-threaded** — `SET threads = 1` around the statement.
+4. **Exact accumulation** — sum in `DECIMAL`, which is integer arithmetic and
+   therefore associative, then cast back.
+
+**Decision: option 4, bit-identical via exact accumulation.**
+
+Option 1 is the weaker contract and was tempting only while the wobble looked
+cosmetic. It is not. A breeding simulation is *chaotic downstream of
+selection*: once `select_parents()` exists (roadmap), a last-bit difference in
+a TBV will occasionally flip a truncation-selection ranking between two nearly
+tied animals, and from there the two runs produce different pedigrees, not
+different last bits. That is a user-visible reproducibility failure, and it
+would be reported as a bug in selection rather than traced back to a `SUM()`.
+
+Option 3 serializes the expensive join along with the cheap aggregate. Option 2
+is deterministic but changes the aggregate state from one value per group to
+one per row, which regresses the memory profile of the hottest query in the
+package and conflicts with design principle 2 ("enables simulations larger
+than RAM").
+
+Option 4 has neither cost: measured at 0.96–1.09× the plain `SUM()` across
+500–5000 loci (the join dominates), with `O(groups)` state. Scale 18 is finer
+than double precision for any contribution a breeding model produces, so the
+per-term rounding sits below the inputs' own representation error.
+
+**Consequences.**
+
+- `GEV_ACC_TYPE` in [genome_effects_eval.R](../R/genome_effects_eval.R), with
+  the reasoning inline so it is not "optimized" back to a plain `SUM()`.
+- The accumulator's domain is finite at both ends. A single term below 1e-18
+  rounds to zero before it is added — unreachable for a trait scaled to any
+  sane variance (1e6 QTL on a unit-variance trait are still ~1e-3 each), so
+  it is a statement about the representable domain rather than a practical
+  limit. The ceiling is the end worth guarding: a model whose per-term
+  contribution or running total exceeds 1e20 now errors. `.gev_accumulator_error()` rethrows
+  DuckDB's bare conversion error as a tidybreed message naming the cause. The
+  bound is **not** pre-checked: the only cheap bound
+  (`|genome_value| × 2^n_members` summed over terms) is loose enough to reject
+  legal high-order models.
+- `tbv_value`, `tgv_value` and `pheno_value` move in the last bits relative to
+  0.70.0. Pre-1.0.0 this is bookkeeping, and CLAUDE.md forbids testing against
+  previous versions' output anyway.
+- CLAUDE.md's reproducibility section now says "identical" means bit-identical
+  and names the parallel-`SUM()` failure mode, because the next many-summand
+  aggregate anyone adds will have the same problem.
+- `test-genome-effects-determinism.R` pins it with `expect_identical()` — the
+  only assertion that can catch a regression, since `expect_equal()` passes on
+  the broken code. 16 of its 18 expectations fail on the pre-change evaluator.
 
 ---
 
@@ -1621,6 +1759,18 @@ the strata rules, and D6 at both definition-time sites.
 9. An explicit zero covariance inside a declared block stays valid — the two
    phenotypes are in one block **because the pair row exists**, draw jointly,
    and come out uncorrelated.
+9b. *(v3.8, added in the Phases 0–8 review)* **Unequal, non-unit variances.**
+   Items 1–9 were all written against unit-diagonal matrices (`R_AB`, the 3 × 3
+   with 1s on the diagonal, and the stratified `R_AB` / `4 * R_AB` pair). In
+   every one of those the conditional slope `sigma_AB / var_A` equals the
+   correlation `sigma_AB / sqrt(var_A var_B)`, so a resolver conditioning on
+   the **correlation** would have passed all of them. The implementation was
+   correct, but nothing proved it. Four tests now separate the two: a
+   sequential and a joint call on `[[4, 1.8], [1.8, 9]]` (`beta = 0.45` versus
+   a correlation of `0.30`, with an explicit assertion that the correlation
+   form is *not* what came out), a three-phenotype block with three different
+   variances recovered through the sequential path, and two strata carrying
+   different unequal-variance matrices.
 10. **D1**: declaring `{A,B}` then `{B,C}` errors, names the missing `(A,C)` pair,
     and leaves `phenotype_var_comp` unchanged (rollback).
 11. **D1**: declaring the complete `{A,B,C}` in one call succeeds.
@@ -1775,7 +1925,11 @@ members, absent phenotypes, hand-broken blocks, RNG-neutrality).
 
 ### Reproducibility and integrity
 
-1. Same seed + same call sequence → identical output.
+1. Same seed + same call sequence → identical output. ✅ *(v3.8: and
+   **identical means bit-identical** — D8. The draws always were; the TBV
+   term was not, so `pheno_value` was not either.
+   `test-genome-effects-determinism.R` asserts it with `expect_identical()`,
+   which is the only assertion that catches this class of regression.)*
 2. Joint and sequential paths reproduce the target covariance statistically.
 3. Forced Stage-3 write failure rolls back residuals, named draws, and phenotype
    rows together — **and** (D7) leaves `.Random.seed` advanced by exactly the
@@ -1968,42 +2122,68 @@ a failed call does leave (the Stage-1 `add_tbv()` upsert). The review also
 added §7 item 4's missing physical-order shuffle to
 `test-add_phenotype_stages.R`.)*
 
-**Phase 8 — documentation, housekeeping, performance.**
+**Phase 8 — documentation, housekeeping, performance.** ✅ **Shipped
+2026-09-22** — see `sample_correlated_effects_phase_8.md`. The closing phase.
+Two decisions, the remaining docs, the benchmark, the release bookkeeping:
+
+- **D8 (new): seeded output is bit-identical.** The v3.7 observation that
+  `add_tbv()`/`add_tgv()` were not bit-reproducible is resolved, not
+  documented as a limitation. Cause localized to one parallel `SUM()` in the
+  genome-effect evaluator; fixed with an exact accumulator (`GEV_ACC_TYPE`)
+  that measures free and keeps `O(groups)` state. New
+  `.gev_accumulator_error()` for the finite range. New
+  `test-genome-effects-determinism.R` (18 expectations; 16 fail on the
+  pre-change evaluator). CLAUDE.md's reproducibility section now says
+  bit-identical and names the failure mode. The Phase 7 snapshot test drops
+  its `ind_tbv` tolerance.
+- **D6 mutability (the v3.5 open item): decided and shipped.** New
+  `define_condition_change_action()` — block-scoped, one transaction, one
+  column. Neither §8 candidate was taken; the reasoning is in D6. The D6 error
+  message now names a recipe that works. Four new tests in
+  `test-phenotype_cov_block.R` (109 → 125 expectations).
+- **Roxygen.** The list below was already complete except the culling example,
+  which is now on `?add_phenotype`: record A on everyone, cull on the realized
+  A, record B on the survivors conditional on their stored A residual. (The
+  `user_residual` subset-list contract landed with Phase 5; D7 with Phase 7;
+  the persistent pen-identity note with Phase 6; D1/D2/D3/D5/D6 with
+  Phases 1–2.)
+- **CLAUDE.md.** Confirmed the four listed sections current; added the
+  `define_condition_change_action()` entry, the block-scoped note on the
+  `phenotype_meta.condition_change_action` row, and the D8 paragraph.
+- **Benchmark.** New `dev/benchmarks/benchmark_phenotype_scale.R`: PLAN /
+  RESOLVE / COMMIT timed separately across four block shapes
+  (`independent`, `correlated`, `conditional`, `named_effect`) and two passes,
+  so the observation-pattern query reads apart from planning and from the
+  batched write. Seeded, per CLAUDE.md. A `--check` mode prints seeded values
+  as the guard that no future optimization changes RNG semantics. **Result: no
+  optimization needed.** Per-individual cost *falls* with population size in
+  every shape — roughly 3–4× from 1,000 to 16,000 individuals (independent:
+  0.47 → 0.095 ms/ind). `commit` takes under 3× the time for 16× the rows, so
+  the single transaction is batching; `plan` dominates the total everywhere;
+  and the call-2-minus-call-1 gap in `resolve` — the observation-pattern
+  query — stays in the tens of milliseconds rather than growing per entity.
+- `R/schema.R` column descriptions: unchanged since Phase 1,
+  `test-schema-print.R` green.
+- `NEWS.md` under **0.71.0**; `DESCRIPTION` version.
+
+*(Original scope, for the record:)*
 - Roxygen: sequential sampling; ordinal repeated-record pairing; liability
   scale; D1 whole-block rule; D2 `condition_change_action` and `'independent'`
   semantics; D3 lock and the `remove_rows()` recipe; D5 on `define_phenotype()`
-  and `define_effect_random()`; D6 agreement; D7 RNG contract *(v3.7: done
-  in Phase 7)*; the persistent
-  pen-identity note on `define_effect_random()` *(v3.6: done)*; a culling
-  example on `add_phenotype()`; the `user_residual` subset-list contract.
+  and `define_effect_random()`; D6 agreement; D7 RNG contract; the persistent
+  pen-identity note on `define_effect_random()`; a culling example on
+  `add_phenotype()`; the `user_residual` subset-list contract.
 - CLAUDE.md: `ind_phenotype` and `phenotype_meta` schema tables; the D1/D5
   rules in the `define_phenotype()` / `define_residual_cov()` sections; the
   `add_phenotype()` description of the three-stage flow and residual model;
   the `phenotype_var_comp` note that `condition_column` rows form strata of one
   block.
-- `R/schema.R` column descriptions are added in Phase 1; confirm
-  `test-schema-print.R` still passes (table lists are unchanged).
-- `NEWS.md` under **0.71.0**, `DESCRIPTION` version bump.
-- *(v3.5)* Make `condition_change_action` changeable on a defined block:
-  today the definition-time D6 check refuses to flip any one member, so
-  once every member is defined the value is frozen. Either a same-call
-  "set on all members" form of `define_phenotype()` or a relaxation that
-  lets the *last* member's change go through. Decide and document.
+- Make `condition_change_action` changeable on a defined block.
 - Benchmark under `dev/benchmarks/` for large populations, optimizing the
   observation-pattern query and batched writes **without changing RNG
   semantics**.
-- *(v3.7, found in Phase 7; outside this plan's layer)* `add_tbv()` /
-  `add_tgv()` values are not bit-reproducible across identical runs: the
-  evaluator's `SUM()` runs multi-threaded in DuckDB, so the floating-point
-  summation order varies (≈ 5e-16 on a 60-locus trait; identical under
-  `SET threads = 1`). `pheno_value` inherits the wobble through the TBV
-  term. Decide whether the "same seed reproduces within the current code"
-  contract means bit-identical (then the evaluator needs an ordered
-  reduction — e.g. `SUM()` over a `locus_id`-ordered subquery is *not*
-  enough in DuckDB; it needs a single-threaded aggregate or an R-side
-  ordered sum) or identical within tolerance (then say so in CLAUDE.md).
-  `test-add_phenotype_failure_contract.R` compares `ind_tbv` with tolerance
-  for this reason.
+- Decide whether "same seed reproduces within the current code" means
+  bit-identical or identical within tolerance.
 
 **Size.** v2's ~250 net lines covered Phases 5–6 only. With Phase 4's
 extraction, the three writers' transactions and validator, and the resolver

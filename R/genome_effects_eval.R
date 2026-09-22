@@ -27,6 +27,47 @@
 # ---------------------------------------------------------------------------
 
 
+# The accumulator type for the one sum that combines terms.
+#
+# Every other step of .gev_sql() is bit-stable on its own: `add_red` sums at
+# most two allele copies per group (floating-point addition *is* commutative;
+# it is associativity that fails), `state` sums integers, `string_agg` carries
+# an explicit ORDER BY, and `product()` runs over a fixed member count. The
+# final `SUM` over a trait's terms is the only reduction with enough summands
+# for the order to matter, and DuckDB's parallel hash aggregate combines
+# partial sums in whatever order the threads finish -- so two runs of the same
+# seed differed in the last bits (~1e-15 at 2000 loci).
+#
+# A DECIMAL sum is exact integer arithmetic, so it is associative and the
+# result is a function of the inputs alone, not of the thread schedule. It
+# costs nothing measurable (the join dominates) and, unlike an ordered
+# `list_reduce()`, keeps the aggregate state at one value per group rather
+# than one per row -- which is what lets the evaluator stay within the
+# "larger than RAM" design principle.
+#
+# Scale 18 is finer than double precision for any contribution a breeding
+# model produces, so the per-term rounding is below the inputs' own
+# representation error. It does put a floor under a *single term*: a
+# contribution below 1e-18 rounds to zero before it is added, so a model built
+# entirely from such terms would sum to zero where a float sum would not. A
+# per-locus effect that small cannot arise from a trait scaled to any sane
+# variance -- 1e6 QTL on a unit-variance trait are still ~1e-3 each -- so the
+# floor is a statement about the representable domain, not a limitation in
+# practice. The ceiling is the constraint worth guarding: every per-term
+# contribution *and* the running sum must stay under 1e20 in absolute value.
+# A model that large is not a breeding model, but the failure must still read
+# like one of ours: `.gev_accumulator_error()` turns DuckDB's bare conversion
+# error into a message that names the cause. The bound is not pre-checked,
+# because the only cheap bound (|genome_value| x 2^n_members summed over
+# terms) is loose enough to reject legal high-order models.
+#
+# See plans/sample_correlated_effects.md D8.
+GEV_ACC_TYPE <- "DECIMAL(38, 18)"
+
+# The largest absolute value GEV_ACC_TYPE can hold (10^20 is the first value
+# that overflows DECIMAL(38, 18)).
+GEV_ACC_MAX <- 1e20
+
 #' Model-structure component for one term
 #'
 #' These are **declared model structure, not variance components**: a functional
@@ -551,6 +592,28 @@
 
 # -- Evaluation -------------------------------------------------------------
 
+#' Rethrow an accumulator overflow as a tidybreed error
+#'
+#' The exact accumulator (`GEV_ACC_TYPE`) holds values under `GEV_ACC_MAX`.
+#' Nothing else in the statement casts to DECIMAL, so an error naming DECIMAL
+#' (the cast) or HUGEINT (its backing type, which overflows while the partial
+#' sums accumulate) is always this one cause. Any other error is re-signalled
+#' unchanged -- matching "Conversion Error" on its own would swallow failures
+#' that have nothing to do with the accumulator.
+#'
+#' @keywords internal
+#' @noRd
+.gev_accumulator_error <- function(e) {
+  msg <- conditionMessage(e)
+  if (!grepl("DECIMAL|HUGEINT", msg)) stop(e)
+  stop("The effect model produces genetic values too large to evaluate ",
+       "exactly: a term's contribution, or a trait's running total, exceeds ",
+       format(GEV_ACC_MAX, scientific = TRUE), " in absolute value. Check the ",
+       "'genome_value' coefficients in genome_effects -- a non-finite or ",
+       "astronomically scaled coefficient is the usual cause. (DuckDB said: ",
+       msg, ")", call. = FALSE)
+}
+
 #' Evaluate the stored effect model for a set of individuals and traits
 #'
 #' Member reduction, tuple grouping and summation are one SQL statement, so the
@@ -611,7 +674,9 @@
                           model$terms[, c("id_genome_effect", "trait_name",
                                           "genome_value", "component_name")])
 
-  res <- DBI::dbGetQuery(conn, .gev_sql(ind_tmp, mem_tmp, map_tmp, term_tmp))
+  res <- tryCatch(
+    DBI::dbGetQuery(conn, .gev_sql(ind_tmp, mem_tmp, map_tmp, term_tmp)),
+    error = .gev_accumulator_error)
 
   bad <- res[res$n_bad > 0L, , drop = FALSE]
   if (nrow(bad) > 0L) {
@@ -695,7 +760,8 @@
     "  GROUP BY 1, 2, 3, mp.n_members ",
     "  HAVING COUNT(*) = mp.n_members ) ",
     "SELECT h.id_ind, t.trait_name, t.component_name, ",
-    "       SUM(t.genome_value * h.prod) AS tgv_value, ",
+    "       CAST(SUM(CAST(t.genome_value * h.prod AS ", GEV_ACC_TYPE, ")) ",
+    "            AS DOUBLE) AS tgv_value, ",
     "       CAST(SUM(h.n_bad) AS INTEGER) AS n_bad ",
     "FROM hit h JOIN ", term_tmp, " t ",
     "  ON t.id_genome_effect = h.id_genome_effect ",
