@@ -36,8 +36,12 @@ record as character (\code{NA} = \code{NULL} in the table).}
 \item{\code{user_values}}{Numeric per record (\code{"user_values"} path).}
 \item{\code{formula}}{The derived formula string (\code{"derived_formula"} path).}
 }
-and \code{residual_blocks}: the residual covariance blocks touching the
-call's phenotypes, from \code{\link[=find_covariance_blocks]{find_covariance_blocks()}}.
+and the covariance blocks Stage 2 draws through, from
+\code{\link[=find_covariance_blocks]{find_covariance_blocks()}}: \code{residual_blocks} (the residual blocks
+touching the call's phenotypes), \code{named_targets} (per random effect,
+the model-path phenotypes whose planned records carry it; see
+\code{.ap_named_effect_targets()}) and \code{named_blocks} (per effect, the
+blocks touching those phenotypes).
 }
 \description{
 Stage 1: plan every record of an \code{add_phenotype()} call

@@ -49,6 +49,12 @@ assign_pens <- function(pop, pens, ids = all_ids(pop)) {
 all_ids <- function(pop) sort(DBI::dbGetQuery(pop$db_conn,
                                               "SELECT id_ind FROM ind_meta")$id_ind)
 
+sex_of <- function(pop) {
+  m <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind, sex FROM ind_meta")
+  stats::setNames(m$sex, m$id_ind)
+}
+
+
 pen_of <- function(pop) {
   m <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind, pen FROM ind_meta ORDER BY id_ind")
   stats::setNames(as.character(m$pen), m$id_ind)
@@ -276,6 +282,38 @@ test_that("effects draw in byte-sorted effect_name order, then blocks, then resi
     ifelse(is.na(pen_of(pop)), 0, 2 * z_pen[match(pen_of(pop), c("P01", "P02"))])
   expect_equal(unname(contrib_of(pop, "A")), unname(expected))
   expect_equal(nrow(re_rows_all(pop)), 4L)
+})
+
+test_that("a phenotype whose planned levels are all NULL draws nothing, alone or in a block, and contributes 0", {
+  pop <- make_ne_pop("ne_allnull", n_males = 4, n_females = 4)
+  on.exit(close_pop(pop))
+  ids <- all_ids(pop)
+  pop <- set_col(pop, "pen", NA_character_)                 # declare the column
+  pop <- suppressMessages(define_effect_random(pop, "A", "pen", source_column = "pen", variance = 4))
+  s <- state_after(30, pop <- add_ph(pop, "A", seed = 30))   # 1 x 1 block
+  expect_identical(s, state_after(30, stats::rnorm(8)))      # residuals only
+  expect_equal(nrow(re_rows_all(pop)), 0L)
+  expect_equal(unname(contrib_of(pop, "A")), rep(0, 8))
+
+  # In a block with B: A_1..A_4 (the males) have no pen, A_5..A_8 are in
+  # P01/P02. A expressed in males only, so A plans no entity at all while
+  # B plans both pens: A's coordinate is planned by nobody and stays
+  # latent; B draws marginally -- 2 normals, then 4 + 8 residuals.
+  pop <- suppressMessages(define_phenotype(
+    pop, "A", type = "continuous", mean = 10, expressed_sex = "M",
+    repeatable = TRUE, overwrite = TRUE))
+  pop <- assign_pens(pop, c("P01", "P02"), ids = ids[5:8])
+  pop <- suppressMessages(define_effect_cov_matrix(pop, "pen", R_pen))  # A's 1 x 1 joins B
+  pop <- suppressMessages(define_effect_random(pop, "B", "pen", source_column = "pen"))
+  expect_identical(unname(sex_of(pop)[ids[1:4]]), rep("M", 4))
+  s <- state_after(31, pop <- add_ph(pop, c("A", "B"), seed = 31))
+  expect_identical(s, state_after(31, stats::rnorm(2 + 4 + 8)))
+  r <- re_rows_all(pop)
+  expect_identical(r$phenotype_name, c("B", "B"))
+  expect_identical(r$level, c("P01", "P02"))
+  set.seed(31)
+  expect_equal(r$draw_value, 2 * stats::rnorm(2))
+  expect_equal(unname(contrib_of(pop, "A", 2L)), rep(0, 4))
 })
 
 test_that("a permanent-environment effect (source_column = id_ind) is one draw per animal reused across repeated records", {

@@ -73,8 +73,12 @@ NULL
 #'     \item{`user_values`}{Numeric per record (`"user_values"` path).}
 #'     \item{`formula`}{The derived formula string (`"derived_formula"` path).}
 #'   }
-#'   and `residual_blocks`: the residual covariance blocks touching the
-#'   call's phenotypes, from [find_covariance_blocks()].
+#'   and the covariance blocks Stage 2 draws through, from
+#'   [find_covariance_blocks()]: `residual_blocks` (the residual blocks
+#'   touching the call's phenotypes), `named_targets` (per random effect,
+#'   the model-path phenotypes whose planned records carry it; see
+#'   `.ap_named_effect_targets()`) and `named_blocks` (per effect, the
+#'   blocks touching those phenotypes).
 #' @keywords internal
 .ap_plan <- function(tbl, phenos, user_values = NULL) {
   pop  <- tbl$pop
@@ -712,8 +716,9 @@ NULL
 
   # ── Entities: the planned levels, sorted ─────────────────────────────────
   planned <- do.call(rbind, lapply(in_call, function(t) {
-    lv <- terms[[t]]$level
-    data.frame(level = unique(lv[!is.na(lv)]), phenotype_name = t,
+    lv <- unique(terms[[t]]$level)
+    lv <- lv[!is.na(lv)]
+    data.frame(level = lv, phenotype_name = rep(t, length(lv)),
                stringsAsFactors = FALSE)
   }))
   levels <- sort(unique(planned$level), method = "radix")

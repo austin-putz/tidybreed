@@ -30,7 +30,7 @@ closed. Nothing of the pre-Phase-4 draw code remains in `add_phenotype()`.
 | `.ap_resolve()` | same | The pre-draw and the per-phenotype marginal loop are replaced by one `.ap_resolve_named_effects()` call; still before the residual adapter. |
 | `.blupf90_residual_cov()` | `R/blupf90_helpers.R` | `write_renum_par()`'s residual matrix, from `find_covariance_blocks()`: block-diagonal across independent blocks, error for a trait in no block or with only conditional strata. |
 | Deleted | `R/add_phenotype_stages.R`, `R/define_effect_cov_matrix.R` | `.ap_predraw_named_effects()` (§7.5, the last `MASS::mvrnorm()` on the phenotype path), `.ap_resolve_random_terms()`, `.ap_existing_draws()`, `.ap_append_random_effects()`, `load_phenotype_cov()`. Four `man/` pages go with them. |
-| Tests | `tests/testthat/test-add_phenotype_named_effects.R` (new) | 65 expectations; see below. One test added to `test-correlated_draws.R` for `.blupf90_residual_cov()`. No existing test changed. |
+| Tests | `tests/testthat/test-add_phenotype_named_effects.R` (new) | 74 expectations (65 at the first commit, +9 in the review pass); see below. One test added to `test-correlated_draws.R` for `.blupf90_residual_cov()`. No existing test changed. |
 | Docs | `man/dot-ap_resolve_named_effects.Rd`, `dot-ap_named_effect_block.Rd`, `dot-ap_named_effect_targets.Rd`, `dot-blupf90_residual_cov.Rd` new; `add_phenotype.Rd` (random-shift bullet), `add_phenotype_stages.Rd` (Stage 2 = two adapters), `dot-ap_resolve.Rd`, `correlated_draws.Rd`, `define_effect_random.Rd` (the §5.8 persistence note, the conditional-sampling paragraph, the `distribution` semantics), `define_effect_cov_matrix.Rd`, `write_renum_par.Rd` updated | `NAMESPACE` unchanged. CLAUDE.md: `phenotype_random_effects` (persistent entity, written only by `add_phenotype()`), the Stage 2 description, the `define_effect_random()` bullet. |
 
 ## What a user sees differently
@@ -110,7 +110,7 @@ stratified residual would feed a conditional row's value into the prior).
 The block loader is the one reader of stored matrices; the writer now
 uses it.
 
-## Tests (`test-add_phenotype_named_effects.R`, 65 expectations)
+## Tests (`test-add_phenotype_named_effects.R`, 74 expectations)
 
 Exact tests replay the resolver's contract: `n × m` standard normals in
 entity (byte-sorted level) order and coordinate order within an entity,
@@ -127,6 +127,7 @@ level draw.
 | Defect 3 closed | both phenotypes in one call: `{A, B}` group (new level, joint through `chol(R)`) before `{B}` group (stored `A` reused exactly, `B` conditional); group order by byte-sorted sample key |
 | three-phenotype block | `C` conditional on `(A, B)` for two levels and on `A` alone for a third, in one resolver call; hand-computed `E[C | ·]` and `V[C | ·]` |
 | effect order, `NULL` level | `'herd'` before `'pen'` before residuals; a `NULL` pen draws nothing and contributes `0`; four rows stored |
+| all-`NULL` levels | a phenotype none of whose planned records has a level: nothing drawn for it as a 1 × 1 block, and in a block with a partner that has levels the partner draws marginally while its coordinate stays latent (review-pass regression) |
 | permanent environment | `source_column = "id_ind"`: one draw per animal, reused on the second record, second call draws residuals only |
 | 1 × 1 gamma / uniform | `rgamma(shape = 1, rate = 1/√v)` and `runif(±√3v)` exactly; a new level on the next call is one new gamma draw, stored levels reused |
 | latent member | the term dropped from `A` after its draws exist: `A` no longer draws, contributes `0`, and its stored draws still condition `B` |
@@ -147,13 +148,14 @@ it never conditioned).
 
 ## Verification
 
-- `test-add_phenotype_named_effects.R`: 65/65.
+- `test-add_phenotype_named_effects.R`: 74/74.
 - `test-add_phenotype_stages.R`, `test-add_phenotype.R`,
   `test-add_phenotype_residuals.R`, `test-phenotype_composite.R`,
   `test-phenotype_cov_block.R`, `test-correlated_draws.R` (1 added),
   `test-archive_replicate.R`, `test-schema-registries.R` — all green.
-- Full suite on the final code (after the review pass): 3384 passed,
-  0 failed, 1 skipped (3316 at the Phase 5 end state + 65 + 3).
+- Full suite at the first commit (`70b9909`): 3384 passed, 0 failed,
+  1 skipped (3316 at the Phase 5 end state + 65 + 3). After the second
+  review pass: 3393 passed, 0 failed, 1 skipped.
 - `roxygen2::roxygenise(roclets = "rd")` clean; `NAMESPACE` unchanged.
 
 ## Review pass
@@ -178,6 +180,28 @@ applied before the commit:
   draw.
 - Confirmed nothing references the deleted functions outside historical
   `NEWS.md` entries and the plan's "before Phase 6" narrative.
+
+Second pass (after the commit `70b9909`), against seven adversarial
+probes — integer levels read from a non-`ind_meta` source table, every
+planned level `NULL`, a sex-expressed phenotype whose pens are a subset of
+the block partner's, a categorical phenotype in a block, a gamma 1 × 1 on
+a reuse call, two effects with one partially stored, and conditioning
+after `close_pop()` / `restore_pop()`:
+
+- **Bug: a phenotype whose planned levels are all `NULL` crashed.**
+  `.ap_named_effect_block()` built its planned-level frame with
+  `data.frame(level = <length 0>, phenotype_name = t)`, which R refuses
+  ("differing number of rows: 0, 1"). The pre-Phase-6 marginal path
+  handled this case silently (nothing to draw). Fixed by recycling the
+  name to the level count; the case is now a test ("all NULL … alone or
+  in a block": no draw, RNG untouched by the effect, contribution `0`,
+  and in a block the partner still draws for its own pens while the
+  all-`NULL` phenotype's coordinate stays latent).
+- `.ap_plan()`'s roxygen now lists `named_targets` / `named_blocks` in
+  the returned plan.
+- The other six probes passed unchanged; the categorical probe was
+  wrong about the package (a `prevalence` phenotype writes category
+  indices `1`/`2`, not `0`/`1`), not the adapter.
 
 ## Plan bookkeeping
 

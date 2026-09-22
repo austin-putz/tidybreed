@@ -1871,8 +1871,10 @@ registered view, §5.6 backstop per block, one resolver call per sample-set
 group, 1 × 1 gamma/uniform marginal sampler kept; draws before the
 residual adapter. `.ap_predraw_named_effects()`,
 `.ap_resolve_random_terms()`, `.ap_existing_draws()`,
-`.ap_append_random_effects()` and `load_phenotype_cov()` deleted. 65 new
-expectations in `test-add_phenotype_named_effects.R`; full suite green.
+`.ap_append_random_effects()` and `load_phenotype_cov()` deleted. 74
+expectations in `test-add_phenotype_named_effects.R` (the review pass
+found and fixed one crash — every planned level `NULL` — and added its
+test); full suite green.
 
 *(Original scope:)* Replace §7.5 and the normal branch of
 the marginal path (*v3.4:* `.ap_predraw_named_effects()` and the normal
