@@ -14,7 +14,7 @@
 <a href="https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&style=for-the-badge&label=R-CMD-check&logo=githubactions&logoColor=white" alt="R-CMD-check" /></a>
 <a href="https://austin-putz.github.io/tidybreed/"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&style=for-the-badge&label=pkgdown&logo=githubactions&logoColor=white" alt="pkgdown" /></a>
 <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental"><img src="https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge" alt="Lifecycle: experimental" /></a>
-<a href="https://github.com/austin-putz/tidybreed/releases"><img src="https://img.shields.io/badge/version-0.71.0-4ecdc4.svg?style=for-the-badge" alt="Version" /></a>
+<a href="https://github.com/austin-putz/tidybreed/releases"><img src="https://img.shields.io/badge/version-0.71.1-4ecdc4.svg?style=for-the-badge" alt="Version" /></a>
 <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" /></a>
 </p>
 

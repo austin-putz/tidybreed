@@ -1,3 +1,14 @@
+# tidybreed 0.71.1 (2026-09-23)
+
+## Developer documentation
+
+* `CLAUDE.md` slimmed from ~98k to ~20k characters. The per-table schema and
+  per-function reference moved verbatim into two project skills,
+  `.claude/skills/tidybreed-schema/` and `.claude/skills/tidybreed-api/`, loaded
+  on demand. Every prohibition and failure contract from those sections stays in
+  `CLAUDE.md` under a new **Hard Rules** section. `.gitignore` now tracks
+  `.claude/skills/`. No package code changed.
+
 # tidybreed 0.71.0
 
 Correlated random effects sampled across simulation stages — see

@@ -6,6 +6,7 @@
 *.Rproj
 inst/doc
 .claude/*
+!.claude/skills/
 memory/
 .quarto/*
 *.Rcheck/
