@@ -4,16 +4,13 @@
 \alias{.create_run_dir}
 \title{Create a timestamped layer-5 run directory inside a tool dir}
 \usage{
-.create_run_dir(pop, tool, keep = "on_error")
+.create_run_dir(pop, tool)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object with \code{run_dirs} populated.}
 
 \item{tool}{Character scalar. Which tool dir to use (must be a key in
 \code{pop$run_dirs}).}
-
-\item{keep}{\code{FALSE}, \code{TRUE}, or \code{"on_error"}. Cleanup semantics (not yet
-enforced automatically; reserved for a future release).}
 }
 \value{
 Path to the newly created run directory (invisibly).

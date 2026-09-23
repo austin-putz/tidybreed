@@ -137,13 +137,13 @@ test_that("extract_genotypes() errors if chip not defined", {
 # New effects_tbl tests
 # ---------------------------------------------------------------------------
 
-test_that("extract_genotypes() with effects_tbl returns QTL loci for all individuals", {
+test_that("extract_genotypes() with effects_tbl returns causal loci for all individuals", {
   pop <- make_qtl_pop("test_eg_qtl_basic")
 
   geno <- pop |>
     get_table("ind_meta") |>
     extract_genotypes(
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -164,7 +164,7 @@ test_that("extract_genotypes() effects_tbl respects pending tbl filter", {
     get_table("ind_meta") |>
     dplyr::filter(sex == "F") |>
     extract_genotypes(
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -187,7 +187,7 @@ test_that("extract_genotypes() chip + effects_tbl unions loci (no overlap)", {
     get_table("ind_meta") |>
     extract_genotypes(
       chip_name   = "HD",
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
@@ -211,12 +211,42 @@ test_that("extract_genotypes() chip + effects_tbl deduplicates overlapping loci"
     get_table("ind_meta") |>
     extract_genotypes(
       chip_name   = "50k",
-      effects_tbl = get_table(pop, "genome_effects") |>
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
         dplyr::filter(trait_name == "ADG")
     )
 
   locus_cols <- grep("^locus_", names(geno), value = TRUE)
   expect_equal(length(locus_cols), 50L)
+
+  close_pop(pop)
+})
+
+test_that("extract_genotypes() effects_tbl filters on contrast and coefficient", {
+  pop <- make_qtl_pop("test_eg_qtl_large")
+
+  # The coefficient lives on the term; genome_effect_loci repeats it on each
+  # member row so a locus-grain filter can see it.
+  cut <- DBI::dbGetQuery(
+    pop$db_conn,
+    "SELECT quantile_cont(abs(genome_value), 0.5) AS q FROM genome_effect_loci
+      WHERE trait_name = 'ADG'")$q
+  n_big <- DBI::dbGetQuery(
+    pop$db_conn, paste0(
+      "SELECT COUNT(DISTINCT locus_id) AS n FROM genome_effect_loci ",
+      "WHERE trait_name = 'ADG' AND contrast_name = 'additive' ",
+      "AND abs(genome_value) > ", cut))$n
+  expect_gt(n_big, 0L)
+
+  geno <- pop |>
+    get_table("ind_meta") |>
+    extract_genotypes(
+      effects_tbl = get_table(pop, "genome_effect_loci") |>
+        dplyr::filter(trait_name == "ADG", contrast_name == "additive",
+                      abs(genome_value) > cut)
+    )
+
+  locus_cols <- grep("^locus_", names(geno), value = TRUE)
+  expect_equal(length(locus_cols), as.integer(n_big))
 
   close_pop(pop)
 })
@@ -228,10 +258,10 @@ test_that("extract_genotypes() errors when effects_tbl filter yields no loci", {
     pop |>
       get_table("ind_meta") |>
       extract_genotypes(
-        effects_tbl = get_table(pop, "genome_effects") |>
+        effects_tbl = get_table(pop, "genome_effect_loci") |>
           dplyr::filter(trait_name == "NONEXISTENT")
       ),
-    "No QTL loci found"
+    "No causal loci found"
   )
 
   close_pop(pop)
@@ -246,7 +276,7 @@ test_that("extract_genotypes() errors when effects_tbl is wrong table", {
       extract_genotypes(
         effects_tbl = get_table(pop, "ind_meta")
       ),
-    "genome_effects"
+    "genome_effect_loci"
   )
 
   close_pop(pop)
@@ -371,6 +401,38 @@ test_that("extract_genotypes() does not error when chr_inheritance has a sex-lin
                              from_parent_1 = 0, from_parent_2 = 1))
 
   expect_no_error(pop |> get_table("ind_meta") |> extract_genotypes("50k"))
+
+  close_pop(pop)
+})
+
+
+test_that("extract_genotypes() accepts a filtered ind_ebv as the individual set", {
+  pop <- make_extract_pop("test_eg_ebv")
+  pop <- pop |> get_table("ind_meta") |> add_genotypes("50k")
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 4)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'T', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  geno <- pop |>
+    get_table("ind_ebv") |>
+    dplyr::filter(ebv_value >= 2) |>
+    extract_genotypes("50k")
+  expect_setequal(geno$id_ind, ids[2:4])
+
+  # Unfiltered: every animal with an EBV
+  geno_all <- pop |> get_table("ind_ebv") |> extract_genotypes("50k")
+  expect_setequal(geno_all$id_ind, ids)
+
+  expect_error(pop |> get_table("genome_meta") |> extract_genotypes("50k"),
+               "has no 'id_ind' column")
+  expect_error(
+    pop |> get_table("ind_meta") |> dplyr::filter(sex == "X") |>
+      extract_genotypes("50k"),
+    "No individuals found")
 
   close_pop(pop)
 })

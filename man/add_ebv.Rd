@@ -23,8 +23,12 @@ add_ebv(
 )
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally filtered).
-Must contain an \code{id_ind} column.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, optionally piped through
+\code{\link[dplyr:filter]{dplyr::filter()}}. Any table with an \code{id_ind} column is accepted; the
+individuals acted on are the distinct \code{id_ind} values present in the
+(filtered) table. An unfiltered \code{ind_meta} selects every individual; an
+unfiltered \code{ind_ebv}, \code{ind_index}, \code{ind_genotype}, ... selects only the
+individuals that have rows there. A table without \code{id_ind} is an error.}
 
 \item{trait_name}{Character vector of trait name(s) to evaluate.}
 
@@ -77,11 +81,10 @@ Applies only in \code{software = "blupf90"} mode.}
 
 \item{update_covars}{Logical. If \code{estimate_var = TRUE}, attempt to write
 estimated variance components back to \code{trait_var_comp}. Default \code{FALSE}.
-\strong{Not yet implemented}: the current writeback step
-(\code{update_covars_from_blupf90()}) is a stub that only prints a message
-pointing you to \code{blupf90.out} and \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} for a
-manual update — no rows are written automatically yet. Applies only in
-\code{software = "blupf90"} mode.}
+\strong{Not yet implemented}: \code{blupf90.out} is not parsed back into
+\code{trait_var_comp}. Setting this only prints a message pointing you to
+that file and to \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} for a manual update; no
+rows are written. Applies only in \code{software = "blupf90"} mode.}
 
 \item{phenotype}{Optional \code{tidybreed_table} from
 \code{get_table("ind_phenotype") |> filter(...)}. When supplied, only phenotype

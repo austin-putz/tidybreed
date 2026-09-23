@@ -42,6 +42,18 @@ before `1.0.0`; there is no downstream compatibility contract to protect.
    implementation. We do **not** care whether it matches any previous version's
    output — never write a test that compares against pre-change/"golden-from-old"
    output, and never contort a formula to stay "byte-identical to today."
+
+   **"Identical" means bit-identical, not "within tolerance."** This binds more
+   than the RNG stream: every value the simulation writes must be a function of
+   the stored inputs alone, never of how many threads DuckDB happened to use.
+   A parallel `SUM()` over more than two floating-point summands is the usual
+   way this breaks — partial sums combine in whatever order the threads finish,
+   which is not associative. The genome-effect evaluator therefore accumulates
+   its one many-summand sum exactly (`GEV_ACC_TYPE` in
+   `R/genome_effects_eval.R`); do not "optimize" that back to a plain `SUM()`.
+   `tests/testthat/test-genome-effects-determinism.R` pins it with
+   `expect_identical()`, which is the only assertion that can catch a
+   regression here — `expect_equal()` passes on the broken code.
 2. **R ↔ Rcpp parity.** Where the same algorithm exists in both R and C++, a given
    seed must produce identical output in both (this is a *within-current-code*
    guarantee, and the reason RNG choices like `dqrng` matter).
@@ -94,7 +106,7 @@ contributor-specific phenotype components without another fundamental rewrite.
 Do not implement future biology before it is needed. It is enough to reserve
 clean dimensions now when the schema would be painful to alter later. Prefer
 long tables with explicit dimensions such as `line_name`, `sex`, `map_name`,
-`genome_effect_type`, and `effect_name`. Use `NULL` deliberately for
+`contrast_name`, `component_name`, and `effect_name`. Use `NULL` deliberately for
 shared/default behavior, such as population-wide genome effects or maps applying
 to all lines.
 
@@ -127,7 +139,7 @@ The model is split into two distinct layers with a strict boundary between them:
 **Genetic component layer** — managed by `define_trait()`:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
 - Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_var_comp`
-- Arguments: `target_add_var`, `target_add_mean`, `expressed_parent`, `description`, `units`
+- Arguments: `target_add_var`, `target_add_mean`, `description`, `units`
 - No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
 **Observation layer** — managed by `define_phenotype()`:
@@ -219,32 +231,85 @@ distance-driven code (founder LD, recombination):
 - `validate_genome_map(conn)` — logical-key uniqueness (NULL-normalized),
   agreement with `genome_meta`, valid `sex`/`map_name`. Run after every map write.
 
-### `genome_effects`
+### `genome_effects` / `genome_effect_members` / `genome_effect_member_origins`
 
-QTL effect data. One row per (locus × trait × effect type × line). Populated by
-`define_additive_effects()` (single or multi-trait).
+Genome effects are stored as **terms**, not one row per locus. A term is one
+coefficient over one or more loci, each locus contributing a named basis function
+(`contrast_name`), each optionally scoped to allele copies of a given line and/or
+parent of origin. Created by `define_genome()` (not `open_pop()` — the `locus_id`
+foreign key needs `genome_meta` to exist first). Written by
+`define_genome_effects()` and, for the reserved `generated_additive_tbv` owner,
+by `define_additive_effects()`.
 
-| Column             | Type    | Notes                                                      |
-|--------------------|---------|------------------------------------------------------------|
-| id_genome_effect   | INTEGER | Primary key assigned by tidybreed via `next_int_id()`       |
-| locus_name         | VARCHAR | FK to `genome_meta.locus_name`                             |
-| line_name          | VARCHAR | NULL = population-wide; set for line-specific effects      |
-| trait_name         | VARCHAR | FK to `trait_meta.trait_name`                              |
-| genome_effect_type | VARCHAR | `"additive"` now; `"dominance"` and others later           |
-| genome_value       | DOUBLE  | Effect size                                                |
-| base_allele_freq   | DOUBLE  | Base allele frequency used for TBV centering (Falconer)    |
+**`genome_effects`** — one row per term.
 
-**Reserved**: all columns (the table is managed exclusively by `define_additive_effects()`).
+| Column           | Type    | Notes                                                     |
+|------------------|---------|-----------------------------------------------------------|
+| id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
+| trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated_additive_tbv"` is reserved for `define_additive_effects()`, `"custom"` is the `define_genome_effects()` default |
+| effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
+| genome_value     | DOUBLE  | The term's coefficient                                    |
 
-QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
-`genome_effects` for that `(trait_name, genome_effect_type)`. No separate boolean
-flag is stored.
+**`genome_effect_members`** — one row per (term × locus), canonicalized by
+ascending `locus_id` with `member_slot` running `1..n`.
 
-For crossbreeding, `line_name = NULL` means a population-wide/common effect shared
-across lines; non-NULL `line_name` rows are line-specific effects. Current code
-implements additive effects only, but the long `genome_effect_type` dimension is
-reserved so dominance, epistasis, and other non-additive effects can be added later
-without a table rewrite.
+| Column           | Type     | Notes                                                    |
+|------------------|----------|----------------------------------------------------------|
+| id_genome_effect | INTEGER  | FK to `genome_effects`; PK part                          |
+| member_slot      | INTEGER  | Position in the term; PK part                            |
+| locus_id         | INTEGER  | FK to `genome_meta.locus_id`                             |
+| contrast_name    | VARCHAR  | `"additive"` (per allele copy), `"dominance"` (Cockerham, diploid), `"indicator"` (one genotype state) |
+| copy_count_value | UTINYINT | Indicator state: realized copy count. Required with `dosage_value`, because dosage alone conflates "no copy", "one allele-0 copy" and "two allele-0 copies" |
+| dosage_value     | UTINYINT | Indicator state: dosage of allele 1                      |
+| center_value     | DOUBLE   | Per-copy centring constant: `p` under Cockerham coding, `0.5` under functional coding. Required for non-indicator contrasts |
+
+**`genome_effect_member_origins`** — the scope of a member, as a predicate over
+allele copies. **No rows = the common scope**, which matches every copy.
+
+| Column           | Type     | Notes                                                    |
+|------------------|----------|----------------------------------------------------------|
+| id_genome_effect | INTEGER  | PK part; composite FK to `genome_effect_members`         |
+| member_slot      | INTEGER  | PK part; composite FK to `genome_effect_members`         |
+| origin_slot      | INTEGER  | PK part; canonicalized by sorting the origin tuple       |
+| line_match_type  | VARCHAR  | `"exact"` (named line), `"unknown"` (copies with no line), `"any"` (additive members only, and must carry a `parent_origin`) |
+| line_name        | VARCHAR  | Set only for `"exact"`                                   |
+| parent_origin    | UTINYINT | 1 = sire, 2 = dam, NULL = either. Non-NULL on an additive member is how **imprinting** is expressed |
+| copy_count       | INTEGER  | Copies demanded; always 1 on an additive member          |
+
+**Reserved**: all columns of all three. Row deletion is refused — effect
+definitions are configuration and are replaced through
+`define_genome_effects(mode = ...)`, not row-deleted.
+
+**No foreign keys *inside* the set** (members → effects, origins → members),
+deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
+transaction whose children were deleted earlier in that same transaction — for
+single-column and composite keys alike, in either delete order — which makes
+every replace mode unwritable as one transaction. Since a half-replaced effect
+model is a *different* model rather than a weaker one, the FKs go and
+`validate_genome_effects()` reports orphans in both directions before every
+`COMMIT` instead. The `locus_id` → `genome_meta` key **stays**: `genome_meta`
+rows are never deleted, so it never sits in the failing position. See
+`tests/testthat/test-genome-effects-schema.R` for the pinned DuckDB behaviour.
+
+**Rules.** An additive member takes at most one origin row (`"A or B"` is
+expanded into separate variants); a genotype member takes an exact multiset whose
+`copy_count`s sum to the state's copy count (2 for `dominance`, the declared
+`copy_count_value` for `indicator`). Terms sharing a **family signature** —
+trait, owner, and the ordered member states, exposed as `family_key` on the
+`genome_effect_terms` view — are scope variants of one term and **compete**: the
+most specific matching scope wins, and overlapping-but-incomparable scopes are
+refused at write time. Terms with different keys **sum**.
+
+Causal-locus membership is **implicit**: a locus is causal for a trait if it
+appears as a member of any term for it. No boolean flag is stored.
+
+### Genome-effect views
+
+| View                   | Grain                      | What it is for                                 |
+|------------------------|----------------------------|-------------------------------------------------|
+| `genome_effect_terms`  | one row per term           | `effect_order`, `contrast_signature`, `family_key`, `scope_description` — all derived, never stored. `family_key` is how you see which terms compete and which sum |
+| `genome_effect_loci`   | one row per (term × locus) | `locus_name` joined from `genome_meta` and the term's `genome_value` repeated on every member row; the place to ask which loci are causal, and the only relation at locus grain that can be filtered by effect size. `locus_name` lives only here, so there is no id/name agreement invariant in the base tables. Never `SUM(genome_value)` — an interaction term would be counted once per member |
 
 ### `ind_haplotype`
 
@@ -263,7 +328,7 @@ plain autosome (`1, 1`, the default), 1 for a hemizygous sex chromosome (e.g.
 | strand        | UTINYINT | Copy within a parent's contribution; always 1 for diploids; PK part |
 | line_origin   | VARCHAR  | Founding line this allele traces to; used by `add_tbv()` for line-specific crossbreeding TBV |
 | locus_id      | INTEGER  | FK to `genome_meta.locus_id`; physical sort/PK key          |
-| locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized for direct `genome_effects` joins |
+| locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized so exports and user queries read without joining `genome_meta`. The effect tables key on `locus_id`, not on this column |
 | allele        | UTINYINT | 0 or 1 (phased)                                             |
 
 **Primary key**: `(id_ind, parent_origin, strand, locus_id)`.
@@ -403,7 +468,6 @@ Observation-layer metadata lives in `phenotype_meta`.
 | trait_name      | VARCHAR | Unique identifier; equals `phenotype_name` for simple traits       |
 | description     | VARCHAR | Free text                                                          |
 | units           | VARCHAR | e.g. `"kg"`, `"g/day"`                                             |
-| expressed_parent| VARCHAR | `"both"` (default), `"parent_1"` (paternal), `"parent_2"` (maternal) — imprinting |
 | target_add_mean | DOUBLE  | TBV centering mean for the base population; default `0`            |
 
 **What does NOT belong here** (all moved to `phenotype_meta` in v0.31.0):
@@ -451,8 +515,11 @@ SGE ADG) appear only here.
 | cat_names                | VARCHAR | Comma-separated labels per category                           |
 | store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |
 | missing_component_action | VARCHAR | `"skip"` (default) or `"error"` — what to do when any component of a composite phenotype cannot be resolved for an individual |
+| condition_change_action  | VARCHAR | `"error"` (default) or `"independent"` — what to do when a correlated phenotype's stored residual was drawn under a different residual `condition_level` than the current record resolves to (see `plans/sample_correlated_effects.md` D2/D6). Must agree across every phenotype in one residual covariance block, so it is **block-scoped**: `define_phenotype()` sets it while the phenotype is still a block of one, and `define_condition_change_action()` changes it afterwards, on every member in one transaction |
 
-**Reserved**: all columns (managed by `define_phenotype()`).
+**Reserved**: all columns (managed by `define_phenotype()`, except
+`condition_change_action`, which `define_condition_change_action()` also
+writes — block-scoped, one column, one transaction).
 
 ### `phenotype_components`
 
@@ -470,19 +537,22 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 | group_table        | VARCHAR | Table containing `group_column`; default `"ind_meta"`              |
 | aggregation        | VARCHAR | `"sum"` (default) or `"mean"` — how group-mates' TBVs are combined |
 | weight             | DOUBLE  | Scalar multiplier; default `1.0`                                   |
-| weight_type        | VARCHAR | `"fixed"` (default), `"covariate"`, `"legendre"`, `"raw_poly"`     |
+| weight_type        | VARCHAR | `"fixed"` (default) or `"covariate"`. Those are the only two implemented, and `define_phenotype()` rejects anything else |
 | covariate_name     | VARCHAR | Covariate column when `weight_type = "covariate"`                  |
 | covariate_table    | VARCHAR | Table containing `covariate_name`                                  |
 | poly_order         | INTEGER | Polynomial basis order                                             |
 | poly_scale_min/max | DOUBLE  | Legendre scaling bounds                                            |
-| genome_effect_types| VARCHAR | Default `"additive"`                                               |
-| missing_action     | VARCHAR | Per-component fallback (currently unused; use `phenotype_meta.missing_component_action`) |
-| contributor_filter | VARCHAR | Reserved for spatial/neighborhood lookup — not yet implemented     |
+| component_names    | VARCHAR | Comma-separated `ind_tgv.component_name` values this component draws from; default `"order1_additive"`. **Reserved** — `add_phenotype()` reads only the additive breeding value today. This is the one reserved column here, kept because its counterpart (`ind_tgv.component_name`) is already written by `add_tgv()` |
 
 **Note on SGE (Social Genetic Effects / Bijma model)**: for `contributor_type = "group"`,
 `add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
+`group_table` must have exactly one row per focal individual (error otherwise).
+All contributor lookups — self, dam, sire, group, and `formula_tbv`'s
+`dam()`/`sire()`/`group_sum()`/`group_mean()` — go through `R/contributor_tbv.R`
+(`.tbv_by_id()`, `.group_mate_tbv()`, `.group_members()`), one registered-view
+SQL each; ids never enter SQL text.
 
 **Reserved**: all columns (managed exclusively by
 `define_phenotype(..., components = ...)`).
@@ -516,8 +586,15 @@ table, keyed by `phenotype_name` (FK to `phenotype_meta`), not by `trait_name`.
 ### `phenotype_random_effects`
 
 Sampled draws for the random effects declared in `phenotype_effects`. One row per
-(phenotype × effect × level), written by `define_effect_random()` and read by
-`add_phenotype()`. Pure observation-layer noise — no genetic content.
+(phenotype × effect × level), written by `add_phenotype()` (Stage 3) and
+deleted by `define_effect_random(overwrite = TRUE)` or `remove_rows()`. Pure
+observation-layer noise — no genetic content. A level is a **persistent
+entity**: its draw is realized the first time a planned record touches it
+and reused by every later record with that level, in every later call. In a
+covariance block (`define_effect_cov_matrix(effect_name, …)`) a level's draw
+for one phenotype is drawn conditional on the draws it already has stored
+for the block's other phenotypes; a member with no draw stays latent (no
+row) until a record needs it.
 
 | Column         | Type    | Notes                                              |
 |----------------|---------|-----------------------------------------------------|
@@ -529,7 +606,7 @@ Sampled draws for the random effects declared in `phenotype_effects`. One row pe
 
 **Primary key**: `(phenotype_name, effect_name, level)`.
 
-**Reserved**: all columns (managed exclusively by `define_effect_random()`).
+**Reserved**: all columns (written only by `add_phenotype()`).
 
 ### `phenotype_var_comp`
 
@@ -543,6 +620,36 @@ condition). Both (i,j) and (j,i) pairs stored for off-diagonal entries. Populate
 The `condition_column` / `condition_level` columns are used only for `'residual'`
 to model heterogeneous residual variance by sex, group, etc.
 
+**Covariance blocks.** For one `effect_name`, the phenotypes joined by any stored
+pair row (an explicit `0` counts) form a *block*, and every writer goes through
+`write_phenotype_cov_block()` / `validate_phenotype_cov_block()` in
+`R/phenotype_cov_block.R` inside one transaction:
+
+- A block is **declared in one call, as a complete matrix** (D1). A call naming
+  a fragment or a strict subset of an existing block is an error naming the
+  omitted phenotypes; the matrix must be symmetric, finite and PSD.
+- Conditional `'residual'` rows form **strata** `(condition_table,
+  condition_column, condition_level)` of the same block: every stratum names the
+  same phenotypes and a block has one condition column. Unconditional rows have
+  `condition_column`, `condition_table` and `condition_level` all `NULL`.
+- A block is **locked once realized** (D3): any `ind_phenotype` row of a member
+  with `residual_value IS NOT NULL`, or any `phenotype_random_effects` row for
+  `(effect_name, member)`. The error gives the `remove_rows()` call that clears
+  the realizations. There is no `force`.
+- Every defined member of a residual block carries the same
+  `phenotype_meta.condition_change_action` (D6); in a named-effect block of two
+  or more, every `phenotype_effects` row is `random`, `normal`, and reads the
+  same `(source_column, source_table)`.
+
+Stored matrices are exactly symmetric (the writer stores `(M + t(M)) / 2`).
+`find_covariance_blocks(conn, effect_name, phenotype_names)` in
+`R/correlated_draws.R` is the one reader that turns stored rows back into
+matrices — one entry per block touching the targets, every stratum assembled,
+invariants re-checked — and `resolve_correlated_draws()` beside it is the pure
+conditional-MVN sampler the phenotype layer will draw through.
+
+See `plans/sample_correlated_effects.md` §5.2, §5.4, §5.9 and D1/D3/D5/D6.
+
 | Column               | Type    | Notes                                                              |
 |----------------------|---------|--------------------------------------------------------------------|
 | id_phenotype_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()`              |
@@ -550,9 +657,9 @@ to model heterogeneous residual variance by sex, group, etc.
 | phenotype_name_1     | VARCHAR |                                                                    |
 | phenotype_name_2     | VARCHAR |                                                                    |
 | cov_value            | DOUBLE  |                                                                    |
-| condition_column     | VARCHAR | NULL = unconditional; used only for `effect_name = 'residual'`     |
-| condition_table      | VARCHAR | Default `"ind_meta"`                                               |
-| condition_level      | VARCHAR | Value of `condition_column` for this row                           |
+| condition_column     | VARCHAR | NULL = unconditional stratum; used only for `effect_name = 'residual'` |
+| condition_table      | VARCHAR | Table holding `condition_column`; `NULL` on unconditional rows      |
+| condition_level      | VARCHAR | Value of `condition_column` for this stratum; `NULL` on unconditional rows |
 | weight_type          | VARCHAR | Default `"fixed"`                                                  |
 | poly_order           | INTEGER | Polynomial order for `"legendre"` weight type                      |
 
@@ -560,14 +667,21 @@ to model heterogeneous residual variance by sex, group, etc.
 
 Phenotype records in long format. Populated by `add_phenotype()`.
 
-| Column         | Type    | Notes                                             |
-|----------------|---------|---------------------------------------------------|
-| id_phenotype   | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
-| id_ind         | VARCHAR |                                                   |
-| phenotype_name | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
-| pheno_value    | DOUBLE  | Phenotype value                                   |
-| pheno_number   | INTEGER | 1 = first record for this individual × trait, etc.|
-| *user cols*    | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+| Column                   | Type    | Notes                                             |
+|--------------------------|---------|---------------------------------------------------|
+| id_phenotype             | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
+| id_ind                   | VARCHAR |                                                   |
+| phenotype_name           | VARCHAR | FK to `phenotype_meta.phenotype_name`             |
+| pheno_value              | DOUBLE  | Phenotype value                                   |
+| pheno_number             | INTEGER | 1 = first record for this individual × trait, etc. Ordinal identity, **not** simulated time |
+| liability_value          | DOUBLE  | Raw liability for categorical phenotypes with `store_liability = TRUE`; NULL otherwise |
+| cat_name                 | VARCHAR | Category label for categorical phenotypes defined with `cat_names`; NULL otherwise |
+| residual_value           | DOUBLE  | Realized **liability-scale** residual for model-generated and `user_residual` records; NULL for `user_values` / `derived_formula` records. Conditions later draws of correlated phenotypes (`plans/sample_correlated_effects.md`) |
+| residual_condition_level | VARCHAR | `condition_level` of the residual (co)variance stratum the residual was drawn under; NULL when the unconditional `R` was used (the *selected* stratum, not the raw column value) |
+| *user cols*              | any     | Added via `mutate_table()` or scalar `...` in `add_phenotype()` |
+
+All nine columns are in the base `CREATE TABLE` (in `ensure_trait_tables()`);
+nothing is added by on-demand `ALTER TABLE`. **Reserved**: all nine.
 
 ### `ind_tbv`
 
@@ -580,6 +694,34 @@ True breeding values (simulation ground truth). Populated by
 | id_ind     | VARCHAR |                                        |
 | trait_name | VARCHAR |                                        |
 | tbv_value  | DOUBLE  |                                        |
+
+### `ind_tgv`
+
+True **genetic** values (simulation ground truth): the total genotypic value,
+split by declared model structure. One row per (individual × trait × component).
+Populated by `add_tgv()`. Created in `define_trait()`'s lazy DDL block beside
+`ind_tbv`.
+
+| Column         | Type    | Notes                                              |
+|----------------|---------|-----------------------------------------------------|
+| id_tgv         | INTEGER | Primary key assigned via `next_int_id()`            |
+| id_ind         | VARCHAR |                                                     |
+| trait_name     | VARCHAR |                                                     |
+| component_name | VARCHAR | `"order1_additive"`, `"order1_dominance"`, `"order1_other"` (a hand-entered order-1 indicator surface), or `"interaction"` (any term with ≥ 2 members) |
+| tgv_value      | DOUBLE  | Raw sum of the contributing terms; **no mean is added** |
+
+**Unique**: `(id_ind, trait_name, component_name)`. **Reserved**: all columns.
+
+`component_name` records **how a term was declared, not a variance component**.
+A functional A×A term contributes to A, D *and* I in the statistical sense; the
+names carry the order precisely so they cannot be misread as `V_A` / `V_D` /
+`V_I`. There is deliberately **no** `replicate` column: like `ind_tbv`, that
+column exists only in the archive copy, and `archive_replicate()` refuses to
+stamp a table that already has one.
+
+The total is the derived view **`ind_tgv_total`** (`id_ind`, `trait_name`,
+`tgv_total`), never a stored `'total'` row — a stored total would make every
+`SUM(tgv_value)` double-count.
 
 ### `ind_ebv`
 
@@ -658,7 +800,8 @@ in R via DELETE + INSERT when `overwrite_index = TRUE`.
 The current surface for creating a population and its genome is
 `open_pop() |> define_genome(...)`. `define_genome()` populates the genome tables:
 
-- Genome: `genome_meta` (physical `pos_bp`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `chr_inheritance` + `chr_recombination` (default autosome rows)
+- Genome: `genome_meta` (physical `pos_bp`, `locus_id` `PRIMARY KEY`), `genome_map` (default map), `ind_haplotype` (empty), `ind_genotype` (empty), `ind_crossover` (empty), `chr_inheritance` + `chr_recombination` (default autosome rows)
+- Effects: `genome_effects`, `genome_effect_members`, `genome_effect_member_origins` (all empty), plus the `genome_effect_terms` and `genome_effect_loci` views. **These are created here, not in `open_pop()`** — `genome_effect_members` declares a foreign key to `genome_meta.locus_id`, and DuckDB refuses a foreign key to a column that does not exist yet
 
 `define_genome()` key params: `pop`, `n_loci`, `n_chr`, `chr_len_Mb` (finite,
 strictly positive), `cM_per_Mb` (genetic-map rate, cM per Mb; scalar or
@@ -667,8 +810,8 @@ length-`n_chr`, finite, strictly positive, default `1.0` →
 `recombines_M`/`recombines_F` (genome-wide per-parent-sex recombination defaults,
 both `TRUE`; set one `FALSE` for a whole-genome achiasmatic sex, seeded into
 `chr_recombination`). Calling
-`define_genome()` on a population that already has a non-empty `genome_meta` is a
-hard error (no partial re-definition).
+`define_genome()` on a population where **any** of those ten tables or two views
+already exists is a hard error (no partial re-definition).
 
 ### `add_founders()`
 
@@ -851,11 +994,26 @@ Supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, `count()`,
 and `mutate_table()`. `close_pop()` safely closes the DuckDB connection.
 
 **Subset selection for action functions** (`add_phenotype`, `add_tbv`,
-`add_genotypes`, `extract_genotypes`) requires `get_table()` as the first step.
-`filter()` is called on the `tidybreed_table`, not on the pop directly.
-The unique `id_ind` values from the collected filtered table are used as the
-candidate set. Any table that has an `id_ind` column can be used (e.g.
-`ind_meta`, `ind_phenotype`, `ind_haplotype`, `ind_genotype`).
+`add_tgv`, `add_ebv`, `add_dosage`, `add_genotypes`, `extract_genotypes`)
+requires `get_table()` as the first step. `filter()` is called on the
+`tidybreed_table`, not on the pop directly. **The individuals acted on are
+the distinct `id_ind` values present in the (filtered) table**, whatever the
+table: `ind_meta` for dates/generation, `ind_genotype`/`ind_haplotype` for
+marker-assisted pre-selection, `ind_ebv`/`ind_index` for EBV- or index-based
+selection, `ind_phenotype` for prior records. An unfiltered `ind_meta` is
+everyone; an unfiltered `ind_ebv` is *the animals that have an EBV*, not
+everyone. A table without `id_ind` is an error, filtered or not.
+
+All seven go through one internal helper, `resolve_subset_ids(tbl, what,
+all_if_null)` in `R/sql_utils.R`: it re-applies the stashed filter quosures
+to a fresh un-projected lazy tbl (so `select()` cannot hide `id_ind`), renders
+it with `dbplyr::sql_render()`, and runs one `SELECT DISTINCT id_ind ... JOIN
+ind_meta` in DuckDB — only the id vector is collected, never the table. It
+returns `NULL` for an unfiltered `ind_meta` so callers can keep an unrestricted
+SQL fast path (`add_genotypes()`'s `UPDATE` without `WHERE`); callers that need
+a concrete vector pass `all_if_null = TRUE`. `add_index()` and `remove_rows()`
+deliberately do **not** use it — they act on the rows of the passed table
+itself, not on a derived animal set.
 
 ```r
 # All individuals
@@ -865,6 +1023,18 @@ pop |> get_table("ind_meta") |> add_phenotype("ADG")
 pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F", gen == 1L) |>
+  add_phenotype("ADG")
+
+# Marker-assisted pre-selection (add_dosage() first; ind_genotype is a cache)
+pop |>
+  get_table("ind_genotype") |>
+  dplyr::filter(locus_name == "Locus_10", dosage_value == 2L) |>
+  add_phenotype("ADG")
+
+# EBV-based: the animals above a threshold in one evaluation
+pop |>
+  get_table("ind_ebv") |>
+  dplyr::filter(trait_name == "ADG", eval_number == 3L, ebv_value > 0.5) |>
   add_phenotype("ADG")
 
 # Pre-select top performers from a prior phenotype
@@ -918,8 +1088,7 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 - `define_trait()` — **genetic layer only**. Writes one row to `trait_meta` and
   a global `(index_name = NULL, trait_name, economic_weight = 0)` row to
   `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
-  `trait_var_comp`), `target_add_mean`, `expressed_parent`, `description`,
-  `units`, `overwrite`. **Never** pass observation-layer arguments here
+  `trait_var_comp`), `target_add_mean`, `description`, `units`, `overwrite`. **Never** pass observation-layer arguments here
   (`type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
   in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
   already exists; `overwrite = TRUE` replaces both the `trait_meta` row and its
@@ -935,7 +1104,49 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
     "shared"` (all traits use the filtered loci) or `"union"` (per-trait QTL
     sets from existing `genome_effects` rows, restricted to the filtered loci).
 
-  Re-calling for the same trait replaces existing rows in `genome_effects`.
+  Writes one order-one `additive` term per locus under the reserved effect
+  owner `generated_additive_tbv`, with `center_value` = the base allele
+  frequency. `line_name` and `parent_origin` compose into the single origin row
+  an additive member may carry:
+
+  | `line_name` | `parent_origin` | Stored scope |
+  |---|---|---|
+  | `NULL` | `NULL` | no origin rows (the common scope) |
+  | `"A"` | `NULL` | `('exact', 'A', parent NULL, copy_count = 1)` |
+  | `NULL` | `1` / `2` | `('any', NULL, parent, copy_count = 1)` |
+  | `"A"` | `1` / `2` | `('exact', 'A', parent, copy_count = 1)` |
+
+  Re-calling replaces **only the variant at the same scope**, so successive
+  common / line-A / line-B calls each keep the others — the per-copy fallback
+  that makes crossbred breeding values correct needs all of them standing.
+  Changing `parent_origin` on a re-run therefore **adds** a variant rather than
+  replacing one; that is a legal containment pair and rarely intended, so the
+  function warns on exactly that case. `parent_origin` is **per trait** (scalar
+  recycled, positional vector, or named by trait); a call mixing origins across
+  traits while supplying `G` is rejected, because the genetic covariance
+  between a paternal-only and a maternal-only trait is zero under random mating
+  and the requested off-diagonal is unobtainable, not merely approximate.
+
+  `scale_to_target` is origin-aware:
+  `V_A = Σ_j n_eligible,j · p_j q_j a_j²`, `n_eligible` = 2 unparented, 1
+  parent-qualified.
+
+  **The base population is `base_tbl`, a filtered `tidybreed_table`** — the
+  same two-table shape as `add_ebv(tbl, phenotype = )`: `tbl` says which loci,
+  `base_tbl` says which allele copies define `p`. Three shapes, dispatched on
+  `table_name` and checked for projected columns: `founder_haplotypes` (the
+  pool), `ind_haplotype` (these copies — `filter(line_origin == "Duroc")` is
+  Duroc copies at any cross depth), or any table with `id_ind` (these
+  individuals, semi-joined on `DISTINCT id_ind`). `p` always comes from
+  `extract_allele_freq()`, so a base selection means the same population in
+  every writer. `base_tbl = NULL` is the population the effect applies to,
+  resolved with the `line → NULL` precedence of `resolve_genome_map()`: the
+  line's own founder pool, else the shared (`NULL`) pool, else an error listing
+  the pools that exist. Only a population-wide effect on a multi-pool founder
+  table warns (Wahlund); an explicit `base_tbl` — including the whole founder
+  table, which is how the common fallback variant of a crossbreeding model is
+  defined — never warns. A selected QTL with no copies in the base is an error
+  naming the loci, never silently centred at `p = 0`.
 
   ```r
   # Single trait
@@ -947,11 +1158,118 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   pop |> get_table("genome_meta") |> filter(chr %in% 1:5) |>
     define_additive_effects(c("ADG", "BW"), G = G)
 
-  # Use generation-0 animals to define base allele frequencies
-  gen0 <- get_table(pop, "ind_meta") |> filter(gen == 0L)
+  # Generation-0 animals define base allele frequencies
   pop |> get_table("genome_meta") |> filter(...) |>
-    define_additive_effects("ADG", base = "current_pop", base_tbl = gen0)
+    define_additive_effects("ADG",
+      base_tbl = get_table(pop, "ind_meta") |> filter(gen == 0L))
+
+  # Crossbreeding: common fallback pooled on purpose (no warning), then each
+  # line centred on its own founder pool by default
+  gm <- pop |> get_table("genome_meta") |> filter(chr %in% 1:5)
+  gm |> define_additive_effects("ADG", base_tbl = get_table(pop, "founder_haplotypes"))
+  gm |> define_additive_effects("ADG", line_name = "Duroc")
+  gm |> define_additive_effects("ADG", line_name = "Landrace")
+
+  # Imprinting: paternal expression, per line rather than trait-wide
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("IMP", line_name = "Duroc", parent_origin = 1)
   ```
+
+### `extract_allele_freq()`
+
+`R/extract_allele_freq.R`
+
+`extract_allele_freq(tbl)` — the single place a population selection becomes
+per-locus allele frequency. Takes the three `base_tbl` shapes above; returns
+one row per `genome_meta` locus in `locus_id` order (`locus_id`, `locus_name`,
+`allele_freq`), `NA` at a locus the selection has no copies for (never `0`),
+an error if no locus is covered at all. One SQL statement with the filter
+rendered as a subquery via `dbplyr::sql_render()`; nothing else is collected.
+Never warns, never writes. Users call it to obtain `p` for `ad_terms()`. Also
+holds `.validate_base_tbl()`, shared by both genome-effect writers.
+
+**How the two writers relate.** `define_genome_effects()` writes any effect
+you supply; `define_*_effects()` functions sample effects of one shape and
+write them through the same engine (`.ge_build → .ge_read_model →
+.ge_resolve_deletes → .ge_commit`). `define_additive_effects()` is provably
+sugar over the writer — `tests/testthat/test-genome-effects-writer.R`
+("generator == writer") reproduces its output exactly through
+`define_genome_effects()` with the reserved owner, `replace_scope`, and the
+same `base_tbl`. `base_tbl = NULL` deliberately differs: the generator has a
+domain default; the writer fills nothing, so a missing centre is an error.
+
+### `define_genome_effects()` / `ad_terms()` / `genotype_terms()`
+
+`R/define_genome_effects.R`, `R/genome_effect_terms_builders.R`
+
+`define_genome_effects(pop, trait_name, terms, effect_owner = "custom", mode =
+c("append", "replace_scope", "replace_owner", "replace_trait"), origin = NULL,
+base_tbl = NULL, require_complete = FALSE, allow_reserved_owner = FALSE)` — the
+general writer
+for arbitrary genome effects. `terms` is a **long data frame, one row per
+(term × locus)**: `term_id` (user-facing only; never stored), `genome_value`,
+`effect_name`, `locus_name`, `contrast_name`, `center_value`,
+`copy_count_value`, `dosage_value`. A single-term call may omit `term_id`.
+Scope lives in a separate `origin` argument — `NULL` (the common scope), a
+named scalar list applied to every member, or a data frame keyed by
+`locus_name` for the exact multisets a genotype member takes.
+
+The writer resolves `locus_name` → `locus_id`, canonicalizes members by
+ascending `locus_id` and origin rows by the sorted tuple, infers
+`copy_count_value` for indicator input at diploid-autosomal loci, assigns ids
+via `next_int_id()`, and writes in **one transaction** that validates the whole
+table set before `COMMIT`. Every message about malformed input names the
+`term_id` the user typed, never an `id_genome_effect` they have not seen.
+`require_complete = TRUE` demands every reachable `(copy_count, dosage)` state
+on every member of an indicator surface — including `copy_count_value = 0`
+where a chromosome can be absent. `base_tbl` (a filtered `tidybreed_table`;
+see `extract_allele_freq()`) fills Cockerham `center_value` on any `additive`
+or `dominance` member that has none — column omitted or `NA`. An explicit
+centre always wins, `indicator` members are never touched, the base is
+validated whenever supplied but queried only if some centre is missing, and
+without `base_tbl` a missing centre is an error. The fill happens inside
+`.ge_build()` before member validation, whose per-row message says when the
+base had no copies at that locus. One `base_tbl` gives one `p` per locus per
+call, so line-scoped surfaces are written one line at a time with
+`mode = "append"`.
+
+Two builders produce `terms`, because a surface is rows, not a second
+representation:
+
+- `ad_terms(locus_name, a, d, p, coding = c("functional", "cockerham"))` —
+  expands an (a, d) pair. Functional coding is `additive`@`0.5` plus
+  `indicator`@`(2, 1)`; Cockerham is `additive`@`p` plus `dominance`@`p`. It
+  **reports** the implied genetic mean `μ = a(p − q) + 2pq·d` and writes it
+  nowhere — putting it in `phenotype_meta.mean` would double-count once
+  non-additive genetic values reach the phenotype layer.
+- `genotype_terms(genotypes, value, copy_count = NULL, drop_zero = TRUE)` —
+  turns a genotype-by-value table into `indicator` terms, one term per row and
+  one member per locus column.
+
+```r
+# One dominance term, Cockerham coding at p = 0.3
+pop |> define_genome_effects("ADG", data.frame(
+  locus_name = "Locus_10", contrast_name = "dominance",
+  center_value = 0.3, genome_value = 0.8))
+
+# A 3x3 A x A surface: nine cells, nine terms, two members each
+cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
+pop |> define_genome_effects(
+  "ADG", genotype_terms(cells, c(0, 0, 0, 0, 1.4, 2.1, 0, 2.1, 3.6)),
+  effect_owner = "epistasis_AxA")
+
+# Reciprocal dominance: the F1 value depends on which parent gave which line
+pop |> define_genome_effects(
+  "ADG",
+  terms  = data.frame(term_id = 1L, locus_name = "Locus_10",
+                      contrast_name = "dominance", center_value = 0.3,
+                      genome_value = 1.2),
+  origin = data.frame(term_id = 1L, locus_name = "Locus_10",
+                      line_match_type = "exact",
+                      line_name     = c("Duroc", "Landrace"),
+                      parent_origin = c(1L, 2L), copy_count = c(1L, 1L)),
+  effect_owner = "reciprocal")
+```
 
 ### `define_effect_cov_matrix()` / `define_effect_random()` / `define_effect_fixed_class()` / `define_effect_fixed_cov()` / `define_effect_intercept()`
 
@@ -963,7 +1281,15 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
   any other name → `phenotype_var_comp` with that `effect_name`.
   Can be called before `define_trait()` or `define_effect_random()`.
-- `define_effect_random()` — `variance` optional if already in `phenotype_var_comp`.
+- `define_effect_random()` — `variance = NULL` (default) requires a value
+  already in `phenotype_var_comp`; a number writes a 1 × 1 block and is an error
+  when the phenotype is already in a multi-phenotype block for that effect
+  (redeclare it with `define_effect_cov_matrix()`). Once in a block of two or
+  more, the row must be `distribution = "normal"` and share the block's
+  `(source_column, source_table)`. `overwrite = TRUE` discards that phenotype's
+  stored draws for the effect. One transaction. A level's draw is persistent
+  (see `phenotype_random_effects`): an effect that should be re-realized per
+  batch needs the batch in the level (`pen_batch`), not a new feature.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
 - `define_effect_intercept()` — sets intercept (`target_add_mean`) for a trait.
@@ -979,9 +1305,13 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   prior `define_trait()` call is needed for it.
 
   Key arguments:
-  - `residual_var` — scalar; writes one unconditional diagonal entry to
-    `phenotype_var_comp` (with `effect_name = 'residual'`). For correlated or
-    heterogeneous residuals use `define_residual_cov()` afterwards.
+  - `residual_var` — scalar; writes a 1 × 1 unconditional residual block to
+    `phenotype_var_comp` (with `effect_name = 'residual'`). Error if the
+    phenotype is already in a multi-phenotype residual block (redeclare it with
+    `define_residual_cov()`) or if its residual has realized draws.
+    `overwrite = TRUE` without `residual_var` leaves `phenotype_var_comp`
+    untouched. Every defined member of the phenotype's residual block must
+    share its `condition_change_action`; checked before anything is written.
   - `components` — data frame with columns `source_trait_name` and
     `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
     columns: `weight`, `weight_type`, `aggregation`, `group_column`,
@@ -994,40 +1324,99 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
     example IDs. `"error"` stops immediately.
 
 - `define_residual_cov(pop, phenotype_names, cov_matrix, condition_column = NULL, ...)` —
-  writes conditional or unconditional residual (co)variance entries to
-  `phenotype_var_comp` (always with `effect_name = 'residual'`). Supply a named
-  matrix for multi-phenotype correlated residuals, or call once per sex/group
-  level with `condition_column = "sex"` and `condition_level = "M"` / `"F"` for
-  heterogeneous residuals.
+  writes one stratum of a residual covariance block to `phenotype_var_comp`
+  (always with `effect_name = 'residual'`). Supply a named matrix for
+  multi-phenotype correlated residuals, or call once per sex/group level with
+  `condition_column = "sex"` and `condition_level = "M"` / `"F"` (both together)
+  for heterogeneous residuals. The block rules under `phenotype_var_comp` apply:
+  whole block per call, one condition column, same phenotypes in every stratum,
+  locked once realized. Rejected calls change nothing.
 
-### `add_phenotype()` / `add_tbv()`
+- `define_condition_change_action(pop, phenotype_name, condition_change_action)` —
+  sets `phenotype_meta.condition_change_action` on **every member** of the
+  named phenotype's residual covariance block, in one transaction. D6 requires
+  the members to agree, so once a block has two or more there is no ordering of
+  `define_phenotype()` calls that changes it — each single-member flip is the
+  disagreeing state D6 refuses. This writer is the way (D6 mutability). It
+  touches one column and nothing else, so unlike
+  `define_phenotype(overwrite = TRUE)` it cannot reset the rest of the row. It
+  is **not** locked by realized draws: D3 locks the covariance *matrix*, while
+  the action only governs how future records condition on stored residuals.
 
-`R/add_phenotype.R`, `R/add_tbv.R`
+### `add_phenotype()` / `add_tbv()` / `add_tgv()`
+
+`R/add_phenotype.R`, `R/add_tbv.R`, `R/add_tgv.R`, `R/genome_effects_eval.R`
 
 Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
 
 - `add_phenotype()` — the workhorse. `phenotype_name` (formerly `trait_name`)
-  defaults to all phenotypes in `phenotype_meta` when omitted. Internally calls
-  `add_tbv()` first for all required source traits (including all composite
-  components and group-member IDs), then assembles the composite TBV via
-  `.assemble_composite_tbv()`. For group contributors (SGE model), all
-  group-member TBVs are pre-fetched so group aggregation is a single in-memory
-  pass. Adds fixed/random covariate contributions, samples residuals (joint
-  `MVN(0, R)` when multiple phenotypes share the subset and `R` is stored;
-  otherwise independent). Converts liability to phenotype per `type`.
-  Writes `ind_phenotype` rows and updates `ind_tbv`.
-- `add_tbv()` — TBV-only; no phenotype records. Computes centered TBV by joining
-  `ind_haplotype` to `genome_effects` (`genome_effect_type = "additive"`) on
-  `(locus_name, line_origin)`: a line-specific effect row (`genome_effects.line_name
-  = ind_haplotype.line_origin`) is preferred, falling back per-locus to the
-  population-wide row (`line_name IS NULL`) only when no line-specific row exists
-  for that locus/line. This is what makes crossbreeding TBV correct (e.g. a Duroc ×
-  Landrace F1 centered against each parent line's own QTL effects and base allele
-  frequency). Imprinted traits (`expressed_parent = "parent_1"`/`"parent_2"`)
-  restrict the join to that parent's `parent_origin` before the same line-matching
-  logic applies. `trait_name` also defaults to all traits in `trait_meta` when
-  omitted. Optional arguments for true index computation:
+  defaults to all phenotypes in `phenotype_meta` when omitted. Runs in
+  **three stages** (`R/add_phenotype_stages.R`, `?add_phenotype_stages`):
+  1. **PLAN** (`.ap_plan()`, no RNG, no writes except the `add_tbv()`
+     prerequisite): sorted subset, metadata, topological sort of derived
+     formulas, sex expression, repeatable guard, fixed-effect terms with
+     `null_class_action`, TBV (simple from `ind_tbv`; composite via
+     `.assemble_composite_tbv()`; `formula_tbv` via the DSL) with
+     `missing_component_action`, `pheno_number`, the residual condition value
+     and the random-effect level of every planned record.
+  2. **RESOLVE** (`.ap_resolve()`, RNG, no writes): every draw in a fixed
+     order, through two adapters over `find_covariance_blocks()` and
+     `resolve_correlated_draws()`. First the **named-effect adapter**
+     (`.ap_resolve_named_effects()` → `.ap_named_effect_block()`): effects
+     in byte-sorted `effect_name` order, blocks in loader order, entity =
+     the level, coordinates = the block's phenotypes; a level draws its
+     planned coordinates conditional on the draws it already has stored in
+     `phenotype_random_effects` for the block's other members, one resolver
+     call per sample-set group; `validate_named_effect_block()` re-runs per
+     block as the §5.6 backstop; a 1 × 1 `gamma`/`uniform` block keeps its
+     marginal sampler. Then the **residual adapter**
+     (`.ap_resolve_residuals()` → `.ap_residual_block()`): one residual
+     covariance block at a time, entity = `(id_ind, pheno_number)`; each
+     entity draws its planned coordinates from the stratum its condition
+     value selects (unconditional `R` as fallback, stored as
+     `residual_condition_level = NULL`; error if there is none), conditional
+     on the residuals it has already realized — stored on disk for any
+     block member at the same `pheno_number`, or fixed by `user_residual` —
+     one call per `(stratum, sample set)` group. D6 (agreement) and D2
+     (stratum change: error, or drop with a warning under `'independent'`)
+     run here on the stored coordinates. Then liability and type
+     conversion, all in memory.
+  3. **COMMIT** (`.ap_commit()`, writes, no RNG): one transaction, register +
+     `INSERT` into `phenotype_random_effects` and `ind_phenotype`; rollback on
+     failure.
+
+  Rules that follow: planned ids never appear in SQL text (`.ap_read_by_id()`
+  registers them); never `dbWriteTable()` in this path (it advances the RNG);
+  sort before every RNG-consuming step; an individual without a record must
+  not consume RNG or leave stochastic state. Records are ordered by `id_ind`
+  within a phenotype — that is the positional order for `user_values` /
+  `user_residual` (a plain vector when one phenotype is model-generated,
+  else a named list that may name a subset; the rest are drawn conditional
+  on it). `residual_value` / `residual_condition_level` are written for
+  every model-path record. See `plans/sample_correlated_effects.md` §5.5.
+
+  **Failure contract (D7)**: the database is atomic, the RNG is not. Any
+  error — Stage-1 rejection, Stage-2 error after some draws, failed Stage-3
+  write — leaves `ind_phenotype` and `phenotype_random_effects` untouched
+  (the RNG-independent `add_tbv()` upsert is the one write that remains), and
+  `.Random.seed` advanced by exactly the draws made before the error.
+  Nothing in `R/` touches `.Random.seed`; never add seed restoration to one
+  function — if the package ever adopts it, it is a package-wide policy.
+  `tests/testthat/test-add_phenotype_failure_contract.R` asserts both halves.
+- `add_tbv()` — TBV-only; no phenotype records. **One filtered call into the
+  same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
+  `additive` — never a second implementation of the effect math. Computes
+  centered TBV from the
+  order-one `additive` terms owned by `generated_additive_tbv`: each allele copy
+  takes the most specific variant whose origin predicate matches its
+  `(line_origin, parent_origin)` label, falling back per copy to the common
+  variant. This is what makes crossbreeding TBV correct (e.g. a Duroc × Landrace
+  F1 centered against each parent line's own QTL effects and base allele
+  frequency), and it is also how **imprinting** works now: a term scoped to one
+  `parent_origin` reads only that parent's copies, per locus and per line
+  rather than per trait. `trait_name` also defaults to all traits in
+  `trait_meta` when omitted. Optional arguments for true index computation:
   - `index_names` — character vector of named indices; when supplied, multiplies
     per-trait TBVs by the index weights and writes results to `ind_true_index`.
     `NULL` (default) skips index computation.
@@ -1037,6 +1426,61 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   - `overwrite_index = FALSE` — when `FALSE`, skips individuals that already have
     a value in `ind_true_index` for the given `(index_name, weight_type)`. Set
     `TRUE` to recompute (e.g. after updating index weights).
+
+  The filter is not conservatism. Under functional `(a, d)` input the stored
+  coefficient is `a` while the breeding-value coefficient in a diploid HWE base
+  is `α = a + d(q − p)`; under epistasis, average effects depend on other loci
+  and on LD. So terms written through `define_genome_effects()` move `ind_tgv`
+  and never silently redefine `ind_tbv`, and additive members sitting inside an
+  interaction are ignored.
+
+  **`add_tbv()` warns once per trait when the coefficients it reads have
+  stopped being average effects** — a non-reserved order-one `additive` term (it
+  is part of A and is skipped), an `indicator` surface, or an interaction. An
+  order-one `dominance` term centred where the additive term is centred is the
+  exception and stays **silent**: Cockerham coding is HWE-orthogonal, so it
+  contributes nothing to A and `tbv_value` remains exact. The warning is about
+  *which terms were read*, never a claim that the arithmetic is wrong.
+- `add_tgv()` — evaluates **every** term of a trait and writes `ind_tgv`, one
+  row per (individual × trait × `component_name`). The raw sum of the stored
+  terms; **no mean is added**. Idempotent per (individual, trait) — the delete
+  is by trait, not by component, so a component that leaves the model leaves
+  `ind_tgv` with it. Total via the `ind_tgv_total` view.
+
+#### The evaluator (`R/genome_effects_eval.R`)
+
+Both functions run one evaluator, built on the fact that an origin predicate
+reads a copy's `(line_origin, parent_origin)` **label** and nothing else. The
+winning variant is therefore a function of the label, evaluation tuples group by
+label-vector, and the inner sum factors inside each group. Three artifacts:
+
+| Artifact | Grain | Built |
+|---|---|---|
+| Label alphabet | one row per distinct label | one `DISTINCT` per member kind |
+| Resolved variant map | `(family, label-vector) → id_genome_effect` | in R, from stored rows only — never per individual |
+| Member reduction | one row per `(id_ind, id_genome_effect, member_slot, label)` | SQL |
+
+Containment search runs **only** while building the map; it never runs during
+evaluation, and no tie can reach it because overlapping-but-incomparable scopes
+are refused at write time. Evaluation is a fixed number of statements whatever
+the population size (five for an additive model), and individual identifiers
+never appear in the SQL text.
+
+Two shortcuts keep the map small, and both are the plan's fast path rather than
+special cases: a family no variant scopes resolves to itself for every
+label-vector, and a **member** no variant scopes carries the sentinel label
+`"*"`, reducing over every unit at once. Without the second, a 50-locus
+unscoped dominance term would enumerate `|labels|^50` label-vectors. The
+resolution of a family is cached on a signature that excludes `locus_id`, so a
+500-QTL model with common/line-A/line-B variants solves one problem, not 500.
+
+`options(tidybreed.label_vector_warn)` (default `1e4`) and
+`options(tidybreed.label_vector_max)` (default `1e6`) bound the map.
+
+Reference implementations live in `tests/testthat/helper-genome-effects.R`
+(Phase A: two independent evaluators, hand-computed fixtures, no database);
+`tests/testthat/test-genome-effects-eval.R` asserts the SQL evaluator agrees
+with them for every fixture and every individual.
 
 ### `define_trait_simple()`
 
@@ -1078,7 +1522,8 @@ define_additive_effects()`.
 - `select_parents()` — selection index or truncation selection
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
-- Dominance and epistasis effects (currently only additive)
+- Realized variance components from an arbitrary effect model
+- Consolidating `ind_tbv` into `ind_tgv` (see `plans/consolidate_genetic_values.md`)
 
 ## Future Compiled Code Policy
 

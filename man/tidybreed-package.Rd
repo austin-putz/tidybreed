@@ -6,6 +6,8 @@
 \alias{tidybreed-package}
 \title{tidybreed: Tidy Breeding Program Simulation}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 A next-generation R package for breeding program simulation that uses tidyverse-style design and pipe operators. Provides flexible, memory-efficient tools for simulating animal and plant breeding programs with support for complex mating designs, trait architectures, and selection strategies.
 }
 \seealso{

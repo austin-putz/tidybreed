@@ -74,12 +74,17 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   trait    <- trait_name
   n_traits <- length(trait)
 
-  # Pull fixed effects for these traits (fixed_class and fixed_cov only)
+  # Pull fixed effects for these traits (fixed_class and fixed_cov only).
+  # phenotype_effects and ind_phenotype are observation-layer tables keyed by
+  # phenotype_name; add_ebv() fits simple traits, for which phenotype_name is
+  # the trait_name, so the key is aliased back to trait_name here.
+  trait_in <- paste0("'", trait, "'", collapse = ", ")
   effects_df <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT trait_name, effect_name, effect_class, source_column, source_table ",
+    paste0("SELECT phenotype_name AS trait_name, effect_name, effect_class, ",
+           "source_column, source_table ",
            "FROM phenotype_effects ",
-           "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
+           "WHERE phenotype_name IN (", trait_in, ") ",
            "AND effect_class IN ('fixed_class', 'fixed_cov') ",
            "ORDER BY effect_class, effect_name")
   )
@@ -116,11 +121,12 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   else ""
   pheno_long <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, trait_name, AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
-           "WHERE trait_name IN (", paste0("'", trait, "'", collapse = ", "), ") ",
+    paste0("SELECT id_ind, phenotype_name AS trait_name, ",
+           "AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
+           "WHERE phenotype_name IN (", trait_in, ") ",
            "AND id_ind IN (", id_in, ")",
            pheno_clause,
-           " GROUP BY id_ind, trait_name")
+           " GROUP BY id_ind, phenotype_name")
   )
   if (nrow(pheno_long) == 0)
     stop("No phenotypic records found for the requested individuals and traits.",
@@ -253,6 +259,42 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 }
 
 
+#' The unconditional residual (co)variance matrix of a set of traits
+#'
+#' Assembled from the residual covariance blocks in `phenotype_var_comp`
+#' ([find_covariance_blocks()]): traits in different blocks are independent,
+#' so the matrix is block-diagonal with explicit zeros between blocks. A
+#' trait in no block, or in a block with only conditional strata, is an
+#' error — BLUPF90 takes one residual matrix.
+#'
+#' @return Numeric `trait` x `trait` matrix with dimnames.
+#' @keywords internal
+.blupf90_residual_cov <- function(pop, trait) {
+  blocks <- find_covariance_blocks(pop$db_conn, "residual", trait)
+  R <- matrix(0, length(trait), length(trait), dimnames = list(trait, trait))
+  covered <- character(0)
+  for (b in blocks) {
+    common <- intersect(b$phenotypes, trait)
+    if (is.null(b$unconditional)) {
+      stop("The residual covariance block ", .pvc_set(b$phenotypes),
+           " has only conditional strata; BLUPF90 needs an unconditional ",
+           "residual (co)variance for ", .pvc_set(common), ". Declare one ",
+           "with define_residual_cov() (condition_column = NULL).",
+           call. = FALSE)
+    }
+    R[common, common] <- b$unconditional[common, common]
+    covered <- c(covered, common)
+  }
+  missing <- setdiff(trait, covered)
+  if (length(missing) > 0L) {
+    stop("Residual covariance matrix not found for traits: ",
+         paste(missing, collapse = ", "),
+         ". Call define_effect_cov_matrix(pop, 'residual', ...) first.",
+         call. = FALSE)
+  }
+  R
+}
+
 #' Write the renumf90 parameter file (renum.par)
 #'
 #' @param eval_dir path to evaluation folder; writes renum.par there
@@ -263,8 +305,9 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
 #' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
 #'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
-#' @param pop tidybreed_pop; used to look up residual and additive genetic
-#'   (co)variance matrices via [load_phenotype_cov()] and [load_trait_cov()]
+#' @param pop tidybreed_pop; used to look up the residual (co)variance
+#'   matrix via `.blupf90_residual_cov()` and the additive genetic one via
+#'   [load_trait_cov()]
 #' @param chip_name character or NULL; when non-NULL, adds a `SNP_FILE` line
 #'   for single-step GBLUP
 #' @param estimate_var logical; if TRUE, sets `OPTION method VCE` instead of
@@ -279,13 +322,9 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
   n_fixed_effs <- nrow(distinct_effects)
 
   # Load variance components
-  R_mat <- load_phenotype_cov(pop, "residual", trait)
+  R_mat <- .blupf90_residual_cov(pop, trait)
   G_mat <- load_trait_cov(pop, "gen_add",  trait)
 
-  if (is.null(R_mat))
-    stop("Residual covariance matrix not found for traits: ",
-         paste(trait, collapse = ", "),
-         ". Call define_effect_cov_matrix(pop, 'residual', ...) first.", call. = FALSE)
   if (is.null(G_mat))
     stop("Additive genetic covariance matrix not found for traits: ",
          paste(trait, collapse = ", "),
@@ -379,8 +418,6 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 #' @param distinct_effects data.frame of fixed effects (one row per
 #'   effect_name), as returned by [build_data_file()]
 #' @param trait character vector of trait names (in model order)
-#' @param effects_df data.frame of (trait_name x effect_name) fixed-effect
-#'   rows from `phenotype_effects`, as returned by [build_data_file()]
 #' @param chip_name character or NULL; chip name to report in the genotype
 #'   file section (omitted entirely when NULL)
 #' @param n_loci integer; number of loci written to the genotype file
@@ -391,7 +428,7 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 #' @return `NULL` invisibly; writes meta.txt as a side effect
 #' @keywords internal
 write_meta_file <- function(eval_dir, eval_id, col_map, distinct_effects,
-                             trait, effects_df, chip_name, n_loci, id_width,
+                             trait, chip_name, n_loci, id_width,
                              animal_effect_num) {
   lines <- c(
     paste0("=== tidybreed add_ebv() Evaluation: ", eval_id, " ==="),
@@ -562,20 +599,3 @@ parse_blupf90_solutions <- function(eval_dir, trait_name, animal_effect_num,
   result
 }
 
-
-#' Stub for VCE writeback — parse blupf90.out and update trait_var_comp
-#'
-#' Not yet implemented; called by [add_ebv()] when `estimate_var = TRUE` and
-#' `update_covars = TRUE`.
-#'
-#' @param pop tidybreed_pop
-#' @param eval_dir path to evaluation folder containing blupf90.out
-#' @param trait_name character vector of trait names
-#' @return `NULL` invisibly
-#' @keywords internal
-update_covars_from_blupf90 <- function(pop, eval_dir, trait_name) {
-  message("VCE writeback: automated parsing not yet implemented. ",
-          "Inspect blupf90.out and update trait_var_comp manually via ",
-          "define_effect_cov_matrix().")
-  invisible(NULL)
-}

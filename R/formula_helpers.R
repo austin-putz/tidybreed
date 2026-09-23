@@ -293,203 +293,31 @@
 
 # ── TBV vector pre-fetching ───────────────────────────────────────────────────
 
-#' Fetch TBV values for a set of contributor IDs, aligned to focal_ids.
-#' Returns NA where contributor is absent or has no TBV record.
+#' Pre-fetch every TBV vector a `formula_tbv` expression needs
 #'
-#' @param pop A tidybreed_pop object.
-#' @param trait_safe Character. Trait name, already SQL-escaped (single quotes
-#'   doubled).
-#' @param contr_ids Character vector of contributor IDs (e.g. `id_parent_1` or
-#'   `id_parent_2`), same length and order as `focal_ids`. `NA`/`"NA"`/empty
-#'   values are treated as missing.
-#' @param focal_ids Character vector of focal individual IDs.
-#' @return Numeric vector, same length as `focal_ids`, with the contributor's
-#'   `tbv_value` or `NA` where the contributor is missing or has no TBV.
-#' @keywords internal
-.fetch_contributor_tbvs <- function(pop, trait_safe, contr_ids, focal_ids) {
-  n       <- length(focal_ids)
-  missing <- is.na(contr_ids) | contr_ids == "NA" | !nzchar(as.character(contr_ids))
-  notna   <- unique(as.character(contr_ids[!missing]))
-  vec     <- rep(NA_real_, n)
-  if (length(notna) > 0) {
-    ids_sql  <- paste0("'", notna, "'", collapse = ", ")
-    tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT id_ind, tbv_value FROM ind_tbv ",
-      "WHERE trait_name = '", trait_safe, "' AND id_ind IN (", ids_sql, ")"
-    ))
-    if (nrow(tbv_rows) > 0) {
-      tbv_map <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-      for (j in seq_len(n)) {
-        if (!missing[j]) {
-          val <- tbv_map[as.character(contr_ids[j])]
-          vec[j] <- if (length(val) == 1 && !is.null(val)) val else NA_real_
-        }
-      }
-    }
-  }
-  vec
-}
-
-
-#' Fetch and aggregate group-mate TBVs for a group_sum / group_mean term.
+#' One contributor lookup per trait reference (see `?contributor_tbv`),
+#' returned as a named list ready to be the `eval()` environment.
 #'
-#' Validates that grp_table and grp_col exist (errors with clear message).
-#' Singleton pens (no group-mates) receive 0. Individuals with NA group get NA.
-#'
-#' @param pop A tidybreed_pop object.
-#' @param trait_safe Character. Trait name, already SQL-escaped (single quotes
-#'   doubled).
-#' @param focal_ids Character vector of focal individual IDs.
-#' @param grp_col Character. Column in `grp_table` holding group membership
-#'   (e.g. pen or litter ID).
-#' @param grp_table Character. Table containing `grp_col` and `id_ind`
-#'   (default `"ind_meta"` at the call site).
-#' @param agg_fn Function. `sum` or `mean`, applied to group-mates' TBVs
-#'   (excluding the focal individual itself).
-#' @param phenotype_name Character. Name of the phenotype being computed;
-#'   used only in error messages.
-#' @return Numeric vector, same length as `focal_ids`: the aggregated
-#'   group-mate TBV (0 for singletons with no group-mates), or `NA` for
-#'   individuals with no group assignment.
-#' @keywords internal
-.fetch_group_tbvs <- function(pop, trait_safe, focal_ids, grp_col, grp_table,
-                               agg_fn, phenotype_name) {
-  n <- length(focal_ids)
-  vec <- rep(NA_real_, n)
-
-  available_tables <- DBI::dbListTables(pop$db_conn)
-  if (!grp_table %in% available_tables)
-    stop(
-      "Group table '", grp_table, "' not found in database. ",
-      "In formula_tbv for phenotype '", phenotype_name, "', ",
-      "the `table=` argument of group_sum()/group_mean() must reference ",
-      "an existing table. Available tables: ",
-      paste(available_tables, collapse = ", "),
-      call. = FALSE
-    )
-
-  available_cols <- DBI::dbListFields(pop$db_conn, grp_table)
-  if (!grp_col %in% available_cols)
-    stop(
-      "Group column '", grp_col, "' not found in table '", grp_table, "'. ",
-      "In formula_tbv for phenotype '", phenotype_name, "', ",
-      "check the column name in group_sum()/group_mean(). ",
-      "Use `table = \"<table_name>\"` if the column is in a different table. ",
-      "Available columns in '", grp_table, "': ",
-      paste(available_cols, collapse = ", "),
-      call. = FALSE
-    )
-
-  focal_sql    <- paste0("'", focal_ids, "'", collapse = ", ")
-  focal_grp_df <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_table,
-    " WHERE id_ind IN (", focal_sql, ")"
-  ))
-  focal_grp_map <- stats::setNames(
-    as.character(focal_grp_df$group_val), focal_grp_df$id_ind
-  )
-
-  non_na_grps <- unique(focal_grp_map[
-    !is.na(focal_grp_map) & focal_grp_map != "NA" & nzchar(focal_grp_map)
-  ])
-  if (length(non_na_grps) == 0) return(vec)
-
-  gv_sql       <- paste0("'", non_na_grps, "'", collapse = ", ")
-  all_members  <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_table,
-    " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
-  ))
-  all_members$group_val <- as.character(all_members$group_val)
-
-  all_member_ids <- unique(all_members$id_ind)
-  tbv_map        <- stats::setNames(numeric(0), character(0))
-  if (length(all_member_ids) > 0) {
-    mem_sql  <- paste0("'", all_member_ids, "'", collapse = ", ")
-    tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = '",
-      trait_safe, "' AND id_ind IN (", mem_sql, ")"
-    ))
-    if (nrow(tbv_rows) > 0)
-      tbv_map <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-  }
-
-  for (j in seq_len(n)) {
-    fid     <- focal_ids[j]
-    grp_val <- focal_grp_map[fid]
-    if (is.na(grp_val) || grp_val == "NA" || !nzchar(grp_val)) {
-      vec[j] <- NA_real_
-      next
-    }
-    mate_ids   <- all_members$id_ind[
-      all_members$group_val == grp_val & all_members$id_ind != fid
-    ]
-    valid_tbvs <- tbv_map[mate_ids]
-    valid_tbvs <- valid_tbvs[!is.na(valid_tbvs)]
-    vec[j]     <- if (length(valid_tbvs) == 0) 0 else agg_fn(valid_tbvs)
-  }
-
-  vec
-}
-
-
-#' Pre-fetch all TBV vectors needed by a formula_tbv expression.
-#'
-#' Calls .fetch_contributor_tbvs() or .fetch_group_tbvs() for each trait_ref,
-#' returning a named list ready to be used as an eval() environment.
-#'
-#' @param pop A tidybreed_pop object.
-#' @param trait_refs List from .walk_formula_tbv_ast()$trait_refs.
-#' @param subset_df Data frame: sex-filtered ind_meta rows for focal individuals.
-#' @param phenotype_name Character. Used in error messages.
-#' @return Named list: placeholder → numeric vector (length = nrow(subset_df)).
+#' @param trait_refs List from `.walk_formula_tbv_ast()$trait_refs`.
+#' @param subset_df The planned `ind_meta` rows.
+#' @return Named list: placeholder -> numeric vector (`NA` = missing piece).
 #' @keywords internal
 .build_tbv_env <- function(pop, trait_refs, subset_df, phenotype_name) {
+  conn      <- pop$db_conn
   focal_ids <- as.character(subset_df$id_ind)
-  n         <- length(focal_ids)
+  what      <- paste0("formula_tbv for phenotype '", phenotype_name, "'")
   env_list  <- list()
-
   for (ref in trait_refs) {
-    ph         <- ref$placeholder
-    trait_safe <- gsub("'", "''", ref$trait)
-
-    if (ref$type == "self") {
-      ids_sql  <- paste0("'", focal_ids, "'", collapse = ", ")
-      tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-        "SELECT id_ind, tbv_value FROM ind_tbv ",
-        "WHERE trait_name = '", trait_safe, "' AND id_ind IN (", ids_sql, ")"
-      ))
-      vec <- stats::setNames(rep(NA_real_, n), focal_ids)
-      if (nrow(tbv_rows) > 0) {
-        tbv_map <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-        for (fid in focal_ids) {
-          val <- tbv_map[fid]
-          if (length(val) == 1 && !is.null(val) && !is.na(val)) vec[fid] <- val
-        }
-      }
-      env_list[[ph]] <- unname(vec)
-
-    } else if (ref$type == "dam") {
-      contr_ids      <- as.character(subset_df$id_parent_2)
-      env_list[[ph]] <- .fetch_contributor_tbvs(pop, trait_safe, contr_ids, focal_ids)
-
-    } else if (ref$type == "sire") {
-      contr_ids      <- as.character(subset_df$id_parent_1)
-      env_list[[ph]] <- .fetch_contributor_tbvs(pop, trait_safe, contr_ids, focal_ids)
-
-    } else if (ref$type %in% c("group_sum", "group_mean")) {
-      agg_fn         <- if (ref$type == "group_sum") sum else mean
-      env_list[[ph]] <- .fetch_group_tbvs(
-        pop            = pop,
-        trait_safe     = trait_safe,
-        focal_ids      = focal_ids,
-        grp_col        = ref$col,
-        grp_table      = ref$table,
-        agg_fn         = agg_fn,
-        phenotype_name = phenotype_name
-      )
-    }
+    env_list[[ref$placeholder]] <- switch(
+      ref$type,
+      self       = .tbv_by_id(conn, ref$trait, focal_ids),
+      dam        = .tbv_by_id(conn, ref$trait, subset_df$id_parent_2),
+      sire       = .tbv_by_id(conn, ref$trait, subset_df$id_parent_1),
+      group_sum  = .group_mate_tbv(conn, ref$trait, focal_ids, ref$col,
+                                   ref$table, "sum", what),
+      group_mean = .group_mate_tbv(conn, ref$trait, focal_ids, ref$col,
+                                   ref$table, "mean", what))
   }
-
   env_list
 }
 
@@ -568,29 +396,45 @@
 
 # ── Top-level derived formula evaluator ──────────────────────────────────────
 
-#' Evaluate a derived formula over existing ind_phenotype records.
+#' Evaluate a derived formula over ind_phenotype records.
 #'
 #' @param pop A tidybreed_pop object.
 #' @param formula Character. Formula string from phenotype_meta.
 #' @param ids Character vector. Individual IDs to compute for.
 #' @param phenotype_name Character. Name of the derived phenotype (for messages).
+#' @param pending Optional data frame of records planned earlier in the same
+#'   `add_phenotype()` call (`id_ind`, `phenotype_name`, `pheno_value`,
+#'   `pheno_number`) that are not on disk yet. They are treated exactly as if
+#'   they had been written, so a derived phenotype can consume a feeder
+#'   phenotype from the same call.
 #' @return Numeric vector, same length as ids.
 #'         NA propagates naturally; Inf/NaN converted to NA with a warning.
 #' @keywords internal
-.eval_derived_formula <- function(pop, formula, ids, phenotype_name) {
+.eval_derived_formula <- function(pop, formula, ids, phenotype_name,
+                                  pending = NULL) {
   expr    <- parse(text = formula, keep.source = FALSE)[[1]]
   symbols <- .extract_all_symbols(expr)
   symbols <- setdiff(symbols, c(.FORMULA_MATH_WHITELIST, .FORMULA_ARITH_OPS))
 
   if (length(ids) == 0) return(numeric(0))
 
-  ids_sql    <- paste0("'", ids, "'", collapse = ", ")
-  phenos_sql <- paste0("'", gsub("'", "''", symbols), "'", collapse = ", ")
-  rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT id_ind, phenotype_name, pheno_value, pheno_number FROM ind_phenotype ",
-    "WHERE id_ind IN (", ids_sql, ") ",
-    "AND phenotype_name IN (", phenos_sql, ")"
-  ))
+  conn <- pop$db_conn
+  tmp  <- "__ap_derived_ids"
+  duckdb::duckdb_register(conn, tmp, data.frame(id_ind = unique(ids),
+                                                stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
+  rows <- DBI::dbGetQuery(conn, paste0(
+    "SELECT p.id_ind, p.phenotype_name, p.pheno_value, p.pheno_number ",
+    "FROM ind_phenotype AS p JOIN ", tmp, " AS f USING (id_ind) ",
+    "WHERE p.phenotype_name IN (", .pvc_in_list(conn, symbols), ")"))
+
+  if (!is.null(pending) && nrow(pending) > 0 &&
+      all(c("id_ind", "phenotype_name", "pheno_value", "pheno_number") %in%
+          names(pending))) {
+    keep <- pending$phenotype_name %in% symbols & pending$id_ind %in% ids
+    rows <- rbind(rows, as.data.frame(
+      pending[keep, c("id_ind", "phenotype_name", "pheno_value", "pheno_number")]))
+  }
 
   if (nrow(rows) == 0)
     stop(
@@ -650,8 +494,7 @@
   dep_of <- vector("list", n)
 
   for (i in seq_len(n)) {
-    row <- pheno_meta[i, ]
-    formula_col <- if ("formula" %in% names(row)) row$formula else NA_character_
+    formula_col <- pheno_meta$formula[[i]]
     if (is.na(formula_col) || !nzchar(formula_col)) next
 
     expr <- tryCatch(

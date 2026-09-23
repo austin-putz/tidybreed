@@ -23,6 +23,7 @@ define_phenotype(
   formula_tbv = NULL,
   formula = NULL,
   missing_component_action = c("skip", "error"),
+  condition_change_action = c("error", "independent"),
   overwrite = FALSE
 )
 }
@@ -68,11 +69,15 @@ category, e.g. \code{c("Alive", "Dead")}. Must not contain commas.}
 is written to the reserved \code{liability_value} column in \code{ind_phenotype}.
 Only meaningful for categorical traits.}
 
-\item{residual_var}{Numeric. Scalar residual variance. When supplied, writes
-one unconditional row to \code{phenotype_var_comp}
-(\code{effect_name = "residual"}, \code{condition_column = NULL}). For heterogeneous
-residuals or multi-phenotype correlated residuals, use
-\code{\link[=define_residual_cov]{define_residual_cov()}} afterwards.}
+\item{residual_var}{Numeric or \code{NULL}. Scalar residual variance. When
+supplied, writes a 1 × 1 unconditional residual block for this phenotype
+to \code{phenotype_var_comp} (\code{effect_name = "residual"}). It is an error when
+the phenotype already belongs to a multi-phenotype residual block — that
+block is redeclared as a whole with \code{\link[=define_residual_cov]{define_residual_cov()}} — or when the
+phenotype's existing residual has realized draws in \code{ind_phenotype}. With
+\code{overwrite = TRUE} and no \code{residual_var}, \code{phenotype_var_comp} is left
+untouched. For heterogeneous or correlated residuals use
+\code{\link[=define_residual_cov]{define_residual_cov()}}.}
 
 \item{components}{A data frame or \code{tibble} with one row per genetic
 component. Columns:
@@ -81,24 +86,21 @@ component. Columns:
 \item \code{contributor_type} (required): \code{"self"}, \code{"dam"}, \code{"sire"}, or
 \code{"group"}.
 \item \code{weight} (optional, default \code{1.0}): scalar multiplier.
-\item \code{weight_type} (optional, default \code{"fixed"}): \code{"fixed"}, \code{"covariate"},
-\code{"legendre"}, or \code{"raw_poly"}.
+\item \code{weight_type} (optional, default \code{"fixed"}): \code{"fixed"} or
+\code{"covariate"} (\code{weight * covariate}). Nothing else is implemented, and
+anything else is rejected here rather than at \code{\link[=add_phenotype]{add_phenotype()}} time.
 \item \code{covariate_name} (optional): covariate key.
-\item \code{covariate_table} (optional): table containing the covariate column;
-\code{NULL} means value supplied at \code{\link[=add_phenotype]{add_phenotype()}} call time.
+\item \code{covariate_table} (optional, default \code{"ind_meta"}): table containing
+the covariate column; it must have exactly one row per individual.
 \item \code{poly_order} (optional): polynomial basis order.
 \item \code{poly_scale_min}, \code{poly_scale_max} (optional): Legendre scaling bounds.
-\item \code{genome_effect_types} (optional, default \code{"additive"}).
+\item \code{component_names} (optional, default \code{"order1_additive"}): reserved;
+see \code{phenotype_components.component_names}.
 \item \code{group_column} (optional): column defining group membership.
 \item \code{group_table} (optional, default \code{"ind_meta"}): table containing
 \code{group_column}.
 \item \code{aggregation} (optional, default \code{"sum"}): \code{"sum"} or \code{"mean"} for
 group contributors.
-\item \code{missing_action} (optional, default \code{"skip"}): currently unused
-per-component override — behaviour is governed uniformly by
-\code{missing_component_action} below.
-\item \code{contributor_filter} (optional): reserved for future spatial/
-neighborhood contributor lookup; not yet implemented.
 }
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
@@ -139,6 +141,22 @@ this is unrelated to \code{null_class_action} (set via
 \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}), which handles \code{NULL} levels for
 fixed-class covariate effects, and does not affect random-effect draws
 (new levels always get a fresh draw).}
+
+\item{condition_change_action}{Character. Applies only when this phenotype
+is in a residual covariance block with a \code{condition_column} (see
+\code{\link[=define_residual_cov]{define_residual_cov()}}) and a correlated phenotype's residual was stored
+under a \strong{different} condition level than the one the current record
+resolves to — e.g. an animal moved farms between the two records.
+\code{"error"} (default) stops, because no covariance is defined between the two
+strata. \code{"independent"} drops the incompatible stored residual from the
+conditioning set (stored residuals from the same stratum still condition
+the draw) and warns with a count. Stored in \code{phenotype_meta}; every
+phenotype in one residual block must carry the same value (D6), so this
+argument only sets it while the phenotype is still a block of one. Once
+the block has two or more members the value is block-scoped — change it
+with \code{\link[=define_condition_change_action]{define_condition_change_action()}}, which writes every member in one
+transaction and leaves the rest of their \code{phenotype_meta} rows alone. An
+immutable condition column such as \code{sex} never triggers either action.}
 
 \item{overwrite}{Logical. If \code{TRUE} and a phenotype with the same name
 already exists, replace its rows in \code{phenotype_meta} and

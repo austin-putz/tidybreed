@@ -21,9 +21,6 @@
 #'   Default `0`; `E[TBV] = 0` when TBVs are centered on base allele
 #'   frequencies. The phenotypic population mean (intercept) is set separately
 #'   in [define_phenotype()].
-#' @param expressed_parent Character. Parent-of-origin expression: `"both"`
-#'   (default), `"parent_1"` (paternal), or `"parent_2"` (maternal). Imprinted
-#'   traits use only the haplotype from the specified parent when computing TBVs.
 #' @param description Character. Free-text description of the trait.
 #' @param units Character. Measurement units, e.g. `"kg"`, `"count"`.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
@@ -62,7 +59,6 @@ define_trait <- function(pop,
                          trait_name,
                          target_add_var   = NULL,
                          target_add_mean  = 0,
-                         expressed_parent = c("both", "parent_1", "parent_2"),
                          description      = NULL,
                          units            = NULL,
                          overwrite        = FALSE) {
@@ -72,8 +68,6 @@ define_trait <- function(pop,
 
   stopifnot(is.character(trait_name), length(trait_name) == 1, nchar(trait_name) > 0)
   validate_trait_name(trait_name)
-
-  expressed_parent <- match.arg(expressed_parent)
 
   pop <- ensure_trait_tables(pop)
 
@@ -117,7 +111,6 @@ define_trait <- function(pop,
                        else as.character(description),
     units            = if (is.null(units)) NA_character_
                        else as.character(units),
-    expressed_parent = expressed_parent,
     target_add_mean  = as.numeric(target_add_mean)
   )
 
@@ -174,7 +167,6 @@ ensure_trait_tables <- function(pop) {
         trait_name       VARCHAR UNIQUE NOT NULL,
         description      VARCHAR,
         units            VARCHAR,
-        expressed_parent VARCHAR DEFAULT 'both',
         target_add_mean  DOUBLE DEFAULT 0
       )
     ",
@@ -210,11 +202,15 @@ ensure_trait_tables <- function(pop) {
 
     ind_phenotype = "
       CREATE TABLE ind_phenotype (
-        id_phenotype   INTEGER PRIMARY KEY,
-        id_ind         VARCHAR,
-        phenotype_name VARCHAR,
-        pheno_value    DOUBLE,
-        pheno_number   INTEGER
+        id_phenotype             INTEGER PRIMARY KEY,
+        id_ind                   VARCHAR,
+        phenotype_name           VARCHAR,
+        pheno_value              DOUBLE,
+        pheno_number             INTEGER,
+        liability_value          DOUBLE,
+        cat_name                 VARCHAR,
+        residual_value           DOUBLE,
+        residual_condition_level VARCHAR
       )
     ",
 
@@ -225,6 +221,24 @@ ensure_trait_tables <- function(pop) {
         trait_name VARCHAR,
         tbv_value  DOUBLE,
         UNIQUE (id_ind, trait_name)
+      )
+    ",
+
+    # True genetic value: the total genotypic value, decomposed by declared
+    # model structure. component_name is a dimension from the start because
+    # adding it later would change the unique key from (id_ind, trait_name) and
+    # reshape every row. No `replicate` column: like ind_tbv, that column exists
+    # only in the archive copy, added by archive_replicate() via
+    # .ensure_archive_table(), which refuses to stamp a table that already has
+    # one.
+    ind_tgv = "
+      CREATE TABLE ind_tgv (
+        id_tgv         INTEGER PRIMARY KEY,
+        id_ind         VARCHAR NOT NULL,
+        trait_name     VARCHAR NOT NULL,
+        component_name VARCHAR NOT NULL,
+        tgv_value      DOUBLE  NOT NULL,
+        UNIQUE (id_ind, trait_name, component_name)
       )
     ",
 
@@ -271,66 +285,6 @@ ensure_trait_tables <- function(pop) {
         weight_type      VARCHAR NOT NULL,
         true_index_value DOUBLE
       )
-    ",
-
-    # ── New tables introduced in v0.31.0 ──────────────────────────────────────
-
-    phenotype_meta = "
-      CREATE TABLE phenotype_meta (
-        id_phenotype_meta        INTEGER PRIMARY KEY,
-        phenotype_name           VARCHAR UNIQUE NOT NULL,
-        type                     VARCHAR,
-        mean                     DOUBLE DEFAULT 0,
-        expressed_sex            VARCHAR DEFAULT 'both',
-        repeatable               BOOLEAN DEFAULT FALSE,
-        min_value                DOUBLE,
-        max_value                DOUBLE,
-        prevalence               DOUBLE,
-        thresholds               VARCHAR,
-        cat_values               VARCHAR,
-        cat_names                VARCHAR,
-        store_liability          BOOLEAN DEFAULT FALSE,
-        missing_component_action VARCHAR DEFAULT 'skip',
-        formula_tbv              VARCHAR,
-        formula                  VARCHAR
-      )
-    ",
-
-    phenotype_components = "
-      CREATE TABLE phenotype_components (
-        id_phenotype_comp   INTEGER PRIMARY KEY,
-        phenotype_name      VARCHAR NOT NULL,
-        source_trait_name   VARCHAR NOT NULL,
-        contributor_type    VARCHAR NOT NULL,
-        group_column        VARCHAR,
-        group_table         VARCHAR DEFAULT 'ind_meta',
-        aggregation         VARCHAR DEFAULT 'sum',
-        weight              DOUBLE  DEFAULT 1.0,
-        weight_type         VARCHAR DEFAULT 'fixed',
-        covariate_name      VARCHAR,
-        covariate_table     VARCHAR,
-        poly_order          INTEGER,
-        poly_scale_min      DOUBLE,
-        poly_scale_max      DOUBLE,
-        genome_effect_types VARCHAR DEFAULT 'additive',
-        missing_action      VARCHAR DEFAULT 'skip',
-        contributor_filter  VARCHAR
-      )
-    ",
-
-    phenotype_var_comp = "
-      CREATE TABLE phenotype_var_comp (
-        id_phenotype_var_comp INTEGER PRIMARY KEY,
-        effect_name           VARCHAR NOT NULL DEFAULT 'residual',
-        phenotype_name_1      VARCHAR NOT NULL,
-        phenotype_name_2      VARCHAR NOT NULL,
-        cov_value             DOUBLE  NOT NULL,
-        condition_column      VARCHAR,
-        condition_table       VARCHAR DEFAULT 'ind_meta',
-        condition_level       VARCHAR,
-        weight_type           VARCHAR DEFAULT 'fixed',
-        poly_order            INTEGER
-      )
     "
   )
 
@@ -340,7 +294,16 @@ ensure_trait_tables <- function(pop) {
     }
   }
 
-  pop$tables <- unique(c(pop$tables, names(ddl)))
+  # Derived views over the tables above. Created here so ind_tgv already exists,
+  # and registered in pop$tables so a freshly built population lists the same
+  # objects as a restored one (restore_pop() reads DBI::dbListTables(), which
+  # includes views).
+  views <- c(ind_tgv_total = .ind_tgv_total_view_sql())
+  for (vw in names(views)) {
+    if (!vw %in% existing) DBI::dbExecute(con, views[[vw]])
+  }
+
+  pop$tables <- unique(c(pop$tables, names(ddl), names(views)))
 
   pop
 }

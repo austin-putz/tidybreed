@@ -205,3 +205,41 @@ test_that("add_ebv() fallback mode creates eval dir under run_dir (not managed)"
   created <- list.dirs(tmp_run, recursive = FALSE)
   expect_true(any(grepl("eval_test_run", basename(created))))
 })
+
+# ---------------------------------------------------------------------------
+# build_data_file(): reads the observation layer by phenotype_name
+# ---------------------------------------------------------------------------
+# phenotype_effects and ind_phenotype are keyed by phenotype_name, not
+# trait_name. This does not need the BLUPF90 binary: the data file is built
+# before the solver is looked for.
+
+test_that("build_data_file() reads ind_phenotype and phenotype_effects by phenotype_name", {
+  tmp <- tempfile()
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE))
+
+  pop <- make_managed_pop(tmp, tools = "blupf90") |>
+    define_phenotype("ADG", type = "continuous", mean = 1, residual_var = 0.5) |>
+    define_effect_fixed_class("ADG", effect_name = "sex", source_column = "sex",
+                              levels = c(M = 0.1, F = 0))
+  on.exit(close_pop(pop), add = TRUE)
+
+  pop |> get_table("genome_meta") |> define_additive_effects("ADG")
+  pop |> get_table("ind_meta") |> add_phenotype("ADG")
+
+  ids <- pop |> get_table("ind_meta") |> pull(id_ind)
+  eval_dir <- file.path(tmp, "eval")
+  dir.create(eval_dir)
+
+  res <- build_data_file(pop, ids, "ADG", eval_dir)
+
+  # the fixed effect came through, keyed back to the trait name
+  expect_equal(res$effects_df$trait_name, "ADG")
+  expect_equal(res$effects_df$effect_name, "sex")
+  expect_equal(res$distinct_effects$effect_name, "sex")
+
+  # one observation per phenotyped animal, and the file was written
+  expect_setequal(res$data$id_ind, ids)
+  expect_true(all(is.finite(res$data$ADG)))
+  expect_true(file.exists(file.path(eval_dir, "data.txt")))
+})

@@ -73,11 +73,11 @@ define_trait_simple <- function(pop,
     get_table("genome_meta") |>
     dplyr::collect() |>
     dplyr::slice_sample(n = as.integer(n_qtl)) |>
-    dplyr::pull(locus_name)
+    dplyr::pull(.data$locus_name)
 
   pop <- pop |>
     get_table("genome_meta") |>
-    dplyr::filter(locus_name %in% sel) |>
+    dplyr::filter(.data$locus_name %in% !!sel) |>
     define_additive_effects(trait_name      = trait_name,
                             distribution    = effect_distribution,
                             scale_to_target = scale_to_target,

@@ -44,13 +44,11 @@
       paste0("DELETE FROM phenotype_effects WHERE phenotype_name = '", pn_safe,
              "' AND effect_name = '", en_safe, "'")
     )
-    if ("phenotype_random_effects" %in% DBI::dbListTables(pop$db_conn)) {
-      DBI::dbExecute(
-        pop$db_conn,
-        paste0("DELETE FROM phenotype_random_effects WHERE phenotype_name = '",
-               pn_safe, "' AND effect_name = '", en_safe, "'")
-      )
-    }
+    DBI::dbExecute(
+      pop$db_conn,
+      paste0("DELETE FROM phenotype_random_effects WHERE phenotype_name = '",
+             pn_safe, "' AND effect_name = '", en_safe, "'")
+    )
   }
   invisible(NULL)
 }

@@ -8,12 +8,14 @@
 # Columns deliberately listed before they exist. These are added later by
 # ALTER TABLE, and are reserved up front so a user cannot create a conflicting
 # column of the same name in the meantime.
-#   replicate                 — stamped by archive_replicate()
-#   liability_value, cat_name — added by add_phenotype() per phenotype type
+#   replicate — added to the ARCHIVE copy by archive_replicate(); never present
+#               on the working table, which the function's collision guard
+#               requires
 DEFERRED_COLS <- list(
   ind_meta       = "replicate",
-  ind_phenotype  = c("liability_value", "cat_name", "replicate"),
+  ind_phenotype  = "replicate",
   ind_tbv        = "replicate",
+  ind_tgv        = "replicate",
   ind_ebv        = "replicate",
   ind_index      = "replicate",
   ind_true_index = "replicate"

@@ -1,0 +1,866 @@
+<title>tidybreed by the Numbers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #F6F8F6;
+    --surface: #FFFFFF;
+    --ink: #18231F;
+    --ink-2: #3D4B45;
+    --muted: #66746E;
+    --rule: #D6DDD8;
+    --rule-soft: #E7ECE8;
+    --accent: #23705A;
+    --accent-soft: #DCEDE5;
+    --gold: #C9A227;
+    --gold-soft: #F5ECCF;
+    --bar: #23705A;
+    --bar-track: #E7ECE8;
+    --code-bg: #EEF2EF;
+    --shadow: 0 1px 2px rgba(24, 35, 31, 0.06);
+
+    --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+    --s1: 0.5rem; --s2: 0.75rem; --s3: 1rem; --s4: 1.5rem; --s5: 2.25rem; --s6: 3.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #111917;
+      --surface: #182220;
+      --ink: #E4EAE6;
+      --ink-2: #B9C4BE;
+      --muted: #8A9791;
+      --rule: #2C3834;
+      --rule-soft: #222D29;
+      --accent: #5FBE98;
+      --accent-soft: #1B3A30;
+      --gold: #E2BD45;
+      --gold-soft: #3A3218;
+      --bar: #5FBE98;
+      --bar-track: #22302B;
+      --code-bg: #1F2A26;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #111917;
+    --surface: #182220;
+    --ink: #E4EAE6;
+    --ink-2: #B9C4BE;
+    --muted: #8A9791;
+    --rule: #2C3834;
+    --rule-soft: #222D29;
+    --accent: #5FBE98;
+    --accent-soft: #1B3A30;
+    --gold: #E2BD45;
+    --gold-soft: #3A3218;
+    --bar: #5FBE98;
+    --bar-track: #22302B;
+    --code-bg: #1F2A26;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 76ch;
+    margin: 0 auto;
+    padding-block: var(--s6) var(--s6);
+    padding-inline: clamp(16px, 4vw, 40px);
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: grid; gap: var(--s3); margin-bottom: var(--s5); }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 .pkg { color: var(--accent); }
+  .lede {
+    font-size: 1.12rem;
+    color: var(--ink-2);
+    max-width: 62ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+  .manifest {
+    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+    font-family: var(--mono); font-size: 0.85rem; color: var(--muted);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--rule);
+  }
+  .manifest b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- sections ---------- */
+  section { margin-top: var(--s5); }
+  h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.45rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 var(--s3);
+    display: flex; align-items: baseline; gap: var(--s2);
+    text-wrap: balance;
+  }
+  h2 .count {
+    font-family: var(--mono); font-weight: 400; font-size: 0.8rem;
+    color: var(--muted); letter-spacing: 0.04em;
+  }
+
+  /* ---------- stats ledger ---------- */
+  .ledger {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .stat {
+    background: var(--surface);
+    padding: var(--s3) var(--s3) var(--s2);
+    display: grid; gap: 2px; align-content: start;
+  }
+  .stat .n {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 2.1rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .stat .l { font-size: 0.82rem; color: var(--ink-2); font-weight: 500; }
+  .stat .sub { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+  .stat.gold .n { color: var(--gold); }
+  .stat.accent .n { color: var(--accent); }
+  @media (max-width: 720px) { .ledger { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 400px) { .ledger { grid-template-columns: 1fr; } }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono); font-weight: 500; font-size: 0.72rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--rule);
+  }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: 0.9rem; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+  .group td:first-child { font-weight: 600; color: var(--ink); }
+  td .note { color: var(--muted); font-size: 0.88rem; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--code-bg);
+    padding: 0.08em 0.38em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+  th code { text-transform: none; letter-spacing: 0; }
+
+  /* ---------- API prefix rows ---------- */
+  .api { display: grid; border-top: 1px solid var(--rule); }
+  .api-row {
+    display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3);
+    padding: var(--s2) 0; border-bottom: 1px solid var(--rule-soft);
+  }
+  .api-row:last-child { border-bottom: 1px solid var(--rule); }
+  .prefix { font-family: var(--mono); color: var(--accent); font-weight: 500; font-size: 0.92rem; padding-top: 0.2rem; }
+  .prefix .verb { color: var(--muted); font-weight: 400; display: block; font-size: 0.75rem; letter-spacing: 0.04em; margin-top: 2px; font-family: var(--body); }
+  .fns { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .fns code { background: var(--code-bg); padding: 0.18em 0.5em; border-radius: 4px; font-size: 0.8rem; }
+  @media (max-width: 560px) { .api-row { grid-template-columns: 1fr; gap: var(--s1); } }
+
+  /* ---------- database tables ---------- */
+  .ledger.compact .stat .n { font-size: 1.7rem; }
+  .types { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: var(--s3); }
+  .types .type {
+    display: inline-flex; align-items: baseline; gap: 0.35rem;
+    font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 0.15rem 0.5rem;
+  }
+  .types .type code { background: transparent; padding: 0; color: var(--ink); }
+  .types .type b { font-weight: 500; }
+  .tnote { font-size: 0.85rem; color: var(--muted); margin: var(--s3) 0 0; max-width: 70ch; text-wrap: pretty; }
+  .tnote b { font-weight: 500; color: var(--ink-2); }
+  table.tables .lk { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); margin-left: 0.2rem; }
+  .tgroup { margin-top: var(--s4); }
+  .tgroup h3 {
+    font-family: var(--display); font-weight: 700; font-size: 1.05rem;
+    margin: 0 0 var(--s2); display: flex; align-items: baseline; gap: var(--s2);
+    color: var(--accent);
+  }
+  .tgroup h3 .count { font-family: var(--mono); font-weight: 400; font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; }
+  table.tables { font-size: 0.88rem; }
+  table.tables td { padding: 0.5rem 0.6rem; }
+  table.tables .tname { font-family: var(--mono); font-weight: 500; font-size: 0.85rem; display: block; }
+  table.tables .tdesc { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.4; max-width: 34ch; text-wrap: pretty; }
+  table.tables .kind { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  table.tables .kind.view { color: var(--gold); }
+  table.tables .kind.table { color: var(--muted); }
+  table.tables .key code { font-size: 0.74rem; white-space: nowrap; }
+  table.tables .key { line-height: 1.7; }
+  table.tables .arch { font-size: 0.8rem; color: var(--ink-2); white-space: nowrap; }
+
+  /* ---------- bar table ---------- */
+  .bars { display: grid; gap: 0.55rem; }
+  .bar-row { display: grid; grid-template-columns: 15rem 1fr 4.5rem; gap: var(--s2); align-items: center; }
+  .bar-row .name { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row .purpose { font-size: 0.82rem; color: var(--muted); display: block; font-family: var(--body); white-space: normal; }
+  .track { height: 10px; background: var(--bar-track); border-radius: 2px; overflow: hidden; }
+  .fill { height: 100%; background: var(--bar); border-radius: 2px; }
+  .bar-row .loc { font-family: var(--mono); font-size: 0.85rem; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .bar-row.test .fill { background: var(--gold); }
+  .bars-cap { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: var(--s2); letter-spacing: 0.04em; }
+  @media (max-width: 640px) {
+    .bar-row { grid-template-columns: 1fr 3.5rem; }
+    .bar-row .name { grid-column: 1 / -1; white-space: normal; }
+  }
+
+  /* ---------- deps ---------- */
+  .deps { display: grid; gap: var(--s2); }
+  .dep { display: grid; grid-template-columns: 8rem 1fr; gap: var(--s3); align-items: baseline; }
+  .dep .k { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .dep .v { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .dep .v code { font-size: 0.82rem; }
+  .dep .v .core { border: 1px solid var(--accent); color: var(--accent); background: transparent; }
+  @media (max-width: 480px) { .dep { grid-template-columns: 1fr; gap: var(--s1); } }
+
+  footer {
+    margin-top: var(--s6);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+    display: flex; flex-wrap: wrap; gap: var(--s3); justify-content: space-between;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .page { padding-block: 0; max-width: none; }
+    .ledger { box-shadow: none; }
+    section { break-inside: avoid; }
+    tbody tr:hover td { background: transparent; }
+  }
+</style>
+
+<main class="page">
+  <header class="masthead">
+    <div class="eyebrow">R package · breeding-program simulation</div>
+    <h1><span class="pkg">tidybreed</span> by the numbers</h1>
+    <p class="lede">A database-first breeding-program simulator. Every genotype, haplotype and record lives in a file-based DuckDB database rather than in R memory, so simulations can exceed RAM, resume after a crash, and archive replicates. A small Rcpp kernel handles meiosis and recombination.</p>
+    <div class="manifest">
+      <span>version <b>0.68.4</b></span>
+      <span>snapshot <b>2026-09-16</b></span>
+      <span>branch <b>feat/genome-effects-v49</b> @ <b>a190bf4</b></span>
+      <span>license <b>MIT</b></span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Highlights</h2>
+    <div class="ledger">
+      <div class="stat accent">
+        <div class="n">43</div>
+        <div class="l">Exported functions</div>
+        <div class="sub">+17 S3 methods · 275 total</div>
+      </div>
+      <div class="stat">
+        <div class="n">20.7<small>k</small></div>
+        <div class="l">Lines of R</div>
+        <div class="sub">59 files · 5.6k roxygen</div>
+      </div>
+      <div class="stat">
+        <div class="n">217</div>
+        <div class="l">Lines of C++</div>
+        <div class="sub">2 files · gamete kernel</div>
+      </div>
+      <div class="stat">
+        <div class="n">180</div>
+        <div class="l">Man pages</div>
+        <div class="sub">1 vignette · 1,149-line README</div>
+      </div>
+      <div class="stat gold">
+        <div class="n">794</div>
+        <div class="l">Tests</div>
+        <div class="sub">55 files · 1,864 assertions</div>
+      </div>
+      <div class="stat gold">
+        <div class="n">0.83<small> : 1</small></div>
+        <div class="l">Test : source ratio</div>
+        <div class="sub">17.3k test lines / 20.7k source</div>
+      </div>
+      <div class="stat">
+        <div class="n">199</div>
+        <div class="l">Commits</div>
+        <div class="sub">129 released versions</div>
+      </div>
+      <div class="stat">
+        <div class="n">11</div>
+        <div class="l">Imports</div>
+        <div class="sub">duckdb · dplyr · Rcpp · dqrng · …</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Detailed counts</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Metric</th><th class="num">Count</th></tr></thead>
+        <tbody>
+          <tr class="group"><td>Exported functions (<code>NAMESPACE</code>)</td><td class="num">43</td></tr>
+          <tr><td>S3 methods registered</td><td class="num">17</td></tr>
+          <tr><td>Total R function definitions</td><td class="num">275</td></tr>
+          <tr class="group"><td>R source files (<code>R/</code>)</td><td class="num">59</td></tr>
+          <tr><td>R lines of code</td><td class="num">20,671</td></tr>
+          <tr><td>Roxygen doc lines (<code>#'</code>) in <code>R/</code></td><td class="num">5,631</td></tr>
+          <tr class="group"><td>C++ source files (<code>src/</code>)</td><td class="num">2</td></tr>
+          <tr><td>C++ lines of code</td><td class="num">217</td></tr>
+          <tr class="group"><td>Man pages (<code>man/*.Rd</code>)</td><td class="num">180</td></tr>
+          <tr><td>Vignettes <span class="note">(<code>tidybreed-introduction.Rmd</code>, 649 lines)</span></td><td class="num">1</td></tr>
+          <tr><td><code>README.md</code> lines</td><td class="num">1,149</td></tr>
+          <tr><td><code>NEWS.md</code> lines <span class="note">(129 version headings)</span></td><td class="num">3,607</td></tr>
+          <tr><td>Design docs (<code>plans/</code>) <span class="note">(53 files)</span></td><td class="num">22,798</td></tr>
+          <tr class="group"><td>testthat test files</td><td class="num">55</td></tr>
+          <tr><td>testthat lines of code <span class="note">(+ 4 helper files, 999 lines)</span></td><td class="num">17,260</td></tr>
+          <tr><td><code>test_that()</code> blocks</td><td class="num">794</td></tr>
+          <tr><td><code>expect_*()</code> assertions</td><td class="num">1,864</td></tr>
+          <tr class="group"><td>Git commits</td><td class="num">199</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Exported API <span class="count">43 functions · named by what they do to the database</span></h2>
+    <div class="api">
+      <div class="api-row">
+        <div class="prefix">open_ / restore_ / close_<span class="verb">session</span></div>
+        <div class="fns"><code>open_pop</code><code>restore_pop</code><code>close_pop</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">define_<span class="verb">write model configuration</span></div>
+        <div class="fns"><code>define_genome</code><code>define_chromosome</code><code>define_founder_haplotypes</code><code>define_chip</code><code>define_trait</code><code>define_trait_simple</code><code>define_additive_effects</code><code>define_genome_effects</code><code>define_phenotype</code><code>define_residual_cov</code><code>define_effect_cov_matrix</code><code>define_effect_random</code><code>define_effect_fixed_class</code><code>define_effect_fixed_cov</code><code>define_effect_intercept</code><code>define_index</code><code>define_table</code><code>define_schema_description</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">add_<span class="verb">insert simulation output</span></div>
+        <div class="fns"><code>add_founders</code><code>add_offspring</code><code>add_phenotype</code><code>add_tbv</code><code>add_tgv</code><code>add_ebv</code><code>add_index</code><code>add_dosage</code><code>add_genotypes</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">mutate_<span class="verb">add or update columns</span></div>
+        <div class="fns"><code>mutate_table</code><code>mutate_derived</code><code>mutate_group_seq</code><code>mutate_group_named</code><code>mutate_group_concatenate</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">extract_ / remove_ / archive_<span class="verb">read out, delete, stamp replicates</span></div>
+        <div class="fns"><code>extract_genotypes</code><code>remove_rows</code><code>archive_replicate</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">term builders<span class="verb">rows for define_genome_effects()</span></div>
+        <div class="fns"><code>ad_terms</code><code>genotype_terms</code></div>
+      </div>
+      <div class="api-row">
+        <div class="prefix">inspection<span class="verb">lazy dplyr access</span></div>
+        <div class="fns"><code>get_table</code><code>schema</code><code>describe_table</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Database tables <span class="count">every table is DuckDB, read lazily through dplyr</span></h2>
+    <div class="ledger compact">
+      <div class="stat accent">
+        <div class="n">27</div>
+        <div class="l">Tables</div>
+        <div class="sub">in 8 groups</div>
+      </div>
+      <div class="stat">
+        <div class="n">3</div>
+        <div class="l">Views</div>
+        <div class="sub">derived, never stored</div>
+      </div>
+      <div class="stat">
+        <div class="n">201</div>
+        <div class="l">Columns</div>
+        <div class="sub">201 described in _schema_meta</div>
+      </div>
+      <div class="stat">
+        <div class="n">22</div>
+        <div class="l">SQL primary keys</div>
+        <div class="sub">5 logical keys enforced in R</div>
+      </div>
+    </div>
+    <div class="types">
+<span class="type"><code>VARCHAR</code><b>111</b></span>
+<span class="type"><code>INTEGER</code><b>40</b></span>
+<span class="type"><code>DOUBLE</code><b>32</b></span>
+<span class="type"><code>UTINYINT</code><b>11</b></span>
+<span class="type"><code>BIGINT</code><b>3</b></span>
+<span class="type"><code>BOOLEAN</code><b>3</b></span>
+<span class="type"><code>DATE</code><b>1</b></span>
+    </div>
+    <p class="tnote">Key is the declared SQL <code>PRIMARY KEY</code>, or the logical row key enforced in R where a DuckDB constraint would block bulk inserts or transactional replacement. Archive is how <code>archive_replicate()</code> treats the table: copied and stamped <b>per replicate</b>, copied <b>once</b>, <b>reset only</b>, or <b>kept</b> in the working database.</p>
+    <div class="tgroup">
+      <h3>Genome <span class="count">9 tables</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">genome_meta</span><span class="tdesc">Locus-level metadata. One row per locus. Stores chromosome assignment, physical position (pos_bp), and chip membership flags added by define_chip(). Genetic-map positions live in the separate genome_map table.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">6</td>
+            <td class="key"><code>locus_id</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_map</span><span class="tdesc">Genetic map in long format. One row per (locus x sex x line x map) with a defined genetic position (pos_cM). sex NULL = both sexes; line_name NULL = all lines. define_genome() writes a single default map (map_name 'default'); sex/line/version-specific maps are added as rows. Logical key (locus_id, sex, line_name, map_name).</span></td>
+            <td class="kind table">table</td>
+            <td class="num">7</td>
+            <td class="key"><code>id_genome_map</code> <span class="lk">logical</span></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_effects</span><span class="tdesc">Genome-effect terms. One row per term: a single coefficient over one or more loci. The loci are in genome_effect_members; scope (line, parent of origin) is in genome_effect_member_origins. A locus is causal for a trait if it appears as a member of any term.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_genome_effect</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_effect_members</span><span class="tdesc">The loci a term spans, one row per (term x locus), canonicalized by ascending locus_id. contrast_name says which basis function the locus contributes: 'additive' (per allele copy), 'dominance' (Cockerham, diploid loci), or 'indicator' (one genotype state).</span></td>
+            <td class="kind table">table</td>
+            <td class="num">7</td>
+            <td class="key"><code>id_genome_effect</code> <code>member_slot</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_effect_member_origins</span><span class="tdesc">Scope of a member, as a predicate over allele copies. No rows = the common scope, which matches every copy. An additive member takes at most one row; a genotype member takes an exact multiset whose copy counts sum to the realized copy count. Among matching variants of one family the most specific wins; overlapping but incomparable scopes are refused at write time.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">7</td>
+            <td class="key"><code>id_genome_effect</code> <code>member_slot</code> <code>origin_slot</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_effect_terms</span><span class="tdesc">View: one row per term, with effect_order (member count) and family_key derived rather than stored. Terms sharing a family_key are scope variants of one mathematical term and compete under specificity fallback; terms with different keys sum.</span></td>
+            <td class="kind view">view</td>
+            <td class="num">9</td>
+            <td class="key">—</td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          <tr>
+            <td><span class="tname">genome_effect_loci</span><span class="tdesc">View: one row per (term x locus), with locus_name joined from genome_meta. The place to answer which loci are causal for a trait; locus_name lives only here, so there is no id/name agreement invariant to keep in the base tables.</span></td>
+            <td class="kind view">view</td>
+            <td class="num">8</td>
+            <td class="key">—</td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          <tr>
+            <td><span class="tname">chr_inheritance</span><span class="tdesc">Per-chromosome copy counts, keyed by offspring sex. One row per (chr_name, offspring_sex, line_name). Seeded default is a diploid autosome (from_parent_1 = from_parent_2 = 1). Non-default rules (sex chromosomes, organelles) are set via define_chromosome().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>chr_name</code> <code>offspring_sex</code> <code>line_name</code> <span class="lk">logical</span></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          <tr>
+            <td><span class="tname">chr_recombination</span><span class="tdesc">Per-chromosome recombination, keyed by producing-parent sex. One row per (chr_name, parent_sex, line_name). Seeded from define_genome()'s genome-wide recombines_M/recombines_F defaults. Non-default rules (Y, W, achiasmy) are set via define_chromosome().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">4</td>
+            <td class="key"><code>chr_name</code> <code>parent_sex</code> <code>line_name</code> <span class="lk">logical</span></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Founders <span class="count">1 table</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">founder_haplotypes</span><span class="tdesc">Pool of founder haplotypes in long format (one row per haplotype x locus) sampled by add_founders() to assign phased alleles.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">4</td>
+            <td class="key"><code>line_name</code> <code>haplotype_id</code> <code>locus_name</code> <span class="lk">logical</span></td>
+            <td class="key"><code>define_founder_haplotypes()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Individuals <span class="count">4 tables</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">ind_meta</span><span class="tdesc">Individual-level metadata. One row per individual. Core columns are managed by the system; user-defined columns can be added via mutate_table() or the ... arguments of add_founders() and add_offspring().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">6</td>
+            <td class="key"><code>id_ind</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_haplotype</span><span class="tdesc">Phased haplotypes in long format. One row per individual x haplotype x locus. parent_origin (1/2) and strand (1 for diploids) identify the copy; line_origin traces the allele's founding line. No DB primary key (dropped for insert speed); (id_ind, parent_origin, strand, locus_id) is unique by construction, guaranteed R-side.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">7</td>
+            <td class="key"><code>id_ind</code> <code>parent_origin</code> <code>strand</code> <code>locus_id</code> <span class="lk">logical</span></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">reset only</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_genotype</span><span class="tdesc">Genotype dosage cache in long format. One row per individual x locus. NOT auto-populated; filled on demand by add_dosage() from ind_haplotype. May be empty or partial. PRIMARY KEY (id_ind, locus_id).</span></td>
+            <td class="kind table">table</td>
+            <td class="num">4</td>
+            <td class="key"><code>id_ind</code> <code>locus_id</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">reset only</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_crossover</span><span class="tdesc">Crossover events in long format, one row per crossover drawn during meiosis. Created empty by define_genome(); populated only when add_offspring(store_crossovers = TRUE) (row writes land with the Stage-2 kernel). Absence of a row for a (id_ind, parent_origin, chr) means that gamete's chromosome did not recombine.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">6</td>
+            <td class="key"><code>id_crossover</code></td>
+            <td class="key"><code>define_genome()</code></td>
+            <td class="arch">reset only</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Genetic model <span class="count">2 tables</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">trait_meta</span><span class="tdesc">Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_trait</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">trait_var_comp</span><span class="tdesc">Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'gen_add', 'dominance' (future), 'epistasis' (future).</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_trait_var_comp</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Observation model <span class="count">5 tables</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">phenotype_meta</span><span class="tdesc">Observed phenotype definitions. One row per phenotype. Manages the observation layer: type, mean, sex expression, and distributional parameters. Populated by define_phenotype().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">16</td>
+            <td class="key"><code>id_phenotype_meta</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">phenotype_components</span><span class="tdesc">Component definitions for composite phenotypes. One row per phenotype x component. Enables maternal effects, social genetic effects, and multi-contributor phenotypes. Populated by define_phenotype(..., components = ...).</span></td>
+            <td class="kind table">table</td>
+            <td class="num">17</td>
+            <td class="key"><code>id_phenotype_comp</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">phenotype_var_comp</span><span class="tdesc">Phenotype-level variance component storage. One row per (effect_name, phenotype pair, optional condition). Stores residual covariances (effect_name = 'residual') and named random effects (hys, litter, pen, etc.). Populated by define_phenotype(), define_residual_cov(), and define_effect_random().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">10</td>
+            <td class="key"><code>id_phenotype_var_comp</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">phenotype_effects</span><span class="tdesc">Fixed and random effect configurations for phenotype models. One row per phenotype x effect. Populated by define_effect_fixed_class(), define_effect_fixed_cov(), define_effect_random().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">12</td>
+            <td class="key"><code>phenotype_name</code> <code>effect_name</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          <tr>
+            <td><span class="tname">phenotype_random_effects</span><span class="tdesc">Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>phenotype_name</code> <code>effect_name</code> <code>level</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Selection <span class="count">1 table</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">index_meta</span><span class="tdesc">Selection index definitions. One row per index x trait. A special row with index_name = NULL holds the global economic weight per trait written by define_trait(). Named indices hold selection weights from define_index().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_index_name</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">once</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>Results <span class="count">7 tables</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">ind_tbv</span><span class="tdesc">True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">4</td>
+            <td class="key"><code>id_tbv</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_tgv</span><span class="tdesc">True genetic values (simulation ground truth): the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv(). The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_tgv</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_tgv_total</span><span class="tdesc">View: the total genetic value per individual x trait, summing every component of ind_tgv. Derived rather than stored so it can never disagree with its parts.</span></td>
+            <td class="kind view">view</td>
+            <td class="num">3</td>
+            <td class="key">—</td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_phenotype</span><span class="tdesc">Phenotype records in long format. One row per individual x phenotype x record number. Populated by add_phenotype(). User-defined columns can be added via the ... argument of add_phenotype().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_phenotype</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_ebv</span><span class="tdesc">Estimated breeding values from external BLUP or GBLUP analyses. One row per individual x trait x model x evaluation number. Populated by add_ebv().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">8</td>
+            <td class="key"><code>id_ebv</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_index</span><span class="tdesc">Computed selection index values. One row per individual x index x run. Multiple runs are distinguished by index_number. Populated by add_index().</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_index</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          <tr>
+            <td><span class="tname">ind_true_index</span><span class="tdesc">True selection index values computed from TBVs. One row per individual x index x weight type. Populated by add_tbv() when index_names is supplied.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">5</td>
+            <td class="key"><code>id_true_index</code></td>
+            <td class="key"><code>define_trait()</code></td>
+            <td class="arch">per replicate</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tgroup">
+      <h3>System <span class="count">1 table</span></h3>
+      <div class="tablewrap">
+        <table class="tables">
+          <thead><tr><th>Table</th><th>Kind</th><th class="num">Cols</th><th>Key</th><th>Created by</th><th>Archive</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><span class="tname">_schema_meta</span><span class="tdesc">System table storing table and column descriptions for all tidybreed database objects.</span></td>
+            <td class="kind table">table</td>
+            <td class="num">6</td>
+            <td class="key"><code>id_schema_meta</code></td>
+            <td class="key"><code>open_pop()</code></td>
+            <td class="arch">kept</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Largest source files</h2>
+    <div class="bars">
+      <div class="bar-row">
+        <div class="name">schema.R<span class="purpose">Table registry, descriptions, <code>schema()</code> / <code>describe_table()</code></span></div>
+        <div class="track"><div class="fill" style="width:100.0%"></div></div>
+        <div class="loc">1,520</div>
+      </div>
+      <div class="bar-row">
+        <div class="name">add_phenotype.R<span class="purpose">Phenotype simulation (composite, SGE, fixed/random effects, residuals)</span></div>
+        <div class="track"><div class="fill" style="width:75.4%"></div></div>
+        <div class="loc">1,146</div>
+      </div>
+      <div class="bar-row">
+        <div class="name">define_genome_effects.R<span class="purpose">General genome-effect writer: terms, members, origins, replace modes</span></div>
+        <div class="track"><div class="fill" style="width:60.3%"></div></div>
+        <div class="loc">917</div>
+      </div>
+      <div class="bar-row">
+        <div class="name">define_additive_effects.R<span class="purpose">QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope</span></div>
+        <div class="track"><div class="fill" style="width:60.0%"></div></div>
+        <div class="loc">912</div>
+      </div>
+      <div class="bar-row">
+        <div class="name">genome_effects_eval.R<span class="purpose">The one evaluator behind <code>add_tbv()</code> / <code>add_tgv()</code></span></div>
+        <div class="track"><div class="fill" style="width:57.5%"></div></div>
+        <div class="loc">874</div>
+      </div>
+      <div class="bar-row">
+        <div class="name">add_offspring.R<span class="purpose">Mating, gamete formation, offspring haplotype writes</span></div>
+        <div class="track"><div class="fill" style="width:54.1%"></div></div>
+        <div class="loc">823</div>
+      </div>
+    </div>
+    <div class="bars-cap">bars scaled to schema.R = 1,520 lines</div>
+  </section>
+
+  <section>
+    <h2>Largest test files</h2>
+    <div class="bars">
+      <div class="bar-row test">
+        <div class="name">test-genome-effects-writer.R</div>
+        <div class="track"><div class="fill" style="width:100.0%"></div></div>
+        <div class="loc">991</div>
+      </div>
+      <div class="bar-row test">
+        <div class="name">test-genome-effects-eval.R</div>
+        <div class="track"><div class="fill" style="width:86.9%"></div></div>
+        <div class="loc">861</div>
+      </div>
+      <div class="bar-row test">
+        <div class="name">test-define_founder_haplotypes.R</div>
+        <div class="track"><div class="fill" style="width:81.0%"></div></div>
+        <div class="loc">803</div>
+      </div>
+      <div class="bar-row test">
+        <div class="name">test-mutate_group.R</div>
+        <div class="track"><div class="fill" style="width:77.0%"></div></div>
+        <div class="loc">763</div>
+      </div>
+      <div class="bar-row test">
+        <div class="name">test-genome-effects-schema.R</div>
+        <div class="track"><div class="fill" style="width:68.0%"></div></div>
+        <div class="loc">674</div>
+      </div>
+      <div class="bar-row test">
+        <div class="name">test-define_index.R</div>
+        <div class="track"><div class="fill" style="width:65.0%"></div></div>
+        <div class="loc">644</div>
+      </div>
+    </div>
+    <div class="bars-cap">bars scaled to test-genome-effects-writer.R = 991 lines</div>
+  </section>
+
+  <section>
+    <h2>Dependencies</h2>
+    <div class="deps">
+      <div class="dep">
+        <div class="k">Imports</div>
+        <div class="v"><code class="core">duckdb</code><code class="core">DBI</code><code class="core">dbplyr</code><code>cli</code><code>dplyr</code><code>tibble</code><code>rlang</code><code>dqrng</code><code>MASS</code><code>Rcpp</code><code>stats</code></div>
+      </div>
+      <div class="dep">
+        <div class="k">LinkingTo</div>
+        <div class="v"><code>Rcpp</code><code>dqrng</code><code>BH</code><code>sitmo</code></div>
+      </div>
+      <div class="dep">
+        <div class="k">Suggests</div>
+        <div class="v"><code>testthat (≥ 3.2.0)</code><code>withr</code><code>knitr</code><code>rmarkdown</code><code>covr</code></div>
+      </div>
+      <div class="dep">
+        <div class="k">System</div>
+        <div class="v"><code>C++17</code></div>
+      </div>
+      <div class="dep">
+        <div class="k">License</div>
+        <div class="v"><code>MIT</code></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>tidybreed · package summary</span>
+    <span>counts from the 0.68.4 working tree at a190bf4, 2026-09-16</span>
+  </footer>
+</main>

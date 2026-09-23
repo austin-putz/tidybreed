@@ -14,7 +14,7 @@
 <a href="https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&style=for-the-badge&label=R-CMD-check&logo=githubactions&logoColor=white" alt="R-CMD-check" /></a>
 <a href="https://austin-putz.github.io/tidybreed/"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&style=for-the-badge&label=pkgdown&logo=githubactions&logoColor=white" alt="pkgdown" /></a>
 <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental"><img src="https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge" alt="Lifecycle: experimental" /></a>
-<a href="https://github.com/austin-putz/tidybreed/releases"><img src="https://img.shields.io/badge/version-0.64.3-4ecdc4.svg?style=for-the-badge" alt="Version" /></a>
+<a href="https://github.com/austin-putz/tidybreed/releases"><img src="https://img.shields.io/badge/version-0.71.0-4ecdc4.svg?style=for-the-badge" alt="Version" /></a>
 <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" /></a>
 </p>
 
@@ -1053,7 +1053,11 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | `founder_haplotypes` | 1 per (haplotype × locus) | Haplotype pool sampled by `add_founders()` |
 | `ind_haplotype` | 2 per (individual × locus) | Phased haplotypes, long format (paternal / maternal) |
 | `ind_genotype` | 1 per (individual × locus) | 0/1/2 dosages, long format; on-demand cache filled by `add_dosage()` |
-| `genome_effects` | 1 per (locus × trait × effect type) | Additive QTL effect sizes |
+| `genome_effects` | 1 per term | One coefficient over one or more loci (`genome_value`, `effect_owner`) |
+| `genome_effect_members` | 1 per (term × locus) | The loci a term spans and each locus's basis function (`additive` / `dominance` / `indicator`) |
+| `genome_effect_member_origins` | 1 per (term × locus × origin) | Optional line / parent-of-origin scope on a member; no rows = applies to every allele copy |
+| `genome_effect_terms`, `genome_effect_loci` | views | Term-grain and locus-grain reads over the three tables above (`family_key`, `locus_name`, `genome_value`) |
+| `ind_tgv` | 1 per (individual × trait × component) | True genetic values by declared model structure; total via the `ind_tgv_total` view |
 | `ind_meta` | 1 per individual | Pedigree, sex, line; user date/status columns added via `mutate_table()` |
 | `ind_phenotype` | 1 per (individual × phenotype record) | Long-format phenotype records |
 | `ind_tbv` | 1 per (individual × trait) | True breeding values (simulation ground truth) |

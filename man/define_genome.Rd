@@ -55,8 +55,12 @@ The input \code{tidybreed_pop} with genome tables added.
 }
 \description{
 Adds genome tables (\code{genome_meta}, \code{genome_map}, \code{ind_haplotype},
-\code{ind_genotype}, \code{chr_inheritance}, \code{chr_recombination}) to a population opened
-with \code{\link[=open_pop]{open_pop()}}.
+\code{ind_genotype}, \code{chr_inheritance}, \code{chr_recombination}, \code{genome_effects},
+\code{genome_effect_members}, \code{genome_effect_member_origins}) and the
+\code{genome_effect_terms} / \code{genome_effect_loci} views to a population opened
+with \code{\link[=open_pop]{open_pop()}}. The three effect tables are created here rather than in
+\code{\link[=open_pop]{open_pop()}} so that \code{genome_meta} already exists and the \code{locus_id} foreign
+key can be declared.
 Pipe-friendly — accepts a \code{tidybreed_pop} and returns a \code{tidybreed_pop}.
 Physical position (\code{pos_bp}, base pairs) lives in \code{genome_meta}; the genetic
 map (\code{pos_cM}, centiMorgans) lives in the long \code{genome_map} table. Haplotypes

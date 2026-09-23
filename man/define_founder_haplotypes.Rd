@@ -124,11 +124,12 @@ per-locus allele frequency of the most recently generated pool (the empirical
 column mean for LD methods and for \code{exact_freq = TRUE}; the sampled target
 otherwise). This column is \strong{informational only} — no other tidybreed
 function reads it, and because each call rewrites it for every locus, in a
-multi-line setup it describes only the pool written last. For multi-line
-setups needing accurate per-line Falconer centering, use
-\code{base = "current_pop"} in \code{\link[=define_additive_effects]{define_additive_effects()}} instead: with
-\code{base = "founder_haplotypes"} the base frequency is recomputed by pooling
-\strong{all} lines' haplotypes together.
+multi-line setup it describes only the pool written last.
+\code{\link[=define_additive_effects]{define_additive_effects()}} never reads it: a line-specific effect
+(\code{line_name = "A"}) centers on line A's own pool by default, and any other
+base — a line's realized copies, a generation, a filtered founder pool — is
+a filtered table passed as \code{base_tbl}. Use \code{\link[=extract_allele_freq]{extract_allele_freq()}} to read
+per-pool frequencies directly.
 }
 \section{Methods}{
 

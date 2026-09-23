@@ -52,7 +52,8 @@ test_that("print.tidybreed_pop() shows Model / Individuals / Records for a full 
   pop <- pop |> define_trait("ADG", target_add_var = 0.25)
   pop <- pop |>
     get_table("genome_meta") |> dplyr::filter(chr %in% 1:2) |>
-    define_additive_effects("ADG")
+    define_additive_effects("ADG",
+      base_tbl = get_table(pop, "founder_haplotypes"))   # two pools; pooled on purpose
   pop <- pop |> define_phenotype("ADG", residual_var = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
@@ -60,11 +61,11 @@ test_that("print.tidybreed_pop() shows Model / Individuals / Records for a full 
 
   # Genome + founder pool (two lines of 50 → 100 haplotypes)
   expect_true(grepl("founder pool: 100 haplotypes", out))
-  # Model section: trait, phenotype, QTL
+  # Model section: trait, phenotype, causal loci
   expect_true(grepl("Model", out))
   expect_true(grepl("1 trait", out))
   expect_true(grepl("1 phenotype", out))
-  expect_true(grepl("QTL", out))
+  expect_true(grepl("causal loc", out))
   # Individuals with sex and line breakdowns (two lines → by line shown)
   expect_true(grepl("Individuals", out))
   expect_true(grepl("by sex", out))

@@ -2,24 +2,20 @@
 % Please edit documentation in R/formula_helpers.R
 \name{.build_tbv_env}
 \alias{.build_tbv_env}
-\title{Pre-fetch all TBV vectors needed by a formula_tbv expression.}
+\title{Pre-fetch every TBV vector a \code{formula_tbv} expression needs}
 \usage{
 .build_tbv_env(pop, trait_refs, subset_df, phenotype_name)
 }
 \arguments{
-\item{pop}{A tidybreed_pop object.}
+\item{trait_refs}{List from \code{.walk_formula_tbv_ast()$trait_refs}.}
 
-\item{trait_refs}{List from .walk_formula_tbv_ast()$trait_refs.}
-
-\item{subset_df}{Data frame: sex-filtered ind_meta rows for focal individuals.}
-
-\item{phenotype_name}{Character. Used in error messages.}
+\item{subset_df}{The planned \code{ind_meta} rows.}
 }
 \value{
-Named list: placeholder → numeric vector (length = nrow(subset_df)).
+Named list: placeholder -> numeric vector (\code{NA} = missing piece).
 }
 \description{
-Calls .fetch_contributor_tbvs() or .fetch_group_tbvs() for each trait_ref,
-returning a named list ready to be used as an eval() environment.
+One contributor lookup per trait reference (see \code{?contributor_tbv}),
+returned as a named list ready to be the \code{eval()} environment.
 }
 \keyword{internal}

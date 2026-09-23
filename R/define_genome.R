@@ -2,14 +2,25 @@
 # the preflight check, the pop$tables registration, and the summary message —
 # they must never disagree about what a "defined genome" consists of.
 GENOME_TABLES <- c("genome_meta", "genome_map", "ind_haplotype", "ind_genotype",
-                   "ind_crossover", "chr_inheritance", "chr_recombination")
+                   "ind_crossover", "chr_inheritance", "chr_recombination",
+                   "genome_effects", "genome_effect_members",
+                   "genome_effect_member_origins")
+
+# Views over the effect tables, created in the same transaction. Kept separate
+# from GENOME_TABLES because they are derived objects: they are registered in
+# pop$tables and checked by the preflight, but they are not "tables written".
+GENOME_VIEWS <- c("genome_effect_terms", "genome_effect_loci")
 
 #' Define the genome structure of a breeding population
 #'
 #' @description
 #' Adds genome tables (`genome_meta`, `genome_map`, `ind_haplotype`,
-#' `ind_genotype`, `chr_inheritance`, `chr_recombination`) to a population opened
-#' with [open_pop()].
+#' `ind_genotype`, `chr_inheritance`, `chr_recombination`, `genome_effects`,
+#' `genome_effect_members`, `genome_effect_member_origins`) and the
+#' `genome_effect_terms` / `genome_effect_loci` views to a population opened
+#' with [open_pop()]. The three effect tables are created here rather than in
+#' [open_pop()] so that `genome_meta` already exists and the `locus_id` foreign
+#' key can be declared.
 #' Pipe-friendly — accepts a `tidybreed_pop` and returns a `tidybreed_pop`.
 #' Physical position (`pos_bp`, base pairs) lives in `genome_meta`; the genetic
 #' map (`pos_cM`, centiMorgans) lives in the long `genome_map` table. Haplotypes
@@ -138,12 +149,17 @@ define_genome <- function(pop,
 
   db_conn <- pop$db_conn
 
-  # Preflight: refuse to re-define a genome. Check for ANY of the seven genome
-  # tables, not just a non-empty genome_meta — an empty-but-existing genome_meta
-  # used to pass this guard and then die on the plain CREATE of ind_haplotype,
-  # leaving the population unusable. open_pop() creates none of these seven, so
-  # any of them existing means define_genome() has already run here.
-  existing_genome_tables <- intersect(GENOME_TABLES, DBI::dbListTables(db_conn))
+  # Preflight: refuse to re-define a genome. Check for ANY of the ten genome
+  # tables (and the two views), not just a non-empty genome_meta — an
+  # empty-but-existing genome_meta used to pass this guard and then die on the
+  # plain CREATE of ind_haplotype, leaving the population unusable.
+  # open_pop() creates none of these, so any of them existing means
+  # define_genome() has already run here. The three effect tables joined this
+  # list in the same commit that removed genome_effects from open_pop(): while
+  # open_pop() still created it, listing it here fired on every fresh
+  # population.
+  existing_genome_tables <- intersect(c(GENOME_TABLES, GENOME_VIEWS),
+                                      DBI::dbListTables(db_conn))
   if (length(existing_genome_tables) > 0L) {
     stop("Genome already defined for this population (found: ",
          paste(existing_genome_tables, collapse = ", "), "). ",
@@ -268,10 +284,18 @@ define_genome <- function(pop,
   # would shift the seeded draw sequence). Plain CREATE, not CREATE OR REPLACE:
   # the preflight guarantees the table does not exist, so OR REPLACE could only
   # ever silently clobber a genome.
+  # locus_id is a PRIMARY KEY: genome_effect_members declares a FOREIGN KEY to
+  # it, and DuckDB refuses an FK to a column with no primary key or unique
+  # constraint. Safe here where it was not on ind_haplotype — genome_meta is
+  # n_loci rows written once, not n_ind x n_loci, so the ART index is not a
+  # bulk-insert cost. locus_id is seq_len(n_loci), so uniqueness is an existing
+  # invariant, not a new constraint. Every other writer reaches this table by
+  # ALTER TABLE ADD COLUMN + UPDATE (define_chip(), define_founder_haplotypes(),
+  # mutate_table()) and never rewrites it, so the constraint survives.
   DBI::dbExecute(db_conn, paste0(
     "CREATE TABLE genome_meta (",
-    "locus_id INTEGER, locus_name VARCHAR, chr INTEGER, chr_name VARCHAR, ",
-    "pos_bp BIGINT)"
+    "locus_id INTEGER PRIMARY KEY, locus_name VARCHAR, chr INTEGER, ",
+    "chr_name VARCHAR, pos_bp BIGINT)"
   ))
   genome_meta_df <- tibble::tibble(
     locus_id   = seq_len(n_loci),
@@ -419,12 +443,113 @@ define_genome <- function(pop,
   validate_chr_inheritance(db_conn)
   validate_chr_recombination(db_conn)
 
+  # ---- Genome effects: term / member / origin ----------------------------
+  # A stored effect is one coefficient (genome_effects) over one or more loci
+  # (genome_effect_members), each optionally scoped to allele copies of a given
+  # line and/or parent of origin (genome_effect_member_origins). Created here
+  # rather than in open_pop() so genome_meta already exists and the locus_id
+  # foreign key is declarable. Every row-local invariant is a declared SQL
+  # constraint; cross-row rules (family identity, scope containment, exact
+  # multiset satisfiability) are enforced by validate_genome_effects().
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE genome_effects (",
+    "id_genome_effect INTEGER PRIMARY KEY, ",        # next_int_id()
+    "trait_name       VARCHAR NOT NULL, ",           # R-enforced FK to trait_meta
+    "effect_owner     VARCHAR NOT NULL, ",           # who owns these rows for replacement; NOT selectable
+    "effect_name      VARCHAR, ",                    # optional per-term label; no mathematical meaning
+    "genome_value     DOUBLE  NOT NULL)"
+  ))
+
+  # No FOREIGN KEY inside the set (members -> effects, origins -> members),
+  # deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
+  # transaction when its children were deleted earlier in that same transaction
+  # -- the FK index still holds the uncommitted child entries -- and it does so
+  # for single-column and composite keys alike, in either delete order, whether
+  # the child delete was filtered or a whole-table DELETE. It succeeds only in
+  # autocommit. That makes every replace mode of define_genome_effects()
+  # unwritable as one transaction, and a half-replaced effect model is not a
+  # weaker version of the requested model, it is a different one.
+  #
+  # The integrity those two keys would buy is enforced in R instead, by
+  # validate_genome_effects(), which runs inside every write transaction before
+  # COMMIT and reports orphans in both directions. These tables are package-
+  # owned: remove_rows() refuses them, every column is reserved, and
+  # define_genome_effects() is the only writer -- so the sole route to an orphan
+  # is a raw DBI call, which bypasses every other guard in the package too.
+  #
+  # The locus_id key below stays: genome_meta rows are never deleted, so it is
+  # never in the failing position, and it is the one relationship R cannot
+  # cheaply re-check on every write.
+  #
+  # copy_count_value is not redundant with dosage_value: at a variable-copy
+  # locus dosage 0 conflates "no copy", "one allele-0 copy" and "two allele-0
+  # copies", so an indicator state is the pair, not the dosage.
+  # center_value needs IS NOT NULL in its own branch — a bare
+  # BETWEEN evaluates to UNKNOWN on NULL, which a CHECK accepts.
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE genome_effect_members (",
+    "id_genome_effect INTEGER  NOT NULL, ",
+    "member_slot      INTEGER  NOT NULL, ",          # canonical: ascending locus_id
+    "locus_id         INTEGER  NOT NULL, ",
+    "contrast_name    VARCHAR  NOT NULL, ",
+    "copy_count_value UTINYINT, ",                   # indicator state, with dosage_value
+    "dosage_value     UTINYINT, ",
+    "center_value     DOUBLE, ",                     # per-copy centring constant
+    "PRIMARY KEY (id_genome_effect, member_slot), ",
+    "CHECK (contrast_name IN ('additive','dominance','indicator')), ",
+    "CHECK ( (contrast_name =  'indicator' ",
+    "           AND copy_count_value IS NOT NULL ",
+    "           AND dosage_value     IS NOT NULL ",
+    "           AND dosage_value <= copy_count_value ",
+    "           AND center_value     IS NULL) ",
+    "     OR (contrast_name <> 'indicator' ",
+    "           AND copy_count_value IS NULL ",
+    "           AND dosage_value     IS NULL ",
+    "           AND center_value     IS NOT NULL ",
+    "           AND center_value BETWEEN 0 AND 1) ), ",
+    "FOREIGN KEY (locus_id) REFERENCES genome_meta(locus_id))"
+  ))
+
+  # 'any' exists so that (any line, one parent) is storable at all: ANY on the
+  # line dimension is otherwise only reachable as zero origin rows, and a row is
+  # where parent_origin lives. Two rules stop it becoming a second spelling of
+  # the common scope — it must carry a parent (row-local, so a CHECK), and it is
+  # permitted only on additive members (cross-table, so R).
+  DBI::dbExecute(db_conn, paste0(
+    "CREATE TABLE genome_effect_member_origins (",
+    "id_genome_effect INTEGER  NOT NULL, ",
+    "member_slot      INTEGER  NOT NULL, ",
+    "origin_slot      INTEGER  NOT NULL, ",          # canonical: sorted origin tuple
+    "line_match_type  VARCHAR  NOT NULL, ",
+    "line_name        VARCHAR, ",
+    "parent_origin    UTINYINT, ",                   # NULL = either parent
+    "copy_count       INTEGER  NOT NULL, ",
+    "PRIMARY KEY (id_genome_effect, member_slot, origin_slot), ",
+    "CHECK (line_match_type IN ('exact','unknown','any')), ",
+    "CHECK (copy_count > 0), ",
+    "CHECK (parent_origin IS NULL OR parent_origin IN (1,2)), ",
+    "CHECK ( (line_match_type = 'exact'   AND line_name IS NOT NULL) ",
+    "     OR (line_match_type = 'unknown' AND line_name IS NULL) ",
+    "     OR (line_match_type = 'any'     AND line_name IS NULL ",
+    "                                     AND parent_origin IS NOT NULL) ) )"
+  ))
+
+  # Views. The base tables must not force a six-way join on anyone, and
+  # family_key is the only way a user can see which terms compete (same key,
+  # specificity fallback) and which sum (different keys). effect_order and
+  # family_key are derived here and never stored.
+  DBI::dbExecute(db_conn, .genome_effect_terms_view_sql())
+  DBI::dbExecute(db_conn, .genome_effect_loci_view_sql())
+
   DBI::dbExecute(db_conn, "COMMIT")
   committed <- TRUE
 
   # Update pop$tables (union, not append — never let the registry drift or
   # accumulate duplicates)
-  pop$tables <- unique(c(pop$tables, GENOME_TABLES))
+  # Views are registered too: restore_pop() takes pop$tables from
+  # DBI::dbListTables(), which includes views, so a freshly built population
+  # that omitted them would list a different set from a restored one.
+  pop$tables <- unique(c(pop$tables, GENOME_TABLES, GENOME_VIEWS))
 
   chr_len_str <- if (length(unique(chr_len_Mb)) == 1) {
     paste0("all equal to ", chr_len_Mb[1], " Mb")
@@ -434,7 +559,8 @@ define_genome <- function(pop,
   message(
     "Defined genome: ", n_loci, " loci across ", n_chr, " chromosomes",
     " | chr lengths (Mb): ", chr_len_str,
-    "\n  Tables written: ", paste(GENOME_TABLES, collapse = ", ")
+    "\n  Tables written: ", paste(GENOME_TABLES, collapse = ", "),
+    "\n  Views created: ", paste(GENOME_VIEWS, collapse = ", ")
   )
 
   validate_tidybreed_pop(pop)

@@ -8,11 +8,11 @@ archive_replicate(
   pop,
   replicate = getOption("tidybreed.replicate"),
   archive_path = NULL,
-  store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv", "ind_ebv", "ind_index",
-    "ind_true_index", "phenotype_random_effects"),
-  store_once = c("genome_meta", "genome_effects", "trait_meta", "phenotype_effects",
-    "trait_var_comp", "phenotype_meta", "phenotype_components", "phenotype_var_comp",
-    "index_meta"),
+  store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv", "ind_ebv",
+    "ind_index", "ind_true_index", "phenotype_random_effects"),
+  store_once = c("genome_meta", "genome_effects", "genome_effect_members",
+    "genome_effect_member_origins", "trait_meta", "phenotype_effects", "trait_var_comp",
+    "phenotype_meta", "phenotype_components", "phenotype_var_comp", "index_meta"),
   reset_only = c("ind_haplotype", "ind_genotype", "ind_crossover")
 )
 }

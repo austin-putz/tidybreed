@@ -211,12 +211,18 @@ schema(pop)
 
 # start population by building a genome
 #
-# define_genome() is a ONE-SHOT call: it writes seven tables (genome_meta,
+# define_genome() is a ONE-SHOT call: it writes ten tables (genome_meta,
 # genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance,
-# chr_recombination) inside a SINGLE transaction. If anything fails, everything
+# chr_recombination, plus the empty genome_effects / genome_effect_members /
+# genome_effect_member_origins effect tables) and two views (genome_effect_terms,
+# genome_effect_loci) inside a SINGLE transaction. If anything fails, everything
 # rolls back and this same `pop` can be reused for a corrected call. Calling it
 # a second time on a population that already has any of those tables is an
 # error -- there is no partial re-definition.
+#
+# The effect tables live here rather than in open_pop() because
+# genome_effect_members carries a foreign key to genome_meta.locus_id, which
+# has to exist first.
 #
 # Arguments are validated BEFORE anything is written: n_loci / n_chr must be
 # whole numbers with n_loci >= n_chr, and chr_len_Mb / cM_per_Mb must be finite
@@ -303,9 +309,9 @@ pop |>
 # Every call also (re)writes genome_meta.founder_allele_freq with the per-locus
 # frequency of the pool written MOST RECENTLY. It is informational only -- no
 # other tidybreed function reads it -- so with six lines below it describes only
-# line F. For per-line Falconer centering use
-#   define_additive_effects(..., base = "current_pop", base_tbl = <line-filtered>)
-# rather than base = "founder_haplotypes", which pools ALL lines together.
+# line F. define_additive_effects() never reads it: with line_name set it
+# centers on that line's own founder pool by default, and any other base is a
+# filtered table passed as base_tbl (see extract_allele_freq()).
 
 # line A
 pop <- pop %>%
@@ -656,6 +662,11 @@ pop %>%
 # print genome_meta table
 pop %>% get_table("genome_meta")
 
+pop |>
+  get_table("genome_meta") |>
+  count(chr) |> 
+  arrange(chr)
+
 # define_chip() added field name "is_9k" to genome_meta
 
 #------------------------------------------------------------------------------#
@@ -903,11 +914,12 @@ pop %>%
     trait_name      = "AP", 
     distribution    = "normal", 
     scale_to_target = TRUE, 
-    base            = "current_pop"
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
-# print 'genome_effects'
-pop %>% get_table("genome_effects") |>
+# print the causal loci (one row per term x locus; a locus-level view over
+# genome_effects / genome_effect_members)
+pop %>% get_table("genome_effect_loci") |>
   count(locus_name)
 
 # calculate all TBV for AP
@@ -936,29 +948,17 @@ pop %>%
   get_table("ind_meta") %>%
   extract_genotypes(chip_name = "9k")
 
-# extract QTL for this trait (2 animals)
+# extract the causal loci for this trait (2 animals)
 pop %>%
   get_table("ind_meta") %>%
     filter(
       id_ind %in% c("A_1", "A_2")
     ) %>%
   extract_genotypes(
-    effects_tbl = pop %>% get_table("genome_effects") %>% filter(trait_name=="AP")
+    effects_tbl = pop %>% get_table("genome_effect_loci") %>% filter(trait_name=="AP")
   ) %>%
   collect()
 
-
-# ----- ADD OVERALL MEAN ----- #
-
-# UPDATE: Version 0.31.0 we add 'mean' argument inside `define_phenotype()` 
-# to replace this function. 
-
-# # add overall mean for AP
-# pop %>%
-#   add_effect_int(
-#     trait_name = "AP",              # trait (need to change to "trait_name")
-#     mean = config$general$mean_puberty_age
-#   )
 
 # ----- SAMPLE AP PHENOTYPE ON FEMALES ----- #
 
@@ -1154,7 +1154,7 @@ pop %>%
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADG
@@ -1167,13 +1167,6 @@ pop <- pop %>%
 
 # print TBV table
 pop %>% get_table("ind_tbv")
-
-# # add overall mean for ADG
-# pop %>%
-#   define_effect_int(
-#     trait_name = "ADG",              # trait (need to change to "trait_name")
-#     mean = 1000
-#   )
 
 # add sex effect for ADG
 pop %>%
@@ -1189,7 +1182,7 @@ pop %>%
 # trait effects
 pop |> get_table("phenotype_effects")            # fixed effects
 pop |> get_table("phenotype_random_effects")     # random effects sampled
-pop |> get_table("phenotype_components")     # for special cases but I forget now why we left it
+pop |> get_table("phenotype_components")     # composite phenotypes only (e.g. WW = WWD + dam(WWM), defined below)
 
 # test `add_phenotype()` function
 pop %>%
@@ -1243,14 +1236,14 @@ pop %>%
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for BF
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     #filter(rep == repl) %>%
-  add_tbv("BF", rep = repl)
+  add_tbv("BF")
 
 # look at TBV table
 pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
@@ -1316,7 +1309,7 @@ pop %>%
     trait_name      = "ADFI",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADFI
@@ -1403,27 +1396,12 @@ pop <- pop %>%
     trait_name       = "WWD",
     description      = "Weaning Weight - Direct Genetic Effect",
     units            = "kg",
-    expressed_parent = "both",
     target_add_mean  = 0,
     overwrite        = TRUE
   )
 
-pop %>%
-  get_table("genome_meta") %>%
-    filter(is_9k != TRUE) %>%
-  define_additive_effects(
-    trait_name       = "WWD",
-    distribution     = "normal",
-    scale_to_target  = TRUE,
-    base             = "current_pop"
-  )
-
-pop <- pop %>%
-  get_table("ind_meta") %>%
-    #filter(rep == repl) %>%
-  add_tbv("WWD")
-
-pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWD")
+# QTL effects + TBVs for WWD and WWM are written together, below, from one
+# multi-trait define_additive_effects() call.
 
 #------------------------------------------------------------#
 # Trait: WWM - Weaning Weight Maternal
@@ -1436,27 +1414,9 @@ pop <- pop %>%
     trait_name       = "WWM",
     description      = "Weaning Weight - Maternal Genetic Effect",
     units            = "kg",
-    expressed_parent = "both",
     target_add_mean  = 0,
     overwrite        = TRUE
   )
-
-pop %>%
-  get_table("genome_meta") %>%
-    filter(is_9k != TRUE) %>%
-  define_additive_effects(
-    trait_name       = "WWM",
-    distribution     = "normal",
-    scale_to_target  = TRUE,
-    base             = "current_pop"
-  )
-
-pop <- pop %>%
-  get_table("ind_meta") %>%
-    #filter(rep == repl) %>%
-  add_tbv("WWM")
-
-pop %>% get_table("ind_tbv") %>% filter(trait_name == "WWM")
 
 pop %>% get_table("trait_meta") %>% collect() %>% print(n=Inf, width=Inf)
 
@@ -1464,17 +1424,31 @@ pop %>% get_table("trait_meta") %>% collect() %>% print(n=Inf, width=Inf)
 # Add additive effects for both WWD and WWM
 #------------------------------------------------------------#
 
-# add which loci are QTL and their effects
+# One multi-trait call draws the two traits' QTL effects jointly from
+# MVN(0, G), with G read from trait_var_comp (the WWD/WWM block of
+# vars.mat.add). method = "shared" (the default) puts both traits on the same
+# QTL set. Calling define_additive_effects() again for the same trait and scope
+# REPLACES that trait's effects, so this must be the only call for WWD/WWM --
+# otherwise any TBVs written before it go stale.
 pop %>%
   get_table("genome_meta") %>%
     filter(is_9k != TRUE) %>%
-  # set loci as QTL for this trait
   define_additive_effects(
     trait_name      = c("WWD", "WWM"), # trait names
     distribution    = "normal",        # distribution of QTL effects
     scale_to_target = TRUE,            # scale to meet additive variance target
-    base            = "current_pop"    # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
+
+# causal loci per trait (locus grain; one row per term x locus)
+pop %>% get_table("genome_effect_loci") %>% count(trait_name)
+
+# TBVs for both traits in one call
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  add_tbv(c("WWD", "WWM"))
+
+pop %>% get_table("ind_tbv") %>% filter(trait_name %in% c("WWD", "WWM"))
 
 #------------------------------------------------------------#
 # Phenotype: WW - Weaning Weight (composite: WWD + dam(WWM))
@@ -1532,7 +1506,7 @@ pop %>%
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
     scale_to_target = TRUE,         # scale to meet additive variance target
-    base            = "current_pop" # use all animals in pop to standardized (or if filtered)
+    base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
 # add all TBV for ADG
@@ -1571,7 +1545,7 @@ warning("Calculate Means in Founder Generation")
 pop %>%
   get_table("ind_tbv") %>%
   collect() %>%
-  group_by(rep, trait_name) %>%
+  group_by(trait_name) %>%
   summarise(
     MeanTBV = round(mean(tbv_value), 3),
     .groups = "drop_last"
@@ -1614,24 +1588,22 @@ pop %>% get_table("ind_true_index") %>% collect() %>% glimpse()
 # Run by Time
 #------------------------------------------------------------------------------#
 
-if (1 > 2){
+# Re-running the loop on a population that already went through it? Reset the
+# loop's output first with remove_rows() (filter -> delete; refuses to wipe a
+# whole table unless confirm_all = TRUE). Not run by default.
+if (FALSE) {
 
-  # delete rows in tables if needed!  
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'AP'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'ADG'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'BF'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'NW'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_phenotype WHERE phenotype_name = 'WW'")
-  # delete rows in tables if needed!
-  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'AP'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'ADG'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'BF'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'NW'")
-  dbExecute(pop$db_conn, "DELETE FROM ind_ebv WHERE trait_name = 'WW'")
-  # delete index rows
-  dbExecute(pop$db_conn, "DELETE FROM ind_index WHERE index_name = 'maternal'")
-  # delete new offspring
-  dbExecute(pop$db_conn, "DELETE FROM ind_meta WHERE birth_date > '2026-08-01'")
+  # drop every EBV, index value and phenotype record
+  pop %>% get_table("ind_ebv")       %>% remove_rows(confirm_all = TRUE)
+  pop %>% get_table("ind_index")     %>% remove_rows(confirm_all = TRUE)
+  pop %>% get_table("ind_phenotype") %>% remove_rows(confirm_all = TRUE)
+
+  # drop every animal born after the founders, from EVERY ind_* table
+  # (ind_meta, ind_haplotype, ind_tbv, ind_true_index, ...)
+  pop %>%
+    get_table("ind_meta") %>%
+    filter(!is.na(id_parent_1)) %>%
+    remove_rows(tables = "all")
 }
 
 #------------------------------------------------------------------------------#
@@ -1706,10 +1678,13 @@ warning("Phenotypes will be added to the evaluation by filtering by 'pheno_date'
 # CHECKS: 
 #   - do not mess up the order... 
 
-# ---------- ADG + BF ---------- #
+# ---------- OFF-TEST: ADG + BF + ADFI + FCR ---------- #
 
-message("Add ADG Phenotype")
+message("Add off-test phenotypes (ADG, BF, ADFI, FCR)")
 
+# ADG / BF / ADFI share the subset, so their residuals are drawn jointly from
+# the residual R matrix; FCR is a derived_formula phenotype (ADFI / ADG) and
+# add_phenotype() sorts it after the two records it reads.
 pop %>%
   get_table("ind_meta") %>%
   filter(
@@ -1717,7 +1692,7 @@ pop %>%
     off_test_date  == cur_date
   ) %>%
   add_phenotype(
-    phenotype_name = c("ADG", "BF"),
+    phenotype_name = c("ADG", "BF", "ADFI", "FCR"),
     #rep = repl, 
     pheno_date = cur_date
   )
@@ -1824,78 +1799,68 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
   
   message("Calculate EBVs by Trait")
   
-  # run EBV for AP
-  pop <- pop %>%
-    get_table("ind_meta") %>%
-      #filter(rep == repl) %>%
-    add_ebv("AP", software="blupf90", model="blup",
-      phenotype = pop %>% 
-        get_table("ind_phenotype") %>% 
-        filter(
-          pheno_date < cur_date |    # make sure to remove future observations
-          is.na(pheno_date)          # or if phenotype date is NULL/NA
-        ),
-      eval_date = cur_date           # add eval date
+  # Only records observed BEFORE today enter an evaluation: pheno_date is set
+  # when the record is made, and for AP / NW it lies in the future (birth date +
+  # age at puberty; mating date + gestation). The same filter is passed to
+  # add_ebv() below.
+  observed_phenotypes <- pop %>%
+    get_table("ind_phenotype") %>%
+    filter(
+      pheno_date < cur_date |    # make sure to remove future observations
+      is.na(pheno_date)          # or if phenotype date is NULL/NA
     )
   
+  # simple (single-trait, animal-model) phenotypes with at least one observed
+  # record today; the rest are skipped until records exist
+  traits_to_evaluate <- observed_phenotypes %>%
+    collect() %>%
+    distinct(phenotype_name) %>%
+    pull(phenotype_name) %>%
+    intersect(c("AP", "ADG", "BF", "ADFI", "NW"))
+  
+  message("  Traits with observed records: ", paste(traits_to_evaluate, collapse = ", "))
+  
+  # one BLUPF90 animal-model run per trait (pedigree traced by add_ebv())
+  for (cur_trait in traits_to_evaluate) {
+    
+    pop <- pop %>%
+      get_table("ind_meta") %>%
+        #filter(rep == repl) %>%
+      add_ebv(cur_trait, software="blupf90", model="blup",
+        phenotype = observed_phenotypes,   # records observed before today only
+        eval_date = cur_date               # custom column on ind_ebv
+      )
+    
+  }
+  
+  # today's EBVs
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "AP")
-  
-  # run EBV for ADG
-  pop <- pop %>%
-    get_table("ind_meta") %>%
-      #filter(rep == repl) %>%
-    add_ebv("ADG", software="blupf90", model="blup",
-      phenotype = pop %>% 
-        get_table("ind_phenotype") %>% 
-        filter(
-          pheno_date < cur_date |    # make sure to remove future observations
-          is.na(pheno_date)          # or if phenotype date is NULL/NA
-        ),
-      eval_date = cur_date           # add data to output table
-    )
-  
-  pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "ADG")
-  
-  # run EBV for BF
-  pop <- pop %>%
-    get_table("ind_meta") %>%
-      #filter(rep == repl) %>%
-    add_ebv("BF", software="blupf90", model="blup",
-      phenotype = pop %>% 
-        get_table("ind_phenotype") %>% 
-        filter(
-          pheno_date < cur_date |    # make sure to remove future observations
-          is.na(pheno_date)          # or if phenotype date is NULL/NA
-        ),
-      eval_date = cur_date           # add data to output table
-    )
-  
-  pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "BF")
-  
-  # run EBV for NW
-  pop <- pop %>%
-    get_table("ind_meta") %>%
-      #filter(rep == repl) %>%
-    add_ebv("NW", software="blupf90", model="blup",
-      phenotype = pop %>% 
-        get_table("ind_phenotype") %>% 
-        filter(
-          pheno_date < cur_date |    # make sure to remove future observations
-          is.na(pheno_date)          # or if phenotype date is NULL/NA
-        ),
-      eval_date = cur_date           # add data to output table
-    )
-
-  pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "NW")
-  
-  
-  
+    filter(eval_date == cur_date) %>%
+    count(trait_name)
   
   #---------------- Weaning Weight (WW) --------------------#
+  
+  # add_ebv() fits single-trait animal models only, so the maternal model for
+  # WW (direct WWD + maternal WWM, from the WW phenotype) is written and run
+  # against BLUPF90 by hand here. Solutions are stored in ind_ebv as separate
+  # WWD and WWM rows, which is what the 'maternal' index reads.
+  
+  # extract phenotypes (weaned before today)
+  data_phenotype <- pop %>%
+    get_table("ind_phenotype") %>%
+    filter(
+      pheno_date < cur_date,
+      phenotype_name == "WW"
+    ) %>%
+    collect()
+  
+  # the first litters are weaned ~ gest_len + lact_len days after the first
+  # mating; until then there is nothing to evaluate
+  if (nrow(data_phenotype) == 0) {
+    
+    warning("No WW phenotypes yet; skipping WW maternal evaluation")
+    
+  } else {
   
   # create run directory
   run_dir <- tidybreed:::.create_run_dir(pop, tool = "blupf90")
@@ -1905,19 +1870,6 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
     get_table("ind_meta") %>%
     collect() %>%
     select(id_ind, id_parent_1, id_parent_2)
-  
-  # extract dataset
-  data_ind_meta <- pop %>%
-    get_table("ind_meta")
-  
-  # extract phenotypes
-  data_phenotype <- pop %>%
-    get_table("ind_phenotype") %>%
-    filter(
-      pheno_date < cur_date,
-      phenotype_name == "WW"
-    ) %>%
-    collect()
   
   # function to convet matrix to string for glue
   matrix_to_string <- function(matrix) {
@@ -2008,14 +1960,21 @@ OPTION method BLUP
       )
     ) %>% 
     mutate(
-      model = "blupf90", acc = NA, se = NA,
-      eval_number = 1, eval_date = cur_date
+      model = "blupf90", acc = NA_real_, se = NA_real_,
+      eval_date = cur_date
     ) %>%
     select(-trait_renum, -level_renum, -effect_renum)
   
-  # read in solutions
+  # eval_number the way add_ebv() assigns it: per trait, MAX(eval_number) + 1
+  next_eval_ww <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT trait_name, COALESCE(MAX(eval_number), 0) + 1 AS eval_number
+       FROM ind_ebv WHERE trait_name IN ('WWD', 'WWM') GROUP BY trait_name")
+  
+  # assign ids + eval_number
   solutions.ww <- solutions.ww %>%
+    left_join(next_eval_ww, by = "trait_name") %>%
     mutate(
+      eval_number = coalesce(as.integer(eval_number), 1L),
       id_ebv = seq.int(
         tidybreed:::next_int_id(pop$db_conn, "ind_ebv", "id_ebv"),
         length.out = nrow(solutions.ww)
@@ -2032,22 +1991,10 @@ OPTION method BLUP
   # reset to original wd
   setwd(old_wd)
   
-  # # run EBV for WW
-  # pop <- pop %>%
-  #   get_table("ind_meta") %>%
-  #     filter(rep == repl) %>%
-  #   add_ebv("WW", software="blupf90", model="blup",
-  #     phenotype = pop %>% 
-  #       get_table("ind_phenotype") %>% 
-  #       filter(
-  #         pheno_date < cur_date |    # make sure to remove future observations
-  #         is.na(pheno_date)          # or if phenotype date is NULL/NA
-  #       ),
-  #     eval_date = cur_date           # add data to output table
-  #   )
-
   pop %>% get_table("ind_ebv") %>%
-    filter(trait_name == "WW")
+    filter(trait_name %in% c("WWD", "WWM"), eval_date == cur_date)
+  
+  } # END WW maternal evaluation
 
 } else {  # END CALCULATE EBVs
   warning("EVALUATIONS NOT RUN TODAY")
@@ -2059,20 +2006,50 @@ if (cur_date >= as.Date(config$general$start_date_evaluations) & cur_day_of_week
   
   message("Calculate Indexes")
   
-  # run index calculation
-  pop %>%
-    get_table("ind_ebv") %>%    # must pass 'ind_ebv' because it contains the EBVs needed
-    filter(
-      #rep == repl,
-      eval_date == cur_date
-    ) %>%
-    add_index(
-      "maternal",          # just give the index name and it will grab weights
-      index_date = cur_date
-    )
+  # add_index() requires every animal to have exactly one EBV for EVERY trait
+  # in the index. Early on some index traits have no EBVs yet (NW records are
+  # dated at farrowing, WWD/WWM need weaned litters), so only compute the index
+  # once today's evaluation covered all of them.
+  index_traits <- pop %>%
+    get_table("index_meta") %>%
+    filter(index_name == "maternal") %>%
+    pull(trait_name)
+  
+  evaluated_today <- pop %>%
+    get_table("ind_ebv") %>%
+    filter(eval_date == cur_date) %>%
+    collect() %>%
+    distinct(trait_name) %>%
+    pull(trait_name)
+  
+  if (all(index_traits %in% evaluated_today)) {
+    
+    # run index calculation
+    pop %>%
+      get_table("ind_ebv") %>%    # must pass 'ind_ebv' because it contains the EBVs needed
+      filter(
+        #rep == repl,
+        eval_date == cur_date
+      ) %>%
+      add_index(
+        "maternal",          # just give the index name and it will grab weights
+        index_date = cur_date
+      )
+    
+  } else {
+    warning("Index NOT calculated: no EBVs yet for ",
+            paste(setdiff(index_traits, evaluated_today), collapse = ", "))
+  }
+  
 } else {  # END INDEX CALCULATION
   warning("No new EBVs, no need to calculate INDEXES")
 }
+
+# ------------------------------ SELECTION MODE ------------------------------ #
+
+# Selection is random until the first index has been computed, then by index.
+# (The index, not the evaluation start date, is the switch: see CALC INDEX.)
+index_available <- (pop %>% get_table("ind_index") %>% collect() %>% nrow()) > 0
 
 
 # ------------------------------ SELECT MALES -------------------------------- #
@@ -2095,8 +2072,8 @@ if (cur_date == male_selection_date){
   
   print(male_candidates)
   
-  # random selection early on before EBVs running with more data!
-  if (cur_date < as.Date(config$general$start_date_evaluations)){
+  # random selection early on before an index exists
+  if (!index_available){
     
     message("Using RANDOM")
     
@@ -2136,7 +2113,7 @@ if (cur_date == male_selection_date){
   # ---------- UPDATE BOAR STATUS ---------- #
   
   # set current 'breeding-boar' to 'cull-boar' if was already a 'breeding-boar' and not in list
-  list_culled_boars <- pop %>%
+  pop %>%
     get_table("ind_meta") %>%
     filter(
       status == "breeding-boar",
@@ -2177,8 +2154,8 @@ if (cur_date == female_selection_date){
   message("female candidates:")
   print(female_candidates)
   
-  # random selection early on before EBVs running
-  if (cur_date < as.Date(config$general$start_date_evaluations)){
+  # random selection early on before an index exists
+  if (!index_available){
     
     selected_females = pop %>%
       get_table("ind_meta") %>%
@@ -2228,7 +2205,7 @@ if (cur_date == female_selection_date){
     non_selected_females <- pop %>%
       get_table("ind_index") %>%
       filter(
-        id_ind %in% selected_females_candidates,
+        id_ind %in% female_candidates,
         !(id_ind %in% selected_females)
       ) %>%
       pull(id_ind)
@@ -2301,24 +2278,8 @@ if (cur_date == female_selection_date){
   
   message("Extract NW phenotype")
   
-  # # random selection early on before EBVs running
-  # if (cur_date < as.Date(config$general$start_date_evaluations)){
-  #   
-  #   # list the selected females
-  #   list_cur_selected_females <- pop %>%
-  #     get_table("ind_meta") %>%
-  #     filter(
-  #       #rep == repl,
-  #       status %in% c("selected-female")
-  #     ) %>%
-  #     pull(id_ind)
-  #   
-  # } else {
-  #   
-  # }
-  
-  # 
-  if (cur_date < as.Date(config$general$start_date_evaluations)){
+  # random split early on before an index exists
+  if (!index_available){
       
     # list all selected females
     list_cur_selected_females <- pop %>%
@@ -2330,7 +2291,7 @@ if (cur_date == female_selection_date){
       collect() %>%
       pull(id_ind)
     
-    # top 10 selected females produce FEMALES ONLY
+    # randomly chosen selected females produce MALES ONLY (sexed semen)
     list_cur_selected_females_sexed_males <- pop %>%
       get_table("ind_meta") %>%
       filter(
@@ -2427,9 +2388,9 @@ if (cur_date == female_selection_date){
     # use new phenotype to build mating plan
   data.new.matings.males <- tibble(
     # rep sires by "NW" phenotype from dam so they match the same rows (1 litter)
-    id_parent_1 = rep(list_sampled_boar_matings_sexed_males, time=data.nw.males$pheno_value),
+    id_parent_1 = rep(list_sampled_boar_matings_sexed_males, times = data.nw.males$pheno_value),
     # rep dams by "NW" phenotype to get a full litter (1 row / offspring)
-    id_parent_2 = rep(c(data.nw.males$id_ind), time=data.nw.males$pheno_value),
+    id_parent_2 = rep(c(data.nw.males$id_ind), times = data.nw.males$pheno_value),
     line_name     = "A",
     sex           = "M",       # SEXED SEMEN -> males only
     #rep           = repl,
@@ -2442,9 +2403,9 @@ if (cur_date == female_selection_date){
   # use new phenotype to build mating plan
   data.new.matings.females <- tibble(
     # rep sires by "NW" phenotype from dam so they match the same rows (1 litter)
-    id_parent_1 = rep(list_sampled_boar_matings_sexed_females, time=data.nw.females$pheno_value),
+    id_parent_1 = rep(list_sampled_boar_matings_sexed_females, times = data.nw.females$pheno_value),
     # rep dams by "NW" phenotype to get a full litter (1 row / offspring)
-    id_parent_2 = rep(c(data.nw.females$id_ind), time=data.nw.females$pheno_value),
+    id_parent_2 = rep(c(data.nw.females$id_ind), times = data.nw.females$pheno_value),
     line_name     = "A",
     sex           = "F",         # SEXED SEMEN -> females only
     #rep           = repl,
@@ -2735,96 +2696,101 @@ data.timing <- add_row(data.timing,
 
 } # END SIMULATION LOOP FOR DATE
 
-
-
-
-
-
-# close pop
-#close_pop(pop)
-
-#stop("stopping after finishing")
-
-
-
-
-
-
-
 #------------------------------------------------------------------------------#
-# RESTORE DUCKDB DATABASE
+# After the loop: fill in TBV / TGV / true index for every animal
 #------------------------------------------------------------------------------#
 
-# how to use DBI directly
-if (1 > 2) {
-  
-  # libraries needed
-  library(DBI)
-  library(duckdb)
+warning("Fill in TBVs, TGVs and true index for every animal")
+
+# TBVs are written by add_phenotype() (for the animals it phenotypes) and by
+# add_tbv() -- NOT by add_offspring(). Animals born inside the loop that never
+# received a phenotype (young boars, piglets still on test) have none yet. One
+# call with no trait_name evaluates every trait in trait_meta; rows that already
+# exist are upserted, so this is safe to run on everyone.
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  add_tbv()
+
+# every animal x every trait
+pop %>% get_table("ind_tbv") %>% count(trait_name)
+
+# true index for everyone (overwrite_index = TRUE recomputes the founders too)
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  add_tbv(index_names = "maternal", overwrite_index = TRUE)
+
+pop %>% get_table("ind_true_index")
+
+# True GENETIC values: add_tgv() evaluates EVERY stored term of a trait (additive,
+# dominance, epistatic, ...) and writes ind_tgv, one row per (animal x trait x
+# component_name). This model is purely additive, so the only component is
+# 'order1_additive' and the total (view ind_tgv_total) equals the TBV -- a
+# cheap consistency check on the evaluator.
+pop <- pop %>%
+  get_table("ind_meta") %>%
+  add_tgv()
+
+pop %>% get_table("ind_tgv") %>% count(trait_name, component_name)
+
+# TBV vs TGV total: identical under an additive-only model
+pop %>%
+  get_table("ind_tgv_total") %>%
+  collect() %>%
+  inner_join(
+    pop %>% get_table("ind_tbv") %>% collect(),
+    by = c("id_ind", "trait_name")
+  ) %>%
+  summarise(max_abs_diff = max(abs(tgv_total - tbv_value)))
+
+# summary of the population (row counts per table, on-disk size)
+print(pop)
+schema(pop)
+
+#------------------------------------------------------------------------------#
+# Restoring the database later
+#------------------------------------------------------------------------------#
+
+# Everything lives in the .duckdb file, so a finished (or interrupted) run can be
+# reopened in a fresh R session with restore_pop(). The path is stored on the
+# pop object; with the options set at the top of this script it resolves to
+#   <base_dir>/<output>/<scenario>/<db_name>
+message("Database file: ", pop$db_path)
+
+# Not run here -- example of reopening in a new session
+if (FALSE) {
+
   library(tidyverse)
-  
-  # duckdb file path
-  cur_duck_db_file_name = "~/Claude/tidybreed-test/age_at_puberty_tidybreed.duckdb"
-  
-  # restore population object for tidybreed
+  library(tidybreed)
+
+  # same options as the top of this script (tools -> run directories)
+  options(tidybreed.tools = c("blupf90", "plink"))
+
+  # restore population object (refuses a database written by an older schema)
   pop <- restore_pop(
-    db_path = cur_duck_db_file_name
+    db_path = "~/Claude/tidybreed/vignettes/swine/tidybreed_output/age_at_puberty/sim.duckdb"
   )
-  
-  # add TBVs you forgot...
+
+  # continue as usual, e.g. fill in TBVs
   pop <- pop %>%
     get_table("ind_meta") %>%
-    add_tbv(c("ADG", "BF", "AP", "NW"))
-  
+    add_tbv()
+
   # close pop
   close_pop(pop)
 
 }
 
-# how to use DBI directly
-if (1 > 2) {
-  
-  # reconnect to DB
-  pop <- dbConnect(duckdb(), 
-            dbdir = cur_duck_db_file_name)
-  
-  # extract latest EBVs
-  data.ebv.latest <- tbl(pop, "ind_ebv") %>%
-    filter(eval_date == max(eval_date)) %>%
-    collect()
-  
-  # extract TBVs
-  data.tbv <- tbl(pop, "ind_tbv") %>%
-    collect()
-  
-  # extract TBVs
-  data.ind.meta <- tbl(pop, "ind_meta") %>%
-    collect()
-
-  # close DB connection
-  dbDisconnect(pop, shutdown = TRUE)
-
-}
-
-
-
-
-
-
-
 #------------------------------------------------------------------------------#
-# UPDATE TIME TIBBLE
+# Timing: label each simulated day
 #------------------------------------------------------------------------------#
 
 # ---------- MALES ---------- #
 
 male_selection_start_date <- as.Date(config$general$start_date_selection)
 
-#male_selection_dates <- seq(male_selection_start_date, by = "56 days", length.out = ceiling(365 * 2 / 56))
-
 male_selection_dates <- seq.Date(
   from   = male_selection_start_date,
-  to     = male_selection_start_date + (365 * 2),
+  to     = end_date,
   by     = as.numeric(config$selection$male_selection_interval)
 )
 
@@ -2832,23 +2798,21 @@ male_selection_dates <- seq.Date(
 
 female_selection_start_date <- as.Date(config$general$start_date_selection)
 
-#female_selection_dates <- seq(female_selection_start_date, by = "56 days", length.out = ceiling(365 * 2 / 56))
-
 female_selection_dates <- seq.Date(
   from   = female_selection_start_date,
-  to     = female_selection_start_date + (365 * 2),
+  to     = end_date,
   by     = as.numeric(config$selection$female_selection_interval)
 )
 
 # ---------- EVALUATIONS ---------- #
 
+# first Friday on/after the evaluation start date; evaluations run every Friday
 first_friday <- as.Date(config$general$start_date_evaluations) + 
   (5 - wday(as.Date(config$general$start_date_evaluations), week_start = 1)) %% 7
 
-# Generate every 7 days
-selection_dates <- seq.Date(
+eval_dates <- seq.Date(
   from = first_friday,
-  to   = first_friday + (365 * 2),
+  to   = end_date,
   by   = 7
 )
 
@@ -2856,25 +2820,38 @@ selection_dates <- seq.Date(
 
 data.timing <- data.timing %>%
   mutate(
-    male_selection_date = sim_date %in% male_selection_dates,
+    male_selection_date   = sim_date %in% male_selection_dates,
     female_selection_date = sim_date %in% female_selection_dates,
-    eval_date = sim_date %in% selection_dates
+    eval_date             = sim_date %in% eval_dates
   ) %>%
   mutate(
     day_type = case_when(
-      male_selection_date == TRUE & female_selection_date == FALSE & eval_date == FALSE ~ "male-sel",
-      male_selection_date == FALSE & female_selection_date == TRUE & eval_date == FALSE ~ "female-sel",
-      male_selection_date == TRUE & female_selection_date == TRUE & eval_date == FALSE ~ "male-sel-female-sel",
-      male_selection_date == TRUE & female_selection_date == FALSE & eval_date == TRUE ~ "male-sel-eval-date",
-      male_selection_date == FALSE & female_selection_date == TRUE & eval_date == TRUE ~ "female-sel-eval-date",
-      male_selection_date == TRUE & female_selection_date == TRUE & eval_date == TRUE ~ "male-sel-female-sel-eval-date",
-      male_selection_date == FALSE & female_selection_date == FALSE & eval_date == TRUE ~ "eval-date",
+      male_selection_date == TRUE  & female_selection_date == FALSE & eval_date == FALSE ~ "male-sel",
+      male_selection_date == FALSE & female_selection_date == TRUE  & eval_date == FALSE ~ "female-sel",
+      male_selection_date == TRUE  & female_selection_date == TRUE  & eval_date == FALSE ~ "male-sel-female-sel",
+      male_selection_date == TRUE  & female_selection_date == FALSE & eval_date == TRUE  ~ "male-sel-eval-date",
+      male_selection_date == FALSE & female_selection_date == TRUE  & eval_date == TRUE  ~ "female-sel-eval-date",
+      male_selection_date == TRUE  & female_selection_date == TRUE  & eval_date == TRUE  ~ "male-sel-female-sel-eval-date",
+      male_selection_date == FALSE & female_selection_date == FALSE & eval_date == TRUE  ~ "eval-date",
       .default = "regular-day"
     )
   )
 
+# seconds per day type
+data.timing %>%
+  filter(type == "date-loop") %>%
+  group_by(day_type) %>%
+  summarise(
+    n_days       = n(),
+    mean_sec     = mean(elapsed_sec),
+    max_sec      = max(elapsed_sec),
+    total_min    = sum(elapsed_sec) / 60,
+    .groups      = "drop"
+  ) %>%
+  arrange(desc(total_min))
+
 #------------------------------------------------------------------------------#
-# TIMING PER LOOP
+# Timing: plots
 #------------------------------------------------------------------------------#
 
 # ---------- CUMULATIVE TIME ON DATE ---------- #
@@ -2885,8 +2862,8 @@ data.timing %>%
     cumulative_hour = cumulative_min / 60
   ) %>%
 ggplot(aes(x=sim_date, y=cumulative_min, group=1)) +
-  geom_line(color=hg_blue) +
-  theme_bw() +
+  geom_line(color=tb_colors[2]) +
+  tb_theme() +
   labs(
     title = "Cumulative Minutes Total (1-day)",
     subtitle = "Daily Swine Breeding Program",
@@ -2898,14 +2875,11 @@ ggplot(aes(x=sim_date, y=cumulative_min, group=1)) +
 # ---------- LOOP TIME ON DATE ---------- #
 
 data.timing %>%
-  mutate(
-    cumulative_min  = cumulative_sec / 60,
-    cumulative_hour = cumulative_min / 60
-  ) %>%
-  #filter(!is.na(elapsed_sec)) %>%
+  filter(type == "date-loop") %>%
 ggplot(aes(x=sim_date, y=elapsed_sec, fill=day_type, color=day_type)) +
   geom_col() +
-  theme_bw() +
+  scale_fill_manual("Day type", values = tb_colors, aesthetics = c("fill", "colour")) +
+  tb_theme() +
   labs(
     title = "Elapsed Seconds Per Loop (1-day)",
     subtitle = "Daily Swine Breeding Program",
@@ -2917,14 +2891,11 @@ ggplot(aes(x=sim_date, y=elapsed_sec, fill=day_type, color=day_type)) +
 # ---------- LOOP TIME HISTOGRAM ---------- #
 
 data.timing %>%
-  mutate(
-    cumulative_min  = cumulative_sec / 60,
-    cumulative_hour = cumulative_min / 60
-  ) %>%
-  #filter(!is.na(elapsed_sec)) %>%
+  filter(type == "date-loop") %>%
 ggplot(aes(x=elapsed_sec, fill=day_type)) +
   geom_histogram(color="grey30") +
-  theme_bw() +
+  scale_fill_manual("Day type", values = tb_colors) +
+  tb_theme() +
   labs(
     title = "Elapsed Seconds Per Loop (1-day)",
     subtitle = "Daily Swine Breeding Program",
@@ -2933,100 +2904,65 @@ ggplot(aes(x=elapsed_sec, fill=day_type)) +
     caption = "tidybreed timing"
   )
 
-
-
-
-#------------------------------------------------------------------------------#
-# TEST HOW TO REMOVE ROWS WITH DBI
-#------------------------------------------------------------------------------#
-
-# WITHOUT GLUE PACKAGE
-# id_list <- c(1, 2, 3)
-# id_string <- paste(id_list, collapse = ", ")
-# sql <- glue("DELETE FROM ind_phenotype WHERE id_ind IN ({id_string})")
-# dbExecute(pop$db_conn, sql)
-
-# GLUE DIDN'T WORK - should work now with removal of "ID-01" with dashed (clashes with SQL)
-# sql <- glue("DELETE FROM ind_phenotype WHERE id_ind IN ({glue_collapse(id_list, sep = ', ')})")
-# dbExecute(pop$db_conn, sql)
-
-if (1 > 2){
-  
-  # check how many records first
-  pop %>% 
-    get_table("ind_phenotype") %>% 
-    collect() %>% 
-    filter(pheno_date > cur_date) 
-  
-  # list rows to delete in phenotype dataset
-  list_pheno_ids <- pop %>% 
-    get_table("ind_phenotype") %>% 
-    collect() %>% 
-    filter(pheno_date > cur_date) %>% 
-    pull(id_record)
-  
-  # put R list into a correct string for SQL
-  id_string <- paste0("'", list_pheno_ids, "'", collapse = ", ")
-  
-  # sql code
-  sql <- glue("DELETE FROM ind_phenotype WHERE id_record IN ({id_string})")
-  
-  # run SQL code with `dbExecute`
-  dbExecute(pop$db_conn, sql)
-  
-  # VERIFY the rows were deleted! 
-  pop %>% 
-    get_table("ind_phenotype") %>% 
-    collect() %>% 
-    filter(pheno_date > cur_date)
-  
-  # YUP - No rows left that are into the future! 
-
-}
-
-
-
-
 #------------------------------------------------------------------------------#
 # Summary - Tables and Plots
 #------------------------------------------------------------------------------#
 
-# add TBVs
-pop <- pop %>%
-  get_table("ind_meta") %>%
-  add_tbv(c("ADG", "BF", "AP", "NW"))
+warning("Summary tables and plots")
 
-# calculate latest EBV evaluation date
+# latest EBV evaluation date
 latest_eval_date <- pop %>%
   get_table("ind_ebv") %>%
   collect() %>%
   pull(eval_date) %>%
   max()
 
-# ---------- BAR - SEX ---------- #
+message("Latest evaluation date: ", latest_eval_date)
 
-pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  count(sex)
+# ---------- ONE TIBBLE: individuals + latest EBVs + TBVs ---------- #
 
-# count status by sex
-pop %>%
+# individuals, with birth year-quarter as the time axis for trend plots
+data.ind.meta <- pop %>%
   get_table("ind_meta") %>%
   collect() %>%
   mutate(
     birth_year    = year(birth_date),
     birth_quarter = quarter(birth_date),
-    birth_yq      = paste(birth_year, birth_quarter, sep="_")
-  ) %>%
-  group_by(sex, birth_yq) %>%
-  summarise(
-    n = n()
-  ) %>%
+    birth_yq      = paste(birth_year, birth_quarter, sep = "_")
+  )
+
+# latest EBVs (one row per animal x trait)
+data.ebvs.latest <- pop %>%
+  get_table("ind_ebv") %>%
+  filter(eval_date == latest_eval_date) %>%
+  collect() %>%
+  select(id_ind, trait_name, ebv_value)
+
+# TBVs (one row per animal x trait, every animal after add_tbv() above)
+data.tbvs <- pop %>%
+  get_table("ind_tbv") %>%
+  collect() %>%
+  select(id_ind, trait_name, tbv_value)
+
+# join: every animal x trait, EBV is NA for animals not in the latest evaluation
+data.tbv.ebv <- data.tbvs %>%
+  left_join(data.ebvs.latest, by = c("id_ind", "trait_name")) %>%
+  left_join(data.ind.meta,    by = "id_ind")
+
+glimpse(data.tbv.ebv)
+
+# ---------- COUNTS ---------- #
+
+# animals by sex
+data.ind.meta %>% count(sex)
+
+# animals by sex and birth year-quarter
+data.ind.meta %>%
+  count(sex, birth_yq) %>%
 ggplot(aes(x=birth_yq, y=n, fill=sex)) +
   geom_col(position="dodge") +
-  #geom_label(aes(label=n), fill="white") +
-  scale_fill_manual("Sex", values = c("magenta3", "dodgerblue3")) +
+  scale_fill_manual("Sex", values = c(F = "magenta3", M = "dodgerblue3")) +
+  tb_theme() +
   labs(
     title = "Sex Count by Birth Year-Quarter",
     subtitle = "Daily Loop / Weekly Evaluations",
@@ -3034,307 +2970,101 @@ ggplot(aes(x=birth_yq, y=n, fill=sex)) +
     y = "Count",
     caption = "tidybreed - 'Daily' Swine Breeding Program"
   ) + 
-  theme(axis.text.x = element_text(angle=70))
+  theme(axis.text.x = element_text(angle=70, hjust=1))
 
-# ---------- BAR - STATUS color SEX ---------- #
-
-# count status by sex
-pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  group_by(sex, status) %>%
-  summarise(
-    n = n()
-  ) %>%
+# status by sex (latest status of every animal)
+data.ind.meta %>%
   filter(!is.na(status)) %>%
+  count(sex, status) %>%
 ggplot(aes(x=status, y=n, fill=sex)) +
   geom_col() +
   geom_label(aes(label=n), fill="white") +
-  scale_fill_manual("Sex", values = c("magenta3", "dodgerblue3")) +
+  scale_fill_manual("Sex", values = c(F = "magenta3", M = "dodgerblue3")) +
+  tb_theme() +
   labs(
     title = "Status Counts",
     subtitle = "Weekly Evaluations",
     x = "(Latest) Simulation Status",
     y = "Count",
     caption = "tidybreed - 'Daily' Swine Breeding Program"
-  )
+  ) + 
+  theme(axis.text.x = element_text(angle=45, hjust=1))
 
-# ---------- COMPARE EBVS AND TBVS ---------- #
-
-list_old_animals <- pop %>%
-  get_table("ind_meta") %>%
-  filter(birth_date < as.Date("2026-01-01")) %>%
-  pull(id_ind)
-
-list_young_animals <- pop %>%
-  get_table("ind_meta") %>%
-  filter(birth_date > as.Date("2027-06-01")) %>%
-  pull(id_ind)
-
-# calculate mean EBVs by trait - OLD ANIMALS
-pop %>%
-  get_table("ind_ebv") %>%
-  filter(
-    eval_date == latest_eval_date,
-    id_ind %in% list_old_animals) %>%
-  collect() %>%
-  group_by(trait_name) %>%
-  summarise(
-    MeanEBV = mean(ebv_value)
-  )
-
-# calculate mean EBVs by trait - YOUNG ANIMALS
-pop %>%
-  get_table("ind_ebv") %>%
-  filter(
-    eval_date == latest_eval_date,
-    id_ind %in% list_young_animals) %>%
-  collect() %>%
-  group_by(trait_name) %>%
-  summarise(
-    MeanEBV = mean(ebv_value)
-  )
-
-# calculate mean TBVs by trait - OLD ANIMALS
-pop %>%
-  get_table("ind_tbv") %>%
-  filter(
-    id_ind %in% list_old_animals
-  ) %>%
-  collect() %>%
-  group_by(trait_name) %>%
-  summarise(
-    MeanTBV = mean(tbv_value)
-  )
-
-# calculate mean TBVs by trait - YOUNG ANIMALS
-pop %>%
-  get_table("ind_tbv") %>%
-  filter(
-    id_ind %in% list_young_animals
-  ) %>%
-  collect() %>%
-  group_by(trait_name) %>%
-  summarise(
-    MeanTBV = mean(tbv_value)
-  )
-
-# ---------- TABLE - MEAN PHENOTYPE ---------- #
-
-# calculate mean phenotypes by trait
+# phenotype records by phenotype and year-quarter phenotyped
 pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
-  group_by(trait_name) %>%
-  summarise(
-    MeanPhenotype = mean(pheno_value)
-  )
-
-# ---------- HISTOGRAM EBVs ---------- #
-
-# histogram of EBVs by Trait
-pop %>%
-  get_table("ind_ebv") %>%
-  collect() %>%
-  filter(eval_date == max(eval_date)) %>%
-ggplot(aes(x=ebv_value)) +
-  geom_histogram(color="white", fill=hg_blue) +
-  facet_wrap(~trait_name, scale="free") +
-  labs(
-    title = "EBVs (latest)"
-  )
-
-# time-series of EBVs by Trait
-# pop %>%
-#   get_table("ind_ebv") %>%
-#   collect() %>%
-# ggplot(aes(x=eval_date, y=ebv, color=trait_name)) +
-#   geom_line(aes(group=id_ind), alpha=0.05) +
-#   geom_point(color=hg_blue, alpha=0.1) +
-#   geom_smooth(aes(group = NULL), method = "loess", se = TRUE) +
-#   facet_wrap(~trait_name, scale="free") +
-#   labs(
-#     title = "Timeseries EBVs (latest)",
-#     subtitle = "Weekly Evaluations",
-#     x = "Evaluation Date (BLUPF90)",
-#     y = "Estimated Breeding Value",
-#     caption = "tidybreed - 'Daily' Swine Breeding Program"
-#   )
-
-pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  count()
-
-# 8381 animals/rows
-
-pop %>%
-  get_table("ind_tbv") %>%
-  collect() %>%
-  count()
-
-# 33,524 rows
-# 33,524 / 4 = 8381
-
-# TBVs tibble
-data.tbvs <- pop %>%
-  get_table("ind_tbv") %>%
-  collect() %>%
-  select(id_ind, trait_name, tbv_value)
-
-# EBVs dataset (latest eval)
-data.ebvs.latest <- pop %>%
-  get_table("ind_ebv") %>%
-  filter(eval_date == latest_eval_date) %>%
-  collect()
-
-# pull individual data
-data.ind.meta <- pop %>%
-  get_table("ind_meta") %>%
-  collect()
-
-# join meta data to EBVs data
-data.ebvs.latest <- left_join(data.ebvs.latest, data.ind.meta)
-
-# join meta data to EBVs data
-data.tbvs <- left_join(data.tbvs, data.ind.meta)
-
-# ---------- EBVs on Birth Date ---------- #
-
-# EBVs on Birth Date
-data.ebvs.latest %>%
-ggplot(aes(x=birth_date, y=ebv_value, color=trait_name)) +
-  #geom_point(color=hg_blue, alpha=0.1) +
-  geom_hex() +
-  geom_smooth(aes(group = NULL), method = "loess", se = TRUE, linewidth=2) +
-  facet_wrap(~trait_name, scales="free") +
-  scale_color_discrete("Trait Name") +
-  scale_fill_gradient(
-    low  = "grey80",
-    high = "grey20"
-  ) +
-  labs(
-    title    = "EBV (latest) trend by birth date",
-    subtitle = "Weekly Evaluations",
-    x        = "Birth Date",
-    y        = "Estimated Breeding Value (EBV)",
-    caption  = "tidybreed - 'Daily' Swine Breeding Program"
-  )
-
-# ---------- TBVs on Birth Date ---------- #
-
-# TBV on birth date by Trait
-data.tbvs %>%
-ggplot(aes(x=birth_date, y=tbv_value, color=trait_name)) +
-  #geom_point(color="grey80", alpha=0.5) +
-  geom_hex() +
-  geom_smooth(method = "loess", se = TRUE, linewidth=2) +
-  facet_wrap(~trait_name, scales="free") +
-  scale_color_discrete("Trait Name") +
-  scale_fill_gradient(
-    low  = "grey80",
-    high = "grey20"
-  ) +
-  labs(
-    title    = "TBV trend by birth date",
-    subtitle = "Weekly Evaluations",
-    x        = "Birth Date",
-    y        = "True Breeding Value (TBV)",
-    caption  = "tidybreed - 'Daily' Swine Breeding Program"
-  )
-
-
-# ---------- MEAN TBVs on Birth Date ---------- #
-
-# TBV on birth date by Trait
-data.tbvs %>%
-  group_by(trait_name, birth_date) %>%
-  summarise(
-    MeanTBV = mean(tbv_value)
-  ) %>%
-ggplot(aes(x=birth_date, y=MeanTBV, color=trait_name)) +
-  #geom_line() +
-  geom_point() +
-  geom_smooth(method = "loess", se = TRUE) +
-  facet_wrap(~trait_name, scale="free") +
-  scale_color_discrete("Trait Name") +
-  labs(
-    title    = "TBV Mean Trend by Birth Date",
-    subtitle = "Weekly Evaluations",
-    x        = "Birth Date",
-    y        = "True Breeding Value (TBV)",
-    caption  = "tidybreed - 'Daily' Swine Breeding Program"
-  )
-
-# ----------  ---------- #
-
-# count matings by date
-pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  mutate(mate_date = as.factor(mate_date)) %>%
-  filter(!is.na(mate_date)) %>%
-ggplot(aes(x=mate_date, group=id_ind)) +
-  geom_bar(fill=hg_blue) +
-  labs(
-    title = "Timeseries Mating Counts",
-    subtitle = "28 day batch",
-    x = "Mating Date",
-    y = "Count Mated",
-    caption = "tidybreed - 'Daily' Swine Breeding Program"
-  )
-
-# count age at puberty by date
-pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  #mutate(puberty_date = as.factor(puberty_date)) %>%
-  filter(!is.na(puberty_date)) %>%
-ggplot(aes(x=puberty_date, group=id_ind)) +
-  geom_bar(fill=hg_blue) +
-  labs(
-    title = "Timeseries Puberty Date Counts",
-    subtitle = "28 day batch",
-    x = "Puberty Date (daily)",
-    y = "Count",
-    caption = "tidybreed - 'Daily' Swine Breeding Program"
-  )
-
-# data frame - count age at puberty by year-week
-df <- pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-  #mutate(puberty_date = as.factor(puberty_date)) %>%
-  filter(!is.na(puberty_date)) %>%
   mutate(
-    puberty_year = year(puberty_date),
-    puberty_week = str_pad(week(puberty_date), 2, side="left",pad = "0"),
-    puberty_yw = paste(puberty_year, puberty_week, sep="_")
+    pheno_yq = paste(year(pheno_date), quarter(pheno_date), sep = "_")
+  ) %>%
+  count(phenotype_name, pheno_yq) %>%
+  pivot_wider(names_from = phenotype_name, values_from = n, values_fill = 0) %>%
+  arrange(pheno_yq) %>%
+  print(n = Inf)
+
+# ---------- MEANS: OLD vs YOUNG ANIMALS ---------- #
+
+# "old" = born before the simulation started (founders); "young" = born in the
+# final year of the simulation
+list_old_animals   <- data.ind.meta %>% filter(birth_date <  start_date)       %>% pull(id_ind)
+list_young_animals <- data.ind.meta %>% filter(birth_date >= end_date - 365)   %>% pull(id_ind)
+
+message("n old / young animals: ", length(list_old_animals), " / ", length(list_young_animals))
+
+# mean EBV (latest) and TBV by trait, old vs young
+data.tbv.ebv %>%
+  mutate(
+    age_group = case_when(
+      id_ind %in% list_old_animals   ~ "old (founders)",
+      id_ind %in% list_young_animals ~ "young (last year)",
+      .default = "middle"
+    )
+  ) %>%
+  group_by(age_group, trait_name) %>%
+  summarise(
+    n        = n(),
+    mean_ebv = mean(ebv_value, na.rm = TRUE),
+    mean_tbv = mean(tbv_value),
+    .groups  = "drop"
+  ) %>%
+  arrange(trait_name, age_group) %>%
+  print(n = Inf)
+
+# mean phenotype by phenotype name
+pop %>%
+  get_table("ind_phenotype") %>%
+  collect() %>%
+  group_by(phenotype_name) %>%
+  summarise(
+    n              = n(),
+    mean_phenotype = mean(pheno_value),
+    sd_phenotype   = sd(pheno_value),
+    .groups        = "drop"
   )
 
-# plot - count age at puberty by year-week
-df %>%
-  count(puberty_yw) %>%
-  mutate(puberty_yw = as.factor(puberty_yw)) %>%
-ggplot(aes(x=puberty_yw, y=n)) +
-  geom_col(fill=hg_blue) +
-  #scale_x_date(breaks=df$puberty_date, date_labels = "%d") +
-  labs(
-    title = "Timeseries Puberty Date Counts",
-    subtitle = "28 day batch",
-    x = "Puberty Year-Week",
-    y = "Count",
-    caption = "tidybreed - 'Daily' Swine Breeding Program"
-  ) + 
-  theme(axis.text.x = element_text(angle=45))
+# ---------- HISTOGRAMS ---------- #
 
-# histogram of phenotypes by Trait
+# histogram of EBVs (latest) by trait
+data.ebvs.latest %>%
+ggplot(aes(x=ebv_value)) +
+  geom_histogram(color="white", fill=tb_colors[2]) +
+  facet_wrap(~trait_name, scales="free") +
+  tb_theme() +
+  labs(
+    title = "EBVs (latest evaluation)",
+    subtitle = paste("Evaluation date:", latest_eval_date),
+    x = "Estimated Breeding Value (EBV)",
+    y = "Count"
+  )
+
+# histogram of phenotypes by phenotype
 pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
 ggplot(aes(x=pheno_value)) +
-  geom_histogram(color="white", fill=hg_green, bins=17) +
-  facet_wrap(~trait_name, scale="free_x") +
+  geom_histogram(color="white", fill=tb_colors[3], bins=17) +
+  facet_wrap(~phenotype_name, scales="free_x") +
+  tb_theme() +
   labs(
     title = "Histogram - Phenotypes",
     subtitle = "Daily Loop / Sexed Semen",
@@ -3343,418 +3073,243 @@ ggplot(aes(x=pheno_value)) +
     caption = "tidybreed - 'Daily' Swine Breeding Program"
   ) 
 
-# histogram of indexes
+# histogram of index values (latest)
 pop %>% get_table("ind_index") %>%
-  filter(
-    index_name == "maternal"
-  ) %>%
+  filter(index_name == "maternal") %>%
   collect() %>%
+  filter(index_date == max(index_date)) %>%
 ggplot(aes(x=index_value)) +
   geom_histogram(color="white", fill="aquamarine3") +
+  tb_theme() +
   labs(
     title = "Index Values (latest)"
   )
 
-# count rows in index table
+# index rows per calculation date
 pop %>% get_table("ind_index") %>%
-  filter(index_name == "maternal", rep == repl) %>%
+  filter(index_name == "maternal") %>%
   collect() %>%
-  group_by(index_name, rep, index_date) %>%
-  count()
+  count(index_name, index_date) %>%
+  print(n = Inf)
 
+# ---------- TRENDS ON BIRTH DATE ---------- #
 
-
-
-
-
-
-#------------------------------------------------------------------------------#
-# Summarize Pop - Tables and Figures
-#------------------------------------------------------------------------------#
-
-#------------------------------------------------------------#
-# Combine Individual + EBV + TBV data into 1 tibble
-#------------------------------------------------------------#
-
-# extract individual data
-data.ind <- pop %>%
-  get_table("ind_meta") %>%
-  collect()
-
-# extract EBV data (only use last generation EBVs)
-data.ebv <- pop %>%
-  get_table("ind_ebv") %>%
-  filter(gen_eval == genl) %>%
-  collect()
-
-# pull TBVs
-data.tbv <- pop %>%
-  get_table("ind_tbv") %>%
-  collect()
-
-# join ind data to EBV data
-data.tbv.ebv <- left_join(data.ebv, data.ind)
-
-# join TBV to EBV tibble
-data.tbv.ebv <- left_join(data.tbv.ebv, data.tbv)
-
-
-#------------------------------------------------------------#
-# plot options
-#------------------------------------------------------------#
-
-trait_colors = c("cadetblue2", "darkolivegreen2", "darkorange", 
-                 "darkorchid", "dodgerblue2")
-
-#------------------------------------------------------------#
-# Genetic Variances
-#------------------------------------------------------------#
-
-data.gen.vars <- pop %>%
-  get_table("trait_effect_cov") %>%
-  filter(
-    effect_name == "gen_add",
-    trait_1 == trait_2
-  ) %>%
-  collect() %>%
-  select(trait_1, cov) %>%
-  rename(trait_name = trait_1, var = cov) %>%
-  mutate(
-    sd = sqrt(var)
+# EBVs (latest) on birth date
+data.tbv.ebv %>%
+  filter(!is.na(ebv_value)) %>%
+ggplot(aes(x=birth_date, y=ebv_value)) +
+  geom_hex() +
+  geom_smooth(method = "loess", se = TRUE, linewidth=2, color=tb_colors[1]) +
+  facet_wrap(~trait_name, scales="free") +
+  scale_fill_gradient(low = "grey80", high = "grey20") +
+  tb_theme() +
+  labs(
+    title    = "EBV (latest) trend by birth date",
+    subtitle = "Weekly Evaluations",
+    x        = "Birth Date",
+    y        = "Estimated Breeding Value (EBV)",
+    caption  = "tidybreed - 'Daily' Swine Breeding Program"
   )
 
-#------------------------------------------------------------#
-# EBVs
-#------------------------------------------------------------#
+# TBVs on birth date
+data.tbv.ebv %>%
+ggplot(aes(x=birth_date, y=tbv_value)) +
+  geom_hex() +
+  geom_smooth(method = "loess", se = TRUE, linewidth=2, color=tb_colors[1]) +
+  facet_wrap(~trait_name, scales="free") +
+  scale_fill_gradient(low = "grey80", high = "grey20") +
+  tb_theme() +
+  labs(
+    title    = "TBV trend by birth date",
+    subtitle = "Weekly Evaluations",
+    x        = "Birth Date",
+    y        = "True Breeding Value (TBV)",
+    caption  = "tidybreed - 'Daily' Swine Breeding Program"
+  )
 
-# plot EBV Trends
-p <- data.tbv.ebv %>%
-  group_by(rep, gen_born, trait_name) %>%
-  summarise(
-    MeanEBV = mean(ebv),
-    .groups = "drop_last"
-  ) %>%
+# mean TBV by birth date
+data.tbv.ebv %>%
+  group_by(trait_name, birth_date) %>%
+  summarise(MeanTBV = mean(tbv_value), .groups = "drop") %>%
+ggplot(aes(x=birth_date, y=MeanTBV, color=trait_name)) +
+  geom_point(alpha=0.5) +
+  geom_smooth(method = "loess", se = TRUE) +
+  facet_wrap(~trait_name, scales="free") +
+  scale_color_manual("Trait Name", values = tb_colors) +
+  tb_theme() +
+  labs(
+    title    = "TBV Mean Trend by Birth Date",
+    subtitle = "Weekly Evaluations",
+    x        = "Birth Date",
+    y        = "True Breeding Value (TBV)",
+    caption  = "tidybreed - 'Daily' Swine Breeding Program"
+  )
+
+# ---------- MATINGS AND PUBERTY OVER TIME ---------- #
+
+# count matings by date
+data.ind.meta %>%
+  filter(!is.na(mate_date)) %>%
+  count(mate_date) %>%
+ggplot(aes(x=mate_date, y=n)) +
+  geom_col(fill=tb_colors[2]) +
+  tb_theme() +
+  labs(
+    title = "Timeseries Mating Counts",
+    subtitle = paste(config$selection$female_selection_interval, "day batch"),
+    x = "Mating Date",
+    y = "Count Mated",
+    caption = "tidybreed - 'Daily' Swine Breeding Program"
+  )
+
+# count puberty dates by year-week
+data.ind.meta %>%
+  filter(!is.na(puberty_date)) %>%
   mutate(
-    rep = as.factor(rep),
-    gen_born = as.factor(gen_born)
+    puberty_year = year(puberty_date),
+    puberty_week = str_pad(week(puberty_date), 2, side="left", pad = "0"),
+    puberty_yw   = paste(puberty_year, puberty_week, sep="_")
   ) %>%
-ggplot(., aes(x=gen_born, y=MeanEBV, color=trait_name, shape=as.factor(rep), group=rep)) +
+  count(puberty_yw) %>%
+ggplot(aes(x=puberty_yw, y=n)) +
+  geom_col(fill=tb_colors[2]) +
+  tb_theme() +
+  labs(
+    title = "Timeseries Puberty Date Counts",
+    subtitle = "Gilts reaching puberty per year-week",
+    x = "Puberty Year-Week",
+    y = "Count",
+    caption = "tidybreed - 'Daily' Swine Breeding Program"
+  ) + 
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+
+#------------------------------------------------------------------------------#
+# Saved figures: genetic trend by birth year-quarter
+#------------------------------------------------------------------------------#
+
+# A time-based simulation has no "generation"; birth year-quarter is the
+# grouping used for trend figures written to config$output$save_dir.
+
+warning("Save trend figures to: ", config$output$save_dir)
+
+# helper: save a plot with consistent settings
+save_fig <- function(p, name) {
+  ggsave(
+    filename = file.path(config$output$save_dir, name),
+    plot   = p,
+    width  = 8,
+    height = 5,
+    units  = "in",
+    dpi    = 100,
+    bg     = "white"
+  )
+}
+
+# ---------- MEAN EBV + TBV BY BIRTH YEAR-QUARTER ---------- #
+
+p <- data.tbv.ebv %>%
+  pivot_longer(cols = c(tbv_value, ebv_value), names_to = "value_type", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  mutate(value_type = recode(value_type, tbv_value = "TBV", ebv_value = "EBV")) %>%
+  group_by(value_type, trait_name, birth_yq) %>%
+  summarise(mean_value = mean(value), n = n(), .groups = "drop") %>%
+ggplot(aes(x=birth_yq, y=mean_value, color=value_type, group=value_type)) +
   geom_hline(yintercept = 0, color="grey50", linetype=2) +
   geom_line() +
   geom_point() +
   facet_wrap(~trait_name, scales="free_y") +
-  scale_shape_discrete("Rep Number") +
-  #scale_color_manual("Trait", values = trait_colors) +
-  scale_color_discrete("Trait") +
-  scale_x_discrete(limits=factor(0:10)) +
+  scale_color_manual("Value", values = c(EBV = tb_colors[2], TBV = tb_colors[1])) +
+  tb_theme() +
   labs(
-    title = "Estimated Breeding Values (EBVs)",
-    x = "Generation Born",
-    y = "Mean Estimated Breeding Value (EBV)",
+    title = "Mean EBV (latest) and TBV by Birth Year-Quarter",
+    x = "Birth Year-Quarter",
+    y = "Mean Breeding Value",
     caption = config$scenario_name
-  )
+  ) +
+  theme(axis.text.x = element_text(angle=70, hjust=1))
 
 print(p)
+save_fig(p, "mean_ebv_tbv_on_birth_yq_facet_trait.png")
 
-ggsave(
-  filename = file.path(config$output$save_dir, "ebv_mean_on_gen_born_facet_trait_color_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
+# ---------- TBV DISTRIBUTION BY BIRTH YEAR-QUARTER ---------- #
 
-#------------------------------------------------------------#
-# TBVs
-#------------------------------------------------------------#
-
-# plot EBV Trends
 p <- data.tbv.ebv %>%
-  group_by(rep, gen_born, trait_name) %>%
+  group_by(trait_name, birth_yq) %>%
   summarise(
-    MeanTBV = mean(tbv),
-    .groups = "drop_last"
-  ) %>%
-  mutate(
-    rep = as.factor(rep),
-    gen_born = as.factor(gen_born)
-  ) %>%
-ggplot(., aes(x=gen_born, y=MeanTBV, color=trait_name, shape=as.factor(rep), group=rep)) +
-  geom_hline(yintercept = 0, color="grey50", linetype=2) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~trait_name, scales="free_y") +
-  scale_shape_discrete("Rep Number") +
-  #scale_color_manual("Trait", values = trait_colors) +
-  scale_color_discrete("Trait") +
-  scale_x_discrete(limits=factor(0:10)) +
+    MinTBV = min(tbv_value),
+    Q1TBV  = quantile(tbv_value, prob=0.25),
+    Q2TBV  = quantile(tbv_value, prob=0.50),
+    Q3TBV  = quantile(tbv_value, prob=0.75),
+    MaxTBV = max(tbv_value),
+    .groups = "drop"
+  ) %>% 
+ggplot(aes(x=birth_yq, group=1)) +
+  geom_hline(aes(yintercept = 0), color="red3", linewidth=0.75, linetype=3) +
+  geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), fill=tb_colors[2], alpha=0.10) +
+  geom_ribbon(aes(ymin=Q1TBV,  ymax=Q3TBV),  fill=tb_colors[2], alpha=0.40) +
+  geom_line(aes(y=Q2TBV), color=tb_colors[2]) +
+  facet_wrap(~ trait_name, scales="free_y") +
+  tb_theme() +
   labs(
-    title = "True Breeding Values (TBVs)",
-    x = "Generation Born",
-    y = "Mean True Breeding Value (TBV)",
+    title = "TBV Trends By Trait",
+    subtitle = "Median + middle 50 percent + min/max, by birth year-quarter",
+    x = "Birth Year-Quarter",
+    y = "TBV",
     caption = config$scenario_name
-  )
+  ) +
+  theme(axis.text.x = element_text(angle=70, hjust=1))
 
 print(p)
+save_fig(p, "ribbon_tbv_on_birth_yq_facet_trait.png")
 
-ggsave(
-  filename = file.path(config$output$save_dir, "tbv_mean_on_gen_born_facet_trait_color_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
+# ---------- ANIMAL COUNT BY BIRTH YEAR-QUARTER ---------- #
 
-#------------------------------------------------------------------------------#
-# Ribbins
-#------------------------------------------------------------------------------#
-
-# data.tbv.ebv %>%
-# ggplot(., aes(x = gen_born, y = ebv)) +
-#   geom_ribbon(aes(ymin = min_val, ymax = max_val), alpha = 0.3) +
-#   geom_line(aes(y = mean_val)) +
-#   facet_wrap(~trait_name)
-
-#------------------------------------------------------------#
-# EBVs
-#------------------------------------------------------------#
-
-# plot EBVs
-p <- data.tbv.ebv %>%
-  # mutate(
-  #   rep = as.factor(rep),
-  #   gen_born = as.factor(gen_born)
-  # ) %>%
-ggplot(., aes(x = gen_born, y = ebv)) +
-  stat_summary(fun.min = min, fun.max = max,
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.5, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line", color = "steelblue", linewidth = 1) +
-  facet_wrap(~ trait_name, scales = "free_y") +
+p <- data.ind.meta %>%
+  count(birth_yq, sex) %>%
+ggplot(aes(x=birth_yq, y=n, fill=sex)) +
+  geom_col(position="dodge") +
+  scale_fill_manual("Sex", values = c(F = "magenta3", M = "dodgerblue3")) +
+  tb_theme() +
   labs(
-    title = "EBVs",
-    x = "Generation Born",
-    y = "Estimated Breeding Values (EBVs)",
-    caption = config$scenario_name
-  )
-
-print(p)
-
-ggsave(
-  filename = file.path(config$output$save_dir, "ribbon_ebv_on_gen_born_facet_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
-
-#------------------------------------------------------------#
-# TBVs
-#------------------------------------------------------------#
-
-# plot TBVs
-p <- data.tbv.ebv %>%
-ggplot(., aes(x = gen_born, y = tbv)) +
-  stat_summary(fun.min = min, fun.max = max,
-               geom = "ribbon", alpha = 0.2, fill = "steelblue") +
-  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.5, fill = "steelblue") +
-  stat_summary(fun = mean, geom = "line", color = "steelblue", linewidth = 1) +
-  facet_wrap(~ trait_name, scales = "free_y") +
-  labs(
-    title = "TBVs",
-    x = "Generation Born",
-    y = "True Breeding Values (TBVs)",
-    caption = config$scenario_name
-  )
-
-print(p)
-
-ggsave(
-  filename = file.path(config$output$save_dir, "ribbon_tbv_on_gen_born_facet_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
-
-#------------------------------------------------------------#
-# EBVs + TBVs
-#------------------------------------------------------------#
-
-# plot TBVs
-p <- data.tbv.ebv %>%
-  pivot_longer(
-    cols = c("tbv", "ebv")
-  ) %>%
-ggplot(., aes(x = gen_born, y = value, fill=name, color=name)) +
-  stat_summary(fun.min = min, fun.max = max,
-               geom = "ribbon", alpha = 0.5) +
-  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1),
-               geom = "ribbon", alpha = 0.5) +
-  stat_summary(fun = mean, geom = "line", linewidth = 1, alpha=0.7) +
-  facet_wrap(~ trait_name, scales = "free_y", ncol=3) +
-  scale_fill_manual("Value", values = c("steelblue3", "grey50"), labels = c("EBV", "TBV")) +
-  scale_color_manual("Value", values = c("steelblue3", "grey50"), labels = c("EBV", "TBV")) +
-  scale_x_discrete(limits = factor(0:10)) +
-  labs(
-    title = "EBVs and TBVs over Time",
-    x = "Generation Born",
-    y = "Values (EBVs or TBVs)",
-    caption = config$scenario_name
-  )
-
-print(p)
-
-ggsave(
-  filename = file.path(config$output$save_dir, "ribbon_ebv_and_tbv_on_gen_born_facet_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
-
-
-
-
-#------------------------------------------------------------------------------#
-# Summary of Data
-#------------------------------------------------------------------------------#
-
-#------------------------------------------------------------#
-# Animals - Rep + Gen
-#------------------------------------------------------------#
-
-# count by rep and gen
-p <- pop %>%
-  get_table("ind_meta") %>%
-  collect() %>%
-ggplot(., aes(x=as.factor(gen_born), fill=as.factor(rep))) +
-  geom_bar(position="dodge") +
-  scale_x_discrete(limits = factor(0:10)) +
-  #scale_fill_manual("Replicate", values=trait_colors)) +
-  scale_fill_discrete("Replicate") +
-  labs(
-    title = "Count Animal Records by Rep + Generation",
-    x = "Generation Born",
+    title = "Count Animals by Birth Year-Quarter and Sex",
+    x = "Birth Year-Quarter",
     y = "Count",
     caption = config$scenario_name
-  )
+  ) +
+  theme(axis.text.x = element_text(angle=70, hjust=1))
 
 print(p)
+save_fig(p, "bar_animal_count_on_birth_yq_fill_sex.png")
 
-ggsave(
-  filename = file.path(config$output$save_dir, "bar_animal_count_on_gen_born_fill_rep.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
+# ---------- PHENOTYPE COUNT BY PHENOTYPE YEAR-QUARTER ---------- #
 
-#------------------------------------------------------------#
-# Phenotypes - Rep + Gen
-#------------------------------------------------------------#
-
-# count by rep and gen
 p <- pop %>%
   get_table("ind_phenotype") %>%
   collect() %>%
-ggplot(., aes(x=as.factor(gen_pheno), fill=as.factor(rep))) +
-  geom_bar(position="dodge") +
-  facet_wrap(~trait_name) +
-  scale_x_discrete(limits = factor(0:10)) +
-  #scale_fill_manual("Replicate", values=trait_colors) +
-  scale_fill_discrete("Replicate") +
+  mutate(pheno_yq = paste(year(pheno_date), quarter(pheno_date), sep = "_")) %>%
+  count(phenotype_name, pheno_yq) %>%
+ggplot(aes(x=pheno_yq, y=n, fill=phenotype_name)) +
+  geom_col() +
+  facet_wrap(~phenotype_name, scales="free_y") +
+  scale_fill_manual("Phenotype", values = tb_colors) +
+  tb_theme() +
   labs(
-    title = "Phenotype Count by Rep + Generation",
-    x = "Generation Born",
+    title = "Phenotype Count by Year-Quarter Phenotyped",
+    x = "Phenotype Year-Quarter",
     y = "Phenotype Count",
     caption = config$scenario_name
-  )
+  ) +
+  theme(axis.text.x = element_text(angle=70, hjust=1))
 
 print(p)
+save_fig(p, "bar_phenotype_count_on_pheno_yq_facet_phenotype.png")
 
-ggsave(
-  filename = file.path(config$output$save_dir, "bar_phenotype_count_on_gen_born_fill_rep.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
+#------------------------------------------------------------------------------#
+# Total time + close
+#------------------------------------------------------------------------------#
 
-#------------------------------------------------------------#
-# TBV - Rep + Gen
-#------------------------------------------------------------#
-
-# count by rep and gen
-p <- pop %>%
-  get_table("ind_tbv") %>%
-  collect() %>%
-  left_join(., data.ind) %>%
-  group_by(rep, gen_born, trait_name) %>%
-  summarise(
-    MinTBV = min(tbv),
-    Q1TBV = quantile(tbv, prob=0.25),
-    Q2TBV = quantile(tbv, prob=0.50),
-    Q3TBV = quantile(tbv, prob=0.75),
-    MaxTBV = max(tbv),
-    .groups = "drop_last"
-  ) %>% 
-  mutate(
-    gen_born = as.factor(gen_born),
-    rep = as.factor(rep)
-  ) %>% 
-ggplot(aes(x=gen_born, fill=rep, color=rep, group=rep)) +
-  geom_hline(aes(yintercept = 0), color="red3", linewidth=0.75, linetype=3) +
-  geom_ribbon(aes(ymin=MinTBV, ymax=MaxTBV), alpha=0.05) +
-  geom_ribbon(aes(ymin=Q1TBV, ymax=Q3TBV), alpha=0.40) +
-  geom_line(aes(y=Q2TBV)) +
-  facet_wrap(~ trait_name, scale="free_y") +
-  #scale_color_manual("Replicate", values=trait_colors) +
-  scale_color_discrete("Replicate") +
-  #scale_fill_manual("Replicate", values=trait_colors) +
-  scale_fill_discrete("Replicate") +
-  labs(
-    title = "TBV Trends By Trait and Rep",
-    subtitle = "Median Trend + middle 50 percentile + min/max",
-    x = "Generation Born",
-    y = "TBV (by rep)",
-    caption = config$scenario_name
-  )
-
-print(p)
-
-ggsave(
-  filename = file.path(config$output$save_dir, "ribbon_tbv_on_gen_born_facet_trait_fill_trait.png"),
-  plot = p, 
-  width = 8,
-  height = 5,
-  units = "in",
-  dpi = 100,
-  bg = "white"
-)
-
-
-
-
-
-
+total_elapsed <- (proc.time() - time_start_total)["elapsed"]
+message(sprintf("Simulation finished | total: %s", format_elapsed(total_elapsed)))
 
 # close pop object for database
 close_pop(pop)
-

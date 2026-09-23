@@ -14,8 +14,12 @@ add_tbv(
 )
 }
 \arguments{
-\item{tbl}{A \code{tidybreed_table} object from \code{\link[=get_table]{get_table()}} (optionally piped
-through \code{\link[dplyr:filter]{dplyr::filter()}}). The table must contain an \code{id_ind} column.}
+\item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, optionally piped through
+\code{\link[dplyr:filter]{dplyr::filter()}}. Any table with an \code{id_ind} column is accepted; the
+individuals acted on are the distinct \code{id_ind} values present in the
+(filtered) table. An unfiltered \code{ind_meta} selects every individual; an
+unfiltered \code{ind_ebv}, \code{ind_index}, \code{ind_genotype}, ... selects only the
+individuals that have rows there. A table without \code{id_ind} is an error.}
 
 \item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
 all traits currently in \code{trait_meta} are used (in \code{id_trait} order).}
@@ -54,21 +58,53 @@ TBV is the Falconer-centered sum, across every \code{ind_haplotype} row (one per
 allele copy, not genotype dosage) for the individual, of:
 
 \preformatted{
-  TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+  TBV_i = sum over allele copies of (allele - center_value) * genome_value
 }
 
-\code{genome_value} and \code{base_allele_freq} are read from \code{genome_effects}
-(\code{genome_effect_type = "additive"}). For each haplotype row, a
-\strong{line-specific} effect (\code{genome_effects.line_name} matching that row's
-\code{line_origin}) is preferred; the \strong{population-wide} effect
-(\verb{genome_effects.line_name IS NULL}) is used only when no line-specific row
-exists for that locus/line. This per-locus fallback is what makes
-crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
-each parent line's own QTL effects and base allele frequency (see the
-"Crossbreeding TBV" example below). For \strong{imprinted} traits
-(\code{trait_meta.expressed_parent} = \code{"parent_1"} or \code{"parent_2"}), only
-haplotype rows from that parent's \code{parent_origin} are summed before the
-same line-matching logic applies.
+\code{genome_value} and \code{center_value} come from the \strong{order-one \code{additive}
+terms} under the reserved effect owner \code{generated_additive_tbv}, the terms
+\code{\link[=define_additive_effects]{define_additive_effects()}} writes. \code{center_value} is that variant's base
+allele frequency.
+
+\strong{This is one filtered call into the same evaluator \code{\link[=add_tgv]{add_tgv()}} uses}, not a
+second implementation: \code{add_tbv()} is \code{add_tgv()} restricted to the reserved
+owner and to single-member additive terms.
+
+The filter is deliberate and not merely conservative. Under functional
+\eqn{(a, d)} input the stored coefficient is \eqn{a}, while the
+breeding-value coefficient in a diploid HWE base is
+\eqn{\alpha = a + d(q - p)}; under epistasis, average effects depend on other
+loci and on LD. So arbitrary terms written through \code{\link[=define_genome_effects]{define_genome_effects()}}
+contribute to \code{ind_tgv} but \strong{never silently redefine the breeding value},
+additive members appearing inside interactions are ignored, and \code{ind_tbv}
+keeps its exact meaning. Deriving average effects from a general
+non-additive model is a separate calculation.
+}
+\section{When the stored coefficients stop being average effects}{
+
+Ignoring those terms is right, but it stops giving \emph{the model's} breeding
+value as soon as one of them contributes to the additive component or shifts
+the coefficients this function reads. \code{add_tbv()} warns once per trait in
+exactly that case: a non-reserved order-one \code{additive} term (it is part of A
+and is skipped), an \code{indicator} surface (raw functional coding — at a locus
+that also carries a generated additive term the stored \code{a} is no longer the
+average effect, \eqn{\alpha = a + d(q - p)}), or an interaction (whose
+additive projection depends on other loci and on LD, so there is no local
+correction).
+
+An order-one \code{dominance} term centred where the additive term is centred is
+the \strong{exception and stays silent}: Cockerham coding is HWE-orthogonal, so it
+contributes nothing to A and leaves the additive coefficient alone —
+\code{tbv_value} is still exact. Warning there would cry wolf on the common case.
+
+Each allele copy takes the \strong{most specific} variant whose origin predicate
+matches its \verb{(line_origin, parent_origin)} label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbreeding TBV
+correct — e.g. a Duroc x Landrace F1 is centered against each parent line's
+own effects and base allele frequency (see the "Crossbreeding TBV" example
+below). \strong{Imprinting} is a property of the effect, not of the trait: a term
+scoped to one \code{parent_origin} (see \code{\link[=define_additive_effects]{define_additive_effects()}}) reads only
+that parent's allele copies, per locus and per line.
 
 Optionally computes true selection index values by multiplying per-trait TBVs
 by weights from named indices defined with \code{\link[=define_index]{define_index()}}, and writes them
@@ -83,6 +119,7 @@ property of \code{phenotype_meta}, not of a genetic component trait).
 Useful for tracking genetic trend across generations without collecting
 phenotypes.
 }
+
 \examples{
 \dontrun{
 # Crossbreeding TBV: line-specific additive effects for two pure lines, then
@@ -114,5 +151,6 @@ pop <- pop |>
 }
 }
 \seealso{
+\code{\link[=add_tgv]{add_tgv()}} for every component of the genetic value,
 \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_index]{define_index()}}, \code{\link[=add_index]{add_index()}}
 }

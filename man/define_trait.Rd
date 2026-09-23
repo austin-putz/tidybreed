@@ -9,7 +9,6 @@ define_trait(
   trait_name,
   target_add_var = NULL,
   target_add_mean = 0,
-  expressed_parent = c("both", "parent_1", "parent_2"),
   description = NULL,
   units = NULL,
   overwrite = FALSE
@@ -30,10 +29,6 @@ Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to res
 Default \code{0}; \code{E[TBV] = 0} when TBVs are centered on base allele
 frequencies. The phenotypic population mean (intercept) is set separately
 in \code{\link[=define_phenotype]{define_phenotype()}}.}
-
-\item{expressed_parent}{Character. Parent-of-origin expression: \code{"both"}
-(default), \code{"parent_1"} (paternal), or \code{"parent_2"} (maternal). Imprinted
-traits use only the haplotype from the specified parent when computing TBVs.}
 
 \item{description}{Character. Free-text description of the trait.}
 

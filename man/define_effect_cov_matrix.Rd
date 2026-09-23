@@ -50,14 +50,27 @@ residual matrix; for a single scalar residual use \code{residual_var} in
 \code{\link[=define_phenotype]{define_phenotype()}} instead.
 \item Any named random effect (\code{"hys"}, \code{"litter"}, \code{"pen"}, …) — written to
 \code{phenotype_var_comp}. Must match the \code{effect_name} used in
-\code{\link[=define_effect_random]{define_effect_random()}}. Row/column names are phenotype names.
+\code{\link[=define_effect_random]{define_effect_random()}}. Row/column names are phenotype names. Each
+level of the effect (each pen) then carries one draw per phenotype with
+this covariance, realized sequentially: whichever phenotype
+\code{\link[=add_phenotype]{add_phenotype()}} generates first for a level draws marginally, and the
+others are later drawn conditional on what the level has stored —
+however many calls apart (see \code{\link[=define_effect_random]{define_effect_random()}}).
 }
 
 \code{define_effect_cov_matrix()} can be called \strong{before} \code{\link[=define_trait]{define_trait()}} or
 \code{\link[=define_effect_random]{define_effect_random()}} — no prior setup is required.
 
-All n² pairs are stored. Previous entries for this \code{effect_name} × names
-combination are replaced.
+All n² pairs are stored. For \code{phenotype_var_comp} effects the names form a
+\emph{covariance block} that is declared in one call, as a complete matrix: a
+call that names a fragment or a strict subset of an existing block is an
+error, the matrix must be positive semi-definite, and a block cannot be
+redefined once draws exist under it (the error gives the \code{\link[=remove_rows]{remove_rows()}}
+call that clears them). In a block of two or more phenotypes every
+\code{\link[=define_effect_random]{define_effect_random()}} row for the effect must use
+\code{distribution = "normal"} and read the same \verb{(source_column, source_table)}.
+See \code{\link[=define_residual_cov]{define_residual_cov()}} for the full rules. A rejected call changes
+nothing.
 }
 \examples{
 \dontrun{

@@ -11,24 +11,57 @@
 #' 1. **Called by [define_phenotype()] internally** when `residual_var` is
 #'    supplied (scalar diagonal, unconditional).
 #' 2. **Called by [define_effect_cov_matrix()]** when `effect_name = "residual"`
-#'    to store a full multi-trait unconditional R matrix.
-#' 3. **Called directly** to add group-specific (heterogeneous) residual rows
-#'    after [define_phenotype()] has written the unconditional default.
+#'    to store a full multi-phenotype unconditional R matrix.
+#' 3. **Called directly** to declare group-specific (heterogeneous) residual
+#'    strata, one call per `condition_level`.
+#'
+#' @section A block is declared in one call, as a complete matrix:
+#' The phenotypes that share any stored residual pair row form a *covariance
+#' block*; a pair written as an explicit `0` still joins its two phenotypes.
+#' A call must name a whole block: declaring `{A, B}` and then `{B, C}` is an
+#' error (the block would be `{A, B, C}` with `Cov(A, C)` undeclared), and so is
+#' redeclaring `{A, B}` or `A` alone once `{A, B, C}` exists. Redeclare the
+#' complete block instead, writing `0` for uncorrelated pairs. The matrix must
+#' be symmetric, finite and positive semi-definite; a rejected call changes
+#' nothing.
+#'
+#' **Strata.** Conditional calls (`condition_column` + `condition_level`) add
+#' strata to the block. Every stratum names the same phenotypes and a block has
+#' one `condition_column`; to grow a block that already has several strata,
+#' clear its rows from `phenotype_var_comp` with [remove_rows()] and redeclare
+#' each stratum.
+#'
+#' **How the block is sampled.** [add_phenotype()] draws each record's
+#' residual from this block conditional on the residuals the same individual
+#' has already realized for the block's other phenotypes at the same
+#' `pheno_number` — in the same call or any earlier one — so the declared
+#' covariance holds whether the phenotypes are recorded together or a
+#' hundred simulated days apart with culling in between. With strata, each
+#' record draws from the stratum its `condition_column` value selects,
+#' falling back to the unconditional stratum when the value is `NULL` or
+#' matches none (an error if there is no unconditional stratum).
+#'
+#' **Realized draws lock the block.** Once any `ind_phenotype` row of a member
+#' has a non-`NULL` `residual_value`, the block cannot be redefined; the error
+#' gives the [remove_rows()] call that clears those rows. Every phenotype in
+#' the block that is already defined must carry the same
+#' `condition_change_action` (see [define_phenotype()]).
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param phenotype_names Character vector of phenotype names (must match
 #'   `rownames(cov_matrix)` and `colnames(cov_matrix)`). For a single
 #'   phenotype, a scalar is accepted.
-#' @param cov_matrix Numeric matrix. Must be symmetric with
-#'   `dimnames(cov_matrix)` matching `phenotype_names`. For a single phenotype
-#'   the matrix is `1×1`.
+#' @param cov_matrix Numeric matrix with `dimnames(cov_matrix)` matching
+#'   `phenotype_names`. For a single phenotype the matrix is `1×1`.
 #' @param condition_column Character or `NULL`. Column in `condition_table` used
-#'   to look up group membership at phenotype time. `NULL` (default) stores an
-#'   unconditional default row (the fallback when no group-specific row exists).
+#'   to look up group membership at phenotype time. `NULL` (default) declares
+#'   the unconditional stratum. Must be supplied together with
+#'   `condition_level`.
 #' @param condition_table Character. Table containing `condition_column`.
-#'   Default `"ind_meta"`.
-#' @param condition_level Character or `NULL`. Specific level of `condition_column`
-#'   this row applies to. `NULL` (default) = unconditional fallback row.
+#'   Default `"ind_meta"`. Ignored (stored as `NULL`) for the unconditional
+#'   stratum.
+#' @param condition_level Character or `NULL`. Level of `condition_column` this
+#'   stratum applies to. `NULL` (default) = unconditional stratum.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -63,86 +96,31 @@ define_residual_cov <- function(pop,
   validate_tidybreed_pop(pop)
 
   phenotype_names <- as.character(phenotype_names)
-  stopifnot(length(phenotype_names) >= 1)
+  if (length(phenotype_names) < 1L) {
+    stop("`phenotype_names` must name at least one phenotype.", call. = FALSE)
+  }
+  lapply(phenotype_names, validate_sql_identifier, what = "phenotype name")
 
-  # Validate cov_matrix
-  if (!is.matrix(cov_matrix) || !is.numeric(cov_matrix)) {
-    stop("`cov_matrix` must be a numeric matrix.", call. = FALSE)
+  if (is.null(condition_column)) {
+    condition_table <- NULL
+  } else {
+    validate_sql_identifier(condition_column, what = "condition_column")
+    validate_sql_identifier(condition_table,  what = "condition_table")
   }
-  if (nrow(cov_matrix) != ncol(cov_matrix)) {
-    stop("`cov_matrix` must be square.", call. = FALSE)
-  }
-  rn <- rownames(cov_matrix)
-  cn <- colnames(cov_matrix)
-  if (is.null(rn) || is.null(cn) || !identical(sort(rn), sort(phenotype_names)) ||
-      !identical(sort(cn), sort(phenotype_names))) {
-    stop(
-      "`cov_matrix` dimnames must match `phenotype_names`: ",
-      paste(phenotype_names, collapse = ", "),
-      call. = FALSE
-    )
-  }
-
-  # Symmetry check
-  tol <- 1e-9
-  if (length(phenotype_names) > 1 &&
-      max(abs(cov_matrix - t(cov_matrix))) > tol) {
-    stop("`cov_matrix` must be symmetric.", call. = FALSE)
+  if (!is.null(condition_level) &&
+      (length(condition_level) != 1L || is.na(condition_level))) {
+    stop("`condition_level` must be a single non-missing value.", call. = FALSE)
   }
 
   pop <- ensure_trait_tables(pop)
-  pop <- ensure_phenotype_var_comp(pop)
 
-  # Delete existing rows for this exact (phenotype pair, effect, condition) combination
-  pn1_in <- paste0("'", gsub("'", "''", phenotype_names), "'", collapse = ", ")
-  cond_col_sql <- if (is.null(condition_column)) "IS NULL"
-                  else paste0("= '", gsub("'", "''", condition_column), "'")
-  cond_lvl_sql <- if (is.null(condition_level)) "IS NULL"
-                  else paste0("= '", gsub("'", "''", condition_level), "'")
-
-  DBI::dbExecute(pop$db_conn, paste0(
-    "DELETE FROM phenotype_var_comp ",
-    "WHERE effect_name = 'residual' ",
-    "  AND phenotype_name_1 IN (", pn1_in, ")",
-    "  AND phenotype_name_2 IN (", pn1_in, ")",
-    "  AND condition_column ", cond_col_sql,
-    "  AND condition_level  ", cond_lvl_sql
-  ))
-
-  # Build all n² rows (both directions for off-diagonal)
-  n <- length(phenotype_names)
-  pn_order <- phenotype_names
-
-  rows <- list()
-  first_id <- next_int_id(pop$db_conn, "phenotype_var_comp", "id_phenotype_var_comp")
-  k <- 0L
-
-  for (i in seq_len(n)) {
-    for (j in seq_len(n)) {
-      k <- k + 1L
-      rows[[k]] <- list(
-        id_phenotype_var_comp = first_id + k - 1L,
-        effect_name           = "residual",
-        phenotype_name_1      = pn_order[i],
-        phenotype_name_2      = pn_order[j],
-        cov_value             = cov_matrix[pn_order[i], pn_order[j]],
-        condition_column      = if (is.null(condition_column)) NA_character_
-                                else condition_column,
-        condition_table       = condition_table,
-        condition_level       = if (is.null(condition_level)) NA_character_
-                                else as.character(condition_level)
-      )
-    }
-  }
-
-  cov_df <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  cov_df$id_phenotype_var_comp <- as.integer(cov_df$id_phenotype_var_comp)
-  cov_df$cov_value              <- as.numeric(cov_df$cov_value)
-  cov_df$condition_column       <- as.character(cov_df$condition_column)
-  cov_df$condition_table        <- as.character(cov_df$condition_table)
-  cov_df$condition_level        <- as.character(cov_df$condition_level)
-
-  DBI::dbWriteTable(pop$db_conn, "phenotype_var_comp", cov_df, append = TRUE)
+  write_phenotype_cov_block(
+    pop$db_conn, "residual", phenotype_names, cov_matrix,
+    condition_column = condition_column,
+    condition_table  = condition_table,
+    condition_level  = condition_level,
+    caller           = "define_residual_cov()"
+  )
 
   invisible(pop)
 }

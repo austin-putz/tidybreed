@@ -159,8 +159,11 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   # Register schema descriptions for core tables
   register_schema_meta(db_conn, .all_schema_descriptions())
 
+  # genome_effects (and its member/origin children) are NOT created here: they
+  # declare a foreign key to genome_meta.locus_id, which does not exist until
+  # define_genome() runs. See define_genome().
   tables_created <- c(
-    "_schema_meta", "ind_meta", "trait_var_comp", "genome_effects",
+    "_schema_meta", "ind_meta", "trait_var_comp",
     "phenotype_meta", "phenotype_components", "phenotype_var_comp"
   )
 
@@ -207,12 +210,10 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
 #' @param pop A `tidybreed_pop` object with `run_dirs` populated.
 #' @param tool Character scalar. Which tool dir to use (must be a key in
 #'   `pop$run_dirs`).
-#' @param keep `FALSE`, `TRUE`, or `"on_error"`. Cleanup semantics (not yet
-#'   enforced automatically; reserved for a future release).
 #'
 #' @return Path to the newly created run directory (invisibly).
 #' @keywords internal
-.create_run_dir <- function(pop, tool, keep = "on_error") {
+.create_run_dir <- function(pop, tool) {
 
   if (!inherits(pop, "tidybreed_pop"))
     stop("pop must be a tidybreed_pop object", call. = FALSE)
@@ -283,18 +284,6 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
   ")
 
   DBI::dbExecute(db_conn, "
-    CREATE TABLE genome_effects (
-      id_genome_effect   INTEGER PRIMARY KEY,
-      locus_name         VARCHAR NOT NULL,
-      line_name          VARCHAR,
-      trait_name         VARCHAR NOT NULL,
-      genome_effect_type VARCHAR NOT NULL,
-      genome_value       DOUBLE  NOT NULL,
-      base_allele_freq   DOUBLE
-    )
-  ")
-
-  DBI::dbExecute(db_conn, "
     CREATE TABLE phenotype_meta (
       id_phenotype_meta        INTEGER PRIMARY KEY,
       phenotype_name           VARCHAR UNIQUE NOT NULL,
@@ -310,6 +299,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       cat_names                VARCHAR,
       store_liability          BOOLEAN DEFAULT FALSE,
       missing_component_action VARCHAR DEFAULT 'skip',
+      condition_change_action  VARCHAR DEFAULT 'error',
       formula_tbv              VARCHAR,
       formula                  VARCHAR
     )
@@ -331,9 +321,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       poly_order          INTEGER,
       poly_scale_min      DOUBLE,
       poly_scale_max      DOUBLE,
-      genome_effect_types VARCHAR DEFAULT 'additive',
-      missing_action      VARCHAR DEFAULT 'skip',
-      contributor_filter  VARCHAR
+      component_names     VARCHAR DEFAULT 'order1_additive'
     )
   ")
 

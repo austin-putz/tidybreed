@@ -11,21 +11,52 @@
 #' allele copy, not genotype dosage) for the individual, of:
 #'
 #' \preformatted{
-#'   TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+#'   TBV_i = sum over allele copies of (allele - center_value) * genome_value
 #' }
 #'
-#' `genome_value` and `base_allele_freq` are read from `genome_effects`
-#' (`genome_effect_type = "additive"`). For each haplotype row, a
-#' **line-specific** effect (`genome_effects.line_name` matching that row's
-#' `line_origin`) is preferred; the **population-wide** effect
-#' (`genome_effects.line_name IS NULL`) is used only when no line-specific row
-#' exists for that locus/line. This per-locus fallback is what makes
-#' crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
-#' each parent line's own QTL effects and base allele frequency (see the
-#' "Crossbreeding TBV" example below). For **imprinted** traits
-#' (`trait_meta.expressed_parent` = `"parent_1"` or `"parent_2"`), only
-#' haplotype rows from that parent's `parent_origin` are summed before the
-#' same line-matching logic applies.
+#' `genome_value` and `center_value` come from the **order-one `additive`
+#' terms** under the reserved effect owner `generated_additive_tbv`, the terms
+#' [define_additive_effects()] writes. `center_value` is that variant's base
+#' allele frequency.
+#'
+#' **This is one filtered call into the same evaluator [add_tgv()] uses**, not a
+#' second implementation: `add_tbv()` is `add_tgv()` restricted to the reserved
+#' owner and to single-member additive terms.
+#'
+#' The filter is deliberate and not merely conservative. Under functional
+#' \eqn{(a, d)} input the stored coefficient is \eqn{a}, while the
+#' breeding-value coefficient in a diploid HWE base is
+#' \eqn{\alpha = a + d(q - p)}; under epistasis, average effects depend on other
+#' loci and on LD. So arbitrary terms written through [define_genome_effects()]
+#' contribute to `ind_tgv` but **never silently redefine the breeding value**,
+#' additive members appearing inside interactions are ignored, and `ind_tbv`
+#' keeps its exact meaning. Deriving average effects from a general
+#' non-additive model is a separate calculation.
+#'
+#' @section When the stored coefficients stop being average effects:
+#' Ignoring those terms is right, but it stops giving *the model's* breeding
+#' value as soon as one of them contributes to the additive component or shifts
+#' the coefficients this function reads. `add_tbv()` warns once per trait in
+#' exactly that case: a non-reserved order-one `additive` term (it is part of A
+#' and is skipped), an `indicator` surface (raw functional coding — at a locus
+#' that also carries a generated additive term the stored `a` is no longer the
+#' average effect, \eqn{\alpha = a + d(q - p)}), or an interaction (whose
+#' additive projection depends on other loci and on LD, so there is no local
+#' correction).
+#'
+#' An order-one `dominance` term centred where the additive term is centred is
+#' the **exception and stays silent**: Cockerham coding is HWE-orthogonal, so it
+#' contributes nothing to A and leaves the additive coefficient alone —
+#' `tbv_value` is still exact. Warning there would cry wolf on the common case.
+#'
+#' Each allele copy takes the **most specific** variant whose origin predicate
+#' matches its `(line_origin, parent_origin)` label, falling back per copy to
+#' the common variant. This per-copy fallback is what makes crossbreeding TBV
+#' correct — e.g. a Duroc x Landrace F1 is centered against each parent line's
+#' own effects and base allele frequency (see the "Crossbreeding TBV" example
+#' below). **Imprinting** is a property of the effect, not of the trait: a term
+#' scoped to one `parent_origin` (see [define_additive_effects()]) reads only
+#' that parent's allele copies, per locus and per line.
 #'
 #' Optionally computes true selection index values by multiplying per-trait TBVs
 #' by weights from named indices defined with [define_index()], and writes them
@@ -40,8 +71,12 @@
 #' Useful for tracking genetic trend across generations without collecting
 #' phenotypes.
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param trait_name Character vector of trait name(s). When `NULL` (default),
 #'   all traits currently in `trait_meta` are used (in `id_trait` order).
 #' @param index_names Character vector of named index(es) from `index_meta` for
@@ -63,7 +98,8 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [add_phenotype()], [define_index()], [add_index()]
+#' @seealso [add_tgv()] for every component of the genetic value,
+#'   [add_phenotype()], [define_index()], [add_index()]
 #'
 #' @examples
 #' \dontrun{
@@ -104,20 +140,9 @@ add_tbv <- function(tbl, trait_name = NULL,
   stopifnot(inherits(tbl, "tidybreed_table"))
   pop <- tbl$pop
   validate_tidybreed_pop(pop)
+  conn <- pop$db_conn
 
-  if (is.null(trait_name)) {
-    trait_name <- DBI::dbGetQuery(
-      pop$db_conn,
-      "SELECT trait_name FROM trait_meta ORDER BY id_trait"
-    )$trait_name
-    if (length(trait_name) == 0L)
-      stop("No traits found in trait_meta. ",
-           "Define traits with define_trait() first.", call. = FALSE)
-  }
-
-  stopifnot(is.character(trait_name), length(trait_name) >= 1)
-  lapply(trait_name, validate_sql_identifier, what = "trait name")
-  trait <- trait_name
+  trait <- .gev_resolve_traits(conn, trait_name)
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
@@ -130,127 +155,31 @@ add_tbv <- function(tbl, trait_name = NULL,
     }
   }
 
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals for TBV computation.",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
-  }
-
-  ind_meta_subset <- if (is.null(subset_ids)) {
-    dplyr::collect(get_table(pop, "ind_meta"))
-  } else {
-    get_table(pop, "ind_meta") |>
-      dplyr::filter(.data$id_ind %in% !!subset_ids) |>
-      dplyr::collect()
-  }
-  if (nrow(ind_meta_subset) == 0) {
+  ids_t <- resolve_subset_ids(tbl, "TBV computation", all_if_null = TRUE)
+  if (length(ids_t) == 0) {
     warning("No individuals matched; no TBVs computed.", call. = FALSE)
     return(invisible(pop))
   }
 
-  meta_rows <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT trait_name, expressed_parent ",
-           "FROM trait_meta WHERE trait_name IN (",
-           paste0("'", trait, "'", collapse = ", "), ")")
-  )
-  missing_t <- setdiff(trait, meta_rows$trait_name)
-  if (length(missing_t) > 0) {
-    stop("Traits not found: ", paste(missing_t, collapse = ", "),
-         call. = FALSE)
+  # The whole stored model, every owner: the staleness check needs the terms
+  # this function does *not* read, and reading once is cheaper than twice.
+  full  <- .gev_read_model(conn, trait)
+  model <- .gev_reserved_additive(full)
+  for (t in trait) {
+    .gev_require_terms(model, t, tbv = TRUE)
+    .gev_warn_tbv_stale(full, t)
   }
-  meta_rows <- meta_rows[match(trait, meta_rows$trait_name), , drop = FALSE]
+
+  res <- .gev_evaluate(conn, ids_t, trait, model = model)
 
   for (t in trait) {
-    m     <- meta_rows[meta_rows$trait_name == t, ]
-    ids_t <- ind_meta_subset$id_ind
-
-    effect_count <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0(
-        "SELECT COUNT(*) AS n FROM genome_effects ",
-        "WHERE trait_name = '", t, "' ",
-        "AND genome_effect_type = 'additive'"
-      )
-    )$n
-    if (effect_count == 0L) {
-      stop(
-        "No additive effects found for trait '", t, "' in genome_effects. ",
-        "Call define_additive_effects() first.",
-        call. = FALSE
-      )
-    }
-
-    id_list <- paste0("'", ids_t, "'", collapse = ", ")
-    parent_filter <- if (m$expressed_parent == "both") {
-      ""
-    } else {
-      parent_origin <- if (m$expressed_parent == "parent_1") 1L else 2L
-      paste0("AND h.parent_origin = ", parent_origin, " ")
-    }
-
-    # Centered TBV, folding (allele - base_allele_freq) into the summed term:
-    # this generalizes Falconer centering to per-line base_allele_freq without
-    # a separate centering constant. Line-specific genome_effects rows
-    # (matched on line_origin) take precedence; a population-wide row
-    # (line_name IS NULL) is only used when no line-specific row exists for
-    # that locus/line (per-locus fallback, via NOT EXISTS). COALESCE(...,0)
-    # on base_allele_freq mirrors the prior R-side `ifelse(is.na(baf), 0, baf)`
-    # -- a NULL base_allele_freq must not null out the whole summed term.
-    tbv_sql <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0(
-        "SELECT h.id_ind, ",
-        "SUM((h.allele - COALESCE(e.base_allele_freq, 0)) * e.genome_value) AS tbv_value ",
-        "FROM ind_haplotype h ",
-        "JOIN genome_effects e ",
-        "  ON h.locus_name = e.locus_name ",
-        " AND e.trait_name = '", t, "' ",
-        " AND e.genome_effect_type = 'additive' ",
-        " AND ( e.line_name = h.line_origin ",
-        "       OR (e.line_name IS NULL AND NOT EXISTS ( ",
-        "             SELECT 1 FROM genome_effects e2 ",
-        "             WHERE e2.locus_name = h.locus_name ",
-        "               AND e2.trait_name = '", t, "' ",
-        "               AND e2.genome_effect_type = 'additive' ",
-        "               AND e2.line_name = h.line_origin)) ) ",
-        "WHERE h.id_ind IN (", id_list, ") ",
-        parent_filter,
-        "GROUP BY h.id_ind"
-      )
-    )
-
-    tbv <- tbv_sql$tbv_value[match(ids_t, tbv_sql$id_ind)]
-    if (anyNA(tbv)) {
-      missing_ids <- ids_t[is.na(tbv)]
-      stop(
-        "No haplotype rows matched additive effects for trait '", t,
-        "' for individual(s): ",
-        paste(utils::head(missing_ids, 5), collapse = ", "),
-        if (length(missing_ids) > 5) ", ..." else "",
-        ". Those individuals carry no ind_haplotype row at any locus with an ",
-        "additive effect for this trait. Usual causes: (a) every QTL for the ",
-        "trait sits on a chromosome the individual does not inherit (",
-        "chr_inheritance from_parent_1 = 0 and from_parent_2 = 0, e.g. Y in ",
-        "females) -- see define_chromosome(); or (b) the trait is imprinted (",
-        "trait_meta.expressed_parent = 'parent_1'/'parent_2') and restricts to ",
-        "a parent_origin the individual has no copies of (a male's X is ",
-        "from_parent_1 = 0). Place the trait's QTL on a chromosome these ",
-        "individuals carry, or exclude them from the subset.",
-        call. = FALSE
-      )
-    }
+    sub <- res[res$trait_name == t, , drop = FALSE]
+    .gev_require_contribution(ids_t, sub$id_ind, t)
 
     tbv_df <- tibble::tibble(
       id_ind     = ids_t,
       trait_name = t,
-      tbv_value  = tbv
+      tbv_value  = sub$tgv_value[match(ids_t, sub$id_ind)]
     )
     if (length(extra_cols) > 0) {
       prepped <- prepare_extra_cols(extra_cols, nrow(tbv_df), "ind_tbv",
@@ -272,7 +201,7 @@ add_tbv <- function(tbl, trait_name = NULL,
       "economic" = "economic",
       "both"     = c("index", "economic")
     )
-    all_subset_ids <- ind_meta_subset$id_ind
+    all_subset_ids <- ids_t
 
     for (idx_name in index_names) {
       idx_check <- DBI::dbGetQuery(
@@ -411,5 +340,41 @@ upsert_ind_true_index <- function(pop, df) {
   on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
   DBI::dbExecute(pop$db_conn,
     paste0("INSERT INTO ind_true_index SELECT * FROM ", tmp))
+  invisible(NULL)
+}
+
+
+#' Upsert TBV rows — column-named INSERT with ON CONFLICT DO UPDATE SET
+#'
+#' Only the columns present in tbv_df are updated on conflict; all other
+#' columns (user-defined extras) are left untouched in existing rows.
+#'
+#' @keywords internal
+upsert_ind_tbv <- function(pop, tbv_df) {
+  if (nrow(tbv_df) == 0) return(invisible(NULL))
+
+  start  <- next_int_id(pop$db_conn, "ind_tbv", "id_tbv")
+  tbv_df <- tibble::add_column(tbv_df,
+                                id_tbv = seq.int(start, start + nrow(tbv_df) - 1L),
+                                .before = 1)
+
+  tmp <- paste0("_tbv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
+  duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(tbv_df))
+  on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
+
+  cols        <- names(tbv_df)
+  key_cols    <- c("id_tbv", "id_ind", "trait_name")
+  update_cols <- setdiff(cols, key_cols)
+
+  col_list   <- paste(cols, collapse = ", ")
+  update_set <- paste(
+    paste0(update_cols, " = EXCLUDED.", update_cols),
+    collapse = ", "
+  )
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_tbv (", col_list, ") ",
+    "SELECT ", col_list, " FROM ", tmp, " ",
+    "ON CONFLICT (id_ind, trait_name) DO UPDATE SET ", update_set
+  ))
   invisible(NULL)
 }

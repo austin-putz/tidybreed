@@ -11,7 +11,21 @@
 #' }
 #'
 #' * `mean` comes from `phenotype_meta.mean`.
-#' * Fixed and random shifts come from `phenotype_effects` rows.
+#' * Fixed shifts come from the `fixed_class` / `fixed_cov` rows of
+#'   `phenotype_effects`.
+#' * Random shifts come from its `random` rows (see [define_effect_random()]):
+#'   one draw per distinct level of the effect's `source_column`, realized
+#'   the first time any record touches the level and stored in
+#'   `phenotype_random_effects`, then reused by every later record with that
+#'   level — in this call or any later one. A level is persistent: a pen
+#'   that is re-realized per batch is a different level (`pen_batch`), not a
+#'   different feature. When the effect is correlated across phenotypes
+#'   ([define_effect_cov_matrix()] with the effect's name), a level's draw
+#'   for one phenotype is conditional on the draws it already has stored for
+#'   the block's other phenotypes — `add_phenotype("ADG")` today and
+#'   `add_phenotype("BF")` next season gives pen `P1` a `(ADG, BF)` pair with
+#'   the declared covariance, whichever came first. A record whose level is
+#'   `NULL` gets no draw and a shift of `0`.
 #' * For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is the
 #'   standard additive TBV from `genome_effects` (computed via [add_tbv()],
 #'   which this function calls internally for every source trait it needs).
@@ -23,9 +37,31 @@
 #'   set, written by `define_phenotype(..., formula_tbv = ...)`), `TBV_i` is
 #'   evaluated from a small DSL expression referencing self/dam/sire/group
 #'   TBVs instead of a `phenotype_components` data frame.
-#' * `e_i` is residual: drawn from `MVN(0, R)` across phenotypes when a
-#'   covariance matrix is stored in `phenotype_var_comp` and multiple
-#'   phenotypes share the same subset; otherwise drawn independently.
+#' * `e_i` is the residual, drawn from the phenotype's residual covariance
+#'   block in `phenotype_var_comp` (see [define_residual_cov()]). Within a
+#'   block, residuals are **correlated across phenotypes and sequential in
+#'   time**: each record is drawn from the block's multivariate normal
+#'   conditional on every residual the same individual has already realized
+#'   for the other phenotypes of the block at the same `pheno_number` —
+#'   whether those were drawn in this call, in an earlier call, or supplied
+#'   through `user_residual`. So `add_phenotype("A")` today and
+#'   `add_phenotype("B")` after culling gives the survivors' `B` residual
+#'   the stored correlation with their `A` residual, with no `B` record for
+#'   the culled. Heterogeneous residual variance (strata by
+#'   `condition_column`) is applied per record: each record draws from the
+#'   stratum its condition value selects, falling back to the unconditional
+#'   `R` (with `residual_condition_level` stored as `NULL`) when the value
+#'   is `NULL` or matches no stratum, and erroring if there is no
+#'   unconditional stratum to fall back on. A stored residual drawn under a
+#'   different stratum than the current record resolves to is an error, or
+#'   is dropped from the conditioning set with a warning when the block's
+#'   phenotypes have `condition_change_action = "independent"`. The realized
+#'   residual and its stratum are written to `ind_phenotype.residual_value`
+#'   / `residual_condition_level` (liability scale; `NULL` for `user_values`
+#'   and `derived_formula` records). `pheno_number` pairs records
+#'   ordinally, not by simulated time; repeated records of the *same*
+#'   phenotype have independent residuals (use a permanent-environment
+#'   random effect for within-animal covariance).
 #'
 #' **`derived_formula` phenotypes are the one exception to the model above.**
 #' When `phenotype_meta.type == "derived_formula"` (`phenotype_meta.formula`
@@ -39,37 +75,69 @@
 #' **Subset selection**: pipe a `tidybreed_table` (from [get_table()] and
 #' optionally [dplyr::filter()]) as the first argument.
 #'
+#' **How a call runs.** Every record is planned first — sex expression, the
+#' repeatable guard, fixed-effect skips, missing-component exclusions and
+#' `pheno_number` are all decided before a single random number is drawn —
+#' then every draw is made in memory, then everything is written in one
+#' transaction. An individual that ends up without a record therefore never
+#' consumes RNG, and seeded output does not depend on physical row order:
+#' records are planned in `id_ind` order within each phenotype. See
+#' `?add_phenotype_stages`.
+#'
+#' **If a call fails**, nothing is written: `ind_phenotype` and
+#' `phenotype_random_effects` are exactly as they were, whether the error
+#' came from validation, from sampling (a missing variance, a residual
+#' stratum change under `condition_change_action = "error"`) or from the
+#' write itself — down to the schema, so a new column named in `...` is
+#' rolled back with the rows it was added for. The random-number stream is **not** rewound: `.Random.seed`
+#' stays advanced by the draws made before the error, as after any other
+#' failed R call, so re-running the call draws different values. Pass `seed`
+#' (or call `set.seed()`) again if the retry must reproduce the failed call.
+#' The TBVs the call materialized through [add_tbv()] remain; they do not
+#' depend on the RNG, and the retry rewrites them.
+#'
 #' **Escape hatches**:
 #' * `user_values`: skip model computation and write these values as phenotype
 #'   records for the subset.
-#' * `user_residual`: supply a numeric vector (or named list) to override the
-#'   residual draw.
+#' * `user_residual`: supply the residuals of some or all phenotypes instead
+#'   of drawing them; the rest are drawn conditional on the supplied values.
 #'
-#' @param tbl A `tidybreed_table` object from [get_table()] (optionally piped
-#'   through [dplyr::filter()]). The table must contain an `id_ind` column.
+#' @param tbl A `tidybreed_table` from [get_table()], optionally piped through
+#'   [dplyr::filter()]. Any table with an `id_ind` column is accepted; the
+#'   individuals acted on are the distinct `id_ind` values present in the
+#'   (filtered) table. An unfiltered `ind_meta` selects every individual; an
+#'   unfiltered `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+#'   individuals that have rows there. A table without `id_ind` is an error.
 #' @param phenotype_name Character vector of phenotype name(s). When `NULL`
 #'   (default), all phenotypes in `phenotype_meta` are used in
 #'   `id_phenotype_meta` order.
-#' @param user_residual Optional override for residual draws (skips the
-#'   `MVN`/independent residual sampling step described above; the mean,
-#'   covariate, and TBV contributions are still computed and added). For a single
-#'   `phenotype_name`, a plain numeric vector matched **by position** to the
-#'   final per-phenotype individual list — i.e. after sex-expression
-#'   filtering (`expressed_sex`), repeatable-record exclusion, and any
-#'   missing-component exclusion, so its length must equal the resulting
-#'   subset size, which may be smaller than the original filtered `tbl`. For
-#'   multiple phenotypes, a named list keyed by `phenotype_name`, each element
-#'   following the same positional rule for that phenotype's own subset.
-#'   Unlike `user_values` below, named (per-`id_ind`) vectors are **not**
-#'   supported here.
+#' @param user_residual Optional residuals to use instead of drawing them
+#'   (the mean, covariate and TBV contributions are still computed and
+#'   added). When exactly one phenotype in the call is generated from the
+#'   model, a plain numeric vector matched **by position** to that
+#'   phenotype's planned records — sorted `id_ind` order after sex
+#'   expression, the repeatable guard and any exclusion, so its length must
+#'   equal the planned record count, which may be smaller than the filtered
+#'   `tbl`. Otherwise a named list keyed by `phenotype_name` that may name
+#'   **any subset** of the model-generated phenotypes, each element following
+#'   the same positional rule; the phenotypes not named are drawn conditional
+#'   on the supplied values. Supplied residuals are stored in
+#'   `residual_value` like drawn ones and condition later calls; a phenotype
+#'   whose residuals are all supplied needs no residual variance declared.
+#'   A value outside the support of a singular covariance (e.g. non-zero
+#'   for a zero-variance phenotype) is an error. Named (per-`id_ind`) vectors are
+#'   **not** supported here; cannot be combined with `user_values`.
 #' @param user_values Optional override for the full phenotype value —
 #'   skips the model entirely (mean, covariates, and residual are not
 #'   evaluated), though TBVs are still computed and stored in `ind_tbv`. For a
-#'   single `phenotype_name`: a plain numeric vector matching the filtered
-#'   subset by position (`id_ind` order), or a named numeric vector (e.g.
-#'   `c(id_1 = 555, id_2 = 560)`) to match by `id_ind` regardless of order.
-#'   For multiple phenotypes: a named list keyed by `phenotype_name`, each
-#'   element following the same (positional-or-named) rule.
+#'   single `phenotype_name`: a plain numeric vector matching the planned
+#'   records by position (sorted `id_ind` order, after sex expression and the
+#'   repeatable guard), or a named numeric vector (e.g.
+#'   `c(id_1 = 555, id_2 = 560)`) to match by `id_ind` regardless of order —
+#'   every name must be an individual in that planned set, each once, and
+#'   only the named individuals receive a record. For multiple phenotypes: a
+#'   named list keyed by `phenotype_name`, each element following the same
+#'   (positional-or-named) rule.
 #' @param seed Optional integer for reproducibility.
 #' @param ... Optional scalar extra columns written to `ind_phenotype`
 #'   (broadcast to all records). Supply per-record vectors with
@@ -93,6 +161,23 @@
 #'   dplyr::filter(sex == "F", gen == 1L) |>
 #'   add_phenotype("ADG")
 #'
+#' # Any table with id_ind chooses the individuals. Marker-assisted
+#' # pre-selection: only carriers of two copies at Locus_10 (run add_dosage()
+#' # first, since ind_genotype is an on-demand cache)
+#' pop <- pop |>
+#'   get_table("ind_genotype") |>
+#'   dplyr::filter(locus_name == "Locus_10", dosage_value == 2L) |>
+#'   add_phenotype("ADG")
+#'
+#' # EBV-based: only animals above an EBV threshold in the latest evaluation
+#' pop <- pop |>
+#'   get_table("ind_ebv") |>
+#'   dplyr::filter(trait_name == "ADG", eval_number == 3L, ebv_value > 0.5) |>
+#'   add_phenotype("ADG")
+#'
+#' # Unfiltered ind_ebv means "every animal that has an EBV", not everyone
+#' pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
+#'
 #' # Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
 #' # registered once via define_phenotype(components = ...)
 #' pop <- pop |>
@@ -106,6 +191,41 @@
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 1L) |>
 #'   add_phenotype("WW")
+#'
+#' # Culling between records. A and B share a residual covariance block, so
+#' # B's residual is drawn conditional on each survivor's stored A residual.
+#' # The culled animals simply get no B record -- and because a residual is
+#' # realized only when a record is planned, they consume no draw either.
+#' pop <- pop |>
+#'   define_phenotype("A", type = "continuous", mean = 100) |>
+#'   define_phenotype("B", type = "continuous", mean = 250) |>
+#'   define_residual_cov(c("A", "B"),
+#'     matrix(c(40, 18, 18, 30), 2, 2,
+#'            dimnames = list(c("A", "B"), c("A", "B"))))
+#'
+#' # 1. Record A on everyone
+#' pop <- pop |> get_table("ind_meta") |> add_phenotype("A", seed = 1)
+#'
+#' # 2. Cull on the realized A: keep the top half
+#' cut <- pop |> get_table("ind_phenotype") |>
+#'   dplyr::filter(phenotype_name == "A") |> dplyr::pull(pheno_value) |>
+#'   stats::median()
+#'
+#' # 3. Record B on the survivors only. Selecting from ind_phenotype means
+#' #    "the animals with this A record", not everyone.
+#' pop <- pop |>
+#'   get_table("ind_phenotype") |>
+#'   dplyr::filter(phenotype_name == "A", pheno_value >= cut) |>
+#'   add_phenotype("B", seed = 2)
+#'
+#' # Checking the result: do NOT expect the correlation between the two
+#' # stored residual_value columns to equal the declared 18/sqrt(40*30) =
+#' # 0.52. The survivors were selected on A, so their A residuals are
+#' # range-restricted and the observed correlation is attenuated (~0.35 for
+#' # a top-half cull). What selection does *not* change is the conditional
+#' # slope, so that is the quantity to check:
+#' #
+#' #   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45
 #'
 #' # Escape hatch: supply phenotype values directly (skips the model, but
 #' # still computes and stores TBVs); named vector matches by id_ind
@@ -139,7 +259,7 @@ add_phenotype <- function(tbl,
 
   stopifnot(is.character(phenotype_name), length(phenotype_name) >= 1)
   lapply(phenotype_name, validate_sql_identifier, what = "phenotype name")
-  phenos <- phenotype_name
+  phenotype_name <- unique(phenotype_name)
 
   extra_cols <- list(...)
   if (length(extra_cols) > 0) {
@@ -162,715 +282,22 @@ add_phenotype <- function(tbl,
     }
   }
 
+  if (!is.null(user_values) && !is.null(user_residual)) {
+    stop("user_values and user_residual cannot be combined: user_values ",
+         "bypasses the model, so there is no residual to fix.", call. = FALSE)
+  }
+
   if (!is.null(seed)) set.seed(seed)
 
-  # ── 1. Resolve subset ──────────────────────────────────────────────────────
-
-  if (length(tbl$pending_filter) == 0) {
-    subset_ids <- NULL
-  } else {
-    collected <- dplyr::collect(tbl)
-    if (!"id_ind" %in% names(collected)) {
-      stop("Filtered table '", tbl$table_name,
-           "' must contain 'id_ind' to subset individuals for phenotyping.",
-           call. = FALSE)
-    }
-    subset_ids <- unique(collected[["id_ind"]])
-  }
-
-  # ── 2. Pull candidate ind_meta rows ───────────────────────────────────────
-
-  if (!is.null(subset_ids)) {
-    ind_meta_subset <- get_table(pop, "ind_meta") |>
-      dplyr::filter(.data$id_ind %in% !!subset_ids) |>
-      dplyr::collect()
-  } else {
-    ind_meta_subset <- dplyr::collect(get_table(pop, "ind_meta"))
-  }
-  if (nrow(ind_meta_subset) == 0) {
-    warning("No individuals matched the filter; no phenotypes generated.",
-            call. = FALSE)
-    return(invisible(pop))
-  }
-
-  # ── 3. Validate phenotypes and collect metadata from phenotype_meta ────────
-
-  phenos_in   <- paste0("'", gsub("'", "''", phenos), "'", collapse = ", ")
-  pheno_meta  <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT * FROM phenotype_meta WHERE phenotype_name IN (", phenos_in, ")")
-  )
-  missing_p <- setdiff(phenos, pheno_meta$phenotype_name)
-  if (length(missing_p) > 0) {
-    stop("Phenotypes not found in phenotype_meta: ",
-         paste(missing_p, collapse = ", "),
-         ". Call define_phenotype() first.", call. = FALSE)
-  }
-  pheno_meta <- pheno_meta[match(phenos, pheno_meta$phenotype_name), , drop = FALSE]
-
-  # ── 4 (G1): Check which phenotypes have components ────────────────────────
-
-  has_components       <- stats::setNames(logical(length(phenos)), phenos)
-  components_by_pheno  <- stats::setNames(vector("list", length(phenos)), phenos)
-
-  if ("phenotype_components" %in% DBI::dbListTables(pop$db_conn)) {
-    for (t in phenos) {
-      comp_rows <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT * FROM phenotype_components WHERE phenotype_name = '",
-               gsub("'", "''", t), "'")
-      )
-      has_components[t]      <- nrow(comp_rows) > 0
-      components_by_pheno[[t]] <- comp_rows
-    }
-  }
-
-  # ── 4b. Classify formula types for each phenotype ─────────────────────────
-
-  has_formula_tbv <- stats::setNames(logical(length(phenos)), phenos)
-  has_formula     <- stats::setNames(logical(length(phenos)), phenos)
-  formula_tbv_str <- stats::setNames(character(length(phenos)), phenos)
-  formula_str     <- stats::setNames(character(length(phenos)), phenos)
-
-  for (t in phenos) {
-    m_t  <- pheno_meta[pheno_meta$phenotype_name == t, ]
-    ftbv <- if ("formula_tbv" %in% names(m_t) && !is.na(m_t$formula_tbv) &&
-                 nzchar(m_t$formula_tbv)) m_t$formula_tbv else NA_character_
-    fder <- if ("formula" %in% names(m_t) && !is.na(m_t$formula) &&
-                 nzchar(m_t$formula)) m_t$formula else NA_character_
-    has_formula_tbv[t] <- !is.na(ftbv)
-    has_formula[t]     <- !is.na(fder)
-    formula_tbv_str[t] <- if (is.na(ftbv)) "" else ftbv
-    formula_str[t]     <- if (is.na(fder)) "" else fder
-  }
-
-  # G1: Validate genome_effects only for simple (non-composite) phenotypes
-  for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
-    n_eff <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT COUNT(*) AS n FROM genome_effects ",
-             "WHERE trait_name = '", gsub("'", "''", t), "' ",
-             "AND genome_effect_type = 'additive' AND line_name IS NULL")
-    )$n
-    if (n_eff == 0L) {
-      stop(
-        "No additive effects found for phenotype '", t, "' in genome_effects. ",
-        "For simple phenotypes call define_additive_effects() first. ",
-        "For composite phenotypes supply 'components' or 'formula_tbv' in define_phenotype(). ",
-        "For derived phenotypes (no genetic architecture) ",
-        "use type = 'derived_formula'.",
-        call. = FALSE
-      )
-    }
-  }
-
-  # ── 4c. Topological sort when derived_formula phenotypes are present ────────
-
-  if (any(has_formula)) {
-    ordered_phenos <- .topo_sort_phenotypes(pheno_meta)
-    phenos             <- ordered_phenos
-    has_components     <- has_components[phenos]
-    has_formula_tbv    <- has_formula_tbv[phenos]
-    has_formula        <- has_formula[phenos]
-    formula_tbv_str    <- formula_tbv_str[phenos]
-    formula_str        <- formula_str[phenos]
-    components_by_pheno <- components_by_pheno[phenos]
-    pheno_meta         <- pheno_meta[match(phenos, pheno_meta$phenotype_name), ]
-  }
-
-  # ── 5. Sex filter using phenotype_meta.expressed_sex ──────────────────────
-
-  subset_by_pheno <- lapply(seq_len(nrow(pheno_meta)), function(i) {
-    ex_sex <- pheno_meta$expressed_sex[i]
-    if (is.null(ex_sex) || is.na(ex_sex) || ex_sex == "both") return(ind_meta_subset)
-    ind_meta_subset[ind_meta_subset$sex == ex_sex, , drop = FALSE]
-  })
-  names(subset_by_pheno) <- phenos
-
-  # ── 5.5. Repeatable guard ─────────────────────────────────────────────────
-
-  for (t in phenos) {
-    m_t   <- pheno_meta[pheno_meta$phenotype_name == t, ]
-    ids_t <- subset_by_pheno[[t]]$id_ind
-    if (length(ids_t) == 0 || isTRUE(m_t$repeatable)) next
-
-    pn_safe  <- gsub("'", "''", t)
-    ids_sql  <- paste0("'", ids_t, "'", collapse = ", ")
-    already_done <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT DISTINCT id_ind FROM ind_phenotype ",
-             "WHERE phenotype_name = '", pn_safe, "' ",
-             "AND id_ind IN (", ids_sql, ")")
-    )$id_ind
-    n_rejected <- length(already_done)
-    if (n_rejected > 0) {
-      keep <- ids_t[!ids_t %in% already_done]
-      warning(
-        "Phenotype '", t, "' is not repeatable: ",
-        n_rejected, " individual(s) already phenotyped were skipped; ",
-        length(keep), " individual(s) will receive a new phenotype record.",
-        call. = FALSE
-      )
-      subset_by_pheno[[t]] <- subset_by_pheno[[t]][
-        subset_by_pheno[[t]]$id_ind %in% keep, , drop = FALSE]
-    }
-  }
-
-  # ── 6. Compute TBVs ───────────────────────────────────────────────────────
-
-  # Derived formula phenotypes have no TBV; exclude from TBV computation
-  simple_phenos        <- phenos[!has_components & !has_formula_tbv & !has_formula]
-  composite_phenos     <- phenos[has_components]
-  formula_tbv_phenos   <- phenos[has_formula_tbv]
-
-  # Simple: phenotype_name == trait_name in trait_meta
-  if (length(simple_phenos) > 0) {
-    pop <- add_tbv(tbl, trait_name = simple_phenos)
-  }
-
-  # G2: Composite — gather all contributor IDs + source traits, then add_tbv once
-  if (length(composite_phenos) > 0) {
-    all_source_traits   <- character(0)
-    all_contributor_ids <- character(0)
-
-    for (t in composite_phenos) {
-      comp_rows <- components_by_pheno[[t]]
-      all_source_traits <- unique(c(all_source_traits,
-                                    as.character(comp_rows$source_trait_name)))
-      subset_df <- subset_by_pheno[[t]]
-
-      for (ct in unique(as.character(comp_rows$contributor_type))) {
-        if (ct == "self") {
-          all_contributor_ids <- unique(c(all_contributor_ids, subset_df$id_ind))
-        } else if (ct == "dam") {
-          dids <- as.character(subset_df$id_parent_2)
-          dids <- dids[!is.na(dids) & dids != "NA" & nzchar(dids)]
-          all_contributor_ids <- unique(c(all_contributor_ids, dids))
-        } else if (ct == "sire") {
-          sids <- as.character(subset_df$id_parent_1)
-          sids <- sids[!is.na(sids) & sids != "NA" & nzchar(sids)]
-          all_contributor_ids <- unique(c(all_contributor_ids, sids))
-        } else if (ct == "group") {
-          # Resolve all group-members so their TBVs can be pre-computed
-          grp_comp_rows <- comp_rows[as.character(comp_rows$contributor_type) == "group",
-                                     , drop = FALSE]
-          for (gi in seq_len(nrow(grp_comp_rows))) {
-            grp_row <- grp_comp_rows[gi, ]
-            grp_col <- as.character(grp_row$group_column)
-            grp_tbl <- if (is.na(grp_row$group_table) || !nzchar(grp_row$group_table))
-                         "ind_meta" else as.character(grp_row$group_table)
-            focal_sql <- paste0("'", subset_df$id_ind, "'", collapse = ", ")
-            grp_vals  <- DBI::dbGetQuery(pop$db_conn, paste0(
-              "SELECT DISTINCT \"", grp_col, "\" AS gv FROM ", grp_tbl,
-              " WHERE id_ind IN (", focal_sql,
-              ") AND \"", grp_col, "\" IS NOT NULL"
-            ))$gv
-            if (length(grp_vals) > 0) {
-              gv_sql     <- paste0("'", grp_vals, "'", collapse = ", ")
-              member_ids <- DBI::dbGetQuery(pop$db_conn, paste0(
-                "SELECT id_ind FROM ", grp_tbl,
-                " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
-              ))$id_ind
-              all_contributor_ids <- unique(c(all_contributor_ids, member_ids))
-            }
-          }
-        }
-      }
-    }
-
-    if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
-      contrib_tbl <- get_table(pop, "ind_meta") |>
-        dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tbv(contrib_tbl, trait_name = all_source_traits)
-    }
-  }
-
-  # G2b: formula_tbv — gather all contributor IDs + source traits via AST walk
-  if (length(formula_tbv_phenos) > 0) {
-    all_source_traits   <- character(0)
-    all_contributor_ids <- character(0)
-
-    for (t in formula_tbv_phenos) {
-      ftbv      <- formula_tbv_str[t]
-      expr      <- parse(text = ftbv, keep.source = FALSE)[[1]]
-      walk_res  <- .walk_formula_tbv_ast(expr)
-      subset_df <- subset_by_pheno[[t]]
-
-      all_source_traits <- unique(c(all_source_traits,
-        vapply(walk_res$trait_refs, `[[`, character(1), "trait")
-      ))
-
-      for (ref in walk_res$trait_refs) {
-        if (ref$type == "self") {
-          all_contributor_ids <- unique(c(all_contributor_ids,
-                                          as.character(subset_df$id_ind)))
-        } else if (ref$type == "dam") {
-          dids <- as.character(subset_df$id_parent_2)
-          dids <- dids[!is.na(dids) & dids != "NA" & nzchar(dids)]
-          all_contributor_ids <- unique(c(all_contributor_ids, dids))
-        } else if (ref$type == "sire") {
-          sids <- as.character(subset_df$id_parent_1)
-          sids <- sids[!is.na(sids) & sids != "NA" & nzchar(sids)]
-          all_contributor_ids <- unique(c(all_contributor_ids, sids))
-        } else if (ref$type %in% c("group_sum", "group_mean")) {
-          grp_col   <- ref$col
-          grp_tbl   <- ref$table
-          focal_sql <- paste0("'", subset_df$id_ind, "'", collapse = ", ")
-          grp_vals  <- tryCatch(
-            DBI::dbGetQuery(pop$db_conn, paste0(
-              "SELECT DISTINCT \"", grp_col, "\" AS gv FROM ", grp_tbl,
-              " WHERE id_ind IN (", focal_sql,
-              ") AND \"", grp_col, "\" IS NOT NULL"
-            ))$gv,
-            error = function(e) character(0)  # column/table errors caught later
-          )
-          if (length(grp_vals) > 0) {
-            gv_sql     <- paste0("'", grp_vals, "'", collapse = ", ")
-            member_ids <- DBI::dbGetQuery(pop$db_conn, paste0(
-              "SELECT id_ind FROM ", grp_tbl,
-              " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
-            ))$id_ind
-            all_contributor_ids <- unique(c(all_contributor_ids, member_ids))
-          }
-        }
-      }
-    }
-
-    if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
-      contrib_tbl <- get_table(pop, "ind_meta") |>
-        dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tbv(contrib_tbl, trait_name = all_source_traits)
-    }
-  }
-
-  # ── 7. user_values short-circuit ──────────────────────────────────────────
-
-  if (!is.null(user_values)) {
-    write_user_phenotype_values(pop, phenos, subset_by_pheno, user_values,
-                                extra_cols)
-    return(invisible(pop))
-  }
-
-  # ── 7.5. Pre-draw correlated random effects (joint MVN across phenotypes) ──
-
-  if (length(phenos) >= 2) {
-    phenos_sql  <- paste0("'", gsub("'", "''", phenos), "'", collapse = ", ")
-    cov_effects <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT DISTINCT effect_name FROM phenotype_var_comp ",
-             "WHERE effect_name NOT IN ('residual') ",
-             "AND phenotype_name_1 IN (", phenos_sql, ") ",
-             "AND phenotype_name_2 IN (", phenos_sql, ")")
-    )$effect_name
-
-    for (eff in cov_effects) {
-      eff_safe    <- gsub("'", "''", eff)
-      eff_phenos_q <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT DISTINCT phenotype_name_1 AS p FROM phenotype_var_comp ",
-               "WHERE effect_name = '", eff_safe, "' ",
-               "AND phenotype_name_1 IN (", phenos_sql, ") ",
-               "AND phenotype_name_2 IN (", phenos_sql, ")")
-      )$p
-      eff_phenos <- intersect(phenos, eff_phenos_q)
-      if (length(eff_phenos) < 2) next
-
-      R_eff <- load_phenotype_cov(pop, eff, eff_phenos)
-      if (is.null(R_eff)) next
-
-      eff_rows <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT phenotype_name, source_column, source_table ",
-               "FROM phenotype_effects WHERE effect_name = '", eff_safe, "' ",
-               "AND phenotype_name IN (", phenos_sql, ")")
-      )
-
-      all_levels <- character(0)
-      for (et in eff_phenos) {
-        er <- eff_rows[eff_rows$phenotype_name == et, , drop = FALSE]
-        if (nrow(er) == 0) next
-        src_tbl <- if (is.na(er$source_table[1]) ||
-                       !nzchar(er$source_table[1])) "ind_meta" else er$source_table[1]
-        src_col <- er$source_column[1]
-        ids_t   <- subset_by_pheno[[et]]$id_ind
-        if (length(ids_t) == 0) next
-        if (src_tbl == "ind_meta") {
-          grp_vals <- subset_by_pheno[[et]][[src_col]]
-        } else {
-          ids_sql_et <- paste0("'", ids_t, "'", collapse = ", ")
-          grp_df <- DBI::dbGetQuery(
-            pop$db_conn,
-            paste0("SELECT ", src_col, " FROM ", src_tbl,
-                   " WHERE id_ind IN (", ids_sql_et, ")")
-          )
-          grp_vals <- grp_df[[src_col]]
-        }
-        all_levels <- union(all_levels,
-                            unique(as.character(grp_vals[!is.na(grp_vals)])))
-      }
-      if (length(all_levels) == 0) next
-
-      new_levels <- character(0)
-      for (et in eff_phenos) {
-        pn_safe2 <- gsub("'", "''", et)
-        existing_lvls <- DBI::dbGetQuery(
-          pop$db_conn,
-          paste0("SELECT level FROM phenotype_random_effects ",
-                 "WHERE phenotype_name = '", pn_safe2,
-                 "' AND effect_name = '", eff_safe, "'")
-        )$level
-        new_levels <- union(new_levels, setdiff(all_levels, existing_lvls))
-      }
-      if (length(new_levels) == 0) next
-
-      if (!requireNamespace("MASS", quietly = TRUE)) {
-        stop("Package 'MASS' is required for correlated random effect sampling.",
-             call. = FALSE)
-      }
-      draws_mat <- MASS::mvrnorm(
-        n     = length(new_levels),
-        mu    = rep(0, length(eff_phenos)),
-        Sigma = R_eff
-      )
-      if (!is.matrix(draws_mat)) draws_mat <- matrix(draws_mat, nrow = 1)
-      colnames(draws_mat) <- eff_phenos
-      rownames(draws_mat) <- new_levels
-
-      for (et in eff_phenos) {
-        pn_safe2 <- gsub("'", "''", et)
-        existing_lvls <- DBI::dbGetQuery(
-          pop$db_conn,
-          paste0("SELECT level FROM phenotype_random_effects ",
-                 "WHERE phenotype_name = '", pn_safe2,
-                 "' AND effect_name = '", eff_safe, "'")
-        )$level
-        new_for_pheno <- setdiff(new_levels, existing_lvls)
-        if (length(new_for_pheno) == 0) next
-        new_df <- tibble::tibble(
-          phenotype_name = et,
-          effect_name    = eff,
-          level          = new_for_pheno,
-          draw_value     = draws_mat[new_for_pheno, et],
-          date_sampled   = Sys.Date()
-        )
-        DBI::dbWriteTable(pop$db_conn, "phenotype_random_effects", new_df,
-                          append = TRUE)
-      }
-    }
-  }
-
-  # ── 8. Residual covariance info (G3) ──────────────────────────────────────
-
-  resid_info <- get_residual_cov(pop, phenos, ind_meta_subset)
-
-  # ── 8.5. Joint residual draw for multi-phenotype case (G3 + G5) ───────────
-
-  joint_resid <- NULL
-
-  if (length(phenos) >= 2 && is.null(user_residual)) {
-    subset_ids_list <- lapply(subset_by_pheno, function(df) sort(df$id_ind))
-    id_strs   <- vapply(subset_ids_list, paste, character(1), collapse = "|")
-    all_equal <- length(unique(id_strs)) == 1
-
-    if (all_equal && !is.null(resid_info$R_unconditional)) {
-      n_common <- length(subset_ids_list[[1]])
-
-      if (is.null(resid_info$condition_column)) {
-        # Fast path: single unconditional MVN draw
-        var_vec <- stats::setNames(diag(resid_info$R_unconditional), phenos)
-        draws   <- sample_residuals(n_common, var_vec,
-                                    R = resid_info$R_unconditional)
-        rownames(draws) <- subset_ids_list[[1]]
-        joint_resid <- draws
-
-      } else if (!is.null(resid_info$R_by_level)) {
-        # G5: Heterogeneous residuals — draw per condition group
-        cond_col <- resid_info$condition_column
-        cond_tbl <- resid_info$condition_table %||% "ind_meta"
-        common_ids <- subset_ids_list[[1]]
-
-        if (cond_tbl == "ind_meta") {
-          ref_df    <- subset_by_pheno[[phenos[1]]]
-          cond_vals <- ref_df[[cond_col]][match(common_ids, ref_df$id_ind)]
-        } else {
-          ids_sql <- paste0("'", common_ids, "'", collapse = ", ")
-          cv_df   <- DBI::dbGetQuery(
-            pop$db_conn,
-            paste0("SELECT id_ind, ", cond_col, " FROM ", cond_tbl,
-                   " WHERE id_ind IN (", ids_sql, ")")
-          )
-          cond_vals <- cv_df[[cond_col]][match(common_ids, cv_df$id_ind)]
-        }
-
-        draws_mat <- matrix(NA_real_, n_common, length(phenos),
-                            dimnames = list(common_ids, phenos))
-
-        for (lvl in names(resid_info$R_by_level)) {
-          grp_mask <- !is.na(cond_vals) & as.character(cond_vals) == lvl
-          if (!any(grp_mask)) next
-          grp_ids <- common_ids[grp_mask]
-          R_grp   <- resid_info$R_by_level[[lvl]]
-          var_vec <- stats::setNames(diag(R_grp), phenos)
-          grp_draws <- sample_residuals(length(grp_ids), var_vec, R = R_grp)
-          draws_mat[grp_ids, ] <- grp_draws
-        }
-
-        # Individuals without a level match: fall back to unconditional R
-        no_match <- which(rowSums(is.na(draws_mat)) > 0)
-        if (length(no_match) > 0) {
-          if (!is.null(resid_info$R_unconditional)) {
-            warning(length(no_match),
-                    " individual(s) have no matching condition level in ",
-                    "phenotype_residual_cov; using unconditional R.",
-                    call. = FALSE)
-            var_vec <- stats::setNames(diag(resid_info$R_unconditional), phenos)
-            fb_draws <- sample_residuals(length(no_match), var_vec,
-                                         R = resid_info$R_unconditional)
-            draws_mat[no_match, ] <- fb_draws
-          } else {
-            warning(length(no_match),
-                    " individual(s) have no matching condition level; residuals ",
-                    "set to 0 (no unconditional fallback).", call. = FALSE)
-            draws_mat[no_match, ] <- 0
-          }
-        }
-
-        joint_resid <- draws_mat
-      }
-    }
-  }
-
-  # ── 9. Per-phenotype generation loop ──────────────────────────────────────
-
-  for (t_idx in seq_along(phenos)) {
-    t         <- phenos[t_idx]
-    m         <- pheno_meta[pheno_meta$phenotype_name == t, ]
-    subset_df <- subset_by_pheno[[t]]
-    ids_t     <- subset_df$id_ind
-    n_ind     <- length(ids_t)
-    if (n_ind == 0) next
-
-    # 9a. Covariate contribution (fixed + random effects)
-    cov_result        <- compute_covariate_contribution(pop, t, subset_df)
-    covariate_contrib <- cov_result$contribution
-
-    # G4: Remove individuals skipped by null_class_action = "skip"
-    skip_mask <- is.na(covariate_contrib)
-    if (any(skip_mask)) {
-      n_skip <- sum(skip_mask)
-      warning("Phenotype '", t, "': ", n_skip,
-              " individual(s) excluded due to null_class_action = 'skip'.",
-              call. = FALSE)
-      keep_mask         <- !skip_mask
-      ids_t             <- ids_t[keep_mask]
-      n_ind             <- length(ids_t)
-      subset_df         <- subset_df[keep_mask, , drop = FALSE]
-      covariate_contrib <- covariate_contrib[keep_mask]
-      if (n_ind == 0) {
-        message("Phenotype '", t, "': all individuals skipped; no records written.")
-        next
-      }
-    }
-
-    # 9b. TBV: four-way dispatch
-    if (has_formula[t]) {
-      # ── derived_formula: evaluate arithmetic over ind_phenotype records ──
-      derived_vals <- .eval_derived_formula(pop, formula_str[t], ids_t, t)
-
-      # Write records directly — no residual, no liability conversion
-      records <- tibble::tibble(
-        id_phenotype   = next_phenotype_ids(pop, n_ind),
-        id_ind         = ids_t,
-        phenotype_name = t,
-        pheno_value    = as.numeric(derived_vals),
-        pheno_number   = next_pheno_numbers(pop, t, ids_t)
-      )
-      if (length(extra_cols) > 0) {
-        prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
-                                     pop$db_conn)
-        for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
-      }
-      DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
-      message("Wrote ", n_ind, " derived phenotype records for '", t, "'.")
-      next  # skip residual draw, liability conversion, etc.
-
-    } else if (has_formula_tbv[t]) {
-      # ── formula_tbv composite: evaluate DSL formula ──
-      mca <- if ("missing_component_action" %in% names(m) &&
-                 !is.na(m$missing_component_action) &&
-                 nzchar(m$missing_component_action)) m$missing_component_action else "skip"
-
-      raw_tbv <- .eval_formula_tbv(pop, formula_tbv_str[t], subset_df, t)
-      tbv     <- raw_tbv[ids_t]
-
-      excl_mask <- is.na(tbv)
-      if (any(excl_mask)) {
-        n_excl    <- sum(excl_mask)
-        excl_ids  <- ids_t[excl_mask]
-        msg <- paste0(
-          n_excl, " individual(s) had one or more missing components for phenotype '",
-          t, "' (formula_tbv: ", formula_tbv_str[t], ") and were excluded. ",
-          "(IDs: ", paste(head(excl_ids, 5), collapse = ", "),
-          if (n_excl > 5) paste0(" ... +", n_excl - 5L, " more") else "", ")"
-        )
-        if (mca == "error") stop(msg, call. = FALSE)
-        else warning(msg, call. = FALSE)
-
-        ids_t             <- ids_t[!excl_mask]
-        n_ind             <- length(ids_t)
-        subset_df         <- subset_df[!excl_mask, , drop = FALSE]
-        covariate_contrib <- covariate_contrib[!excl_mask]
-        tbv               <- tbv[ids_t]
-        if (n_ind == 0) {
-          message("Phenotype '", t, "': all individuals excluded (no formula_tbv result).")
-          next
-        }
-      }
-      # Fall through to 9c (residual draw) — same as simple/composite
-
-    } else if (has_components[t]) {
-      # ── components data frame path (unchanged) ──
-      mca <- if ("missing_component_action" %in% names(m) &&
-                 !is.na(m$missing_component_action) &&
-                 nzchar(m$missing_component_action)) m$missing_component_action else "skip"
-      comp_result <- .assemble_composite_tbv(pop, t, components_by_pheno[[t]],
-                                             subset_df,
-                                             missing_component_action = mca)
-      tbv <- comp_result$composite_tbv[ids_t]
-
-      excl_mask <- is.na(tbv)
-      if (any(excl_mask)) {
-        ids_t             <- ids_t[!excl_mask]
-        n_ind             <- length(ids_t)
-        subset_df         <- subset_df[!excl_mask, , drop = FALSE]
-        covariate_contrib <- covariate_contrib[!excl_mask]
-        tbv               <- tbv[ids_t]
-        if (n_ind == 0) {
-          message("Phenotype '", t, "': all individuals excluded (no composite TBV).")
-          next
-        }
-      }
-    } else {
-      # ── Simple phenotype: read TBV from ind_tbv ──
-      ids_sql  <- paste0("'", ids_t, "'", collapse = ", ")
-      t_safe   <- gsub("'", "''", t)
-      tbv_rows <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT id_ind, tbv_value FROM ind_tbv ",
-               "WHERE trait_name = '", t_safe, "' ",
-               "AND id_ind IN (", ids_sql, ")")
-      )
-      tbv <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)[ids_t]
-    }
-
-    # 9c. Residual draw
-    if (!is.null(user_residual)) {
-      resid <- if (is.list(user_residual)) user_residual[[t]] else user_residual
-      if (length(resid) != n_ind)
-        stop("user_residual length for phenotype '", t, "' must equal ",
-             n_ind, ".", call. = FALSE)
-
-    } else if (!is.null(joint_resid) && t %in% colnames(joint_resid)) {
-      resid <- joint_resid[ids_t, t]
-
-    } else {
-      # Independent per-phenotype draw
-      resid_var <- resid_info$residual_var_unconditional[t]
-      if (is.na(resid_var)) {
-        # Backward-compat fallback for databases without phenotype_var_comp residual rows
-        resid_var <- get_phenotype_var(pop, "residual", t)
-      }
-      if (is.na(resid_var)) {
-        stop("No residual variance found for phenotype '", t, "'. ",
-             "Specify via define_phenotype(residual_var = ...) or ",
-             "define_residual_cov().", call. = FALSE)
-      }
-      resid <- stats::rnorm(n_ind, sd = sqrt(resid_var))
-    }
-
-    # 9d. Liability
-    pheno_mean <- if (!is.null(m$mean) && !is.na(m$mean)) m$mean else 0
-    liability  <- pheno_mean + covariate_contrib + as.numeric(tbv) + resid
-
-    # 9e. Phenotype-type conversion
-    pheno_type <- if (is.null(m$type) || is.na(m$type)) {
-      "continuous"
-    } else {
-      m$type
-    }
-
-    cat_idx <- NULL
-
-    if (pheno_type == "categorical") {
-      has_thresh <- !is.null(m$thresholds) && !is.na(m$thresholds) &&
-                   nzchar(m$thresholds)
-      if (has_thresh) {
-        thresh_vec <- as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]])
-      } else {
-        va <- get_trait_var(pop, "gen_add", t)
-        vr <- resid_info$residual_var_unconditional[t]
-        if (is.na(vr)) vr <- get_phenotype_var(pop, "residual", t)
-        va <- if (is.na(va)) 0 else va
-        vr <- if (is.na(vr)) 0 else vr
-        thresh_vec <- pheno_mean +
-                      stats::qnorm(1 - m$prevalence) * sqrt(va + vr)
-      }
-      cat_idx <- liability_to_categorical(liability, thresh_vec)
-      has_cv  <- !is.null(m$cat_values) && !is.na(m$cat_values) &&
-                 nzchar(m$cat_values)
-      value <- if (has_cv) {
-        cv <- as.numeric(strsplit(m$cat_values, ",", fixed = TRUE)[[1]])
-        as.numeric(cv[cat_idx])
-      } else {
-        as.numeric(cat_idx)
-      }
-    } else {
-      value <- switch(
-        pheno_type,
-        continuous = liability,
-        count      = as.numeric(clip_count(liability, m$min_value, m$max_value)),
-        liability
-      )
-    }
-
-    # 9f. Build and write records
-    records <- tibble::tibble(
-      id_phenotype   = next_phenotype_ids(pop, n_ind),
-      id_ind         = ids_t,
-      phenotype_name = t,
-      pheno_value    = as.numeric(value),
-      pheno_number   = next_pheno_numbers(pop, t, ids_t)
-    )
-    if (length(extra_cols) > 0) {
-      prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
-                                   pop$db_conn)
-      for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
-    }
-
-    # Optional: store raw liability for categorical traits
-    if (isTRUE(m$store_liability) && !is.null(cat_idx)) {
-      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
-      if (!"liability_value" %in% pheno_cols)
-        DBI::dbExecute(pop$db_conn,
-          "ALTER TABLE ind_phenotype ADD COLUMN liability_value DOUBLE")
-      records$liability_value <- as.numeric(liability)
-    }
-
-    # Optional: store category label for categorical traits
-    has_cn <- !is.null(cat_idx) &&
-              !is.null(m$cat_names) && !is.na(m$cat_names) && nzchar(m$cat_names)
-    if (has_cn) {
-      cn <- strsplit(m$cat_names, ",", fixed = TRUE)[[1]]
-      pheno_cols <- DBI::dbListFields(pop$db_conn, "ind_phenotype")
-      if (!"cat_name" %in% pheno_cols)
-        DBI::dbExecute(pop$db_conn,
-          "ALTER TABLE ind_phenotype ADD COLUMN cat_name VARCHAR")
-      records$cat_name <- cn[cat_idx]
-    }
-
-    DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
-    message("Wrote ", n_ind, " phenotype records for '", t, "'.")
-  }
+  # Three stages (see ?add_phenotype_stages): PLAN decides every record with
+  # no RNG and no writes; RESOLVE draws everything in memory; COMMIT writes
+  # once, in one transaction, without touching the RNG.
+  plan <- .ap_plan(tbl, phenotype_name, user_values = user_values)
+  if (is.null(plan)) return(invisible(pop))
+  pop <- plan$pop
+
+  resolved <- .ap_resolve(plan, user_residual = user_residual)
+  .ap_commit(pop, plan, resolved, extra_cols)
 
   invisible(pop)
 }
@@ -878,269 +305,73 @@ add_phenotype <- function(tbl,
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
-#' Assemble composite TBV from phenotype_components for a single phenotype
+#' Assemble the composite TBV of one phenotype from `phenotype_components`
 #'
-#' Reads contributor TBVs from `ind_tbv` (which must already be populated by
-#' `add_tbv()` for all relevant source traits and contributor IDs) and
-#' multiplies by component weights, summing across all components.
+#' Sums `weight * contributor TBV` over the phenotype's component rows, one
+#' contributor lookup per row (see `?contributor_tbv`). `ind_tbv` must
+#' already hold the source traits for every contributor
+#' (`.ap_materialize_tbvs()`). A missing piece — a `NULL` dam or sire, a
+#' contributor with no TBV, a `NULL` group value, a `NULL` covariate —
+#' makes the individual's composite `NA`.
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param phenotype_name Character. The composite phenotype name.
-#' @param comp_rows Data frame. Rows from `phenotype_components` for this phenotype.
-#' @param subset_df Data frame. Sex-filtered (and skip-masked) `ind_meta` rows.
-#' @param missing_component_action Character. `"skip"` (default) to warn and
-#'   exclude individuals with any missing component (dam/sire/group TBV
-#'   unavailable, no group assignment, etc.); `"error"` to stop immediately.
-#' @return A list with `composite_tbv`: named numeric vector (NA = excluded).
+#' @param comp_rows The phenotype's `phenotype_components` rows.
+#' @param subset_df The planned `ind_meta` rows (needs `id_ind`,
+#'   `id_parent_1`, `id_parent_2`).
+#' @param missing_component_action `"skip"` warns and returns `NA` for the
+#'   excluded individuals; `"error"` stops. Both name the count and up to
+#'   five ids.
+#' @return Numeric vector named by `id_ind`; `NA` marks an excluded
+#'   individual.
 #' @keywords internal
 .assemble_composite_tbv <- function(pop, phenotype_name, comp_rows, subset_df,
-                                    missing_component_action = "skip") {
-  focal_ids <- subset_df$id_ind
+                                    missing_component_action) {
+  conn      <- pop$db_conn
+  focal_ids <- as.character(subset_df$id_ind)
   n         <- length(focal_ids)
-  composite <- stats::setNames(rep(0, n), focal_ids)
+  composite <- rep(0, n)
 
   for (i in seq_len(nrow(comp_rows))) {
-    comp           <- comp_rows[i, ]
-    source_trait   <- as.character(comp$source_trait_name)
-    contr_type     <- as.character(comp$contributor_type)
-    weight_val     <- if (is.null(comp$weight)       || is.na(comp$weight))       1.0     else as.numeric(comp$weight)
-    weight_type_c  <- if (is.null(comp$weight_type)  || is.na(comp$weight_type))  "fixed" else as.character(comp$weight_type)
+    comp  <- comp_rows[i, , drop = FALSE]
+    trait <- comp$source_trait_name
+    what  <- paste0("Phenotype '", phenotype_name, "', component '", trait,
+                    "' (", comp$contributor_type, ")")
 
-    # Compute effective per-individual weight (used by all contributor types)
-    if (weight_type_c == "covariate" &&
-        !is.null(comp$covariate_name) && !is.na(comp$covariate_name) &&
-        nzchar(comp$covariate_name)) {
-      cov_col <- as.character(comp$covariate_name)
-      cov_tbl <- if (is.null(comp$covariate_table) || is.na(comp$covariate_table) ||
-                     !nzchar(comp$covariate_table)) "ind_meta"
-                 else as.character(comp$covariate_table)
-      if (cov_tbl == "ind_meta") {
-        cov_vals <- as.numeric(subset_df[[cov_col]])
-      } else {
-        ids_sql2 <- paste0("'", focal_ids, "'", collapse = ", ")
-        cv_df    <- DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, ", cov_col, " FROM ", cov_tbl,
-          " WHERE id_ind IN (", ids_sql2, ")"
-        ))
-        cov_vals <- as.numeric(cv_df[[cov_col]][match(focal_ids, cv_df$id_ind)])
-      }
-      eff_weight <- cov_vals * weight_val
-    } else {
-      eff_weight <- rep(weight_val, n)
-    }
-
-    # Resolve contributor IDs (parallel to focal_ids, NA where missing)
-    if (contr_type == "self") {
-      contr_ids <- focal_ids
-    } else if (contr_type == "dam") {
-      contr_ids <- as.character(subset_df$id_parent_2)
-    } else if (contr_type == "sire") {
-      contr_ids <- as.character(subset_df$id_parent_1)
-    } else if (contr_type == "group") {
-      # ── Group contributor (SGE / Bijma model) ───────────────────────────────
-      grp_col    <- as.character(comp$group_column)
-      grp_tbl    <- if (is.na(comp$group_table) || !nzchar(comp$group_table))
-                      "ind_meta" else as.character(comp$group_table)
-      agg_method <- if (is.na(comp$aggregation) || !nzchar(comp$aggregation))
-                      "sum" else as.character(comp$aggregation)
-      st_safe    <- gsub("'", "''", source_trait)
-
-      focal_sql    <- paste0("'", focal_ids, "'", collapse = ", ")
-      focal_grp_df <- DBI::dbGetQuery(pop$db_conn, paste0(
-        "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_tbl,
-        " WHERE id_ind IN (", focal_sql, ")"
-      ))
-      focal_grp_map <- stats::setNames(
-        as.character(focal_grp_df$group_val),
-        focal_grp_df$id_ind
-      )
-
-      non_na_grps <- unique(focal_grp_map[
-        !is.na(focal_grp_map) & nzchar(focal_grp_map)
-      ])
-
-      all_members_df <- if (length(non_na_grps) > 0) {
-        gv_sql <- paste0("'", non_na_grps, "'", collapse = ", ")
-        DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, \"", grp_col, "\" AS group_val FROM ", grp_tbl,
-          " WHERE \"", grp_col, "\" IN (", gv_sql, ")"
-        ))
-      } else {
-        data.frame(id_ind = character(0), group_val = character(0),
-                   stringsAsFactors = FALSE)
-      }
-      all_members_df$group_val <- as.character(all_members_df$group_val)
-
-      all_member_ids <- unique(all_members_df$id_ind)
-      tbv_map_grp    <- stats::setNames(numeric(0), character(0))
-      if (length(all_member_ids) > 0) {
-        mem_sql  <- paste0("'", all_member_ids, "'", collapse = ", ")
-        tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-          "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = '",
-          st_safe, "' AND id_ind IN (", mem_sql, ")"
-        ))
-        if (nrow(tbv_rows) > 0)
-          tbv_map_grp <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-      }
-
-      for (j in seq_len(n)) {
-        fid <- focal_ids[j]
-        if (is.na(composite[fid])) next  # already excluded
-
-        grp_val <- focal_grp_map[fid]
-        if (is.na(grp_val) || !nzchar(grp_val)) {
-          composite[fid] <- NA_real_   # no group assignment
-          next
+    weight <- if (is.na(comp$weight)) 1 else comp$weight
+    wt <- switch(
+      comp$weight_type,
+      fixed = rep(weight, n),
+      covariate = {
+        if (is.na(comp$covariate_name)) {
+          stop(what, ": weight_type = 'covariate' needs covariate_name.",
+               call. = FALSE)
         }
+        cov_tbl <- if (is.na(comp$covariate_table)) "ind_meta" else comp$covariate_table
+        weight * as.numeric(.read_one_per_id(conn, cov_tbl, comp$covariate_name,
+                                             focal_ids, what))
+      },
+      stop(what, ": weight_type '", comp$weight_type, "' is not implemented; ",
+           "use 'fixed' or 'covariate'.", call. = FALSE))
 
-        mate_ids   <- all_members_df$id_ind[
-          all_members_df$group_val == grp_val & all_members_df$id_ind != fid
-        ]
-        valid_tbvs <- tbv_map_grp[mate_ids]
-        valid_tbvs <- valid_tbvs[!is.na(valid_tbvs)]
-
-        social_val <- if (length(valid_tbvs) == 0) 0
-                      else if (agg_method == "mean") mean(valid_tbvs)
-                      else sum(valid_tbvs)
-
-        composite[fid] <- composite[fid] + eff_weight[j] * social_val
-      }
-      next   # skip the generic contr_ids path below
-    } else {
-      warning("contributor_type '", contr_type, "' is not yet implemented; ",
-              "skipping component '", source_trait, "'.", call. = FALSE)
-      next
-    }
-
-    missing_contr <- is.na(contr_ids) | contr_ids == "NA" | !nzchar(contr_ids)
-
-    # Fetch TBVs for non-missing contributors
-    notna_ids <- unique(contr_ids[!missing_contr])
-    tbv_map   <- stats::setNames(numeric(0), character(0))
-
-    if (length(notna_ids) > 0) {
-      st_safe  <- gsub("'", "''", source_trait)
-      ids_sql  <- paste0("'", notna_ids, "'", collapse = ", ")
-      tbv_rows <- DBI::dbGetQuery(pop$db_conn, paste0(
-        "SELECT id_ind, tbv_value FROM ind_tbv ",
-        "WHERE trait_name = '", st_safe, "' AND id_ind IN (", ids_sql, ")"
-      ))
-      if (nrow(tbv_rows) > 0) {
-        tbv_map <- stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)
-      }
-    }
-
-    # Add contribution per focal individual
-    for (j in seq_len(n)) {
-      fid <- focal_ids[j]
-      if (is.na(composite[fid])) next  # already excluded by a prior component
-
-      if (missing_contr[j]) {
-        composite[fid] <- NA_real_
-        next
-      }
-      cid     <- contr_ids[j]
-      tbv_val <- tbv_map[cid]
-      if (is.na(tbv_val)) {
-        composite[fid] <- NA_real_
-        next
-      }
-      composite[fid] <- composite[fid] + eff_weight[j] * tbv_val
-    }
+    vec <- switch(
+      comp$contributor_type,
+      self  = .tbv_by_id(conn, trait, focal_ids),
+      dam   = .tbv_by_id(conn, trait, subset_df$id_parent_2),
+      sire  = .tbv_by_id(conn, trait, subset_df$id_parent_1),
+      group = .group_mate_tbv(conn, trait, focal_ids, comp$group_column,
+                              comp$group_table, comp$aggregation, what))
+    composite <- composite + wt * vec
   }
 
-  # Generic missing-component handler (covers group, dam, sire, any future type)
   n_missing <- sum(is.na(composite))
-  if (n_missing > 0) {
+  if (n_missing > 0L) {
     missing_ids <- focal_ids[is.na(composite)]
     msg <- paste0(
-      n_missing, " individual(s) had one or more missing components for phenotype '",
-      phenotype_name, "' and were excluded.",
-      " (IDs: ", paste(head(missing_ids, 5), collapse = ", "),
-      if (n_missing > 5) paste0(" ... +", n_missing - 5L, " more") else "", ")"
-    )
+      n_missing, " individual(s) had one or more missing components for ",
+      "phenotype '", phenotype_name, "' and were excluded. (IDs: ",
+      paste(utils::head(missing_ids, 5L), collapse = ", "),
+      if (n_missing > 5L) paste0(" ... +", n_missing - 5L, " more") else "", ")")
     if (missing_component_action == "error") stop(msg, call. = FALSE)
-    else warning(msg, call. = FALSE)
+    warning(msg, call. = FALSE)
   }
-
-  list(composite_tbv = composite)
-}
-
-
-#' Write user-supplied phenotype values verbatim
-#' @keywords internal
-write_user_phenotype_values <- function(pop, phenos, subset_by_pheno,
-                                        user_values, extra_cols = list()) {
-  if (length(phenos) == 1 && !is.list(user_values)) {
-    user_values <- stats::setNames(list(user_values), phenos)
-  }
-  for (t in phenos) {
-    vals <- user_values[[t]]
-    if (is.null(vals)) {
-      stop("user_values missing entry for phenotype '", t, "'.", call. = FALSE)
-    }
-    ids_t <- subset_by_pheno[[t]]$id_ind
-
-    if (!is.null(names(vals))) {
-      ids_t <- names(vals)
-      vals  <- unname(vals)
-    } else if (length(vals) != length(ids_t)) {
-      stop("user_values for '", t, "' must have length equal to subset (",
-           length(ids_t), ") or be a named vector.", call. = FALSE)
-    }
-    if (length(vals) == 0) next
-
-    records <- tibble::tibble(
-      id_phenotype   = next_phenotype_ids(pop, length(vals)),
-      id_ind         = ids_t,
-      phenotype_name = t,
-      pheno_value    = as.numeric(vals),
-      pheno_number   = next_pheno_numbers(pop, t, ids_t)
-    )
-    if (length(extra_cols) > 0) {
-      prepped <- prepare_extra_cols(extra_cols, nrow(records), "ind_phenotype",
-                                   pop$db_conn)
-      for (nm in names(prepped)) records[[nm]] <- prepped[[nm]]
-    }
-    DBI::dbWriteTable(pop$db_conn, "ind_phenotype", records, append = TRUE)
-    message("Wrote ", nrow(records), " user-supplied phenotype records for '",
-            t, "'.")
-  }
-  invisible(NULL)
-}
-
-
-#' Upsert TBV rows — column-named INSERT with ON CONFLICT DO UPDATE SET
-#'
-#' Only the columns present in tbv_df are updated on conflict; all other
-#' columns (user-defined extras) are left untouched in existing rows.
-#'
-#' @keywords internal
-upsert_ind_tbv <- function(pop, tbv_df) {
-  if (nrow(tbv_df) == 0) return(invisible(NULL))
-
-  start  <- next_int_id(pop$db_conn, "ind_tbv", "id_tbv")
-  tbv_df <- tibble::add_column(tbv_df,
-                                id_tbv = seq.int(start, start + nrow(tbv_df) - 1L),
-                                .before = 1)
-
-  tmp <- paste0("_tbv_tmp_", as.character(round(as.numeric(Sys.time()) * 1000)))
-  duckdb::duckdb_register(pop$db_conn, tmp, as.data.frame(tbv_df))
-  on.exit(duckdb::duckdb_unregister(pop$db_conn, tmp), add = TRUE)
-
-  cols        <- names(tbv_df)
-  key_cols    <- c("id_tbv", "id_ind", "trait_name")
-  update_cols <- setdiff(cols, key_cols)
-
-  col_list   <- paste(cols, collapse = ", ")
-  update_set <- paste(
-    paste0(update_cols, " = EXCLUDED.", update_cols),
-    collapse = ", "
-  )
-  DBI::dbExecute(pop$db_conn, paste0(
-    "INSERT INTO ind_tbv (", col_list, ") ",
-    "SELECT ", col_list, " FROM ", tmp, " ",
-    "ON CONFLICT (id_ind, trait_name) DO UPDATE SET ", update_set
-  ))
-  invisible(NULL)
+  stats::setNames(composite, focal_ids)
 }

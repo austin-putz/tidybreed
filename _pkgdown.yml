@@ -55,7 +55,11 @@ reference:
   - define_trait
   - define_trait_simple
   - define_additive_effects
+  - define_genome_effects
+  - ad_terms
+  - genotype_terms
   - define_effect_cov_matrix
+  - extract_allele_freq
 
 - title: Phenotypes — observation layer
   desc: >
@@ -64,6 +68,7 @@ reference:
   contents:
   - define_phenotype
   - define_residual_cov
+  - define_condition_change_action
   - define_effect_intercept
   - define_effect_fixed_class
   - define_effect_fixed_cov
@@ -75,6 +80,7 @@ reference:
     breeding values from an external evaluation.
   contents:
   - add_tbv
+  - add_tgv
   - add_phenotype
   - add_ebv
 

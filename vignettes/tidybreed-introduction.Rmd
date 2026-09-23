@@ -109,7 +109,7 @@ functions:
 
 | You want to specify | Function | Examples |
 |---|---|---|
-| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `expressed_parent`, `units` |
+| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `units` |
 | What gets observed | `define_phenotype()` | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
 
 For a simple trait the two share a name and you call both. The payoff comes later:
@@ -336,12 +336,14 @@ pop <- pop |>
   filter(chr %in% c(4L, 5L)) |>
   define_additive_effects("ADG")
 
-pop |> get_table("genome_effects") |> collect() |> head()
+pop |> get_table("genome_effect_terms") |> collect() |> head()
 ```
 
-QTL membership is **implicit**: a locus is a QTL for a trait if it has a row in
-`genome_effects`. There is no `is_QTL` flag to keep in sync. `base_allele_freq` is
-stored alongside each effect because it is what centres breeding values.
+Causal-locus membership is **implicit**: a locus is causal for a trait if it
+appears as a member of any term for it — `genome_effect_loci` is the view that
+answers that. There is no `is_QTL` flag to keep in sync. The centring frequency
+lives on the member as `center_value`, because a line-specific variant
+legitimately centres against its own line's base frequency.
 
 ## Define the phenotype
 
@@ -451,8 +453,10 @@ pop <- pop |>
 ```
 
 > This **replaces** the ADG effects assigned earlier with a fresh correlated draw.
-> Re-running `define_additive_effects()` for a trait always overwrites its rows in
-> `genome_effects`, so recompute anything derived from them.
+> Re-running `define_additive_effects()` replaces the variant at the *same scope*
+> — here the common, all-lines one — and leaves variants at other scopes
+> (`line_name`, `parent_origin`) standing. Recompute anything derived from the
+> replaced terms.
 
 ```{r tbv2}
 pop <- pop |> get_table("ind_meta") |> add_tbv()   # no trait_name = all traits

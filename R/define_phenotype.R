@@ -42,35 +42,36 @@
 #' @param store_liability Logical. When `TRUE`, the underlying liability value
 #'   is written to the reserved `liability_value` column in `ind_phenotype`.
 #'   Only meaningful for categorical traits.
-#' @param residual_var Numeric. Scalar residual variance. When supplied, writes
-#'   one unconditional row to `phenotype_var_comp`
-#'   (`effect_name = "residual"`, `condition_column = NULL`). For heterogeneous
-#'   residuals or multi-phenotype correlated residuals, use
-#'   [define_residual_cov()] afterwards.
+#' @param residual_var Numeric or `NULL`. Scalar residual variance. When
+#'   supplied, writes a 1 × 1 unconditional residual block for this phenotype
+#'   to `phenotype_var_comp` (`effect_name = "residual"`). It is an error when
+#'   the phenotype already belongs to a multi-phenotype residual block — that
+#'   block is redeclared as a whole with [define_residual_cov()] — or when the
+#'   phenotype's existing residual has realized draws in `ind_phenotype`. With
+#'   `overwrite = TRUE` and no `residual_var`, `phenotype_var_comp` is left
+#'   untouched. For heterogeneous or correlated residuals use
+#'   [define_residual_cov()].
 #' @param components A data frame or `tibble` with one row per genetic
 #'   component. Columns:
 #'   - `source_trait_name` (required): component trait name in `trait_meta`.
 #'   - `contributor_type` (required): `"self"`, `"dam"`, `"sire"`, or
 #'     `"group"`.
 #'   - `weight` (optional, default `1.0`): scalar multiplier.
-#'   - `weight_type` (optional, default `"fixed"`): `"fixed"`, `"covariate"`,
-#'     `"legendre"`, or `"raw_poly"`.
+#'   - `weight_type` (optional, default `"fixed"`): `"fixed"` or
+#'     `"covariate"` (`weight * covariate`). Nothing else is implemented, and
+#'     anything else is rejected here rather than at [add_phenotype()] time.
 #'   - `covariate_name` (optional): covariate key.
-#'   - `covariate_table` (optional): table containing the covariate column;
-#'     `NULL` means value supplied at [add_phenotype()] call time.
+#'   - `covariate_table` (optional, default `"ind_meta"`): table containing
+#'     the covariate column; it must have exactly one row per individual.
 #'   - `poly_order` (optional): polynomial basis order.
 #'   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling bounds.
-#'   - `genome_effect_types` (optional, default `"additive"`).
+#'   - `component_names` (optional, default `"order1_additive"`): reserved;
+#'     see `phenotype_components.component_names`.
 #'   - `group_column` (optional): column defining group membership.
 #'   - `group_table` (optional, default `"ind_meta"`): table containing
 #'     `group_column`.
 #'   - `aggregation` (optional, default `"sum"`): `"sum"` or `"mean"` for
 #'     group contributors.
-#'   - `missing_action` (optional, default `"skip"`): currently unused
-#'     per-component override — behaviour is governed uniformly by
-#'     `missing_component_action` below.
-#'   - `contributor_filter` (optional): reserved for future spatial/
-#'     neighborhood contributor lookup; not yet implemented.
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
 #'   written. Mutually exclusive with `formula_tbv`.
@@ -107,6 +108,21 @@
 #'   [define_effect_fixed_class()]), which handles `NULL` levels for
 #'   fixed-class covariate effects, and does not affect random-effect draws
 #'   (new levels always get a fresh draw).
+#' @param condition_change_action Character. Applies only when this phenotype
+#'   is in a residual covariance block with a `condition_column` (see
+#'   [define_residual_cov()]) and a correlated phenotype's residual was stored
+#'   under a **different** condition level than the one the current record
+#'   resolves to — e.g. an animal moved farms between the two records.
+#'   `"error"` (default) stops, because no covariance is defined between the two
+#'   strata. `"independent"` drops the incompatible stored residual from the
+#'   conditioning set (stored residuals from the same stratum still condition
+#'   the draw) and warns with a count. Stored in `phenotype_meta`; every
+#'   phenotype in one residual block must carry the same value (D6), so this
+#'   argument only sets it while the phenotype is still a block of one. Once
+#'   the block has two or more members the value is block-scoped — change it
+#'   with [define_condition_change_action()], which writes every member in one
+#'   transaction and leaves the rest of their `phenotype_meta` rows alone. An
+#'   immutable condition column such as `sex` never triggers either action.
 #' @param overwrite Logical. If `TRUE` and a phenotype with the same name
 #'   already exists, replace its rows in `phenotype_meta` and
 #'   `phenotype_components`. Default `FALSE` errors on duplicate.
@@ -206,6 +222,7 @@ define_phenotype <- function(pop,
                              formula_tbv              = NULL,
                              formula                  = NULL,
                              missing_component_action = c("skip", "error"),
+                             condition_change_action  = c("error", "independent"),
                              overwrite                = FALSE) {
 
   stopifnot(inherits(pop, "tidybreed_pop"))
@@ -218,6 +235,7 @@ define_phenotype <- function(pop,
   type                     <- match.arg(type)
   expressed_sex            <- match.arg(expressed_sex)
   missing_component_action <- match.arg(missing_component_action)
+  condition_change_action  <- match.arg(condition_change_action)
 
   # ── Categorical validation ─────────────────────────────────────────────────
 
@@ -350,15 +368,45 @@ define_phenotype <- function(pop,
     )
   }
 
+  # ── Residual block checks, before anything is written ─────────────────────
+  #
+  # `residual_var` is the D1 algorithm with N = {phenotype_name}: it writes a
+  # 1 x 1 block, overwrites an unrealized singleton, and errors when the
+  # phenotype is in a multi-phenotype block or the singleton has realized
+  # draws. Validating here (the writer validates again inside its transaction)
+  # means a rejected call leaves phenotype_meta untouched too.
+
+  resid_matrix <- NULL
+  if (!is.null(residual_var)) {
+    if (!is.numeric(residual_var) || length(residual_var) != 1 ||
+        is.na(residual_var) || residual_var < 0) {
+      stop("`residual_var` must be a non-negative number.", call. = FALSE)
+    }
+    resid_matrix <- matrix(as.numeric(residual_var), 1L, 1L,
+                           dimnames = list(phenotype_name, phenotype_name))
+    validate_phenotype_cov_block(pop$db_conn, "residual", phenotype_name,
+                                 resid_matrix,
+                                 caller = "define_phenotype(residual_var = )")
+  }
+
+  # D6: every defined phenotype in this one's residual block agrees on
+  # condition_change_action (the block may have been declared before the
+  # phenotypes, so the same check runs again at sampling time).
+  .check_condition_change_agreement(
+    pop$db_conn,
+    .pvc_block_members(pop$db_conn, "residual", phenotype_name),
+    pending = list(phenotype_name          = phenotype_name,
+                   condition_change_action = condition_change_action),
+    caller  = "define_phenotype()")
+
+  # Overwrite replaces the phenotype_meta row and its components. It leaves
+  # phenotype_var_comp alone: the residual block is only ever rewritten through
+  # `residual_var` (above) or define_residual_cov().
   if (existing_n > 0 && overwrite) {
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM phenotype_meta WHERE phenotype_name = '", pn_safe, "'"))
     DBI::dbExecute(pop$db_conn,
       paste0("DELETE FROM phenotype_components WHERE phenotype_name = '", pn_safe, "'"))
-    DBI::dbExecute(pop$db_conn,
-      paste0("DELETE FROM phenotype_var_comp ",
-             "WHERE effect_name = 'residual' AND phenotype_name_1 = '", pn_safe, "'",
-             " AND condition_column IS NULL"))
   }
 
   # ── Serialize categorical fields ──────────────────────────────────────────
@@ -402,6 +450,7 @@ define_phenotype <- function(pop,
     cat_names                = cat_names_str,
     store_liability          = as.logical(store_liability),
     missing_component_action = missing_component_action,
+    condition_change_action  = condition_change_action,
     formula_tbv              = if (is.null(formula_tbv)) NA_character_ else formula_tbv,
     formula                  = if (is.null(formula))     NA_character_ else formula
   )
@@ -410,16 +459,11 @@ define_phenotype <- function(pop,
 
   # ── Residual variance ──────────────────────────────────────────────────────
 
-  if (!is.null(residual_var)) {
-    if (!is.numeric(residual_var) || length(residual_var) != 1 ||
-        is.na(residual_var) || residual_var < 0) {
-      stop("`residual_var` must be a non-negative number.", call. = FALSE)
-    }
+  if (!is.null(resid_matrix)) {
     pop <- define_residual_cov(
       pop,
       phenotype_names  = phenotype_name,
-      cov_matrix       = matrix(as.numeric(residual_var), 1L, 1L,
-                                dimnames = list(phenotype_name, phenotype_name)),
+      cov_matrix       = resid_matrix,
       condition_column = NULL
     )
   }
@@ -452,6 +496,34 @@ define_phenotype <- function(pop,
       if (any(bad_gc))
         stop("components with contributor_type = 'group' must specify group_column.",
              call. = FALSE)
+
+      # Both reach SQL through .group_members_sql(). The read-time existence
+      # checks in .read_one_per_id() would catch a bad name eventually, but
+      # define_effect_random() and define_effect_fixed_cov() validate their
+      # equivalents here, and a definition-time error names the real mistake.
+      for (g in unique(as.character(gcol))) {
+        validate_sql_identifier(g, what = "group_column")
+      }
+      gtab <- if ("group_table" %in% names(grp_rows)) {
+        as.character(grp_rows$group_table)
+      } else "ind_meta"
+      for (g in unique(gtab[!is.na(gtab) & nzchar(gtab)])) {
+        validate_sql_identifier(g, what = "group_table")
+      }
+    }
+
+    # add_phenotype() implements 'fixed' and 'covariate' and rejects the rest.
+    # Reject here too: a weight_type that can never be evaluated is a mistake
+    # in the model definition, and the error belongs at the call that made it.
+    if ("weight_type" %in% names(components)) {
+      wt  <- as.character(components$weight_type)
+      wt  <- wt[!is.na(wt) & nzchar(wt)]
+      bad <- setdiff(unique(wt), c("fixed", "covariate"))
+      if (length(bad) > 0) {
+        stop("components: weight_type ",
+             paste0("'", bad, "'", collapse = ", "),
+             " is not implemented. Use 'fixed' or 'covariate'.", call. = FALSE)
+      }
     }
 
     # Fill defaults for optional columns
@@ -463,12 +535,10 @@ define_phenotype <- function(pop,
     if (!"poly_order"          %in% names(components)) components$poly_order          <- NA_integer_
     if (!"poly_scale_min"      %in% names(components)) components$poly_scale_min      <- NA_real_
     if (!"poly_scale_max"      %in% names(components)) components$poly_scale_max      <- NA_real_
-    if (!"genome_effect_types" %in% names(components)) components$genome_effect_types <- "additive"
+    if (!"component_names"     %in% names(components)) components$component_names     <- "order1_additive"
     if (!"group_column"        %in% names(components)) components$group_column        <- NA_character_
     if (!"group_table"         %in% names(components)) components$group_table         <- "ind_meta"
     if (!"aggregation"         %in% names(components)) components$aggregation         <- "sum"
-    if (!"missing_action"      %in% names(components)) components$missing_action      <- "skip"
-    if (!"contributor_filter"  %in% names(components)) components$contributor_filter  <- NA_character_
 
     # Replace NA in group_table with default
     components$group_table[is.na(components$group_table)] <- "ind_meta"
@@ -490,9 +560,7 @@ define_phenotype <- function(pop,
       poly_order          = as.integer(components$poly_order),
       poly_scale_min      = as.numeric(components$poly_scale_min),
       poly_scale_max      = as.numeric(components$poly_scale_max),
-      genome_effect_types = as.character(components$genome_effect_types),
-      missing_action      = as.character(components$missing_action),
-      contributor_filter  = as.character(components$contributor_filter)
+      component_names     = as.character(components$component_names)
     )
 
     DBI::dbWriteTable(pop$db_conn, "phenotype_components", comp_rows, append = TRUE)

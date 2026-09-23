@@ -10,7 +10,6 @@ write_meta_file(
   col_map,
   distinct_effects,
   trait,
-  effects_df,
   chip_name,
   n_loci,
   id_width,
@@ -29,9 +28,6 @@ to their data.txt column numbers (as returned by \code{\link[=build_data_file]{b
 effect_name), as returned by \code{\link[=build_data_file]{build_data_file()}}}
 
 \item{trait}{character vector of trait names (in model order)}
-
-\item{effects_df}{data.frame of (trait_name x effect_name) fixed-effect
-rows from \code{phenotype_effects}, as returned by \code{\link[=build_data_file]{build_data_file()}}}
 
 \item{chip_name}{character or NULL; chip name to report in the genotype
 file section (omitted entirely when NULL)}

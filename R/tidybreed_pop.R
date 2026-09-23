@@ -83,7 +83,7 @@ validate_tidybreed_pop <- function(x) {
 #' with the population name, the database location and connection status, then
 #' one section each for the **genome** (loci, chromosomes, physical/genetic
 #' length, founder haplotype pool), the **model** (genetic-component traits,
-#' observed phenotypes, selection indices, QTL), the **individuals** (total,
+#' observed phenotypes, selection indices, causal loci), the **individuals** (total,
 #' broken down by sex and by line), and the **records** written so far
 #' (phenotypes, TBVs, EBVs, index values).
 #'
@@ -155,13 +155,19 @@ print.tidybreed_pop <- function(x, ...) {
   n_pheno  <- if ("phenotype_meta" %in% tables) n_of("SELECT COUNT(*) FROM phenotype_meta") else 0
   n_index  <- if ("index_meta" %in% tables)
     n_of("SELECT COUNT(DISTINCT index_name) FROM index_meta WHERE index_name IS NOT NULL") else 0
-  n_qtl    <- if ("genome_effects" %in% tables)
-    n_of("SELECT COUNT(DISTINCT locus_name) FROM genome_effects WHERE genome_effect_type = 'additive'") else 0
+  # Causal loci, not "QTL": once a coefficient can span several loci, a row
+  # count stops being meaningful. A locus is causal for a trait if it appears as
+  # a member of any term, which is exactly one DISTINCT over the locus view.
+  # (An additive-QTL / epistatic-only breakdown belongs in describe_table() or a
+  # summary helper, not the print header.)
+  n_causal <- if ("genome_effect_loci" %in% tables)
+    n_of("SELECT COUNT(DISTINCT locus_id) FROM genome_effect_loci") else 0
   model_parts <- c(
     if (n_traits > 0) paste(fmt(n_traits), if (n_traits == 1) "trait" else "traits"),
     if (n_pheno  > 0) paste(fmt(n_pheno),  if (n_pheno  == 1) "phenotype" else "phenotypes"),
     if (n_index  > 0) paste(fmt(n_index),  if (n_index  == 1) "index" else "indices"),
-    if (n_qtl    > 0) paste(fmt(n_qtl), "QTL")
+    if (n_causal > 0) paste(fmt(n_causal),
+                            if (n_causal == 1) "causal locus" else "causal loci")
   )
   if (length(model_parts) > 0)
     cat("  Model      ", paste(model_parts, collapse = " · "), "\n", sep = "")

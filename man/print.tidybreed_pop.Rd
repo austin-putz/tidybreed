@@ -19,7 +19,7 @@ Prints a grouped, human-readable summary of the population: a header rule
 with the population name, the database location and connection status, then
 one section each for the \strong{genome} (loci, chromosomes, physical/genetic
 length, founder haplotype pool), the \strong{model} (genetic-component traits,
-observed phenotypes, selection indices, QTL), the \strong{individuals} (total,
+observed phenotypes, selection indices, causal loci), the \strong{individuals} (total,
 broken down by sex and by line), and the \strong{records} written so far
 (phenotypes, TBVs, EBVs, index values).
 

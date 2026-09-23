@@ -97,3 +97,32 @@ test_that("add_genotypes() supports col_name override", {
   expect_true("genotyped_50k" %in% DBI::dbListFields(pop$db_conn, "ind_meta"))
   close_pop(pop)
 })
+
+
+test_that("add_genotypes() accepts a filtered ind_ebv and errors without id_ind", {
+  pop <- make_chip_pop("test_ag_ebv")
+
+  ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 4)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "INSERT INTO ind_ebv (id_ebv, id_ind, trait_name, model, ebv_value, ",
+    "eval_number) VALUES ",
+    paste(sprintf("(%d, '%s', 'T', 'm1', %d, 1)",
+                  seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
+
+  pop <- pop |>
+    get_table("ind_ebv") |>
+    dplyr::filter(ebv_value >= 3) |>
+    add_genotypes("50k")
+
+  ind <- dplyr::collect(get_table(pop, "ind_meta"))
+  expect_setequal(ind$id_ind[ind$has_50k], ids[3:4])
+
+  expect_error(pop |> get_table("genome_meta") |> add_genotypes("50k"),
+               "has no 'id_ind' column")
+  expect_warning(
+    pop |> get_table("ind_meta") |> dplyr::filter(sex == "X") |>
+      add_genotypes("50k"),
+    "No individuals matched")
+
+  close_pop(pop)
+})
