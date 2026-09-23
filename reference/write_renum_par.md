@@ -47,10 +47,9 @@ write_renum_par(
 
 - pop:
 
-  tidybreed_pop; used to look up residual and additive genetic
-  (co)variance matrices via
-  [`load_phenotype_cov()`](https://austin-putz.github.io/tidybreed/reference/load_phenotype_cov.md)
-  and
+  tidybreed_pop; used to look up the residual (co)variance matrix via
+  [`.blupf90_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/dot-blupf90_residual_cov.md)
+  and the additive genetic one via
   [`load_trait_cov()`](https://austin-putz.github.io/tidybreed/reference/load_trait_cov.md)
 
 - chip_name:

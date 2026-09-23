@@ -19,7 +19,7 @@ genotyped it stays genotyped."><meta property="og:image" content="https://austin
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,9 +67,12 @@ genotyped it stays genotyped.</p>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A <code>tidybreed_table</code> object from <code><a href="get_table.html">get_table()</a></code> (optionally piped
-through <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>). The table must contain an <code>id_ind</code> column when a
-filter is applied.</p></dd>
+<dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code>, optionally piped through
+<code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>. Any table with an <code>id_ind</code> column is accepted; the
+individuals acted on are the distinct <code>id_ind</code> values present in the
+(filtered) table. An unfiltered <code>ind_meta</code> selects every individual; an
+unfiltered <code>ind_ebv</code>, <code>ind_index</code>, <code>ind_genotype</code>, ... selects only the
+individuals that have rows there. A table without <code>id_ind</code> is an error.</p></dd>
 
 
 <dt id="arg-chip-name">chip_name<a class="anchor" aria-label="anchor" href="#arg-chip-name"></a></dt>

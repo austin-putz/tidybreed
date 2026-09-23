@@ -110,7 +110,7 @@ defined by two different functions:
 
 | You want to specify | Function | Examples |
 |----|----|----|
-| Genetic architecture | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | `target_add_var`, `target_add_mean`, `expressed_parent`, `units` |
+| Genetic architecture | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | `target_add_var`, `target_add_mean`, `units` |
 | What gets observed | [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
 
 For a simple trait the two share a name and you call both. The payoff
@@ -129,7 +129,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpGwVAPE/duckdb
+#> ℹ /tmp/RtmpduT2xB/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -161,7 +161,8 @@ pop <- pop |>
     cM_per_Mb  = 1.0    # genetic-map rate (the default)
   )
 #> Defined genome: 500 loci across 5 chromosomes | chr lengths (Mb): all equal to 100 Mb
-#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination
+#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins
+#>   Views created: genome_effect_terms, genome_effect_loci
 
 pop |> get_table("genome_meta")
 #> <tidybreed_table: genome_meta>  [500 rows × 5 fields]
@@ -254,15 +255,17 @@ Two helpers exist so you never have to guess what is in the database.
 ``` r
 
 schema(pop)
-#> ── Schema: demo ─────────────────────────────── 22 tables · 1.9 MiB in memory ──
+#> ── Schema: demo ─────────────────────────────── 28 tables · 3.1 MiB in memory ──
 #>   Use describe_table(pop, "name") for column-level details.
 #> 
 #>   Genome
-#>     genome_meta                500     5  Locus-level metadata. One row per l...
-#>     genome_map                 500     7  Genetic map in long format. One row...
-#>     chr_inheritance              5     5  Per-chromosome copy counts, keyed b...
-#>     chr_recombination            5     4  Per-chromosome recombination, keyed...
-#>     + 1 empty: genome_effects
+#>     genome_meta                    500     5  Locus-level metadata. One row p...
+#>     genome_map                     500     7  Genetic map in long format. One...
+#>     chr_inheritance                  5     5  Per-chromosome copy counts, key...
+#>     chr_recombination                5     4  Per-chromosome recombination, k...
+#>     + 5 empty: genome_effects, genome_effect_members, 
+#>                genome_effect_member_origins, genome_effect_terms, 
+#>                genome_effect_loci
 #> 
 #>   Individuals
 #>     + 4 empty: ind_meta, ind_haplotype, ind_genotype, ind_crossover
@@ -278,7 +281,8 @@ schema(pop)
 #>     + 1 empty: index_meta
 #> 
 #>   Results
-#>     + 5 empty: ind_tbv, ind_phenotype, ind_ebv, ind_index, ind_true_index
+#>     + 7 empty: ind_tbv, ind_tgv, ind_tgv_total, ind_phenotype, ind_ebv, 
+#>                ind_index, ind_true_index
 ```
 
 [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md)
@@ -490,10 +494,10 @@ pop <- pop |>
 #> Added trait 'ADG'.
 
 pop |> get_table("trait_meta") |> collect()
-#> # A tibble: 1 × 6
-#>   id_trait trait_name description units  expressed_parent target_add_mean
-#>      <int> <chr>      <chr>       <chr>  <chr>                      <dbl>
-#> 1        1 ADG        NA          kg/day both                           0
+#> # A tibble: 1 × 5
+#>   id_trait trait_name description units  target_add_mean
+#>      <int> <chr>      <chr>       <chr>            <dbl>
+#> 1        1 ADG        NA          kg/day               0
 ```
 
 Note what is *not* here: no mean, no residual variance, no trait type.
@@ -510,25 +514,28 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(chr %in% c(4L, 5L)) |>
   define_additive_effects("ADG")
-#> Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes).
+#> Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes; scope: all lines, both parents' copies).
 
-pop |> get_table("genome_effects") |> collect() |> head()
-#> # A tibble: 6 × 7
-#>   id_genome_effect locus_name line_name trait_name genome_effect_type
-#>              <int> <chr>      <chr>     <chr>      <chr>             
-#> 1                1 Locus_301  NA        ADG        additive          
-#> 2                2 Locus_302  NA        ADG        additive          
-#> 3                3 Locus_303  NA        ADG        additive          
-#> 4                4 Locus_304  NA        ADG        additive          
-#> 5                5 Locus_305  NA        ADG        additive          
-#> 6                6 Locus_306  NA        ADG        additive          
-#> # ℹ 2 more variables: genome_value <dbl>, base_allele_freq <dbl>
+pop |> get_table("genome_effect_terms") |> collect() |> head()
+#> # A tibble: 6 × 9
+#>   trait_name effect_owner           effect_name id_genome_effect effect_order
+#>   <chr>      <chr>                  <chr>                  <int>        <dbl>
+#> 1 ADG        generated_additive_tbv NA                         1            1
+#> 2 ADG        generated_additive_tbv NA                         2            1
+#> 3 ADG        generated_additive_tbv NA                         3            1
+#> 4 ADG        generated_additive_tbv NA                         4            1
+#> 5 ADG        generated_additive_tbv NA                         5            1
+#> 6 ADG        generated_additive_tbv NA                         6            1
+#> # ℹ 4 more variables: contrast_signature <chr>, family_key <chr>,
+#> #   scope_description <chr>, genome_value <dbl>
 ```
 
-QTL membership is **implicit**: a locus is a QTL for a trait if it has a
-row in `genome_effects`. There is no `is_QTL` flag to keep in sync.
-`base_allele_freq` is stored alongside each effect because it is what
-centres breeding values.
+Causal-locus membership is **implicit**: a locus is causal for a trait
+if it appears as a member of any term for it — `genome_effect_loci` is
+the view that answers that. There is no `is_QTL` flag to keep in sync.
+The centring frequency lives on the member as `center_value`, because a
+line-specific variant legitimately centres against its own line’s base
+frequency.
 
 ## Define the phenotype
 
@@ -594,12 +601,12 @@ pop |> get_table("ind_tbv") |> collect() |> head()
 #> # A tibble: 6 × 4
 #>   id_tbv id_ind trait_name tbv_value
 #>    <int> <chr>  <chr>          <dbl>
-#> 1      5 A_5    ADG           0.778 
-#> 2     13 A_13   ADG          -0.929 
-#> 3     16 A_16   ADG           1.02  
-#> 4     22 A_22   ADG          -0.0430
-#> 5     25 A_25   ADG          -0.132 
-#> 6     31 A_31   ADG          -0.334
+#> 1     10 A_107  ADG          -0.353 
+#> 2     11 A_108  ADG          -0.329 
+#> 3     12 A_109  ADG          -0.178 
+#> 4     15 A_111  ADG           0.377 
+#> 5     28 A_123  ADG           0.0670
+#> 6     35 A_13   ADG          -0.929
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -615,15 +622,17 @@ pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 #> Wrote 500 phenotype records for 'ADG'.
 
 pop |> get_table("ind_phenotype") |> collect() |> head()
-#> # A tibble: 6 × 5
-#>   id_phenotype id_ind phenotype_name pheno_value pheno_number
-#>          <int> <chr>  <chr>                <dbl>        <int>
-#> 1            1 A_1    ADG                  1.71             1
-#> 2            2 A_2    ADG                  1.58             1
-#> 3            3 A_3    ADG                 -0.319            1
-#> 4            4 A_4    ADG                  0.848            1
-#> 5            5 A_5    ADG                  1.92             1
-#> 6            6 A_6    ADG                  2.94             1
+#> # A tibble: 6 × 9
+#>   id_phenotype id_ind phenotype_name pheno_value pheno_number liability_value
+#>          <int> <chr>  <chr>                <dbl>        <int>           <dbl>
+#> 1            1 A_1    ADG                   1.71            1              NA
+#> 2            2 A_10   ADG                   1.00            1              NA
+#> 3            3 A_100  ADG                   1.83            1              NA
+#> 4            4 A_101  ADG                   2.07            1              NA
+#> 5            5 A_102  ADG                   1.90            1              NA
+#> 6            6 A_103  ADG                   2.45            1              NA
+#> # ℹ 3 more variables: cat_name <chr>, residual_value <dbl>,
+#> #   residual_condition_level <chr>
 ```
 
 The sex effect we defined should show up as a gap of roughly 0.30
@@ -643,8 +652,8 @@ pop |>
 #> # A tibble: 2 × 3
 #>   sex       n mean_ADG
 #>   <chr> <int>    <dbl>
-#> 1 F       250    0.976
-#> 2 M       250    1.38
+#> 1 F       250     1.02
+#> 2 M       250     1.34
 ```
 
 ## A second, genetically correlated trait
@@ -686,7 +695,7 @@ pop <- pop |>
   get_table("genome_meta") |>
   filter(chr %in% c(4L, 5L)) |>
   define_additive_effects(c("ADG", "BF"))
-#> Set correlated additive effects for traits: ADG, BF (method: shared)
+#> Set correlated additive effects for traits: ADG, BF (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies)
 
 pop <- pop |>
   define_phenotype("BF", type = "continuous", mean = 12, residual_var = 0.70)
@@ -696,8 +705,10 @@ pop <- pop |>
 > This **replaces** the ADG effects assigned earlier with a fresh
 > correlated draw. Re-running
 > [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-> for a trait always overwrites its rows in `genome_effects`, so
-> recompute anything derived from them.
+> replaces the variant at the *same scope* — here the common, all-lines
+> one — and leaves variants at other scopes (`line_name`,
+> `parent_origin`) standing. Recompute anything derived from the
+> replaced terms.
 
 ``` r
 
@@ -713,8 +724,8 @@ pop |>
 #> # A tibble: 2 × 4
 #>   trait_name     n mean_tbv var_tbv
 #>   <chr>      <int>    <dbl>   <dbl>
-#> 1 ADG          500 -0.00520   0.220
-#> 2 BF           500  0.00673   0.312
+#> 1 ADG          500  -0.0115   0.202
+#> 2 BF           500   0.0181   0.254
 ```
 
 The realised variances are in the neighbourhood of the 0.25 and 0.30 we
@@ -764,7 +775,7 @@ and `chr_recombination`.
 ``` r
 
 pop <- add_offspring(pop, matings)
-#> Added 20 offspring (base_seed = 1393264544)
+#> Added 20 offspring (base_seed = 27531936)
 
 pop |> get_table("ind_meta") |> filter(gen == 1L) |> collect() |> head()
 #> # A tibble: 6 × 8
@@ -790,7 +801,7 @@ pop
 #> 
 #>   Genome     500 loci · 5 chr · 495 Mb · 490 cM
 #>              founder pool: 100 haplotypes
-#>   Model      2 traits · 2 phenotypes · 200 QTL
+#>   Model      2 traits · 2 phenotypes · 200 causal loci
 #> 
 #>   Individuals  520
 #>     by sex     260 F · 260 M
@@ -854,11 +865,11 @@ geno[1:5, 1:6]
 #> # A tibble: 5 × 6
 #>   id_ind locus_1 locus_2 locus_3 locus_4 locus_5
 #>   <chr>    <int>   <int>   <int>   <int>   <int>
-#> 1 A_501        1       0       1       1       1
-#> 2 A_502        1       0       2       1       2
-#> 3 A_503        1       1       2       0       2
-#> 4 A_504        1       0       2       0       2
-#> 5 A_505        1       2       2       0       2
+#> 1 A_501        2       1       2       1       2
+#> 2 A_502        1       0       2       0       2
+#> 3 A_503        0       1       2       0       2
+#> 4 A_504        1       0       2       1       2
+#> 5 A_505        0       2       2       0       2
 ```
 
 Haplotypes are the source of truth and dosages are derived on demand, so
@@ -907,12 +918,12 @@ pop |> get_table("ind_true_index") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_true_index id_ind index_name weight_type true_index_value
 #>           <int> <chr>  <chr>      <chr>                  <dbl>
-#> 1             1 A_1    terminal   index                -0.455 
-#> 2             2 A_10   terminal   index                 0.338 
-#> 3             3 A_100  terminal   index                 0.167 
-#> 4             4 A_101  terminal   index                 0.431 
-#> 5             5 A_102  terminal   index                 0.522 
-#> 6             6 A_103  terminal   index                 0.0660
+#> 1             1 A_1    terminal   index                  0.934
+#> 2             2 A_10   terminal   index                  0.396
+#> 3             3 A_100  terminal   index                 -0.609
+#> 4             4 A_101  terminal   index                 -0.202
+#> 5             5 A_102  terminal   index                  0.292
+#> 6             6 A_103  terminal   index                  0.439
 ```
 
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
@@ -937,11 +948,11 @@ pop |>
 #> # A tibble: 5 × 5
 #>   id_index id_ind index_name index_number index_value
 #>      <int> <chr>  <chr>             <int>       <dbl>
-#> 1      381 A_441  terminal              1        1.64
-#> 2      509 A_89   terminal              1        1.44
-#> 3      465 A_517  terminal              1        1.43
-#> 4      486 A_68   terminal              1        1.33
-#> 5      352 A_415  terminal              1        1.28
+#> 1       97 A_186  terminal              1        1.86
+#> 2      264 A_336  terminal              1        1.64
+#> 3      441 A_496  terminal              1        1.64
+#> 4      289 A_359  terminal              1        1.46
+#> 5      223 A_3    terminal              1        1.39
 ```
 
 Those top animals are your selection candidates. Pull their IDs, build a

@@ -12,11 +12,12 @@ per-locus allele frequency of the most recently generated pool (the empirical
 column mean for LD methods and for exact_freq = TRUE; the sampled target
 otherwise). This column is informational only — no other tidybreed
 function reads it, and because each call rewrites it for every locus, in a
-multi-line setup it describes only the pool written last. For multi-line
-setups needing accurate per-line Falconer centering, use
-base = &quot;current_pop&quot; in define_additive_effects() instead: with
-base = &quot;founder_haplotypes&quot; the base frequency is recomputed by pooling
-all lines' haplotypes together."><meta property="og:description" content="Generates a pool of founder haplotypes and stores them in the
+multi-line setup it describes only the pool written last.
+define_additive_effects() never reads it: a line-specific effect
+(line_name = &quot;A&quot;) centers on line A's own pool by default, and any other
+base — a line's realized copies, a generation, a filtered founder pool — is
+a filtered table passed as base_tbl. Use extract_allele_freq() to read
+per-pool frequencies directly."><meta property="og:description" content="Generates a pool of founder haplotypes and stores them in the
 founder_haplotypes table. This table is required by add_founders() to
 assign phased alleles to new individuals.
 Call this function after define_genome() and before add_founders().
@@ -29,11 +30,12 @@ per-locus allele frequency of the most recently generated pool (the empirical
 column mean for LD methods and for exact_freq = TRUE; the sampled target
 otherwise). This column is informational only — no other tidybreed
 function reads it, and because each call rewrites it for every locus, in a
-multi-line setup it describes only the pool written last. For multi-line
-setups needing accurate per-line Falconer centering, use
-base = &quot;current_pop&quot; in define_additive_effects() instead: with
-base = &quot;founder_haplotypes&quot; the base frequency is recomputed by pooling
-all lines' haplotypes together."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+multi-line setup it describes only the pool written last.
+define_additive_effects() never reads it: a line-specific effect
+(line_name = &quot;A&quot;) centers on line A's own pool by default, and any other
+base — a line's realized copies, a generation, a filtered founder pool — is
+a filtered table passed as base_tbl. Use extract_allele_freq() to read
+per-pool frequencies directly."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -41,7 +43,7 @@ all lines' haplotypes together."><meta property="og:image" content="https://aust
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -83,11 +85,12 @@ per-locus allele frequency of the most recently generated pool (the empirical
 column mean for LD methods and for <code>exact_freq = TRUE</code>; the sampled target
 otherwise). This column is <strong>informational only</strong> — no other tidybreed
 function reads it, and because each call rewrites it for every locus, in a
-multi-line setup it describes only the pool written last. For multi-line
-setups needing accurate per-line Falconer centering, use
-<code>base = "current_pop"</code> in <code><a href="define_additive_effects.html">define_additive_effects()</a></code> instead: with
-<code>base = "founder_haplotypes"</code> the base frequency is recomputed by pooling
-<strong>all</strong> lines' haplotypes together.</p>
+multi-line setup it describes only the pool written last.
+<code><a href="define_additive_effects.html">define_additive_effects()</a></code> never reads it: a line-specific effect
+(<code>line_name = "A"</code>) centers on line A's own pool by default, and any other
+base — a line's realized copies, a generation, a filtered founder pool — is
+a filtered table passed as <code>base_tbl</code>. Use <code><a href="extract_allele_freq.html">extract_allele_freq()</a></code> to read
+per-pool frequencies directly.</p>
     </div>
 
     <div class="section level2">

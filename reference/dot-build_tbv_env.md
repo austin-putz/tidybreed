@@ -1,8 +1,9 @@
-# Pre-fetch all TBV vectors needed by a formula_tbv expression.
+# Pre-fetch every TBV vector a `formula_tbv` expression needs
 
-Calls .fetch_contributor_tbvs() or .fetch_group_tbvs() for each
-trait_ref, returning a named list ready to be used as an eval()
-environment.
+One contributor lookup per trait reference (see
+[`?contributor_tbv`](https://austin-putz.github.io/tidybreed/reference/contributor_tbv.md)),
+returned as a named list ready to be the
+[`eval()`](https://rdrr.io/r/base/eval.html) environment.
 
 ## Usage
 
@@ -12,22 +13,14 @@ environment.
 
 ## Arguments
 
-- pop:
-
-  A tidybreed_pop object.
-
 - trait_refs:
 
-  List from .walk_formula_tbv_ast()\$trait_refs.
+  List from `.walk_formula_tbv_ast()$trait_refs`.
 
 - subset_df:
 
-  Data frame: sex-filtered ind_meta rows for focal individuals.
-
-- phenotype_name:
-
-  Character. Used in error messages.
+  The planned `ind_meta` rows.
 
 ## Value
 
-Named list: placeholder → numeric vector (length = nrow(subset_df)).
+Named list: placeholder -\> numeric vector (`NA` = missing piece).

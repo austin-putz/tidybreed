@@ -22,11 +22,14 @@ empirical column mean for LD methods and for `exact_freq = TRUE`; the
 sampled target otherwise). This column is **informational only** — no
 other tidybreed function reads it, and because each call rewrites it for
 every locus, in a multi-line setup it describes only the pool written
-last. For multi-line setups needing accurate per-line Falconer
-centering, use `base = "current_pop"` in
+last.
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-instead: with `base = "founder_haplotypes"` the base frequency is
-recomputed by pooling **all** lines' haplotypes together.
+never reads it: a line-specific effect (`line_name = "A"`) centers on
+line A's own pool by default, and any other base — a line's realized
+copies, a generation, a filtered founder pool — is a filtered table
+passed as `base_tbl`. Use
+[`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
+to read per-pool frequencies directly.
 
 ## Usage
 

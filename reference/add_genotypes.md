@@ -22,11 +22,16 @@ add_genotypes(tbl, chip_name, col_name = paste0("has_", chip_name))
 
 - tbl:
 
-  A `tidybreed_table` object from
-  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-  (optionally piped through
-  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)).
-  The table must contain an `id_ind` column when a filter is applied.
+  A `tidybreed_table` from
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md),
+  optionally piped through
+  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html).
+  Any table with an `id_ind` column is accepted; the individuals acted
+  on are the distinct `id_ind` values present in the (filtered) table.
+  An unfiltered `ind_meta` selects every individual; an unfiltered
+  `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+  individuals that have rows there. A table without `id_ind` is an
+  error.
 
 - chip_name:
 

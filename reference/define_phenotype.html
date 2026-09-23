@@ -25,7 +25,7 @@ per component to phenotype_components.'><meta property="og:image" content="https
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,6 +87,7 @@ per component to <code>phenotype_components</code>.</p>
 <span>  formula_tbv <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  formula <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  missing_component_action <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"skip"</span>, <span class="st">"error"</span><span class="op">)</span>,</span>
+<span>  condition_change_action <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"error"</span>, <span class="st">"independent"</span><span class="op">)</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -161,11 +162,15 @@ Only meaningful for categorical traits.</p></dd>
 
 
 <dt id="arg-residual-var">residual_var<a class="anchor" aria-label="anchor" href="#arg-residual-var"></a></dt>
-<dd><p>Numeric. Scalar residual variance. When supplied, writes
-one unconditional row to <code>phenotype_var_comp</code>
-(<code>effect_name = "residual"</code>, <code>condition_column = NULL</code>). For heterogeneous
-residuals or multi-phenotype correlated residuals, use
-<code><a href="define_residual_cov.html">define_residual_cov()</a></code> afterwards.</p></dd>
+<dd><p>Numeric or <code>NULL</code>. Scalar residual variance. When
+supplied, writes a 1 × 1 unconditional residual block for this phenotype
+to <code>phenotype_var_comp</code> (<code>effect_name = "residual"</code>). It is an error when
+the phenotype already belongs to a multi-phenotype residual block — that
+block is redeclared as a whole with <code><a href="define_residual_cov.html">define_residual_cov()</a></code> — or when the
+phenotype's existing residual has realized draws in <code>ind_phenotype</code>. With
+<code>overwrite = TRUE</code> and no <code>residual_var</code>, <code>phenotype_var_comp</code> is left
+untouched. For heterogeneous or correlated residuals use
+<code><a href="define_residual_cov.html">define_residual_cov()</a></code>.</p></dd>
 
 
 <dt id="arg-components">components<a class="anchor" aria-label="anchor" href="#arg-components"></a></dt>
@@ -174,24 +179,21 @@ component. Columns:</p><ul><li><p><code>source_trait_name</code> (required): com
 <li><p><code>contributor_type</code> (required): <code>"self"</code>, <code>"dam"</code>, <code>"sire"</code>, or
 <code>"group"</code>.</p></li>
 <li><p><code>weight</code> (optional, default <code>1.0</code>): scalar multiplier.</p></li>
-<li><p><code>weight_type</code> (optional, default <code>"fixed"</code>): <code>"fixed"</code>, <code>"covariate"</code>,
-<code>"legendre"</code>, or <code>"raw_poly"</code>.</p></li>
+<li><p><code>weight_type</code> (optional, default <code>"fixed"</code>): <code>"fixed"</code> or
+<code>"covariate"</code> (<code>weight * covariate</code>). Nothing else is implemented, and
+anything else is rejected here rather than at <code><a href="add_phenotype.html">add_phenotype()</a></code> time.</p></li>
 <li><p><code>covariate_name</code> (optional): covariate key.</p></li>
-<li><p><code>covariate_table</code> (optional): table containing the covariate column;
-<code>NULL</code> means value supplied at <code><a href="add_phenotype.html">add_phenotype()</a></code> call time.</p></li>
+<li><p><code>covariate_table</code> (optional, default <code>"ind_meta"</code>): table containing
+the covariate column; it must have exactly one row per individual.</p></li>
 <li><p><code>poly_order</code> (optional): polynomial basis order.</p></li>
 <li><p><code>poly_scale_min</code>, <code>poly_scale_max</code> (optional): Legendre scaling bounds.</p></li>
-<li><p><code>genome_effect_types</code> (optional, default <code>"additive"</code>).</p></li>
+<li><p><code>component_names</code> (optional, default <code>"order1_additive"</code>): reserved;
+see <code>phenotype_components.component_names</code>.</p></li>
 <li><p><code>group_column</code> (optional): column defining group membership.</p></li>
 <li><p><code>group_table</code> (optional, default <code>"ind_meta"</code>): table containing
 <code>group_column</code>.</p></li>
 <li><p><code>aggregation</code> (optional, default <code>"sum"</code>): <code>"sum"</code> or <code>"mean"</code> for
 group contributors.</p></li>
-<li><p><code>missing_action</code> (optional, default <code>"skip"</code>): currently unused
-per-component override — behaviour is governed uniformly by
-<code>missing_component_action</code> below.</p></li>
-<li><p><code>contributor_filter</code> (optional): reserved for future spatial/
-neighborhood contributor lookup; not yet implemented.</p></li>
 </ul><p><code>NULL</code> (default) → simple single-self trait; <code>phenotype_components</code> not
 written. Mutually exclusive with <code>formula_tbv</code>.</p></dd>
 
@@ -236,6 +238,24 @@ this is unrelated to <code>null_class_action</code> (set via
 <code><a href="define_effect_fixed_class.html">define_effect_fixed_class()</a></code>), which handles <code>NULL</code> levels for
 fixed-class covariate effects, and does not affect random-effect draws
 (new levels always get a fresh draw).</p></dd>
+
+
+<dt id="arg-condition-change-action">condition_change_action<a class="anchor" aria-label="anchor" href="#arg-condition-change-action"></a></dt>
+<dd><p>Character. Applies only when this phenotype
+is in a residual covariance block with a <code>condition_column</code> (see
+<code><a href="define_residual_cov.html">define_residual_cov()</a></code>) and a correlated phenotype's residual was stored
+under a <strong>different</strong> condition level than the one the current record
+resolves to — e.g. an animal moved farms between the two records.
+<code>"error"</code> (default) stops, because no covariance is defined between the two
+strata. <code>"independent"</code> drops the incompatible stored residual from the
+conditioning set (stored residuals from the same stratum still condition
+the draw) and warns with a count. Stored in <code>phenotype_meta</code>; every
+phenotype in one residual block must carry the same value (D6), so this
+argument only sets it while the phenotype is still a block of one. Once
+the block has two or more members the value is block-scoped — change it
+with <code><a href="define_condition_change_action.html">define_condition_change_action()</a></code>, which writes every member in one
+transaction and leaves the rest of their <code>phenotype_meta</code> rows alone. An
+immutable condition column such as <code>sex</code> never triggers either action.</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>

@@ -31,7 +31,7 @@ automatically for the pedigree via n_gen_pedigree."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,8 +98,12 @@ automatically for the pedigree via <code>n_gen_pedigree</code>.</p>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code> (optionally filtered).
-Must contain an <code>id_ind</code> column.</p></dd>
+<dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code>, optionally piped through
+<code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>. Any table with an <code>id_ind</code> column is accepted; the
+individuals acted on are the distinct <code>id_ind</code> values present in the
+(filtered) table. An unfiltered <code>ind_meta</code> selects every individual; an
+unfiltered <code>ind_ebv</code>, <code>ind_index</code>, <code>ind_genotype</code>, ... selects only the
+individuals that have rows there. A table without <code>id_ind</code> is an error.</p></dd>
 
 
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
@@ -176,11 +180,10 @@ Applies only in <code>software = "blupf90"</code> mode.</p></dd>
 <dt id="arg-update-covars">update_covars<a class="anchor" aria-label="anchor" href="#arg-update-covars"></a></dt>
 <dd><p>Logical. If <code>estimate_var = TRUE</code>, attempt to write
 estimated variance components back to <code>trait_var_comp</code>. Default <code>FALSE</code>.
-<strong>Not yet implemented</strong>: the current writeback step
-(<code><a href="update_covars_from_blupf90.html">update_covars_from_blupf90()</a></code>) is a stub that only prints a message
-pointing you to <code>blupf90.out</code> and <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> for a
-manual update — no rows are written automatically yet. Applies only in
-<code>software = "blupf90"</code> mode.</p></dd>
+<strong>Not yet implemented</strong>: <code>blupf90.out</code> is not parsed back into
+<code>trait_var_comp</code>. Setting this only prints a message pointing you to
+that file and to <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> for a manual update; no
+rows are written. Applies only in <code>software = "blupf90"</code> mode.</p></dd>
 
 
 <dt id="arg-phenotype">phenotype<a class="anchor" aria-label="anchor" href="#arg-phenotype"></a></dt>

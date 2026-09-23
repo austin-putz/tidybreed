@@ -1,6 +1,7 @@
 # Compute the next pheno_number for each individual for a given phenotype
 
-Compute the next pheno_number for each individual for a given phenotype
+RNG-neutral: the ids are registered as a temporary view and joined,
+never written to a table or pasted into SQL.
 
 ## Usage
 

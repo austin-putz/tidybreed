@@ -7,7 +7,21 @@ Model (per phenotype, on the liability / continuous scale):
 
 
 mean comes from phenotype_meta.mean.
-Fixed and random shifts come from phenotype_effects rows.
+Fixed shifts come from the fixed_class / fixed_cov rows of
+phenotype_effects.
+Random shifts come from its random rows (see define_effect_random()):
+one draw per distinct level of the effect's source_column, realized
+the first time any record touches the level and stored in
+phenotype_random_effects, then reused by every later record with that
+level — in this call or any later one. A level is persistent: a pen
+that is re-realized per batch is a different level (pen_batch), not a
+different feature. When the effect is correlated across phenotypes
+(define_effect_cov_matrix() with the effect's name), a level's draw
+for one phenotype is conditional on the draws it already has stored for
+the block's other phenotypes — add_phenotype(&quot;ADG&quot;) today and
+add_phenotype(&quot;BF&quot;) next season gives pen P1 a (ADG, BF) pair with
+the declared covariance, whichever came first. A record whose level is
+NULL gets no draw and a shift of 0.
 For simple phenotypes (phenotype_name == trait_name), TBV_i is the
 standard additive TBV from genome_effects (computed via add_tbv(),
 which this function calls internally for every source trait it needs).
@@ -19,9 +33,31 @@ For formula_tbv composite phenotypes (phenotype_meta.formula_tbv
 set, written by define_phenotype(..., formula_tbv = ...)), TBV_i is
 evaluated from a small DSL expression referencing self/dam/sire/group
 TBVs instead of a phenotype_components data frame.
-e_i is residual: drawn from MVN(0, R) across phenotypes when a
-covariance matrix is stored in phenotype_var_comp and multiple
-phenotypes share the same subset; otherwise drawn independently.
+e_i is the residual, drawn from the phenotype's residual covariance
+block in phenotype_var_comp (see define_residual_cov()). Within a
+block, residuals are correlated across phenotypes and sequential in
+time: each record is drawn from the block's multivariate normal
+conditional on every residual the same individual has already realized
+for the other phenotypes of the block at the same pheno_number —
+whether those were drawn in this call, in an earlier call, or supplied
+through user_residual. So add_phenotype(&quot;A&quot;) today and
+add_phenotype(&quot;B&quot;) after culling gives the survivors' B residual
+the stored correlation with their A residual, with no B record for
+the culled. Heterogeneous residual variance (strata by
+condition_column) is applied per record: each record draws from the
+stratum its condition value selects, falling back to the unconditional
+R (with residual_condition_level stored as NULL) when the value
+is NULL or matches no stratum, and erroring if there is no
+unconditional stratum to fall back on. A stored residual drawn under a
+different stratum than the current record resolves to is an error, or
+is dropped from the conditioning set with a warning when the block's
+phenotypes have condition_change_action = &quot;independent&quot;. The realized
+residual and its stratum are written to ind_phenotype.residual_value
+/ residual_condition_level (liability scale; NULL for user_values
+and derived_formula records). pheno_number pairs records
+ordinally, not by simulated time; repeated records of the same
+phenotype have independent residuals (use a permanent-environment
+random effect for within-animal covariance).
 
 
 derived_formula phenotypes are the one exception to the model above.
@@ -34,11 +70,30 @@ feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.
 Subset selection: pipe a tidybreed_table (from get_table() and
 optionally dplyr::filter()) as the first argument.
+How a call runs. Every record is planned first — sex expression, the
+repeatable guard, fixed-effect skips, missing-component exclusions and
+pheno_number are all decided before a single random number is drawn —
+then every draw is made in memory, then everything is written in one
+transaction. An individual that ends up without a record therefore never
+consumes RNG, and seeded output does not depend on physical row order:
+records are planned in id_ind order within each phenotype. See
+?add_phenotype_stages.
+If a call fails, nothing is written: ind_phenotype and
+phenotype_random_effects are exactly as they were, whether the error
+came from validation, from sampling (a missing variance, a residual
+stratum change under condition_change_action = &quot;error&quot;) or from the
+write itself — down to the schema, so a new column named in ... is
+rolled back with the rows it was added for. The random-number stream is not rewound: .Random.seed
+stays advanced by the draws made before the error, as after any other
+failed R call, so re-running the call draws different values. Pass seed
+(or call set.seed()) again if the retry must reproduce the failed call.
+The TBVs the call materialized through add_tbv() remain; they do not
+depend on the RNG, and the retry rewrites them.
 Escape hatches:
 user_values: skip model computation and write these values as phenotype
 records for the subset.
-user_residual: supply a numeric vector (or named list) to override the
-residual draw.
+user_residual: supply the residuals of some or all phenotypes instead
+of drawing them; the rest are drawn conditional on the supplied values.
 
 "><meta property="og:description" content="Simulates phenotype values for one or more phenotypes and writes them to
 ind_phenotype. Also computes and stores the underlying true breeding
@@ -48,7 +103,21 @@ Model (per phenotype, on the liability / continuous scale):
 
 
 mean comes from phenotype_meta.mean.
-Fixed and random shifts come from phenotype_effects rows.
+Fixed shifts come from the fixed_class / fixed_cov rows of
+phenotype_effects.
+Random shifts come from its random rows (see define_effect_random()):
+one draw per distinct level of the effect's source_column, realized
+the first time any record touches the level and stored in
+phenotype_random_effects, then reused by every later record with that
+level — in this call or any later one. A level is persistent: a pen
+that is re-realized per batch is a different level (pen_batch), not a
+different feature. When the effect is correlated across phenotypes
+(define_effect_cov_matrix() with the effect's name), a level's draw
+for one phenotype is conditional on the draws it already has stored for
+the block's other phenotypes — add_phenotype(&quot;ADG&quot;) today and
+add_phenotype(&quot;BF&quot;) next season gives pen P1 a (ADG, BF) pair with
+the declared covariance, whichever came first. A record whose level is
+NULL gets no draw and a shift of 0.
 For simple phenotypes (phenotype_name == trait_name), TBV_i is the
 standard additive TBV from genome_effects (computed via add_tbv(),
 which this function calls internally for every source trait it needs).
@@ -60,9 +129,31 @@ For formula_tbv composite phenotypes (phenotype_meta.formula_tbv
 set, written by define_phenotype(..., formula_tbv = ...)), TBV_i is
 evaluated from a small DSL expression referencing self/dam/sire/group
 TBVs instead of a phenotype_components data frame.
-e_i is residual: drawn from MVN(0, R) across phenotypes when a
-covariance matrix is stored in phenotype_var_comp and multiple
-phenotypes share the same subset; otherwise drawn independently.
+e_i is the residual, drawn from the phenotype's residual covariance
+block in phenotype_var_comp (see define_residual_cov()). Within a
+block, residuals are correlated across phenotypes and sequential in
+time: each record is drawn from the block's multivariate normal
+conditional on every residual the same individual has already realized
+for the other phenotypes of the block at the same pheno_number —
+whether those were drawn in this call, in an earlier call, or supplied
+through user_residual. So add_phenotype(&quot;A&quot;) today and
+add_phenotype(&quot;B&quot;) after culling gives the survivors' B residual
+the stored correlation with their A residual, with no B record for
+the culled. Heterogeneous residual variance (strata by
+condition_column) is applied per record: each record draws from the
+stratum its condition value selects, falling back to the unconditional
+R (with residual_condition_level stored as NULL) when the value
+is NULL or matches no stratum, and erroring if there is no
+unconditional stratum to fall back on. A stored residual drawn under a
+different stratum than the current record resolves to is an error, or
+is dropped from the conditioning set with a warning when the block's
+phenotypes have condition_change_action = &quot;independent&quot;. The realized
+residual and its stratum are written to ind_phenotype.residual_value
+/ residual_condition_level (liability scale; NULL for user_values
+and derived_formula records). pheno_number pairs records
+ordinally, not by simulated time; repeated records of the same
+phenotype have independent residuals (use a permanent-environment
+random effect for within-animal covariance).
 
 
 derived_formula phenotypes are the one exception to the model above.
@@ -75,11 +166,30 @@ feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.
 Subset selection: pipe a tidybreed_table (from get_table() and
 optionally dplyr::filter()) as the first argument.
+How a call runs. Every record is planned first — sex expression, the
+repeatable guard, fixed-effect skips, missing-component exclusions and
+pheno_number are all decided before a single random number is drawn —
+then every draw is made in memory, then everything is written in one
+transaction. An individual that ends up without a record therefore never
+consumes RNG, and seeded output does not depend on physical row order:
+records are planned in id_ind order within each phenotype. See
+?add_phenotype_stages.
+If a call fails, nothing is written: ind_phenotype and
+phenotype_random_effects are exactly as they were, whether the error
+came from validation, from sampling (a missing variance, a residual
+stratum change under condition_change_action = &quot;error&quot;) or from the
+write itself — down to the schema, so a new column named in ... is
+rolled back with the rows it was added for. The random-number stream is not rewound: .Random.seed
+stays advanced by the draws made before the error, as after any other
+failed R call, so re-running the call draws different values. Pass seed
+(or call set.seed()) again if the retry must reproduce the failed call.
+The TBVs the call materialized through add_tbv() remain; they do not
+depend on the RNG, and the retry rewrites them.
 Escape hatches:
 user_values: skip model computation and write these values as phenotype
 records for the subset.
-user_residual: supply a numeric vector (or named list) to override the
-residual draw.
+user_residual: supply the residuals of some or all phenotypes instead
+of drawing them; the rest are drawn conditional on the supplied values.
 
 "><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -89,7 +199,7 @@ residual draw.
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,7 +234,21 @@ value (TBV) per individual per trait in <code>ind_tbv</code>.</p>
 <p><strong>Model</strong> (per phenotype, on the liability / continuous scale):</p><div class="sourceCode"><pre><code><span></span>
 <span>  <span class="va">y_i</span> <span class="op">=</span> <span class="va">mean</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">fixed_shifts</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">random_shifts</span><span class="op">)</span> <span class="op">+</span> <span class="va">TBV_i</span> <span class="op">+</span> <span class="va">e_i</span></span></code></pre></div>
 <ul><li><p><code>mean</code> comes from <code>phenotype_meta.mean</code>.</p></li>
-<li><p>Fixed and random shifts come from <code>phenotype_effects</code> rows.</p></li>
+<li><p>Fixed shifts come from the <code>fixed_class</code> / <code>fixed_cov</code> rows of
+<code>phenotype_effects</code>.</p></li>
+<li><p>Random shifts come from its <code>random</code> rows (see <code><a href="define_effect_random.html">define_effect_random()</a></code>):
+one draw per distinct level of the effect's <code>source_column</code>, realized
+the first time any record touches the level and stored in
+<code>phenotype_random_effects</code>, then reused by every later record with that
+level — in this call or any later one. A level is persistent: a pen
+that is re-realized per batch is a different level (<code>pen_batch</code>), not a
+different feature. When the effect is correlated across phenotypes
+(<code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> with the effect's name), a level's draw
+for one phenotype is conditional on the draws it already has stored for
+the block's other phenotypes — <code>add_phenotype("ADG")</code> today and
+<code>add_phenotype("BF")</code> next season gives pen <code>P1</code> a <code>(ADG, BF)</code> pair with
+the declared covariance, whichever came first. A record whose level is
+<code>NULL</code> gets no draw and a shift of <code>0</code>.</p></li>
 <li><p>For <strong>simple</strong> phenotypes (<code>phenotype_name == trait_name</code>), <code>TBV_i</code> is the
 standard additive TBV from <code>genome_effects</code> (computed via <code><a href="add_tbv.html">add_tbv()</a></code>,
 which this function calls internally for every source trait it needs).</p></li>
@@ -136,9 +260,31 @@ of contributor TBVs (self, dam, sire, or group) — see
 set, written by <code>define_phenotype(..., formula_tbv = ...)</code>), <code>TBV_i</code> is
 evaluated from a small DSL expression referencing self/dam/sire/group
 TBVs instead of a <code>phenotype_components</code> data frame.</p></li>
-<li><p><code>e_i</code> is residual: drawn from <code>MVN(0, R)</code> across phenotypes when a
-covariance matrix is stored in <code>phenotype_var_comp</code> and multiple
-phenotypes share the same subset; otherwise drawn independently.</p></li>
+<li><p><code>e_i</code> is the residual, drawn from the phenotype's residual covariance
+block in <code>phenotype_var_comp</code> (see <code><a href="define_residual_cov.html">define_residual_cov()</a></code>). Within a
+block, residuals are <strong>correlated across phenotypes and sequential in
+time</strong>: each record is drawn from the block's multivariate normal
+conditional on every residual the same individual has already realized
+for the other phenotypes of the block at the same <code>pheno_number</code> —
+whether those were drawn in this call, in an earlier call, or supplied
+through <code>user_residual</code>. So <code>add_phenotype("A")</code> today and
+<code>add_phenotype("B")</code> after culling gives the survivors' <code>B</code> residual
+the stored correlation with their <code>A</code> residual, with no <code>B</code> record for
+the culled. Heterogeneous residual variance (strata by
+<code>condition_column</code>) is applied per record: each record draws from the
+stratum its condition value selects, falling back to the unconditional
+<code>R</code> (with <code>residual_condition_level</code> stored as <code>NULL</code>) when the value
+is <code>NULL</code> or matches no stratum, and erroring if there is no
+unconditional stratum to fall back on. A stored residual drawn under a
+different stratum than the current record resolves to is an error, or
+is dropped from the conditioning set with a warning when the block's
+phenotypes have <code>condition_change_action = "independent"</code>. The realized
+residual and its stratum are written to <code>ind_phenotype.residual_value</code>
+/ <code>residual_condition_level</code> (liability scale; <code>NULL</code> for <code>user_values</code>
+and <code>derived_formula</code> records). <code>pheno_number</code> pairs records
+ordinally, not by simulated time; repeated records of the <em>same</em>
+phenotype have independent residuals (use a permanent-environment
+random effect for within-animal covariance).</p></li>
 </ul><p><strong><code>derived_formula</code> phenotypes are the one exception to the model above.</strong>
 When <code>phenotype_meta.type == "derived_formula"</code> (<code>phenotype_meta.formula</code>
 set), the phenotype value is computed directly as an arithmetic expression
@@ -149,10 +295,29 @@ feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.</p>
 <p><strong>Subset selection</strong>: pipe a <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> and
 optionally <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>) as the first argument.</p>
+<p><strong>How a call runs.</strong> Every record is planned first — sex expression, the
+repeatable guard, fixed-effect skips, missing-component exclusions and
+<code>pheno_number</code> are all decided before a single random number is drawn —
+then every draw is made in memory, then everything is written in one
+transaction. An individual that ends up without a record therefore never
+consumes RNG, and seeded output does not depend on physical row order:
+records are planned in <code>id_ind</code> order within each phenotype. See
+<code><a href="add_phenotype_stages.html">?add_phenotype_stages</a></code>.</p>
+<p><strong>If a call fails</strong>, nothing is written: <code>ind_phenotype</code> and
+<code>phenotype_random_effects</code> are exactly as they were, whether the error
+came from validation, from sampling (a missing variance, a residual
+stratum change under <code>condition_change_action = "error"</code>) or from the
+write itself — down to the schema, so a new column named in <code>...</code> is
+rolled back with the rows it was added for. The random-number stream is <strong>not</strong> rewound: <code>.Random.seed</code>
+stays advanced by the draws made before the error, as after any other
+failed R call, so re-running the call draws different values. Pass <code>seed</code>
+(or call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code>) again if the retry must reproduce the failed call.
+The TBVs the call materialized through <code><a href="add_tbv.html">add_tbv()</a></code> remain; they do not
+depend on the RNG, and the retry rewrites them.</p>
 <p><strong>Escape hatches</strong>:</p><ul><li><p><code>user_values</code>: skip model computation and write these values as phenotype
 records for the subset.</p></li>
-<li><p><code>user_residual</code>: supply a numeric vector (or named list) to override the
-residual draw.</p></li>
+<li><p><code>user_residual</code>: supply the residuals of some or all phenotypes instead
+of drawing them; the rest are drawn conditional on the supplied values.</p></li>
 </ul></div>
 
     <div class="section level2">
@@ -172,8 +337,12 @@ residual draw.</p></li>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A <code>tidybreed_table</code> object from <code><a href="get_table.html">get_table()</a></code> (optionally piped
-through <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>). The table must contain an <code>id_ind</code> column.</p></dd>
+<dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code>, optionally piped through
+<code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>. Any table with an <code>id_ind</code> column is accepted; the
+individuals acted on are the distinct <code>id_ind</code> values present in the
+(filtered) table. An unfiltered <code>ind_meta</code> selects every individual; an
+unfiltered <code>ind_ebv</code>, <code>ind_index</code>, <code>ind_genotype</code>, ... selects only the
+individuals that have rows there. A table without <code>id_ind</code> is an error.</p></dd>
 
 
 <dt id="arg-phenotype-name">phenotype_name<a class="anchor" aria-label="anchor" href="#arg-phenotype-name"></a></dt>
@@ -183,29 +352,36 @@ through <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class=
 
 
 <dt id="arg-user-residual">user_residual<a class="anchor" aria-label="anchor" href="#arg-user-residual"></a></dt>
-<dd><p>Optional override for residual draws (skips the
-<code>MVN</code>/independent residual sampling step described above; the mean,
-covariate, and TBV contributions are still computed and added). For a single
-<code>phenotype_name</code>, a plain numeric vector matched <strong>by position</strong> to the
-final per-phenotype individual list — i.e. after sex-expression
-filtering (<code>expressed_sex</code>), repeatable-record exclusion, and any
-missing-component exclusion, so its length must equal the resulting
-subset size, which may be smaller than the original filtered <code>tbl</code>. For
-multiple phenotypes, a named list keyed by <code>phenotype_name</code>, each element
-following the same positional rule for that phenotype's own subset.
-Unlike <code>user_values</code> below, named (per-<code>id_ind</code>) vectors are <strong>not</strong>
-supported here.</p></dd>
+<dd><p>Optional residuals to use instead of drawing them
+(the mean, covariate and TBV contributions are still computed and
+added). When exactly one phenotype in the call is generated from the
+model, a plain numeric vector matched <strong>by position</strong> to that
+phenotype's planned records — sorted <code>id_ind</code> order after sex
+expression, the repeatable guard and any exclusion, so its length must
+equal the planned record count, which may be smaller than the filtered
+<code>tbl</code>. Otherwise a named list keyed by <code>phenotype_name</code> that may name
+<strong>any subset</strong> of the model-generated phenotypes, each element following
+the same positional rule; the phenotypes not named are drawn conditional
+on the supplied values. Supplied residuals are stored in
+<code>residual_value</code> like drawn ones and condition later calls; a phenotype
+whose residuals are all supplied needs no residual variance declared.
+A value outside the support of a singular covariance (e.g. non-zero
+for a zero-variance phenotype) is an error. Named (per-<code>id_ind</code>) vectors are
+<strong>not</strong> supported here; cannot be combined with <code>user_values</code>.</p></dd>
 
 
 <dt id="arg-user-values">user_values<a class="anchor" aria-label="anchor" href="#arg-user-values"></a></dt>
 <dd><p>Optional override for the full phenotype value —
 skips the model entirely (mean, covariates, and residual are not
 evaluated), though TBVs are still computed and stored in <code>ind_tbv</code>. For a
-single <code>phenotype_name</code>: a plain numeric vector matching the filtered
-subset by position (<code>id_ind</code> order), or a named numeric vector (e.g.
-<code>c(id_1 = 555, id_2 = 560)</code>) to match by <code>id_ind</code> regardless of order.
-For multiple phenotypes: a named list keyed by <code>phenotype_name</code>, each
-element following the same (positional-or-named) rule.</p></dd>
+single <code>phenotype_name</code>: a plain numeric vector matching the planned
+records by position (sorted <code>id_ind</code> order, after sex expression and the
+repeatable guard), or a named numeric vector (e.g.
+<code>c(id_1 = 555, id_2 = 560)</code>) to match by <code>id_ind</code> regardless of order —
+every name must be an individual in that planned set, each once, and
+only the named individuals receive a record. For multiple phenotypes: a
+named list keyed by <code>phenotype_name</code>, each element following the same
+(positional-or-named) rule.</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
@@ -242,6 +418,23 @@ element following the same (positional-or-named) rule.</p></dd>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">sex</span> <span class="op">==</span> <span class="st">"F"</span>, <span class="va">gen</span> <span class="op">==</span> <span class="fl">1L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Any table with id_ind chooses the individuals. Marker-assisted</span></span></span>
+<span class="r-in"><span><span class="co"># pre-selection: only carriers of two copies at Locus_10 (run add_dosage()</span></span></span>
+<span class="r-in"><span><span class="co"># first, since ind_genotype is an on-demand cache)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_genotype"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">locus_name</span> <span class="op">==</span> <span class="st">"Locus_10"</span>, <span class="va">dosage_value</span> <span class="op">==</span> <span class="fl">2L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># EBV-based: only animals above an EBV threshold in the latest evaluation</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_ebv"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">trait_name</span> <span class="op">==</span> <span class="st">"ADG"</span>, <span class="va">eval_number</span> <span class="op">==</span> <span class="fl">3L</span>, <span class="va">ebv_value</span> <span class="op">&gt;</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Unfiltered ind_ebv means "every animal that has an EBV", not everyone</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_ebv"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,</span></span></span>
 <span class="r-in"><span><span class="co"># registered once via define_phenotype(components = ...)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
@@ -255,6 +448,41 @@ element following the same (positional-or-named) rule.</p></dd>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">1L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"WW"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Culling between records. A and B share a residual covariance block, so</span></span></span>
+<span class="r-in"><span><span class="co"># B's residual is drawn conditional on each survivor's stored A residual.</span></span></span>
+<span class="r-in"><span><span class="co"># The culled animals simply get no B record -- and because a residual is</span></span></span>
+<span class="r-in"><span><span class="co"># realized only when a record is planned, they consume no draw either.</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_phenotype.html">define_phenotype</a></span><span class="op">(</span><span class="st">"A"</span>, type <span class="op">=</span> <span class="st">"continuous"</span>, mean <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_phenotype.html">define_phenotype</a></span><span class="op">(</span><span class="st">"B"</span>, type <span class="op">=</span> <span class="st">"continuous"</span>, mean <span class="op">=</span> <span class="fl">250</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_residual_cov.html">define_residual_cov</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">40</span>, <span class="fl">18</span>, <span class="fl">18</span>, <span class="fl">30</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span>,</span></span>
+<span class="r-in"><span>           dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 1. Record A on everyone</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"A"</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 2. Cull on the realized A: keep the top half</span></span></span>
+<span class="r-in"><span><span class="va">cut</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phenotype_name</span> <span class="op">==</span> <span class="st">"A"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/pull.html" class="external-link">pull</a></span><span class="op">(</span><span class="va">pheno_value</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 3. Record B on the survivors only. Selecting from ind_phenotype means</span></span></span>
+<span class="r-in"><span><span class="co">#    "the animals with this A record", not everyone.</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phenotype_name</span> <span class="op">==</span> <span class="st">"A"</span>, <span class="va">pheno_value</span> <span class="op">&gt;=</span> <span class="va">cut</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"B"</span>, seed <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Checking the result: do NOT expect the correlation between the two</span></span></span>
+<span class="r-in"><span><span class="co"># stored residual_value columns to equal the declared 18/sqrt(40*30) =</span></span></span>
+<span class="r-in"><span><span class="co"># 0.52. The survivors were selected on A, so their A residuals are</span></span></span>
+<span class="r-in"><span><span class="co"># range-restricted and the observed correlation is attenuated (~0.35 for</span></span></span>
+<span class="r-in"><span><span class="co"># a top-half cull). What selection does *not* change is the conditional</span></span></span>
+<span class="r-in"><span><span class="co"># slope, so that is the quantity to check:</span></span></span>
+<span class="r-in"><span><span class="co">#</span></span></span>
+<span class="r-in"><span><span class="co">#   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Escape hatch: supply phenotype values directly (skips the model, but</span></span></span>
 <span class="r-in"><span><span class="co"># still computes and stores TBVs); named vector matches by id_ind</span></span></span>

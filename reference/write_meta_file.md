@@ -11,7 +11,6 @@ write_meta_file(
   col_map,
   distinct_effects,
   trait,
-  effects_df,
   chip_name,
   n_loci,
   id_width,
@@ -43,12 +42,6 @@ write_meta_file(
 - trait:
 
   character vector of trait names (in model order)
-
-- effects_df:
-
-  data.frame of (trait_name x effect_name) fixed-effect rows from
-  `phenotype_effects`, as returned by
-  [`build_data_file()`](https://austin-putz.github.io/tidybreed/reference/build_data_file.md)
 
 - chip_name:
 

@@ -45,12 +45,31 @@ an observation.
 
 - [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
   : Define a genetic component trait
+
 - [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
   : Define a trait with QTL and sampled effects in one call
+
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   : Define additive QTL effects for one or more traits
+
+- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  : Define genome effects as terms over one or more loci
+
+- [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
+  :
+
+  Build `terms` rows for a functional or Cockerham (a, d) pair
+
+- [`genotype_terms()`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md)
+  :
+
+  Build `terms` rows from a table of genotype values
+
 - [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
   : Define a variance-covariance matrix for any named effect
+
+- [`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
+  : Extract per-locus allele frequencies from a filtered table
 
 ## Phenotypes — observation layer
 
@@ -59,15 +78,25 @@ residual variance, sex expression, and any fixed or random effects.
 
 - [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
   : Define an observed phenotype
+
 - [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md)
   : Define residual covariance entries for observed phenotypes
+
+- [`define_condition_change_action()`](https://austin-putz.github.io/tidybreed/reference/define_condition_change_action.md)
+  :
+
+  Set `condition_change_action` for a whole residual covariance block
+
 - [`define_effect_intercept()`](https://austin-putz.github.io/tidybreed/reference/define_effect_intercept.md)
   : Set the intercept (population mean) for a phenotype
+
 - [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md)
   : Define a discrete fixed-class effect in a phenotype model
+
 - [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md)
   : Define a continuous covariate (regression) effect in a phenotype
   model
+
 - [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md)
   : Define a random group effect in a phenotype model
 
@@ -78,6 +107,8 @@ breeding values from an external evaluation.
 
 - [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
   : Compute and store true breeding values without writing phenotypes
+- [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  : Compute and store true genetic values
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   : Generate phenotype records for a subset of individuals
 - [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
@@ -100,7 +131,7 @@ matrices out for analysis or export.
   Materialize genotype dosage values into `ind_genotype`
 
 - [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
-  : Extract genotype data for individuals, by chip and/or QTL loci
+  : Extract genotype data for individuals, by chip and/or causal loci
 
 ## Selection index
 

@@ -8,10 +8,36 @@ calls to
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
 without requiring a fixed `seed`.
 
+**A level's draw is persistent.** The realized value for pen `P1`
+applies to *every* individual that is ever in `P1` — across batches and
+seasons, in every later
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+call, forever. That is the model declared by using `pen_id` as the
+level. An effect that should be re-realized per batch is a **different
+level** — `pen_batch_id`, or an `interaction(pen_id, batch_id)` column
+written to `ind_meta` — not a different feature. A level is drawn the
+first time a planned record touches it; a level touched only by
+individuals that end up without a record is never drawn.
+
 To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call
 [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
 with the appropriate `effect_name` — either before or after this call.
+Once the phenotype belongs to a block of two or more phenotypes for
+`effect_name`, this call must use `distribution = "normal"` and the same
+`(source_column, source_table)` as the block's other members, and
+`variance` can no longer be set here — the block is redeclared as a
+whole with
+[`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md).
+Within such a block a level's draw for one phenotype is conditional on
+the draws it already has stored for the block's other phenotypes,
+whichever phenotype was generated first and however many calls apart:
+`add_phenotype("ADG")` today and `add_phenotype("BF")` next season gives
+pen `P1` a `(ADG, BF)` pair with the declared covariance. A block member
+that is not in a call, or that has no random term for the effect, is
+simply not drawn — its coordinate stays latent until it is needed. A
+`"gamma"` or `"uniform"` effect is supported only while its phenotype is
+alone in its block.
 
 ## Usage
 
@@ -49,15 +75,20 @@ define_effect_random(
 
 - variance:
 
-  Numeric scalar. Variance of the random effect. Optional if already
-  stored via
-  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md);
-  required otherwise.
+  Numeric scalar or `NULL`. Variance of the random effect. `NULL`
+  (default) uses the value already stored in `phenotype_var_comp` via
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  and errors if there is none. A number writes (or overwrites) a 1 × 1
+  block for this phenotype; it is an error when the phenotype is already
+  in a multi-phenotype block for `effect_name`.
 
 - distribution:
 
-  Character. Sampling distribution: `"normal"` (default), `"gamma"`, or
-  `"uniform"`.
+  Character. Sampling distribution: `"normal"` (default), `"gamma"`
+  (shape 1, rate `1 / sqrt(variance)`), or `"uniform"` (on
+  `± sqrt(3 * variance)`). The last two are marginal samplers for a
+  phenotype alone in its block; a block of two or more requires
+  `"normal"`.
 
 - source_table:
 
@@ -65,7 +96,9 @@ define_effect_random(
 
 - overwrite:
 
-  Logical. Replace an existing effect with the same name.
+  Logical. Replace an existing effect with the same name. The stored
+  draws of that effect for this phenotype in `phenotype_random_effects`
+  are discarded with it.
 
 ## Value
 

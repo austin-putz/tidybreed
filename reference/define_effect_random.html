@@ -4,16 +4,60 @@ per distinct level of source_column; all individuals sharing that level
 receive the same shift. Drawn values are stored in phenotype_random_effects
 so they are reproducible across repeated calls to add_phenotype() without
 requiring a fixed seed.
+A level's draw is persistent. The realized value for pen P1 applies
+to every individual that is ever in P1 — across batches and seasons,
+in every later add_phenotype() call, forever. That is the model
+declared by using pen_id as the level. An effect that should be
+re-realized per batch is a different level — pen_batch_id, or an
+interaction(pen_id, batch_id) column written to ind_meta — not a
+different feature. A level is drawn the first time a planned record
+touches it; a level touched only by individuals that end up without a
+record is never drawn.
 To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call define_effect_cov_matrix() with the
-appropriate effect_name — either before or after this call."><meta property="og:description" content="Inserts a row into phenotype_effects for a random effect. One value is drawn
+appropriate effect_name — either before or after this call. Once the
+phenotype belongs to a block of two or more phenotypes for effect_name,
+this call must use distribution = &quot;normal&quot; and the same
+(source_column, source_table) as the block's other members, and
+variance can no longer be set here — the block is redeclared as a whole
+with define_effect_cov_matrix(). Within such a block a level's draw for
+one phenotype is conditional on the draws it already has stored for the
+block's other phenotypes, whichever phenotype was generated first and
+however many calls apart: add_phenotype(&quot;ADG&quot;) today and
+add_phenotype(&quot;BF&quot;) next season gives pen P1 a (ADG, BF) pair with
+the declared covariance. A block member that is not in a call, or that
+has no random term for the effect, is simply not drawn — its coordinate
+stays latent until it is needed. A &quot;gamma&quot; or &quot;uniform&quot; effect is
+supported only while its phenotype is alone in its block."><meta property="og:description" content="Inserts a row into phenotype_effects for a random effect. One value is drawn
 per distinct level of source_column; all individuals sharing that level
 receive the same shift. Drawn values are stored in phenotype_random_effects
 so they are reproducible across repeated calls to add_phenotype() without
 requiring a fixed seed.
+A level's draw is persistent. The realized value for pen P1 applies
+to every individual that is ever in P1 — across batches and seasons,
+in every later add_phenotype() call, forever. That is the model
+declared by using pen_id as the level. An effect that should be
+re-realized per batch is a different level — pen_batch_id, or an
+interaction(pen_id, batch_id) column written to ind_meta — not a
+different feature. A level is drawn the first time a planned record
+touches it; a level touched only by individuals that end up without a
+record is never drawn.
 To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call define_effect_cov_matrix() with the
-appropriate effect_name — either before or after this call."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+appropriate effect_name — either before or after this call. Once the
+phenotype belongs to a block of two or more phenotypes for effect_name,
+this call must use distribution = &quot;normal&quot; and the same
+(source_column, source_table) as the block's other members, and
+variance can no longer be set here — the block is redeclared as a whole
+with define_effect_cov_matrix(). Within such a block a level's draw for
+one phenotype is conditional on the draws it already has stored for the
+block's other phenotypes, whichever phenotype was generated first and
+however many calls apart: add_phenotype(&quot;ADG&quot;) today and
+add_phenotype(&quot;BF&quot;) next season gives pen P1 a (ADG, BF) pair with
+the declared covariance. A block member that is not in a call, or that
+has no random term for the effect, is simply not drawn — its coordinate
+stays latent until it is needed. A &quot;gamma&quot; or &quot;uniform&quot; effect is
+supported only while its phenotype is alone in its block."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -21,7 +65,7 @@ appropriate effect_name — either before or after this call."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,9 +99,31 @@ per distinct level of <code>source_column</code>; all individuals sharing that l
 receive the same shift. Drawn values are stored in <code>phenotype_random_effects</code>
 so they are reproducible across repeated calls to <code><a href="add_phenotype.html">add_phenotype()</a></code> without
 requiring a fixed <code>seed</code>.</p>
+<p><strong>A level's draw is persistent.</strong> The realized value for pen <code>P1</code> applies
+to <em>every</em> individual that is ever in <code>P1</code> — across batches and seasons,
+in every later <code><a href="add_phenotype.html">add_phenotype()</a></code> call, forever. That is the model
+declared by using <code>pen_id</code> as the level. An effect that should be
+re-realized per batch is a <strong>different level</strong> — <code>pen_batch_id</code>, or an
+<code>interaction(pen_id, batch_id)</code> column written to <code>ind_meta</code> — not a
+different feature. A level is drawn the first time a planned record
+touches it; a level touched only by individuals that end up without a
+record is never drawn.</p>
 <p>To correlate this effect across multiple phenotypes (e.g. the same herd
 affects both ADG and BW), call <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> with the
-appropriate <code>effect_name</code> — either before or after this call.</p>
+appropriate <code>effect_name</code> — either before or after this call. Once the
+phenotype belongs to a block of two or more phenotypes for <code>effect_name</code>,
+this call must use <code>distribution = "normal"</code> and the same
+<code>(source_column, source_table)</code> as the block's other members, and
+<code>variance</code> can no longer be set here — the block is redeclared as a whole
+with <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>. Within such a block a level's draw for
+one phenotype is conditional on the draws it already has stored for the
+block's other phenotypes, whichever phenotype was generated first and
+however many calls apart: <code>add_phenotype("ADG")</code> today and
+<code>add_phenotype("BF")</code> next season gives pen <code>P1</code> a <code>(ADG, BF)</code> pair with
+the declared covariance. A block member that is not in a call, or that
+has no random term for the effect, is simply not drawn — its coordinate
+stays latent until it is needed. A <code>"gamma"</code> or <code>"uniform"</code> effect is
+supported only while its phenotype is alone in its block.</p>
     </div>
 
     <div class="section level2">
@@ -98,13 +164,19 @@ values define the groups (e.g. <code>"herd_id"</code>, <code>"litter"</code>, <c
 
 
 <dt id="arg-variance">variance<a class="anchor" aria-label="anchor" href="#arg-variance"></a></dt>
-<dd><p>Numeric scalar. Variance of the random effect. Optional if
-already stored via <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>; required otherwise.</p></dd>
+<dd><p>Numeric scalar or <code>NULL</code>. Variance of the random effect.
+<code>NULL</code> (default) uses the value already stored in <code>phenotype_var_comp</code> via
+<code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> and errors if there is none. A number writes
+(or overwrites) a 1 × 1 block for this phenotype; it is an error when the
+phenotype is already in a multi-phenotype block for <code>effect_name</code>.</p></dd>
 
 
 <dt id="arg-distribution">distribution<a class="anchor" aria-label="anchor" href="#arg-distribution"></a></dt>
 <dd><p>Character. Sampling distribution: <code>"normal"</code> (default),
-<code>"gamma"</code>, or <code>"uniform"</code>.</p></dd>
+<code>"gamma"</code> (shape 1, rate <code>1 / sqrt(variance)</code>), or <code>"uniform"</code> (on
+<code>± sqrt(3 * variance)</code>). The last two are marginal samplers for a
+phenotype alone in its block; a block of two or more requires
+<code>"normal"</code>.</p></dd>
 
 
 <dt id="arg-source-table">source_table<a class="anchor" aria-label="anchor" href="#arg-source-table"></a></dt>
@@ -113,7 +185,9 @@ already stored via <code><a href="define_effect_cov_matrix.html">define_effect_c
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
-<dd><p>Logical. Replace an existing effect with the same name.</p></dd>
+<dd><p>Logical. Replace an existing effect with the same name.
+The stored draws of that effect for this phenotype in
+<code>phenotype_random_effects</code> are discarded with it.</p></dd>
 
 </dl></div>
     <div class="section level2">

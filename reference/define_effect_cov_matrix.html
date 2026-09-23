@@ -16,13 +16,26 @@ residual matrix; for a single scalar residual use residual_var in
 define_phenotype() instead.
 Any named random effect ("hys", "litter", "pen", …) — written to
 phenotype_var_comp. Must match the effect_name used in
-define_effect_random(). Row/column names are phenotype names.
+define_effect_random(). Row/column names are phenotype names. Each
+level of the effect (each pen) then carries one draw per phenotype with
+this covariance, realized sequentially: whichever phenotype
+add_phenotype() generates first for a level draws marginally, and the
+others are later drawn conditional on what the level has stored —
+however many calls apart (see define_effect_random()).
 
 
 define_effect_cov_matrix() can be called before define_trait() or
 define_effect_random() — no prior setup is required.
-All n² pairs are stored. Previous entries for this effect_name × names
-combination are replaced.'><meta property="og:description" content='Single entry point for storing all variance and covariance data in tidybreed.
+All n² pairs are stored. For phenotype_var_comp effects the names form a
+covariance block that is declared in one call, as a complete matrix: a
+call that names a fragment or a strict subset of an existing block is an
+error, the matrix must be positive semi-definite, and a block cannot be
+redefined once draws exist under it (the error gives the remove_rows()
+call that clears them). In a block of two or more phenotypes every
+define_effect_random() row for the effect must use
+distribution = "normal" and read the same (source_column, source_table).
+See define_residual_cov() for the full rules. A rejected call changes
+nothing.'><meta property="og:description" content='Single entry point for storing all variance and covariance data in tidybreed.
 Routes to trait_var_comp for genetic effects and to phenotype_var_comp for
 phenotype-level effects.
 Common effect_name values:
@@ -39,13 +52,26 @@ residual matrix; for a single scalar residual use residual_var in
 define_phenotype() instead.
 Any named random effect ("hys", "litter", "pen", …) — written to
 phenotype_var_comp. Must match the effect_name used in
-define_effect_random(). Row/column names are phenotype names.
+define_effect_random(). Row/column names are phenotype names. Each
+level of the effect (each pen) then carries one draw per phenotype with
+this covariance, realized sequentially: whichever phenotype
+add_phenotype() generates first for a level draws marginally, and the
+others are later drawn conditional on what the level has stored —
+however many calls apart (see define_effect_random()).
 
 
 define_effect_cov_matrix() can be called before define_trait() or
 define_effect_random() — no prior setup is required.
-All n² pairs are stored. Previous entries for this effect_name × names
-combination are replaced.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+All n² pairs are stored. For phenotype_var_comp effects the names form a
+covariance block that is declared in one call, as a complete matrix: a
+call that names a fragment or a strict subset of an existing block is an
+error, the matrix must be positive semi-definite, and a block cannot be
+redefined once draws exist under it (the error gives the remove_rows()
+call that clears them). In a block of two or more phenotypes every
+define_effect_random() row for the effect must use
+distribution = "normal" and read the same (source_column, source_table).
+See define_residual_cov() for the full rules. A rejected call changes
+nothing.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -53,7 +79,7 @@ combination are replaced.'><meta property="og:image" content="https://austin-put
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,11 +124,24 @@ residual matrix; for a single scalar residual use <code>residual_var</code> in
 <code><a href="define_phenotype.html">define_phenotype()</a></code> instead.</p></li>
 <li><p>Any named random effect (<code>"hys"</code>, <code>"litter"</code>, <code>"pen"</code>, …) — written to
 <code>phenotype_var_comp</code>. Must match the <code>effect_name</code> used in
-<code><a href="define_effect_random.html">define_effect_random()</a></code>. Row/column names are phenotype names.</p></li>
+<code><a href="define_effect_random.html">define_effect_random()</a></code>. Row/column names are phenotype names. Each
+level of the effect (each pen) then carries one draw per phenotype with
+this covariance, realized sequentially: whichever phenotype
+<code><a href="add_phenotype.html">add_phenotype()</a></code> generates first for a level draws marginally, and the
+others are later drawn conditional on what the level has stored —
+however many calls apart (see <code><a href="define_effect_random.html">define_effect_random()</a></code>).</p></li>
 </ul><p><code>define_effect_cov_matrix()</code> can be called <strong>before</strong> <code><a href="define_trait.html">define_trait()</a></code> or
 <code><a href="define_effect_random.html">define_effect_random()</a></code> — no prior setup is required.</p>
-<p>All n² pairs are stored. Previous entries for this <code>effect_name</code> × names
-combination are replaced.</p>
+<p>All n² pairs are stored. For <code>phenotype_var_comp</code> effects the names form a
+<em>covariance block</em> that is declared in one call, as a complete matrix: a
+call that names a fragment or a strict subset of an existing block is an
+error, the matrix must be positive semi-definite, and a block cannot be
+redefined once draws exist under it (the error gives the <code><a href="remove_rows.html">remove_rows()</a></code>
+call that clears them). In a block of two or more phenotypes every
+<code><a href="define_effect_random.html">define_effect_random()</a></code> row for the effect must use
+<code>distribution = "normal"</code> and read the same <code>(source_column, source_table)</code>.
+See <code><a href="define_residual_cov.html">define_residual_cov()</a></code> for the full rules. A rejected call changes
+nothing.</p>
     </div>
 
     <div class="section level2">

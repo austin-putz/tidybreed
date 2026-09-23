@@ -7,9 +7,9 @@ Three typical call patterns:
 Called by define_phenotype() internally when residual_var is
 supplied (scalar diagonal, unconditional).
 Called by define_effect_cov_matrix() when effect_name = "residual"
-to store a full multi-trait unconditional R matrix.
-Called directly to add group-specific (heterogeneous) residual rows
-after define_phenotype() has written the unconditional default.
+to store a full multi-phenotype unconditional R matrix.
+Called directly to declare group-specific (heterogeneous) residual
+strata, one call per condition_level.
 
 '><meta property="og:description" content='Writes rows to phenotype_var_comp (with effect_name = "residual")
 representing the residual (co)variance matrix for one or more phenotypes,
@@ -19,9 +19,9 @@ Three typical call patterns:
 Called by define_phenotype() internally when residual_var is
 supplied (scalar diagonal, unconditional).
 Called by define_effect_cov_matrix() when effect_name = "residual"
-to store a full multi-trait unconditional R matrix.
-Called directly to add group-specific (heterogeneous) residual rows
-after define_phenotype() has written the unconditional default.
+to store a full multi-phenotype unconditional R matrix.
+Called directly to declare group-specific (heterogeneous) residual
+strata, one call per condition_level.
 
 '><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -31,7 +31,7 @@ after define_phenotype() has written the unconditional default.
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,9 +67,9 @@ and <code>(j,i)</code> pairs are stored.</p>
 <p>Three typical call patterns:</p><ol><li><p><strong>Called by <code><a href="define_phenotype.html">define_phenotype()</a></code> internally</strong> when <code>residual_var</code> is
 supplied (scalar diagonal, unconditional).</p></li>
 <li><p><strong>Called by <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code></strong> when <code>effect_name = "residual"</code>
-to store a full multi-trait unconditional R matrix.</p></li>
-<li><p><strong>Called directly</strong> to add group-specific (heterogeneous) residual rows
-after <code><a href="define_phenotype.html">define_phenotype()</a></code> has written the unconditional default.</p></li>
+to store a full multi-phenotype unconditional R matrix.</p></li>
+<li><p><strong>Called directly</strong> to declare group-specific (heterogeneous) residual
+strata, one call per <code>condition_level</code>.</p></li>
 </ol></div>
 
     <div class="section level2">
@@ -99,30 +99,63 @@ phenotype, a scalar is accepted.</p></dd>
 
 
 <dt id="arg-cov-matrix">cov_matrix<a class="anchor" aria-label="anchor" href="#arg-cov-matrix"></a></dt>
-<dd><p>Numeric matrix. Must be symmetric with
-<code>dimnames(cov_matrix)</code> matching <code>phenotype_names</code>. For a single phenotype
-the matrix is <code>1×1</code>.</p></dd>
+<dd><p>Numeric matrix with <code>dimnames(cov_matrix)</code> matching
+<code>phenotype_names</code>. For a single phenotype the matrix is <code>1×1</code>.</p></dd>
 
 
 <dt id="arg-condition-column">condition_column<a class="anchor" aria-label="anchor" href="#arg-condition-column"></a></dt>
 <dd><p>Character or <code>NULL</code>. Column in <code>condition_table</code> used
-to look up group membership at phenotype time. <code>NULL</code> (default) stores an
-unconditional default row (the fallback when no group-specific row exists).</p></dd>
+to look up group membership at phenotype time. <code>NULL</code> (default) declares
+the unconditional stratum. Must be supplied together with
+<code>condition_level</code>.</p></dd>
 
 
 <dt id="arg-condition-table">condition_table<a class="anchor" aria-label="anchor" href="#arg-condition-table"></a></dt>
 <dd><p>Character. Table containing <code>condition_column</code>.
-Default <code>"ind_meta"</code>.</p></dd>
+Default <code>"ind_meta"</code>. Ignored (stored as <code>NULL</code>) for the unconditional
+stratum.</p></dd>
 
 
 <dt id="arg-condition-level">condition_level<a class="anchor" aria-label="anchor" href="#arg-condition-level"></a></dt>
-<dd><p>Character or <code>NULL</code>. Specific level of <code>condition_column</code>
-this row applies to. <code>NULL</code> (default) = unconditional fallback row.</p></dd>
+<dd><p>Character or <code>NULL</code>. Level of <code>condition_column</code> this
+stratum applies to. <code>NULL</code> (default) = unconditional stratum.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The modified <code>tidybreed_pop</code> (invisibly).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="a-block-is-declared-in-one-call-as-a-complete-matrix">A block is declared in one call, as a complete matrix<a class="anchor" aria-label="anchor" href="#a-block-is-declared-in-one-call-as-a-complete-matrix"></a></h2>
+
+
+<p>The phenotypes that share any stored residual pair row form a <em>covariance
+block</em>; a pair written as an explicit <code>0</code> still joins its two phenotypes.
+A call must name a whole block: declaring <code>{A, B}</code> and then <code>{B, C}</code> is an
+error (the block would be <code>{A, B, C}</code> with <code>Cov(A, C)</code> undeclared), and so is
+redeclaring <code>{A, B}</code> or <code>A</code> alone once <code>{A, B, C}</code> exists. Redeclare the
+complete block instead, writing <code>0</code> for uncorrelated pairs. The matrix must
+be symmetric, finite and positive semi-definite; a rejected call changes
+nothing.</p>
+<p><strong>Strata.</strong> Conditional calls (<code>condition_column</code> + <code>condition_level</code>) add
+strata to the block. Every stratum names the same phenotypes and a block has
+one <code>condition_column</code>; to grow a block that already has several strata,
+clear its rows from <code>phenotype_var_comp</code> with <code><a href="remove_rows.html">remove_rows()</a></code> and redeclare
+each stratum.</p>
+<p><strong>How the block is sampled.</strong> <code><a href="add_phenotype.html">add_phenotype()</a></code> draws each record's
+residual from this block conditional on the residuals the same individual
+has already realized for the block's other phenotypes at the same
+<code>pheno_number</code> — in the same call or any earlier one — so the declared
+covariance holds whether the phenotypes are recorded together or a
+hundred simulated days apart with culling in between. With strata, each
+record draws from the stratum its <code>condition_column</code> value selects,
+falling back to the unconditional stratum when the value is <code>NULL</code> or
+matches none (an error if there is no unconditional stratum).</p>
+<p><strong>Realized draws lock the block.</strong> Once any <code>ind_phenotype</code> row of a member
+has a non-<code>NULL</code> <code>residual_value</code>, the block cannot be redefined; the error
+gives the <code><a href="remove_rows.html">remove_rows()</a></code> call that clears those rows. Every phenotype in
+the block that is already defined must carry the same
+<code>condition_change_action</code> (see <code><a href="define_phenotype.html">define_phenotype()</a></code>).</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -1,8 +1,8 @@
-# Extract genotype data for individuals, by chip and/or QTL loci
+# Extract genotype data for individuals, by chip and/or causal loci
 
 Returns a tibble of genotypes (0/1/2 encoding) for a set of individuals,
 restricted to loci selected by a chip definition, a filtered
-`genome_effects` table, or both. Pipe a `tidybreed_table` (from
+`genome_effect_loci` view, or both. Pipe a `tidybreed_table` (from
 [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
 and optionally
 [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html))
@@ -21,13 +21,13 @@ are given the locus sets are **unioned** (deduplicated, ordered by
 
 - Loci with `is_<chip_name> == TRUE` in `genome_meta`
 
-**QTL path (`effects_tbl`)** — the returned individual set is:
+**Causal-locus path (`effects_tbl`)** — the returned individual set is:
 
 - Animals matching any pending
   [`filter()`](https://rdrr.io/r/stats/filter.html) predicates on `tbl`
   (or all individuals in `ind_haplotype` when no filter is applied)
 
-- Loci whose `locus_name` appears in the collected `effects_tbl`
+- Loci whose `locus_id` appears in the collected `effects_tbl`
 
 ## Usage
 
@@ -45,11 +45,16 @@ extract_genotypes(
 
 - tbl:
 
-  A `tidybreed_table` object from
-  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-  (optionally piped through
-  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)).
-  The table must contain an `id_ind` column when a filter is applied.
+  A `tidybreed_table` from
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md),
+  optionally piped through
+  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html).
+  Any table with an `id_ind` column is accepted; the individuals acted
+  on are the distinct `id_ind` values present in the (filtered) table.
+  An unfiltered `ind_meta` selects every individual; an unfiltered
+  `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+  individuals that have rows there. A table without `id_ind` is an
+  error.
 
 - chip_name:
 
@@ -61,20 +66,22 @@ extract_genotypes(
 
 - effects_tbl:
 
-  A `tidybreed_table` from `get_table(pop, "genome_effects")`
-  (optionally filtered), or `NULL`. The collected table must contain a
-  `locus_name` column. Use
+  A `tidybreed_table` from `get_table(pop, "genome_effect_loci")`
+  (optionally filtered), or `NULL`. One row per (term x locus), so use
   [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)
-  to restrict by `trait_name`, `genome_effect_type`, `genome_value`,
-  `line_name`, etc. When `NULL` the QTL path is skipped.
+  to restrict by `trait_name`, `effect_owner`, `contrast_name`,
+  `genome_value`, or `locus_name`. Effects are stored as terms over one
+  or more loci, and a multi-locus term contributes every one of its
+  loci. When `NULL` the causal-locus path is skipped.
 
 - loci_tbl:
 
   A `tidybreed_table` from `get_table(pop, "genome_meta")` (optionally
   filtered), or `NULL`. A general locus filter independent of chips and
-  QTL sets — e.g. `filter(!chr_name %in% c("X", "Y", "MT"))` to restrict
-  to autosomes. The collected table's `locus_name` values become the
-  locus set. Unioned with `chip_name`/`effects_tbl` when combined.
+  causal-locus sets — e.g. `filter(!chr_name %in% c("X", "Y", "MT"))` to
+  restrict to autosomes. The collected table's `locus_name` values
+  become the locus set. Unioned with `chip_name`/`effects_tbl` when
+  combined.
 
 - col_name:
 
@@ -101,29 +108,30 @@ geno <- pop |>
   dplyr::filter(sex == "F") |>
   extract_genotypes("HD")
 
-# QTL loci for a trait (all individuals)
+# Every causal locus for a trait (all individuals)
 geno <- pop |>
   get_table("ind_meta") |>
   extract_genotypes(
-    effects_tbl = get_table(pop, "genome_effects") |>
+    effects_tbl = get_table(pop, "genome_effect_loci") |>
       dplyr::filter(trait_name == "ADG")
   )
 
-# Large-effect QTL only, females only
+# Additive QTL with a large coefficient, females only
 geno <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(sex == "F") |>
   extract_genotypes(
-    effects_tbl = get_table(pop, "genome_effects") |>
-      dplyr::filter(trait_name == "ADG", abs(genome_value) > 0.15)
+    effects_tbl = get_table(pop, "genome_effect_loci") |>
+      dplyr::filter(trait_name == "ADG", contrast_name == "additive",
+                    abs(genome_value) > 0.15)
   )
 
-# Chip loci + QTL loci unioned
+# Chip loci + causal loci unioned
 geno <- pop |>
   get_table("ind_meta") |>
   extract_genotypes(
     chip_name   = "50k",
-    effects_tbl = get_table(pop, "genome_effects") |>
+    effects_tbl = get_table(pop, "genome_effect_loci") |>
       dplyr::filter(trait_name == "ADG")
   )
 } # }

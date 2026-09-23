@@ -1,14 +1,19 @@
 # Define the genome structure of a breeding population
 
 Adds genome tables (`genome_meta`, `genome_map`, `ind_haplotype`,
-`ind_genotype`, `chr_inheritance`, `chr_recombination`) to a population
-opened with
+`ind_genotype`, `chr_inheritance`, `chr_recombination`,
+`genome_effects`, `genome_effect_members`,
+`genome_effect_member_origins`) and the `genome_effect_terms` /
+`genome_effect_loci` views to a population opened with
 [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md).
-Pipe-friendly — accepts a `tidybreed_pop` and returns a `tidybreed_pop`.
-Physical position (`pos_bp`, base pairs) lives in `genome_meta`; the
-genetic map (`pos_cM`, centiMorgans) lives in the long `genome_map`
-table. Haplotypes are stored in long format; `ind_genotype` is an
-on-demand dosage cache populated by
+The three effect tables are created here rather than in
+[`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md)
+so that `genome_meta` already exists and the `locus_id` foreign key can
+be declared. Pipe-friendly — accepts a `tidybreed_pop` and returns a
+`tidybreed_pop`. Physical position (`pos_bp`, base pairs) lives in
+`genome_meta`; the genetic map (`pos_cM`, centiMorgans) lives in the
+long `genome_map` table. Haplotypes are stored in long format;
+`ind_genotype` is an on-demand dosage cache populated by
 [`add_dosage()`](https://austin-putz.github.io/tidybreed/reference/add_dosage.md).
 
 This is the second step in setting up a simulation:

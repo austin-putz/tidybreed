@@ -1,7 +1,14 @@
 # Define additive QTL effects for one or more traits
 
-Selects QTL from a filtered `genome_meta` table and writes additive
-effects to the `genome_effects` table.
+Selects QTL from a filtered `genome_meta` table and writes one order-one
+`additive` term per locus through the same engine as
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md),
+under the reserved effect owner `"generated_additive_tbv"`.
+[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+reads order-one `additive` variants from that owner and nothing else, so
+effects written here and effects a user writes with
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+can never be confused for one another.
 
 **Single trait** (`trait_name` length 1) — two modes:
 
@@ -17,27 +24,17 @@ effects to the `genome_effects` table.
 jointly from a multivariate normal distribution keyed by the
 additive-genetic covariance matrix `G`. Two locus-selection methods:
 
-- `method = "shared"` — the loci in `tbl` become the shared QTL set for
-  all traits. Loci that are QTL for only a subset of traits in
-  `genome_effects` also receive independent draws (with the diagonal
-  variance of `G` for that trait).
+- `method = "shared"` — the loci in `tbl` become the QTL set of every
+  trait, and each locus receives one joint draw.
 
 - `method = "union"` — the loci in `tbl` form the candidate pool;
-  per-trait membership is determined from existing rows in
-  `genome_effects`.
+  per-trait membership is read from the terms already stored at this
+  scope, and a locus draws jointly only for the traits it is a QTL for.
 
-The `base` argument controls which allele frequencies are used:
-
-- `"founder_haplotypes"` (default) — computes allele frequencies
-  directly from the `founder_haplotypes` table (requires
-  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
-  was called). Restrict to one founder pool with `base_line_name`. (This
-  does **not** read `genome_meta.founder_allele_freq`, which is
-  informational only.)
-
-- `"current_pop"` — computes allele frequencies from the current
-  `ind_haplotype` table. Pass a filtered `tidybreed_table` via
-  `base_tbl` to restrict which individuals define the base population.
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+writes any effect you supply; `define_*_effects()` functions such as
+this one sample effects of one shape and write them through the same
+path.
 
 ## Usage
 
@@ -49,10 +46,9 @@ define_additive_effects(
   distribution = c("normal", "gamma"),
   G = NULL,
   method = c("shared", "union"),
-  base = c("founder_haplotypes", "current_pop"),
   base_tbl = NULL,
-  base_line_name = NULL,
   line_name = NULL,
+  parent_origin = NULL,
   scale_to_target = TRUE,
   seed = NULL
 )
@@ -99,42 +95,44 @@ define_additive_effects(
   QTL set. `"union"` — per-trait QTL sets are read from existing
   `genome_effects` rows, restricted to the filtered loci.
 
-- base:
-
-  Character. `"founder_haplotypes"` (default) or `"current_pop"`.
-
 - base_tbl:
 
-  Optional `tidybreed_table` (from
+  Optional `tidybreed_table` from
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-  on any table with an `id_ind` column) used when `base = "current_pop"`
-  to restrict which individuals define the base allele frequencies. When
-  `NULL`, all individuals in `ind_haplotype` are used. Ignored (with a
-  warning) when `base = "founder_haplotypes"` — use `base_line_name`
-  there.
-
-- base_line_name:
-
-  Optional character, `base = "founder_haplotypes"` only. Which founder
-  pool defines the base allele frequencies. **Defaults to `line_name`**,
-  so line-specific effects are centered on their own line; pass `NULL`
-  explicitly to pool every line instead. Errors if no
-  `founder_haplotypes` rows carry that line. See *Which population
-  centers the effects* above.
+  (optionally filtered) selecting the allele copies that define base
+  allele frequencies: `founder_haplotypes`, `ind_haplotype`, or any
+  table with an `id_ind` column. Must come from the same `pop` as `tbl`.
+  `NULL` (default) resolves to the founder pool of the line the effect
+  applies to — see *Which population centers the effects* above.
 
 - line_name:
 
-  Optional character. When set, effects are tagged to this genetic line:
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  then prefers these rows for alleles whose `line_origin` matches,
-  falling back per-locus to the population-wide rows. Also becomes the
-  default for `base_line_name`. `NULL` (default) means population-wide
-  effects.
+  Optional character. When set, effects are scoped to allele copies of
+  this genetic line: a copy whose `line_origin` matches takes these
+  values, and falls back per copy to the common variant where no
+  line-specific one exists. Also selects the default `base_tbl`. `NULL`
+  (default) means the common scope, matching every copy.
+
+- parent_origin:
+
+  Optional `1` (sire / parent_1) or `2` (dam / parent_2) — imprinting,
+  restricting the term to copies inherited from that parent. `NULL`
+  (default) means both parents' copies. **Per trait**: a scalar is
+  recycled, a vector must match `trait_name` positionally, or name its
+  entries by trait. A call mixing origins across traits while supplying
+  `G` is rejected — under random mating the paternal and maternal copies
+  at a locus are independent, so the requested genetic covariance
+  between a paternal-only and a maternal-only trait is zero and cannot
+  be realized. For imprinting that varies locus by locus, write the
+  terms with
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md).
 
 - scale_to_target:
 
-  Logical. If `TRUE`, rescale effects using the Falconer formula so the
-  expected additive variance equals the stored `target_add_var`.
+  Logical. If `TRUE`, rescale effects so the expected additive variance
+  equals the stored `target_add_var`:
+  `V_A = sum_j n_eligible,j * p_j q_j a_j^2`, where `n_eligible` is 2
+  for an unparented term and 1 for a parent-qualified one.
 
 - seed:
 
@@ -148,29 +146,62 @@ The modified `tidybreed_pop` (invisibly).
 
 Base allele frequencies center the true breeding value (the Falconer
 `allele - p` term) and set the `2pq` denominator used by
-`scale_to_target`. By default they come from **the population the effect
-applies to**: `base_line_name` inherits `line_name`, so a line-specific
-effect is centered on that line's own founder pool and a population-wide
-effect (`line_name = NULL`) on the whole founder base.
+`scale_to_target`. They come from `base_tbl`, a filtered
+`tidybreed_table` whose identity says *what kind of thing* is selected
+and whose
+[`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)
+says *which* (see
+[`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
+for the three accepted shapes: the founder pool, allele copies in
+`ind_haplotype`, or individuals from any table with `id_ind`).
 
-This matters because pooling divergent lines overstates within-line
-heterozygosity — the Wahlund effect. Two lines fixed for opposite
-alleles each have zero within-line variance, but pool to `p = 0.5` and
-an apparent `2pq = 0.5`; the inflated denominator then makes
-`scale_to_target` **under**-scale the effects, and realized within-line
-additive variance falls short of `target_add_var`. Pass
-`base_line_name = NULL` explicitly to force pooling anyway.
+When `base_tbl = NULL` the base is **the population the effect applies
+to**, resolved with the same `line -> NULL` precedence as
+`resolve_genome_map()`: a line-specific effect (`line_name = "A"`)
+centers on line A's own founder pool, or on the shared
+(`line_name = NULL`) pool when no named pool exists; a population-wide
+effect (`line_name = NULL`) centers on the whole founder table. Only
+that last case warns when the founder table holds more than one pool:
+pooling divergent lines overstates within-line heterozygosity — the
+Wahlund effect. Two lines fixed for opposite alleles each have zero
+within-line variance, but pool to `p = 0.5` and an apparent `2pq = 0.5`;
+the inflated denominator then makes `scale_to_target` **under**-scale
+the effects, and realized within-line additive variance falls short of
+`target_add_var`. An explicit `base_tbl` is an intentional selection and
+never warns — pass `base_tbl = get_table(pop, "founder_haplotypes")` to
+pool on purpose, which is how the common fallback variant of a
+crossbreeding model is defined.
 
-The centering constant is stored per row in
-`genome_effects.base_allele_freq` and travels with its `genome_value`,
-so
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-applies each allele's own line's centering — a crossbred animal's line-A
-alleles are centered on line A and its line-B alleles on line B.
+A selected QTL locus with no allele copies in the base is an error,
+never silently centered at `p = 0`.
 
-Calling this function again for the same
-`(trait_name, genome_effect_type, line_name)` replaces the existing rows
-in `genome_effects`.
+The centering constant is stored per member as
+`genome_effect_members.center_value` and travels with its
+`genome_value`, so evaluation applies each allele copy's own line's
+centering — a crossbred animal's line-A alleles are centered on line A
+and its line-B alleles on line B.
+
+## Scope, and what a re-run replaces
+
+`line_name` and `parent_origin` compose into the single origin row an
+`additive` member is allowed:
+
+|             |                 |                                               |
+|-------------|-----------------|-----------------------------------------------|
+| `line_name` | `parent_origin` | Stored scope                                  |
+| `NULL`      | `NULL`          | no origin rows (the common scope)             |
+| `"A"`       | `NULL`          | `('exact', 'A', parent NULL, copy_count = 1)` |
+| `NULL`      | `1` / `2`       | `('any', NULL, parent, copy_count = 1)`       |
+| `"A"`       | `1` / `2`       | `('exact', 'A', parent, copy_count = 1)`      |
+
+Re-running replaces **only the variant at the same scope**
+(`mode = "replace_scope"`), so successive common / line-A / line-B calls
+each keep the others: the per-copy fallback that makes crossbred
+breeding values correct depends on all of them standing. It also means
+changing `parent_origin` on a re-run **adds** a variant rather than
+replacing one — the two are in a containment relation and both apply, to
+different copies. That is legal and rarely intended, so the function
+warns on exactly that case.
 
 ## See also
 
@@ -197,25 +228,24 @@ pop <- pop |>
   dplyr::filter(chr %in% 1:5) |>
   define_additive_effects(c("ADG", "BW"), G = G)
 
-# current_pop: use generation-0 individuals to define base allele frequencies
-gen0_tbl <- get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L)
+# Generation-0 individuals define the base allele frequencies
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr %in% 1:5) |>
-  define_additive_effects("ADG", base = "current_pop", base_tbl = gen0_tbl)
+  define_additive_effects("ADG",
+    base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
 
-# Crossbreeding: each line's effects centered on its own founder pool.
-# base_line_name inherits line_name, so nothing extra is needed.
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-  define_additive_effects("ADG", line_name = "Duroc")
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-  define_additive_effects("ADG", line_name = "Landrace")
+# Crossbreeding: three variants. The common fallback names its base to say
+# "yes, pool"; each line's variant centers on its own founder pool by default.
+gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr %in% 1:5)
+pop <- gm |> define_additive_effects("ADG",
+               base_tbl = get_table(pop, "founder_haplotypes"))
+pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
+pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
 
-# Line-specific effects, but deliberately centered on the pooled base
-pop <- pop |>
-  get_table("genome_meta") |> dplyr::filter(chr %in% 1:5) |>
-  define_additive_effects("ADG", line_name = "Duroc", base_line_name = NULL)
+# Duroc allele copies wherever they sit, including inside crossbreds
+pop <- gm |> define_additive_effects("ADG", line_name = "Duroc",
+  base_tbl = get_table(pop, "ind_haplotype") |>
+    dplyr::filter(line_origin == "Duroc"))
 } # }
 ```

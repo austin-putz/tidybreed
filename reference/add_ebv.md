@@ -46,8 +46,15 @@ add_ebv(
 - tbl:
 
   A `tidybreed_table` from
-  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-  (optionally filtered). Must contain an `id_ind` column.
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md),
+  optionally piped through
+  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html).
+  Any table with an `id_ind` column is accepted; the individuals acted
+  on are the distinct `id_ind` values present in the (filtered) table.
+  An unfiltered `ind_meta` selects every individual; an unfiltered
+  `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+  individuals that have rows there. A table without `id_ind` is an
+  error.
 
 - trait_name:
 
@@ -129,12 +136,11 @@ add_ebv(
 
   Logical. If `estimate_var = TRUE`, attempt to write estimated variance
   components back to `trait_var_comp`. Default `FALSE`. **Not yet
-  implemented**: the current writeback step
-  ([`update_covars_from_blupf90()`](https://austin-putz.github.io/tidybreed/reference/update_covars_from_blupf90.md))
-  is a stub that only prints a message pointing you to `blupf90.out` and
+  implemented**: `blupf90.out` is not parsed back into `trait_var_comp`.
+  Setting this only prints a message pointing you to that file and to
   [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
-  for a manual update — no rows are written automatically yet. Applies
-  only in `software = "blupf90"` mode.
+  for a manual update; no rows are written. Applies only in
+  `software = "blupf90"` mode.
 
 - phenotype:
 

@@ -12,39 +12,30 @@ TBV is the Falconer-centered sum, across every `ind_haplotype` row (one
 per allele copy, not genotype dosage) for the individual, of:
 
 
-      TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+      TBV_i = sum over allele copies of (allele - center_value) * genome_value
 
-`genome_value` and `base_allele_freq` are read from `genome_effects`
-(`genome_effect_type = "additive"`). For each haplotype row, a
-**line-specific** effect (`genome_effects.line_name` matching that row's
-`line_origin`) is preferred; the **population-wide** effect
-(`genome_effects.line_name IS NULL`) is used only when no line-specific
-row exists for that locus/line. This per-locus fallback is what makes
-crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered
-against each parent line's own QTL effects and base allele frequency
-(see the "Crossbreeding TBV" example below). For **imprinted** traits
-(`trait_meta.expressed_parent` = `"parent_1"` or `"parent_2"`), only
-haplotype rows from that parent's `parent_origin` are summed before the
-same line-matching logic applies.
+`genome_value` and `center_value` come from the **order-one `additive`
+terms** under the reserved effect owner `generated_additive_tbv`, the
+terms
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+writes. `center_value` is that variant's base allele frequency.
 
-Optionally computes true selection index values by multiplying per-trait
-TBVs by weights from named indices defined with
-[`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
-and writes them to `ind_true_index`.
+**This is one filtered call into the same evaluator
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+uses**, not a second implementation: `add_tbv()` is
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+restricted to the reserved owner and to single-member additive terms.
 
-Pipe a `tidybreed_table` (from
-[`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-and optionally
-[`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html))
-as the first argument to select individuals. Every individual in that
-subset receives a TBV for every requested trait — unlike
-[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-no sex-expression rule is applied here (`expressed_sex` is an
-observation-layer property of `phenotype_meta`, not of a genetic
-component trait).
-
-Useful for tracking genetic trend across generations without collecting
-phenotypes.
+The filter is deliberate and not merely conservative. Under functional
+\\(a, d)\\ input the stored coefficient is \\a\\, while the
+breeding-value coefficient in a diploid HWE base is \\\alpha = a + d(q -
+p)\\; under epistasis, average effects depend on other loci and on LD.
+So arbitrary terms written through
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+contribute to `ind_tgv` but **never silently redefine the breeding
+value**, additive members appearing inside interactions are ignored, and
+`ind_tbv` keeps its exact meaning. Deriving average effects from a
+general non-additive model is a separate calculation.
 
 ## Usage
 
@@ -63,11 +54,16 @@ add_tbv(
 
 - tbl:
 
-  A `tidybreed_table` object from
-  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
-  (optionally piped through
-  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)).
-  The table must contain an `id_ind` column.
+  A `tidybreed_table` from
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md),
+  optionally piped through
+  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html).
+  Any table with an `id_ind` column is accepted; the individuals acted
+  on are the distinct `id_ind` values present in the (filtered) table.
+  An unfiltered `ind_meta` selects every individual; an unfiltered
+  `ind_ebv`, `ind_index`, `ind_genotype`, ... selects only the
+  individuals that have rows there. A table without `id_ind` is an
+  error.
 
 - trait_name:
 
@@ -106,8 +102,57 @@ add_tbv(
 
 The modified `tidybreed_pop` (invisibly).
 
+## When the stored coefficients stop being average effects
+
+Ignoring those terms is right, but it stops giving *the model's*
+breeding value as soon as one of them contributes to the additive
+component or shifts the coefficients this function reads. `add_tbv()`
+warns once per trait in exactly that case: a non-reserved order-one
+`additive` term (it is part of A and is skipped), an `indicator` surface
+(raw functional coding — at a locus that also carries a generated
+additive term the stored `a` is no longer the average effect, \\\alpha =
+a + d(q - p)\\), or an interaction (whose additive projection depends on
+other loci and on LD, so there is no local correction).
+
+An order-one `dominance` term centred where the additive term is centred
+is the **exception and stays silent**: Cockerham coding is
+HWE-orthogonal, so it contributes nothing to A and leaves the additive
+coefficient alone — `tbv_value` is still exact. Warning there would cry
+wolf on the common case.
+
+Each allele copy takes the **most specific** variant whose origin
+predicate matches its `(line_origin, parent_origin)` label, falling back
+per copy to the common variant. This per-copy fallback is what makes
+crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered
+against each parent line's own effects and base allele frequency (see
+the "Crossbreeding TBV" example below). **Imprinting** is a property of
+the effect, not of the trait: a term scoped to one `parent_origin` (see
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md))
+reads only that parent's allele copies, per locus and per line.
+
+Optionally computes true selection index values by multiplying per-trait
+TBVs by weights from named indices defined with
+[`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
+and writes them to `ind_true_index`.
+
+Pipe a `tidybreed_table` (from
+[`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
+and optionally
+[`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html))
+as the first argument to select individuals. Every individual in that
+subset receives a TBV for every requested trait — unlike
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+no sex-expression rule is applied here (`expressed_sex` is an
+observation-layer property of `phenotype_meta`, not of a genetic
+component trait).
+
+Useful for tracking genetic trend across generations without collecting
+phenotypes.
+
 ## See also
 
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+for every component of the genetic value,
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
 [`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)

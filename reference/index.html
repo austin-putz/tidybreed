@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -156,10 +156,38 @@
 
         <dt>
 
+          <code><a href="define_genome_effects.html">define_genome_effects()</a></code>
+
+        </dt>
+        <dd>Define genome effects as terms over one or more loci</dd>
+
+        <dt>
+
+          <code><a href="ad_terms.html">ad_terms()</a></code>
+
+        </dt>
+        <dd>Build <code>terms</code> rows for a functional or Cockerham (a, d) pair</dd>
+
+        <dt>
+
+          <code><a href="genotype_terms.html">genotype_terms()</a></code>
+
+        </dt>
+        <dd>Build <code>terms</code> rows from a table of genotype values</dd>
+
+        <dt>
+
           <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>
 
         </dt>
         <dd>Define a variance-covariance matrix for any named effect</dd>
+
+        <dt>
+
+          <code><a href="extract_allele_freq.html">extract_allele_freq()</a></code>
+
+        </dt>
+        <dd>Extract per-locus allele frequencies from a filtered table</dd>
       </dl></div><div class="section level2">
       <h2 id="phenotypes-observation-layer">Phenotypes — observation layer<a class="anchor" aria-label="anchor" href="#phenotypes-observation-layer"></a></h2>
 
@@ -183,6 +211,13 @@
 
         </dt>
         <dd>Define residual covariance entries for observed phenotypes</dd>
+
+        <dt>
+
+          <code><a href="define_condition_change_action.html">define_condition_change_action()</a></code>
+
+        </dt>
+        <dd>Set <code>condition_change_action</code> for a whole residual covariance block</dd>
 
         <dt>
 
@@ -227,6 +262,13 @@
 
         </dt>
         <dd>Compute and store true breeding values without writing phenotypes</dd>
+
+        <dt>
+
+          <code><a href="add_tgv.html">add_tgv()</a></code>
+
+        </dt>
+        <dd>Compute and store true genetic values</dd>
 
         <dt>
 
@@ -277,7 +319,7 @@
           <code><a href="extract_genotypes.html">extract_genotypes()</a></code>
 
         </dt>
-        <dd>Extract genotype data for individuals, by chip and/or QTL loci</dd>
+        <dd>Extract genotype data for individuals, by chip and/or causal loci</dd>
       </dl></div><div class="section level2">
       <h2 id="selection-index">Selection index<a class="anchor" aria-label="anchor" href="#selection-index"></a></h2>
 

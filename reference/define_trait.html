@@ -19,7 +19,7 @@ use define_trait_simple(), which chains both steps together."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,6 @@ use <code><a href="define_trait_simple.html">define_trait_simple()</a></code>, w
 <span>  <span class="va">trait_name</span>,</span>
 <span>  target_add_var <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  target_add_mean <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  expressed_parent <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"both"</span>, <span class="st">"parent_1"</span>, <span class="st">"parent_2"</span><span class="op">)</span>,</span>
 <span>  description <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  units <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
@@ -96,12 +95,6 @@ Used by <code><a href="define_additive_effects.html">define_additive_effects()</
 Default <code>0</code>; <code>E[TBV] = 0</code> when TBVs are centered on base allele
 frequencies. The phenotypic population mean (intercept) is set separately
 in <code><a href="define_phenotype.html">define_phenotype()</a></code>.</p></dd>
-
-
-<dt id="arg-expressed-parent">expressed_parent<a class="anchor" aria-label="anchor" href="#arg-expressed-parent"></a></dt>
-<dd><p>Character. Parent-of-origin expression: <code>"both"</code>
-(default), <code>"parent_1"</code> (paternal), or <code>"parent_2"</code> (maternal). Imprinted
-traits use only the haplotype from the specified parent when computing TBVs.</p></dd>
 
 
 <dt id="arg-description">description<a class="anchor" aria-label="anchor" href="#arg-description"></a></dt>

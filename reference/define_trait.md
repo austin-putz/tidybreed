@@ -20,7 +20,6 @@ define_trait(
   trait_name,
   target_add_var = NULL,
   target_add_mean = 0,
-  expressed_parent = c("both", "parent_1", "parent_2"),
   description = NULL,
   units = NULL,
   overwrite = FALSE
@@ -53,12 +52,6 @@ define_trait(
   `E[TBV] = 0` when TBVs are centered on base allele frequencies. The
   phenotypic population mean (intercept) is set separately in
   [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md).
-
-- expressed_parent:
-
-  Character. Parent-of-origin expression: `"both"` (default),
-  `"parent_1"` (paternal), or `"parent_2"` (maternal). Imprinted traits
-  use only the haplotype from the specified parent when computing TBVs.
 
 - description:
 

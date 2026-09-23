@@ -7,31 +7,25 @@ trait it needs) before assembling phenotype records — there is no separate
 TBV is the Falconer-centered sum, across every ind_haplotype row (one per
 allele copy, not genotype dosage) for the individual, of:
 
-  TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+  TBV_i = sum over allele copies of (allele - center_value) * genome_value
 
 
-genome_value and base_allele_freq are read from genome_effects
-(genome_effect_type = &quot;additive&quot;). For each haplotype row, a
-line-specific effect (genome_effects.line_name matching that row's
-line_origin) is preferred; the population-wide effect
-(genome_effects.line_name IS NULL) is used only when no line-specific row
-exists for that locus/line. This per-locus fallback is what makes
-crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
-each parent line's own QTL effects and base allele frequency (see the
-&quot;Crossbreeding TBV&quot; example below). For imprinted traits
-(trait_meta.expressed_parent = &quot;parent_1&quot; or &quot;parent_2&quot;), only
-haplotype rows from that parent's parent_origin are summed before the
-same line-matching logic applies.
-Optionally computes true selection index values by multiplying per-trait TBVs
-by weights from named indices defined with define_index(), and writes them
-to ind_true_index.
-Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as
-the first argument to select individuals. Every individual in that subset
-receives a TBV for every requested trait — unlike add_phenotype(), no
-sex-expression rule is applied here (expressed_sex is an observation-layer
-property of phenotype_meta, not of a genetic component trait).
-Useful for tracking genetic trend across generations without collecting
-phenotypes."><meta property="og:description" content="Computes the true breeding value (TBV) for each individual in the current
+genome_value and center_value come from the order-one additive
+terms under the reserved effect owner generated_additive_tbv, the terms
+define_additive_effects() writes. center_value is that variant's base
+allele frequency.
+This is one filtered call into the same evaluator add_tgv() uses, not a
+second implementation: add_tbv() is add_tgv() restricted to the reserved
+owner and to single-member additive terms.
+The filter is deliberate and not merely conservative. Under functional
+\((a, d)\) input the stored coefficient is \(a\), while the
+breeding-value coefficient in a diploid HWE base is
+\(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
+loci and on LD. So arbitrary terms written through define_genome_effects()
+contribute to ind_tgv but never silently redefine the breeding value,
+additive members appearing inside interactions are ignored, and ind_tbv
+keeps its exact meaning. Deriving average effects from a general
+non-additive model is a separate calculation."><meta property="og:description" content="Computes the true breeding value (TBV) for each individual in the current
 subset and each requested trait, and writes them to ind_tbv. This is the
 exact function add_phenotype() calls internally (once for every source
 trait it needs) before assembling phenotype records — there is no separate
@@ -39,31 +33,25 @@ trait it needs) before assembling phenotype records — there is no separate
 TBV is the Falconer-centered sum, across every ind_haplotype row (one per
 allele copy, not genotype dosage) for the individual, of:
 
-  TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+  TBV_i = sum over allele copies of (allele - center_value) * genome_value
 
 
-genome_value and base_allele_freq are read from genome_effects
-(genome_effect_type = &quot;additive&quot;). For each haplotype row, a
-line-specific effect (genome_effects.line_name matching that row's
-line_origin) is preferred; the population-wide effect
-(genome_effects.line_name IS NULL) is used only when no line-specific row
-exists for that locus/line. This per-locus fallback is what makes
-crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
-each parent line's own QTL effects and base allele frequency (see the
-&quot;Crossbreeding TBV&quot; example below). For imprinted traits
-(trait_meta.expressed_parent = &quot;parent_1&quot; or &quot;parent_2&quot;), only
-haplotype rows from that parent's parent_origin are summed before the
-same line-matching logic applies.
-Optionally computes true selection index values by multiplying per-trait TBVs
-by weights from named indices defined with define_index(), and writes them
-to ind_true_index.
-Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as
-the first argument to select individuals. Every individual in that subset
-receives a TBV for every requested trait — unlike add_phenotype(), no
-sex-expression rule is applied here (expressed_sex is an observation-layer
-property of phenotype_meta, not of a genetic component trait).
-Useful for tracking genetic trend across generations without collecting
-phenotypes."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+genome_value and center_value come from the order-one additive
+terms under the reserved effect owner generated_additive_tbv, the terms
+define_additive_effects() writes. center_value is that variant's base
+allele frequency.
+This is one filtered call into the same evaluator add_tgv() uses, not a
+second implementation: add_tbv() is add_tgv() restricted to the reserved
+owner and to single-member additive terms.
+The filter is deliberate and not merely conservative. Under functional
+\((a, d)\) input the stored coefficient is \(a\), while the
+breeding-value coefficient in a diploid HWE base is
+\(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
+loci and on LD. So arbitrary terms written through define_genome_effects()
+contribute to ind_tgv but never silently redefine the breeding value,
+additive members appearing inside interactions are ignored, and ind_tbv
+keeps its exact meaning. Deriving average effects from a general
+non-additive model is a separate calculation."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -71,7 +59,7 @@ phenotypes."><meta property="og:image" content="https://austin-putz.github.io/ti
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -108,31 +96,25 @@ trait it needs) before assembling phenotype records — there is no separate
 <p>TBV is the Falconer-centered sum, across every <code>ind_haplotype</code> row (one per
 allele copy, not genotype dosage) for the individual, of:</p>
 <div class="sourceCode"><pre><code>
-  TBV_i = sum over haplotype rows of (allele - base_allele_freq) * genome_value
+  TBV_i = sum over allele copies of (allele - center_value) * genome_value
 </code></pre></div>
 
-<p><code>genome_value</code> and <code>base_allele_freq</code> are read from <code>genome_effects</code>
-(<code>genome_effect_type = "additive"</code>). For each haplotype row, a
-<strong>line-specific</strong> effect (<code>genome_effects.line_name</code> matching that row's
-<code>line_origin</code>) is preferred; the <strong>population-wide</strong> effect
-(<code>genome_effects.line_name IS NULL</code>) is used only when no line-specific row
-exists for that locus/line. This per-locus fallback is what makes
-crossbreeding TBV correct — e.g. a Duroc x Landrace F1 is centered against
-each parent line's own QTL effects and base allele frequency (see the
-"Crossbreeding TBV" example below). For <strong>imprinted</strong> traits
-(<code>trait_meta.expressed_parent</code> = <code>"parent_1"</code> or <code>"parent_2"</code>), only
-haplotype rows from that parent's <code>parent_origin</code> are summed before the
-same line-matching logic applies.</p>
-<p>Optionally computes true selection index values by multiplying per-trait TBVs
-by weights from named indices defined with <code><a href="define_index.html">define_index()</a></code>, and writes them
-to <code>ind_true_index</code>.</p>
-<p>Pipe a <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> and optionally <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>) as
-the first argument to select individuals. Every individual in that subset
-receives a TBV for every requested trait — unlike <code><a href="add_phenotype.html">add_phenotype()</a></code>, no
-sex-expression rule is applied here (<code>expressed_sex</code> is an observation-layer
-property of <code>phenotype_meta</code>, not of a genetic component trait).</p>
-<p>Useful for tracking genetic trend across generations without collecting
-phenotypes.</p>
+<p><code>genome_value</code> and <code>center_value</code> come from the <strong>order-one <code>additive</code>
+terms</strong> under the reserved effect owner <code>generated_additive_tbv</code>, the terms
+<code><a href="define_additive_effects.html">define_additive_effects()</a></code> writes. <code>center_value</code> is that variant's base
+allele frequency.</p>
+<p><strong>This is one filtered call into the same evaluator <code><a href="add_tgv.html">add_tgv()</a></code> uses</strong>, not a
+second implementation: <code>add_tbv()</code> is <code><a href="add_tgv.html">add_tgv()</a></code> restricted to the reserved
+owner and to single-member additive terms.</p>
+<p>The filter is deliberate and not merely conservative. Under functional
+\((a, d)\) input the stored coefficient is \(a\), while the
+breeding-value coefficient in a diploid HWE base is
+\(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
+loci and on LD. So arbitrary terms written through <code><a href="define_genome_effects.html">define_genome_effects()</a></code>
+contribute to <code>ind_tgv</code> but <strong>never silently redefine the breeding value</strong>,
+additive members appearing inside interactions are ignored, and <code>ind_tbv</code>
+keeps its exact meaning. Deriving average effects from a general
+non-additive model is a separate calculation.</p>
     </div>
 
     <div class="section level2">
@@ -152,8 +134,12 @@ phenotypes.</p>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A <code>tidybreed_table</code> object from <code><a href="get_table.html">get_table()</a></code> (optionally piped
-through <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>). The table must contain an <code>id_ind</code> column.</p></dd>
+<dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code>, optionally piped through
+<code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>. Any table with an <code>id_ind</code> column is accepted; the
+individuals acted on are the distinct <code>id_ind</code> values present in the
+(filtered) table. An unfiltered <code>ind_meta</code> selects every individual; an
+unfiltered <code>ind_ebv</code>, <code>ind_index</code>, <code>ind_genotype</code>, ... selects only the
+individuals that have rows there. A table without <code>id_ind</code> is an error.</p></dd>
 
 
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
@@ -194,8 +180,45 @@ broadcast to all records).</p></dd>
     <p>The modified <code>tidybreed_pop</code> (invisibly).</p>
     </div>
     <div class="section level2">
+    <h2 id="when-the-stored-coefficients-stop-being-average-effects">When the stored coefficients stop being average effects<a class="anchor" aria-label="anchor" href="#when-the-stored-coefficients-stop-being-average-effects"></a></h2>
+
+
+<p>Ignoring those terms is right, but it stops giving <em>the model's</em> breeding
+value as soon as one of them contributes to the additive component or shifts
+the coefficients this function reads. <code>add_tbv()</code> warns once per trait in
+exactly that case: a non-reserved order-one <code>additive</code> term (it is part of A
+and is skipped), an <code>indicator</code> surface (raw functional coding — at a locus
+that also carries a generated additive term the stored <code>a</code> is no longer the
+average effect, \(\alpha = a + d(q - p)\)), or an interaction (whose
+additive projection depends on other loci and on LD, so there is no local
+correction).</p>
+<p>An order-one <code>dominance</code> term centred where the additive term is centred is
+the <strong>exception and stays silent</strong>: Cockerham coding is HWE-orthogonal, so it
+contributes nothing to A and leaves the additive coefficient alone —
+<code>tbv_value</code> is still exact. Warning there would cry wolf on the common case.</p>
+<p>Each allele copy takes the <strong>most specific</strong> variant whose origin predicate
+matches its <code>(line_origin, parent_origin)</code> label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbreeding TBV
+correct — e.g. a Duroc x Landrace F1 is centered against each parent line's
+own effects and base allele frequency (see the "Crossbreeding TBV" example
+below). <strong>Imprinting</strong> is a property of the effect, not of the trait: a term
+scoped to one <code>parent_origin</code> (see <code><a href="define_additive_effects.html">define_additive_effects()</a></code>) reads only
+that parent's allele copies, per locus and per line.</p>
+<p>Optionally computes true selection index values by multiplying per-trait TBVs
+by weights from named indices defined with <code><a href="define_index.html">define_index()</a></code>, and writes them
+to <code>ind_true_index</code>.</p>
+<p>Pipe a <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> and optionally <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>) as
+the first argument to select individuals. Every individual in that subset
+receives a TBV for every requested trait — unlike <code><a href="add_phenotype.html">add_phenotype()</a></code>, no
+sex-expression rule is applied here (<code>expressed_sex</code> is an observation-layer
+property of <code>phenotype_meta</code>, not of a genetic component trait).</p>
+<p>Useful for tracking genetic trend across generations without collecting
+phenotypes.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="add_phenotype.html">add_phenotype()</a></code>, <code><a href="define_index.html">define_index()</a></code>, <code><a href="add_index.html">add_index()</a></code></p></div>
+    <div class="dont-index"><p><code><a href="add_tgv.html">add_tgv()</a></code> for every component of the genetic value,
+<code><a href="add_phenotype.html">add_phenotype()</a></code>, <code><a href="define_index.html">define_index()</a></code>, <code><a href="add_index.html">add_index()</a></code></p></div>
     </div>
 
     <div class="section level2">

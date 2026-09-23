@@ -17,7 +17,7 @@ for deleting the run directory on success if `keep = FALSE` or
 ## Usage
 
 ``` r
-.create_run_dir(pop, tool, keep = "on_error")
+.create_run_dir(pop, tool)
 ```
 
 ## Arguments
@@ -30,11 +30,6 @@ for deleting the run directory on success if `keep = FALSE` or
 
   Character scalar. Which tool dir to use (must be a key in
   `pop$run_dirs`).
-
-- keep:
-
-  `FALSE`, `TRUE`, or `"on_error"`. Cleanup semantics (not yet enforced
-  automatically; reserved for a future release).
 
 ## Value
 

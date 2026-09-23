@@ -28,7 +28,14 @@ Common `effect_name` values:
 - Any named random effect (`"hys"`, `"litter"`, `"pen"`, …) — written to
   `phenotype_var_comp`. Must match the `effect_name` used in
   [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md).
-  Row/column names are phenotype names.
+  Row/column names are phenotype names. Each level of the effect (each
+  pen) then carries one draw per phenotype with this covariance,
+  realized sequentially: whichever phenotype
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  generates first for a level draws marginally, and the others are later
+  drawn conditional on what the level has stored — however many calls
+  apart (see
+  [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md)).
 
 `define_effect_cov_matrix()` can be called **before**
 [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
@@ -36,8 +43,18 @@ or
 [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md)
 — no prior setup is required.
 
-All n² pairs are stored. Previous entries for this `effect_name` × names
-combination are replaced.
+All n² pairs are stored. For `phenotype_var_comp` effects the names form
+a *covariance block* that is declared in one call, as a complete matrix:
+a call that names a fragment or a strict subset of an existing block is
+an error, the matrix must be positive semi-definite, and a block cannot
+be redefined once draws exist under it (the error gives the
+[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+call that clears them). In a block of two or more phenotypes every
+[`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md)
+row for the effect must use `distribution = "normal"` and read the same
+`(source_column, source_table)`. See
+[`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md)
+for the full rules. A rejected call changes nothing.
 
 ## Usage
 

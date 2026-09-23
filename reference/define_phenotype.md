@@ -38,6 +38,7 @@ define_phenotype(
   formula_tbv = NULL,
   formula = NULL,
   missing_component_action = c("skip", "error"),
+  condition_change_action = c("error", "independent"),
   overwrite = FALSE
 )
 ```
@@ -110,12 +111,17 @@ define_phenotype(
 
 - residual_var:
 
-  Numeric. Scalar residual variance. When supplied, writes one
-  unconditional row to `phenotype_var_comp` (`effect_name = "residual"`,
-  `condition_column = NULL`). For heterogeneous residuals or
-  multi-phenotype correlated residuals, use
+  Numeric or `NULL`. Scalar residual variance. When supplied, writes a 1
+  × 1 unconditional residual block for this phenotype to
+  `phenotype_var_comp` (`effect_name = "residual"`). It is an error when
+  the phenotype already belongs to a multi-phenotype residual block —
+  that block is redeclared as a whole with
   [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md)
-  afterwards.
+  — or when the phenotype's existing residual has realized draws in
+  `ind_phenotype`. With `overwrite = TRUE` and no `residual_var`,
+  `phenotype_var_comp` is left untouched. For heterogeneous or
+  correlated residuals use
+  [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md).
 
 - components:
 
@@ -129,22 +135,24 @@ define_phenotype(
 
   - `weight` (optional, default `1.0`): scalar multiplier.
 
-  - `weight_type` (optional, default `"fixed"`): `"fixed"`,
-    `"covariate"`, `"legendre"`, or `"raw_poly"`.
+  - `weight_type` (optional, default `"fixed"`): `"fixed"` or
+    `"covariate"` (`weight * covariate`). Nothing else is implemented,
+    and anything else is rejected here rather than at
+    [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+    time.
 
   - `covariate_name` (optional): covariate key.
 
-  - `covariate_table` (optional): table containing the covariate column;
-    `NULL` means value supplied at
-    [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-    call time.
+  - `covariate_table` (optional, default `"ind_meta"`): table containing
+    the covariate column; it must have exactly one row per individual.
 
   - `poly_order` (optional): polynomial basis order.
 
   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling
     bounds.
 
-  - `genome_effect_types` (optional, default `"additive"`).
+  - `component_names` (optional, default `"order1_additive"`): reserved;
+    see `phenotype_components.component_names`.
 
   - `group_column` (optional): column defining group membership.
 
@@ -153,13 +161,6 @@ define_phenotype(
 
   - `aggregation` (optional, default `"sum"`): `"sum"` or `"mean"` for
     group contributors.
-
-  - `missing_action` (optional, default `"skip"`): currently unused
-    per-component override — behaviour is governed uniformly by
-    `missing_component_action` below.
-
-  - `contributor_filter` (optional): reserved for future spatial/
-    neighborhood contributor lookup; not yet implemented.
 
   `NULL` (default) → simple single-self trait; `phenotype_components`
   not written. Mutually exclusive with `formula_tbv`.
@@ -210,6 +211,27 @@ define_phenotype(
   which handles `NULL` levels for fixed-class covariate effects, and
   does not affect random-effect draws (new levels always get a fresh
   draw).
+
+- condition_change_action:
+
+  Character. Applies only when this phenotype is in a residual
+  covariance block with a `condition_column` (see
+  [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md))
+  and a correlated phenotype's residual was stored under a **different**
+  condition level than the one the current record resolves to — e.g. an
+  animal moved farms between the two records. `"error"` (default) stops,
+  because no covariance is defined between the two strata.
+  `"independent"` drops the incompatible stored residual from the
+  conditioning set (stored residuals from the same stratum still
+  condition the draw) and warns with a count. Stored in
+  `phenotype_meta`; every phenotype in one residual block must carry the
+  same value (D6), so this argument only sets it while the phenotype is
+  still a block of one. Once the block has two or more members the value
+  is block-scoped — change it with
+  [`define_condition_change_action()`](https://austin-putz.github.io/tidybreed/reference/define_condition_change_action.md),
+  which writes every member in one transaction and leaves the rest of
+  their `phenotype_meta` rows alone. An immutable condition column such
+  as `sex` never triggers either action.
 
 - overwrite:
 

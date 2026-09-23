@@ -1,10 +1,13 @@
-# Assemble composite TBV from phenotype_components for a single phenotype
+# Assemble the composite TBV of one phenotype from `phenotype_components`
 
-Reads contributor TBVs from `ind_tbv` (which must already be populated
-by
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-for all relevant source traits and contributor IDs) and multiplies by
-component weights, summing across all components.
+Sums `weight * contributor TBV` over the phenotype's component rows, one
+contributor lookup per row (see
+[`?contributor_tbv`](https://austin-putz.github.io/tidybreed/reference/contributor_tbv.md)).
+`ind_tbv` must already hold the source traits for every contributor
+([`.ap_materialize_tbvs()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_materialize_tbvs.md)).
+A missing piece — a `NULL` dam or sire, a contributor with no TBV, a
+`NULL` group value, a `NULL` covariate — makes the individual's
+composite `NA`.
 
 ## Usage
 
@@ -14,34 +17,26 @@ component weights, summing across all components.
   phenotype_name,
   comp_rows,
   subset_df,
-  missing_component_action = "skip"
+  missing_component_action
 )
 ```
 
 ## Arguments
 
-- pop:
-
-  A `tidybreed_pop` object.
-
-- phenotype_name:
-
-  Character. The composite phenotype name.
-
 - comp_rows:
 
-  Data frame. Rows from `phenotype_components` for this phenotype.
+  The phenotype's `phenotype_components` rows.
 
 - subset_df:
 
-  Data frame. Sex-filtered (and skip-masked) `ind_meta` rows.
+  The planned `ind_meta` rows (needs `id_ind`, `id_parent_1`,
+  `id_parent_2`).
 
 - missing_component_action:
 
-  Character. `"skip"` (default) to warn and exclude individuals with any
-  missing component (dam/sire/group TBV unavailable, no group
-  assignment, etc.); `"error"` to stop immediately.
+  `"skip"` warns and returns `NA` for the excluded individuals;
+  `"error"` stops. Both name the count and up to five ids.
 
 ## Value
 
-A list with `composite_tbv`: named numeric vector (NA = excluded).
+Numeric vector named by `id_ind`; `NA` marks an excluded individual.
