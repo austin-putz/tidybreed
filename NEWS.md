@@ -1,3 +1,18 @@
+# tidybreed 0.72.5 (2026-10-03)
+
+## Documentation
+
+* Plan only: a full re-read of `plans/import_qtl_effect_methods.md` after the
+  Q21 decision, to clear what was left before step 2:
+  - one internal target insert, so the step-3 refusal never blocks `G =`;
+  - `trait_var_comp.line_name` goes in the base DDL, and `restore_pop()`
+    keys on it;
+  - `seed` is applied after validation;
+  - target resolution on the surviving manual-effects paths is specified;
+  - the step-3 refusal is scoped by line;
+  - small step-2 items (`_pkgdown.yml`, the roxygen example, stale error
+    strings).
+
 # tidybreed 0.72.4 (2026-10-03)
 
 ## Documentation

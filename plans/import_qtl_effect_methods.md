@@ -149,6 +149,16 @@ This pass found internal inconsistencies, which are now fixed:
       `effects` and `scale_to_target` in step 3. Exact coefficients go through
       `define_genome_effect_terms()`. The §7.1 named-table `effects` decision and gate
       A12 are withdrawn. §0A, §6A, §7.1, Q2, steps 2–3 and gates A19/PH7 are updated.
+    - A full re-read afterwards (same day) fixed the leftovers before step 2:
+      - §6C's option list;
+      - A19's message;
+      - target resolution on the surviving manual paths;
+      - one internal target insert, so the Q21 refusal never blocks `G =`;
+      - `trait_var_comp.line_name` goes in the base DDL, and `restore_pop()` keys on it;
+      - `seed` moves after validation (A22);
+      - `_pkgdown.yml`, the roxygen example and the stale error strings;
+      - the Q21 refusal is scoped by line;
+      - the `ad_terms()` coding for step 3.
 
 ---
 
@@ -727,9 +737,14 @@ because they measure `ind_tgv`, and nobody would notice.
   that check to the active-block rule rather than adding a new one.
   The owner rule is Q21's decision (a). To keep it sound after generation,
   `define_effect_cov_matrix()` refuses to write a genetic block whose traits already have
-  `generated` terms of that kind. Without this, `remove_rows()` plus a new target would
-  leave the old terms calibrated to a target that is gone. The way to change a target is
-  to regenerate with `G =`, which writes target and terms in one transaction (§7.1).
+  `generated` terms of that kind **at the block's scope**: a `line_name = NULL` block
+  against common-scope terms, and a `line_name = "C"` block against line-C-scoped terms.
+  So writing a line-C target and then generating line-C effects still works (A17).
+  Without this refusal, `remove_rows()` plus a new target would leave the old terms
+  calibrated to a target that is gone. To change a target: `remove_rows()` the old block,
+  then regenerate with `define_additive_effects(G = )`, which writes target and terms in
+  one transaction through the shared internal insert (§7.1). Step 3 rewords step 2's
+  "already stored" error so that it gives this sequence, not `remove_rows()` alone.
   `method = "union"` and line-scoped effects are calibrated *toward* the target, not
   exactly (§7.3, §7.6). The threshold is an approximation in those cases, as the roxygen
   already says of the reference-population target.
@@ -884,7 +899,8 @@ updated in the same change.
 forwards `target_add_var` to `define_trait()` (`R/define_trait_simple.R:53,70`), so it would
 break here anyway. Users chain the three calls it wrapped:
 `define_trait()` → `define_additive_effects(G = …)` → `define_phenotype()`. Its R file,
-`NAMESPACE` entry and man page go, and its 6 files of callers are updated. The internal
+`NAMESPACE` entry and man page go, and its callers are updated: 7 non-plan files, plus `man/`, the `tidybreed-api` skill,
+`README.md` and `package_summary.md` (recount at step 2). The internal
 `write_trait_var_diag()` (`R/define_effect_cov_matrix.R:246`) served only `define_trait()`'s
 `target_add_var` and goes too.
 
@@ -959,8 +975,8 @@ inside one transaction with the rest of the call. This uses `dbExecute()`, never
   it. **An additive-only target is accepted** and gives the same rows as
   `define_additive_effects()` with the same seed, anchor and `base_tbl` (gate C4). The two
   differ in their replacement rule (§5) and in the options only
-  `define_additive_effects()` has (`line_name`, `parent_origin`, `method = "union"`, manual
-  `effects`, `distribution`). The roxygen says which to use: `define_additive_effects()` for scoped or
+  `define_additive_effects()` has (`line_name`, `parent_origin`, `method = "union"`,
+  `distribution`). The roxygen says which to use: `define_additive_effects()` for scoped or
   crossbred additive models, `define_genome_effects()` when dominance or A×A may be added.
 
 **Lines (Q19 (a), decided 2026-10-01).** `trait_var_comp` gains `line_name VARCHAR`
@@ -1000,6 +1016,8 @@ not targeted.
 
 ### 7.1 API
 
+Signature from step 3. Step 2 still has `effects` and `scale_to_target` (see below).
+
 ```r
 define_additive_effects(tbl, trait_name,
   distribution    = c("normal", "gamma"),               # see Q5 on `architecture`
@@ -1029,6 +1047,12 @@ define_additive_effects(tbl, trait_name,
   only `generated` terms before consolidation (§5). Step 2 adds only the refusal of `G`
   together with `effects` or `scale_to_target = FALSE` (A19): nothing would be
   calibrated, so `trait_var_comp` would record a target the model does not deliver.
+  **Target resolution on the two surviving paths (step 2 only):**
+  - with `effects`, no target is resolved or required, and the §6C block checks
+    (partial block, non-additive block, missing target) are skipped;
+  - with `scale_to_target = FALSE`, a stored target is read only where today's code reads
+    it, as the `Sigma` of the k ≥ 2 joint draw (`R/define_additive_effects.R:417`), and
+    no congruence is applied. A missing block errors only on that k ≥ 2 path.
 - **Targets are validated before any write.** A passed or stored `G` must be finite,
   symmetric and positive semidefinite (the source's `.qtl_psd_eigen()` relative tolerance).
   An indefinite `G` errors, naming the block and the most negative eigenvalue. The same
@@ -1044,9 +1068,20 @@ define_additive_effects(tbl, trait_name,
 - **Atomic.** Today a passed `G` is written to `trait_var_comp` (line 328) before effect
   validation and `.ge_commit()` (line 485), so a failed call can change the target and keep
   the old coefficients. That is an existing bug. Fix it in Part A: resolve and validate
-  every target, run the replacement check (§5), build every trait's terms, and only then commit
-  targets and terms together. Target resolution, the write of a passed `G`, and the
+  every target, build every trait's terms, and only then commit targets and terms
+  together. (The §5 owner-content replacement check joins this sequence in step 5, with
+  `define_genome_effects()`.) Target resolution, the write of a passed `G`, and the
   "already stored" refusal follow §6C.
+- **One internal target insert.** A passed `G` is no longer written by calling the
+  exported `define_effect_cov_matrix()` (today `:328`). Both writers call one internal,
+  transactional, full-precision insert (§6C), which carries the "already stored" refusal.
+  Step 3's Q21 refusal (no new block under existing `generated` terms, §6A) goes only in
+  the exported `define_effect_cov_matrix()`, never in that shared insert. Otherwise
+  `define_additive_effects(G = )`, the documented way to set a new target and regenerate,
+  would refuse itself.
+- **`seed` after validation.** Today `set.seed(seed)` runs before any validation
+  (`:216`), so a refused call with `seed =` changes `.Random.seed`. Move it after every
+  check, immediately before the first draw (A22).
 
 - `"reference"` needs no argument of its own. `base_tbl` **already is** the reference
   selection, and the genic weights are computed from whatever it names. The manuscript's
@@ -1646,14 +1681,19 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - §6C:
   - `trait_var_comp_tbl`, and no-overwrite in both target writers (its error names the
     filter and `remove_rows()` only).
-  - `trait_var_comp.line_name` by `ALTER TABLE`, with the line resolution in
-    `load_trait_cov()` / `get_trait_var()` and `define_effect_cov_matrix(line_name =)`.
+  - `trait_var_comp.line_name` in the base `CREATE TABLE` (`R/open_pop.R`). There is no
+    migration, so an `ALTER TABLE` path would have nothing to upgrade. The line resolution
+    goes in `load_trait_cov()` / `get_trait_var()` and
+    `define_effect_cov_matrix(line_name =)`.
   - Full-precision, transactional target inserts.
   - `target_add_var` / `target_add_mean` (and the `trait_meta` column) removed from
     `define_trait()`. `define_trait_simple()` and `write_trait_var_diag()` deleted.
   - `R/schema.R` `.sm_col()` and `R/sql_utils.R` registries updated (`line_name` added,
-    `target_add_mean` dropped). `restore_pop()` refuses a file that still has
-    `trait_meta.target_add_mean`.
+    `target_add_mean` dropped). `restore_pop()` refuses a file whose `trait_var_comp` has
+    no `line_name`. It also refuses a file that still has `trait_meta.target_add_mean`.
+    The first check is the one that always fires: `trait_var_comp` is created by
+    `open_pop()`, while `trait_meta` is created lazily (`ensure_trait_tables()`), so a
+    pre-0.73 file may have no `trait_meta` at all.
 - Reserved `effect_name` constants (§6B rule 5): future names refused with "not yet
   supported". Derived names and reserved names refused as user random effects.
 - CLAUDE.md: the Two-Layer paragraph loses `target_add_var` / `target_add_mean`, and
@@ -1662,7 +1702,17 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   `vignettes/`. Every test that re-declares a target block, or re-runs
   `define_additive_effects(G =)` on a stored block, must now pass `G` once and later rely
   on the stored rows. Tests switch to `define_effect_cov_matrix()` or `G =` in the same
-  commit.
+  commit. Write fixtures as "target first, then generate". A test that calls
+  `define_effect_cov_matrix()` after generating effects breaks again in step 3 (Q21).
+  Recount first: the count was 185 at 0.72.4.
+- **Small items:**
+  - remove `define_trait_simple` from `_pkgdown.yml`;
+  - fix the `define_additive_effects()` roxygen example, which stores `G` with
+    `define_effect_cov_matrix()` and then passes `G = G` again (refused by no-overwrite);
+  - reword error strings that name `define_trait(target_add_var = )`
+    (`R/define_additive_effects.R:274`, `R/add_phenotype_stages.R:1165`);
+  - scalar `G` for one trait (A15) is **new** code: today's single-trait path ignores `G`
+    entirely, and it is read only in the multi-trait path (`:321`).
 
 ### Step 3 — consolidation, P2 and Q18 (0.74.0)
 
@@ -1676,8 +1726,11 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
     owner rule (§6A).
 - Q21 (a):
   - `define_additive_effects()` loses `effects` and `scale_to_target`.
-  - Their call sites (about 76 in `tests/`, plus vignettes and examples) move to
-    `define_genome_effect_terms()` + `ad_terms()`. Count them first.
+  - Their call sites move to `define_genome_effect_terms()` + `ad_terms()`. Estimates
+    range from 76 to 93 in `tests/`, plus vignettes and examples, so count them first.
+    To keep the same genetic values, use `ad_terms(coding = "cockerham", p = <base p>)`,
+    because the generator centres at `p_base`. Functional coding shifts TBVs by a
+    constant.
   - `define_effect_cov_matrix()` refuses a genetic block whose traits already have
     `generated` terms of that kind.
   - The `define_phenotype(prevalence = )` roxygen's 0.72.3 caveat is replaced by the
@@ -1738,12 +1791,12 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - A14. `anchor = "realised"` after `restore_pop()`: the same `base_tbl` filter gives the same row and locus order, and `expect_identical()` stored terms for the same seed.
 - A15. No overwrite (§6C): passing `G` when an `additive` block exists for any of the traits (same `line_name`) errors, **including an identical matrix**, and the error contains a working `remove_rows()` call. After that call, the same `G` succeeds. A filtered `trait_var_comp_tbl` that hides the stored block does not let the write through. `define_effect_cov_matrix()` refuses an existing block the same way. A scalar `G` with one trait is stored as a 1×1 block.
 - A16. `trait_var_comp_tbl` (§6C): a table other than `trait_var_comp` errors. A partial block (one triangle filtered away) errors. Two candidate sets for one `effect_name` error and ask for a filter. A stored `dominance` target with the default `NULL` errors in `define_additive_effects()`, naming the filter and the `remove_rows()` call (and, from step 5, `define_genome_effects()`), and the same call with `filter(effect_name == "additive")` succeeds. Partial trait set: with a stored `additive` block for `ADG` and `BF`, `trait_name = "ADG"` with the default `NULL` errors, naming both traits and the two fixes, before any write and without consuming RNG. The same call with `trait_var_comp_tbl` filtered to the `(ADG, ADG)` row succeeds, and with `trait_name = c("ADG", "BF")` it succeeds.
-- A17. Lines (§6C): a `line_name = "C"` call reads line C's block when it exists and falls back to the `NULL` block otherwise. A passed `G` is written with the call's `line_name`. A line-C block and a population-wide block for the same traits coexist. Fallback is per `effect_name`: line C's own `additive` block plus the shared `dominance` block resolve together. A partial line-C block errors. `load_trait_cov()` / `get_trait_var()` never mix lines, and `add_ebv()`'s parameter file reads the `NULL` rows. `define_effect_cov_matrix(line_name = "C")` writes line rows. `define_trait()` no longer accepts `target_add_var` / `target_add_mean`, `trait_meta` has no `target_add_mean` column, `define_trait_simple()` is not exported, and `restore_pop()` refuses a file that still has `trait_meta.target_add_mean`.
+- A17. Lines (§6C): a `line_name = "C"` call reads line C's block when it exists and falls back to the `NULL` block otherwise. A passed `G` is written with the call's `line_name`. A line-C block and a population-wide block for the same traits coexist. Fallback is per `effect_name`: line C's own `additive` block plus the shared `dominance` block resolve together. A partial line-C block errors. `load_trait_cov()` / `get_trait_var()` never mix lines, and `add_ebv()`'s parameter file reads the `NULL` rows. `define_effect_cov_matrix(line_name = "C")` writes line rows. `define_trait()` no longer accepts `target_add_var` / `target_add_mean`, `trait_meta` has no `target_add_mean` column, `define_trait_simple()` is not exported, and `restore_pop()` refuses a file whose `trait_var_comp` lacks `line_name`, or that still has `trait_meta.target_add_mean`.
 - A18. Precision (§6C): `define_effect_cov_matrix()` with `cov_matrix = matrix(c(1/3, 1/7, 1/7, 2/3), 2)` stores values that read back `expect_identical()` to `G`, and a generator calibrated to it hits it to 1e-12. A failure halfway through a target write leaves `trait_var_comp` unchanged.
-- A19. *(Step 2 only; moot from step 3, when both arguments are removed.)* `G` with manual `effects`, and `G` with `scale_to_target = FALSE`, each error before any write, naming `define_effect_cov_matrix()`.
+- A19. *(Step 2 only; moot from step 3, when both arguments are removed.)* `G` with manual `effects`, and `G` with `scale_to_target = FALSE`, each error before any write. The message says that `G` is a calibration target for sampled effects only, and that manual or unscaled effects take no target. It must **not** suggest storing one with `define_effect_cov_matrix()`: a target next to uncalibrated terms is the Q21 hole.
 - A20. Reserved names (§6B rule 5): `define_effect_cov_matrix()` refuses `total`, `unpartitioned` and `between_components` as `effect_name`. A user random effect named `additive` (or any reserved name) errors in the phenotype layer. Nothing is written to either var-comp table.
 - A21. Part A size guard: `anchor = "realised"` above the cell limit errors with $n$, $m$ and the limit, before any write.
-- A22. RNG on refusal (CLAUDE.md): every validation error in `define_additive_effects()` (bad target, overwrite, owner content, `G` + `effects`) leaves `.Random.seed` unchanged. No draw happens before validation passes.
+- A22. RNG on refusal (CLAUDE.md): every validation error in `define_additive_effects()` (bad target, overwrite, `G` + `effects`; owner content from step 5) leaves `.Random.seed` unchanged, **including with `seed =`** (§7.1, "`seed` after validation"). No draw happens before validation passes.
 
 **Part B**
 
@@ -2150,8 +2203,8 @@ only that a target row **exists**. Some calls write terms that ignore a stored t
 
 Such a call leaves an old target row that the model does not deliver. A reproduction
 has target 1, a delivered variance of about 553, `prevalence = 0.1`, and a realised
-45.5%, with no message. §7.1 makes this deliberate ("a stored block neither blocks them
-nor is checked"). Until step 3, the workaround is explicit `thresholds =`, now stated in
+45.5%, with no message. §7.1's pre-decision wording made this deliberate ("a stored block
+neither blocks them nor is checked"). Until step 3, the workaround is explicit `thresholds =`, now stated in
 the `define_phenotype()` roxygen (0.72.3).
 
 **Options:**
