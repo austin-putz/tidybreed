@@ -15,7 +15,7 @@ shape that no longer exists.
 
 | File | What |
 |---|---|
-| `R/define_genome_effects.R` (new, ~860 lines) | The general writer, the `terms`/`origin` parser, copy-count inference, `require_complete`, the four replacement modes, and the single-transaction commit |
+| `R/define_genome_effect_terms.R` (new, ~860 lines) | The general writer, the `terms`/`origin` parser, copy-count inference, `require_complete`, the four replacement modes, and the single-transaction commit |
 | `R/genome_effect_terms_builders.R` (new, ~250 lines) | `ad_terms()` and `genotype_terms()` — the two `terms` constructors |
 | `R/define_additive_effects.R` (rewritten) | Rebuilt on the general writer; new `parent_origin`; origin-aware `scale_to_target`; the parent-only re-run warning; `method = "union"` reads the new tables |
 | `R/genome_effects_helpers.R` | `labels` on both validators, `.ge_scope_label()`, `.ge_duplicate_hint()` |
@@ -26,7 +26,7 @@ shape that no longer exists.
 | `tests/testthat/test-genome-effects-schema.R` | FK tests retargeted; the DuckDB delete-in-transaction behaviour pinned |
 | `tests/testthat/test-add_tbv.R`, `helper-parity.R`, `test-define_trait.R` | Imprinting retargeted onto origin rows (gate 40) |
 
-Three exported functions are new: `define_genome_effects()`, `ad_terms()`,
+Three exported functions are new: `define_genome_effect_terms()`, `ad_terms()`,
 `genotype_terms()`.
 
 ---
@@ -114,7 +114,7 @@ directions and runs inside every write transaction before `COMMIT`. This is a
 real weakening in exactly one respect: a raw `DBI::dbExecute()` can now create an
 orphan that survives until the next write. That route bypasses every other guard
 in the package too — `remove_rows()` refuses these tables, every column is
-reserved, `mutate_table()` is blocked, and `define_genome_effects()` is the only
+reserved, `mutate_table()` is blocked, and `define_genome_effect_terms()` is the only
 writer.
 
 The `locus_id → genome_meta` key **stays**. `genome_meta` rows are never deleted,
@@ -200,7 +200,7 @@ under partial containment is not settled.
    `meta_rows` reorder with no reader, and an `m <- meta_rows[...]` row lookup
    used by nothing. All removed. Pre-1.0 policy: no vestiges.
 
-7. **`GE_RESERVED_OWNERS` repeated `GE_ADDITIVE_OWNER`'s literal.** Two
+7. **`GE_RESERVED_OWNERS` repeated `GE_GENERATED_OWNER`'s literal.** Two
    constants holding the same string is a silent-drift hazard; the reserved list
    is now derived from the owner constant.
 
@@ -287,7 +287,7 @@ B and E.
 
 519 lines written against the flat `genome_effects` shape. `add_tbv()` is Phase
 D's problem; **this file is Phase C's**, because it tests the function this phase
-rewrote. It now installs a test-local view, `gen_add_flat`, reconstructing
+rewrote. It now installs a test-local view, `additive_flat`, reconstructing
 `(locus_name, line_name, base_allele_freq, genome_value)` from the term / member
 / origin tables, restricted to the generated owner. The package ships no such
 view and should not — the point of the new schema is that a term is not a locus

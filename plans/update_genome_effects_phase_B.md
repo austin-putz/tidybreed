@@ -45,7 +45,7 @@ the expected consequence of not writing a compatibility shim; see
 | `TABLE_RESERVED_COLS` | `genome_effects` (rewritten), `genome_effect_members`, `genome_effect_member_origins`, `ind_tgv`, and all three views (every column of a view is derived, so every column is reserved) |
 | `TABLE_PRIMARY_KEYS` | `ind_tgv` |
 | `TABLE_ROW_KEYS` | `ind_tgv`; `genome_effects` **removed** — see finding 4 |
-| `TABLE_NO_ROW_DELETE` | the three effect tables, with a reason naming `define_genome_effects(mode = ...)`; the three views, with a derived-view reason |
+| `TABLE_NO_ROW_DELETE` | the three effect tables, with a reason naming `define_genome_effect_terms(mode = ...)`; the three views, with a derived-view reason |
 | `SYSTEM_TABLES` | three tables, `ind_tgv`, three views |
 | `IND_TABLE_ID_IND_COLS` | `ind_tgv` |
 | `.schema_table_order()` | Genome group + Results group |
@@ -127,7 +127,7 @@ should be replaced through the writer, not row-deleted." Those cannot both hold:
 
 **Implemented the stated preference.** The three tables are in
 `TABLE_NO_ROW_DELETE` with a reason that names the parent/child structure, the
-absence of cascade, and `define_genome_effects(mode = ...)`. They are not in
+absence of cascade, and `define_genome_effect_terms(mode = ...)`. They are not in
 `TABLE_ROW_KEYS`.
 
 *Known cosmetic wrinkle:* `remove_rows()`'s no-filter guard fires **before** the
@@ -303,7 +303,7 @@ still runs in `open_pop()`.
 
 ## Next
 
-**Phase C** — `define_genome_effects()` with the `terms` data-frame format;
+**Phase C** — `define_genome_effect_terms()` with the `terms` data-frame format;
 `define_additive_effects()` rebuilt on it with `replace_scope` and
 `parent_origin`; the `(a, d)` and genotype-table helpers; origin-aware
 `scale_to_target`; the parent-only re-run warning; and the complete deletion of

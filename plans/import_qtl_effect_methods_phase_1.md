@@ -80,7 +80,15 @@ It found these errors, all fixed in 0.72.1:
 
   They are realigned. Whitespace only.
 - **Wording.** The `trait_var_comp` description in `R/schema.R` read "Reserved … reserved". It now reads "Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet." The same text is fixed in `package_summary.md` and `dev/package_summary/package_summary.html`.
-- **Left as is:** `plans/dyadic_model.md`, `RFI.md`, `yaml_plan.md` and `fix_add_ebv.md` still say `gen_add`. They are older proposals, which count as closed history (§0A). Whoever revives one updates its strings then.
+- **Old names everywhere else (0.72.2).** On request, every remaining file now uses the new names:
+  - 19 older plans (`update_genome_effects*`, `dyadic_model.md`, `RFI.md`, `yaml_plan.md`, `fix_add_ebv.md`, `sample_correlated_effects_phase_2.md` / `_phase_8.md`, `_phase_0b.md`);
+  - `tools/quarto/legacy/` (two `.qmd` files and their rendered `.html`), which the step-1 census missed;
+  - the main plan's lines that describe current code: §2's audit bullets, §6A, B-2, Q3, Q20's `add_ebv()` defect note, and gate PH8.
+- **Where the old names remain on purpose:** only where they record the rename itself:
+  - `NEWS.md` (past entries and the 0.72.0 entry);
+  - this summary;
+  - the main plan's rename text (§0, §0A, §6B, Step 1, gate R1);
+  - the Codex review, whose one hit means the future generator.
 
 ## Plan bookkeeping
 

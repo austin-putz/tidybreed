@@ -92,11 +92,11 @@ DELETE predicate. v2 makes that an explicit, versioned model object.
 
 ### Dominance status
 
-`"dominance"` / `"epistasis"` appear in exactly one functional line:
+`"dominance"` / `"additive_by_additive"` appear in exactly one functional line:
 
 ```r
 # R/define_effect_cov_matrix.R:119
-genetic_effects <- c("gen_add", "dominance", "epistasis")
+genetic_effects <- c("additive", "dominance", "additive_by_additive")
 ```
 
 Accurate statement (per the review's §1.5 correction, adopted):
@@ -1017,7 +1017,7 @@ migrator or just a writer.
 | Option | Notes |
 |---|---|
 | **Design after Phase A fixtures exist** ← recommended | The fixtures reveal what the input shape must express. `define_additive_effects()` remains the front door for the common case regardless |
-| `define_genome_effects()` now | v1's proposal. The review calls it "likely keep", but with normalized states/contrasts/scopes its argument list is no longer obvious |
+| `define_genome_effect_terms()` now | v1's proposal. The review calls it "likely keep", but with normalized states/contrasts/scopes its argument list is no longer obvious |
 | Split writers per gene action | Multiplies entry points and re-fragments what the schema just unified |
 
 ### D7. Imprinting × non-additive terms

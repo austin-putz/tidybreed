@@ -1,3 +1,14 @@
+# tidybreed 0.72.2 (2026-10-03)
+
+## Documentation
+
+* The step-1 names (`define_genome_effect_terms()`, `"additive"`,
+  `"additive_by_additive"`, the `"generated"` owner,
+  `define_effect_cov_matrix(trait_name =)`) now appear in every remaining
+  file: the older plans in `plans/` and the legacy Quarto pages in
+  `tools/quarto/legacy/`. The old names remain only where they record the
+  rename itself (past `NEWS.md` entries, the step-1 plan text and summary).
+
 # tidybreed 0.72.1 (2026-10-03)
 
 Review of step 1 (`plans/import_qtl_effect_methods_phase_1.md`, "Review

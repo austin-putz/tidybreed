@@ -60,7 +60,7 @@ loses "(in development)", since the feature has now shipped. `DESCRIPTION`
 stays at `0.71.0`: the version was already bumped for this feature and the
 whole plan lands under it. `_pkgdown.yml` gains the new export — and, while
 there, the five topics that were already missing from the reference index
-(`ad_terms`, `add_tgv`, `define_genome_effects`, `extract_allele_freq`,
+(`ad_terms`, `add_tgv`, `define_genome_effect_terms`, `extract_allele_freq`,
 `genotype_terms`, all from the genome-effects work), because
 `pkgdown::check_pkgdown()` fails on the whole set or none of it, so the new
 entry could not be verified in isolation while they were outstanding.

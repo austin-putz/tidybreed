@@ -25,7 +25,7 @@ tests.
   helper.
 
 **B-2: no silent `Va = 0` under `prevalence`.**
-- `.ap_liability_records()` looked up `get_trait_var(pop, "gen_add", t)` with the
+- `.ap_liability_records()` looked up `get_trait_var(pop, "additive", t)` with the
   phenotype name and turned `NA` into 0.
 - `define_phenotype()` now refuses `prevalence` together with `components` or
   `formula_tbv`. The message comes from `.prevalence_composite_msg()` and points to
@@ -35,7 +35,7 @@ tests.
   write.
   - It refuses a composite phenotype with a prevalence. This is a second line of
     defence, for a database edited by other means.
-  - It refuses a simple trait with no stored `gen_add` diagonal. The message names
+  - It refuses a simple trait with no stored `additive` diagonal. The message names
     `define_effect_cov_matrix()`, `define_trait(target_add_var = )` and
     `thresholds =`.
 - The `NA → 0` fallback is gone. An `NA` there is now an internal error.

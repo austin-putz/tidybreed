@@ -10,7 +10,7 @@ deviations, all recorded below with the reason; none changes the surface.
 |---|---|---|
 | `48ebce2` | §3.7 step 1 | `extract_allele_freq()`, `.validate_base_tbl()`, `.founder_base_empty_error()`; tests 1–9 |
 | `6a7d3a5` | step 2 | `define_additive_effects()` rewired; `base`, `base_line_name`, `compute_base_allele_freq()` deleted; 73 call sites migrated incl. the six vignette calls; tests 10–17 |
-| `845d1cd` | step 3 | `base_freq` on `.ge_build()`, `base_tbl` on `define_genome_effects()`; tests 18–22 |
+| `845d1cd` | step 3 | `base_freq` on `.ge_build()`, `base_tbl` on `define_genome_effect_terms()`; tests 18–22 |
 | (docs) | steps 4–5 | roxygen family sentence on both writers, `CLAUDE.md`, `NEWS.md`, `DESCRIPTION` 0.69.0, `plans/TODO.md` |
 
 ---
@@ -51,7 +51,7 @@ line_name, parent_origin, scale_to_target, seed)`. Three new internals:
 The completion message now reads `base: founder_haplotypes [1 filter]` /
 `base: ind_meta` instead of the old enum value.
 
-### `define_genome_effects()`
+### `define_genome_effect_terms()`
 
 `base_tbl = NULL` added between `origin` and `require_complete`. Validated
 whenever supplied; queried only when an additive/dominance row has a missing

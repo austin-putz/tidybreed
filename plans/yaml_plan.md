@@ -116,9 +116,9 @@ traits:
 
 # ---- Covariance Matrices ---------------------------------------------
 # Omit entirely for single-trait simulations.
-# effect_name must be "gen_add", "residual", or a named random effect.
+# effect_name must be "additive", "residual", or a named random effect.
 covariances:
-  - effect_name: "gen_add"
+  - effect_name: "additive"
     traits: ["ADG", "BF"]
     matrix:                         # rows listed top-to-bottom, same order as traits
       - [2500.0, -500.0]

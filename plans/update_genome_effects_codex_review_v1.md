@@ -1115,7 +1115,7 @@ The schema is ready only if all of the following are true:
 | `trait_var_comp` prefix rewrite | **Move/reconsider** | Lexical prefix is not a relational type |
 | Compute query sketches | **Move to evaluator plan** | Useful requirements, premature implementation |
 | Functional default | **Do not lock here** | Storage supports multiple explicit bases |
-| `define_genome_effects()` | **Likely keep** | Appropriate general writer after input shape is designed |
+| `define_genome_effect_terms()` | **Likely keep** | Appropriate general writer after input shape is designed |
 
 ## 15. Recommended decision
 
@@ -1295,7 +1295,7 @@ plan's Open Questions with options and a recommendation.
 | `trait_var_comp` prefix rewrite | Move/reconsider | ✅ prefix rule rejected outright — a user naming a random effect `gen_flock` would silently route into `trait_var_comp`; lexical prefix is not a relational type. Renaming moved to its own plan |
 | Compute query sketches | Move to evaluator plan | ⚠️ demoted to Part 2, not deleted (**R1**) |
 | Functional default | Do not lock here | ⚠️ partially accepted — storage is basis-agnostic, but `define_additive_effects()` still needs a default when the user says nothing. Raised as **D8** rather than silently omitted |
-| `define_genome_effects()` | Likely keep | ⚠️ deferred to **D6** — with normalized states/contrasts/scopes its argument list is no longer obvious; design after Phase A fixtures |
+| `define_genome_effect_terms()` | Likely keep | ⚠️ deferred to **D6** — with normalized states/contrasts/scopes its argument list is no longer obvious; design after Phase A fixtures |
 
 ## What the review changed most
 

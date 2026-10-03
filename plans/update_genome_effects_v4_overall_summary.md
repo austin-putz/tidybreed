@@ -36,7 +36,7 @@ Checked by reading the code, not the notes.
 |---|---|---|
 | **A** | 19 fixtures, two evaluators, no schema change | `helper-genome-effects.R` (`gefx_*`), `test-genome-effects-fixtures.R`. The `terms`-format deviation was carried to Phase C as the round-trip test (gate 53, `test-genome-effects-writer.R:194`) |
 | **B** | `genome_meta` PK; `open_pop.R` DDL deleted; three tables in `define_genome()`; `GENOME_TABLES` = 10 + `GENOME_VIEWS`; `ind_tgv` in `define_trait()`'s lazy block; 3 views; registries | `define_genome.R:4-12, 296, 455-546`; `open_pop.R:162` (comment only — no DDL); `define_trait.R:230-238, 357`; `sql_utils.R:85-115, 153-156, 183, 211-235, 294-310`; `schema.R:100-190`; `archive_replicate.R:110-114`. Both Phase B plan corrections (no `replicate` on `ind_tgv`; `TABLE_NO_ROW_DELETE` not `TABLE_ROW_KEYS`) are what is built |
-| **C** | `define_genome_effects()` with the long `terms` format + four modes + `origin` + `require_complete` + `allow_reserved_owner`; `ad_terms()`, `genotype_terms()`; `define_additive_effects()` on the writer with `parent_origin`, `replace_scope`, origin-aware `scale_to_target`, parent-only warning; `expressed_parent` gone at all 14 sites; intra-set FKs dropped | Signatures match the plan exactly (`define_genome_effects.R:133-143`, `genome_effect_terms_builders.R:47, 190`, `define_additive_effects.R:178-190`). `expressed_parent` survives only as absence-assertions and "what `parent_origin` replaced" prose. `validate_sql_identifier(effect_owner)` at `:150`. `.ge_duplicate_hint()` present (Q2) |
+| **C** | `define_genome_effect_terms()` with the long `terms` format + four modes + `origin` + `require_complete` + `allow_reserved_owner`; `ad_terms()`, `genotype_terms()`; `define_additive_effects()` on the writer with `parent_origin`, `replace_scope`, origin-aware `scale_to_target`, parent-only warning; `expressed_parent` gone at all 14 sites; intra-set FKs dropped | Signatures match the plan exactly (`define_genome_effect_terms.R:133-143`, `genome_effect_terms_builders.R:47, 190`, `define_additive_effects.R:178-190`). `expressed_parent` survives only as absence-assertions and "what `parent_origin` replaced" prose. `validate_sql_identifier(effect_owner)` at `:150`. `.ge_duplicate_hint()` present (Q2) |
 | **D** | One evaluator; `add_tgv()`; `add_tbv()` as a filtered call; per-**member** freedom (`"*"` sentinel); preflight with `tidybreed.label_vector_warn/max`; zero-copy state materialized against genotype-member loci; `.gev_warn_tbv_stale()` (Q1); benchmark script | `genome_effects_eval.R` (all `.gev_*` listed), `add_tgv.R`, `add_tbv.R:141-173` reads `.gev_read_model` → `.gev_reserved_additive` → `.gev_evaluate` — no second implementation. `dev/benchmarks/benchmark_tgv_scale.R` exists |
 | **E** | `restore_pop()` guard (both signals + the 0.68.0 rename, connection released); `extract_genotypes()` on `genome_effect_loci` (nominal check **and** locus resolution); `genome_effect_loci.genome_value`; `n_qtl` → `n_causal`; `phenotype_components.genome_effect_types` → `component_names` | `restore_pop.R:111-139`; `extract_genotypes.R:126-131, 210-221`; `genome_effects_helpers.R:69-79`; `tidybreed_pop.R:163-170`; `open_pop.R:325` |
 
@@ -45,7 +45,7 @@ Checked by reading the code, not the notes.
 names: 11 → `writer.R:314`, 12 → `:314, :880`, 13 → `:553`, 19 → `:464`, 20 → `:573`,
 24 → `schema.R:121` + `writer.R:837`, 36 → `writer.R:753`, 37 → `writer.R:927`.
 
-**Docs.** `NAMESPACE` exports `define_genome_effects`, `ad_terms`, `genotype_terms`,
+**Docs.** `NAMESPACE` exports `define_genome_effect_terms`, `ad_terms`, `genotype_terms`,
 `add_tgv`; all six `man/` pages present; `roxygenise()` produces no diff.
 `NEWS.md` has 0.65.0 → 0.68.0 entries, one per phase. `CLAUDE.md` schema
 sections match the DDL (spot-checked all three effect tables, `ind_tgv`, the
@@ -62,7 +62,7 @@ roughly by how likely they are to bite a user.
 
 | # | Item | Recommendation | Size | When |
 |---|---|---|---|---|
-| 3.1 | Mismatched-centre trap | Write-time warning in `define_genome_effects()` | ~30 lines + 2 tests | **Before merge** |
+| 3.1 | Mismatched-centre trap | Write-time warning in `define_genome_effect_terms()` | ~30 lines + 2 tests | **Before merge** |
 | 3.2 | Realized variance / orthogonality diagnostic | New `extract_genetic_variance()`; schedule it **ahead of** consolidation | New file, ~200 lines | Next plan |
 | 3.3 | Dead generic variant under two reciprocals | Write-time warning from the variant map | ~25 lines + 1 test | Before merge, same commit as 3.1 |
 | 3.4 | `require_complete` is scope-blind | Leave; document the limitation in the roxygen | 3 lines of roxygen | Now |
@@ -80,7 +80,7 @@ and the additive coefficient quietly stops being an average effect. Today the
 only net is `add_tbv()`'s warning — right check, wrong moment.
 
 Three candidate fixes recorded in the Phase D notes, none built:
-1. Write-time warning in `define_genome_effects()` when a `dominance` member
+1. Write-time warning in `define_genome_effect_terms()` when a `dominance` member
    lands at a locus whose stored additive variant has a different
    `center_value`.
 2. Realized-orthogonality reporting (needs 3.2).
@@ -88,7 +88,7 @@ Three candidate fixes recorded in the Phase D notes, none built:
 
 **Recommendation — do (1) now, before merge; (2) arrives with 3.2; skip (3).**
 
-- *Where:* `define_genome_effects.R:161-164` already has both halves in hand —
+- *Where:* `define_genome_effect_terms.R:161-164` already has both halves in hand —
   `built` (the candidate rows) and `model <- .ge_read_model(conn)` (the stored
   rows). Add one helper, `.ge_warn_centre_mismatch(built, model, labels)`, called
   right after `.ge_resolve_deletes()` and before `.ge_commit()`. Pattern to copy:
@@ -99,7 +99,7 @@ Three candidate fixes recorded in the Phase D notes, none built:
   owner, whose origin scope matches or contains the dominance member's scope
   (common scope always matches). If any has `center_value` differing by more than
   `1e-8`, warn once per locus: *"dominance term_id 'X' at Locus_10 is centred at
-  0.30 but the additive term (owner 'generated_additive_tbv') is centred at
+  0.30 but the additive term (owner 'generated') is centred at
   0.3333; the Cockerham contrast is orthogonal only at the additive term's centre,
   so `tbv_value` for 'ADG' will stop being the average effect. Pass p = 0.3333, or
   re-run define_additive_effects() with the same p."* Check the reverse direction
@@ -151,7 +151,7 @@ partition the `{A,B}` label space, so a generic `{A:1, B:1}` fallback beneath
 them can never be selected. Correct by the rules, but a user who writes all
 three has written one term that does nothing, silently. Phase A named it as a
 candidate for "the same class of warning as gate 50". Nothing was built and
-nothing documents it in `define_genome_effects()`'s roxygen.
+nothing documents it in `define_genome_effect_terms()`'s roxygen.
 
 **Recommendation — write-time warning, same commit as 3.1.** The machinery
 already exists: `.gev_variant_map()` (`genome_effects_eval.R:369`) resolves every
@@ -164,7 +164,7 @@ variants so the common single-variant case costs nothing; the label alphabet
 comes from `ind_haplotype`, so on an empty population (effects defined before
 founders) skip the check rather than warn on an empty alphabet.
 
-- *Also:* add one sentence to the `@details` of `define_genome_effects()` under
+- *Also:* add one sentence to the `@details` of `define_genome_effect_terms()` under
   the reciprocal example: *"If both reciprocals are written, a generic `{A, B}`
   variant beneath them can never be selected; the writer warns."*
 - *Test:* Phase A's F04 fixture with the second reciprocal added — warns and
@@ -187,7 +187,7 @@ against the same surface at another."* Three lines, no code.
 
 `.ge_validate_dominance_ploidy()` and the writer both call
 `resolve_chr_inheritance(conn, sex)` with no `line_name`
-(`genome_effects_helpers.R:349`, `define_genome_effects.R:367`), so a
+(`genome_effects_helpers.R:349`, `define_genome_effect_terms.R:367`), so a
 line-specific karyotype rule in `chr_inheritance` would not be consulted. No
 such rule can be written today — `define_chromosome()` has no `line_name`
 argument — so this is a latent coupling, not a bug.
@@ -217,7 +217,7 @@ effect tables, and whatever else is registered); no table that could be deleted
 from before becomes undeletable.
 
 - *Test:* unfiltered and `confirm_all = TRUE` calls on `genome_effects` and on
-  `genome_effect_loci` each error with the `define_genome_effects` /
+  `genome_effect_loci` each error with the `define_genome_effect_terms` /
   derived-view reason, not the "no filter" text. Phase B's existing filtered-call
   tests (`test-genome-effects-schema.R:182-190`) stay as they are.
 

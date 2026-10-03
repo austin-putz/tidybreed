@@ -48,7 +48,7 @@ The sampler itself is untouched; `add_phenotype()` behaves exactly as before.
 | `define_effect_random("B", "pen", source_column = "herd")` when `A`'s `pen` reads `sex`, `{A, B}` a `pen` block | accepted; a pen id and a herd id were about to be treated as one random vector | **error** (§5.6) |
 | `define_effect_random(..., distribution = "gamma")` into a block of ≥ 2 | accepted; drawn normal by the correlated path anyway | **error**; a 1 × 1 gamma effect stays legal |
 | `define_residual_cov(c("A","B"), R, condition_column = "sex")` (no level) | wrote rows with a column and a `NULL` level | **error**: both or neither |
-| `define_effect_cov_matrix("residual", M, trait_names = )` | `trait_names` ignored for the residual route | honoured |
+| `define_effect_cov_matrix("residual", M, trait_name = )` | `trait_name` ignored for the residual route | honoured |
 
 ## Why the shape is what it is
 

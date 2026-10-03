@@ -25,7 +25,7 @@ Key properties:
 ## Workflow: How Users Simulate RFI
 
 1. `define_trait()` + `define_additive_effects()` for ADFI, ADG, MBW, backfat
-2. `define_effect_cov_matrix("gen_add", G)` — with realistic genetic covariance
+2. `define_effect_cov_matrix("additive", G)` — with realistic genetic covariance
    matrix among ADFI and all covariates
 3. `define_phenotype()` for ADFI, ADG, MBW, backfat (all standard continuous traits)
 4. `define_phenotype("RFI", trait_type = "regression_residual", ...)` — RFI definition

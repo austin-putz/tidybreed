@@ -371,20 +371,19 @@ inline fixtures to `tests/testthat/helper-qtl-effects.R`.
   These describe *declared structure*, not variance components. §6B renames them to
   `additive`, `dominance`, `indicator`, `interaction`, and the rest of this plan uses the
   new names.
-- **Writer**: exported today as `define_genome_effects()` (`R/define_genome_effects.R:161`),
-  with `ad_terms(coding = "functional" | "cockerham")` and `genotype_terms()`. Step 1
-  renames it `define_genome_effect_terms()` (§0A). Everywhere else in this plan,
+- **Writer**: `define_genome_effect_terms()` (`R/define_genome_effect_terms.R`; named
+  `define_genome_effects()` until step 1, §0A), with `ad_terms(coding = "functional" |
+  "cockerham")` and `genotype_terms()`. Everywhere else in this plan,
   `define_genome_effects()` means the **new Part C generator**.
 - **Generator**: `define_additive_effects()` (`R/define_additive_effects.R:176`), reserved
-  owner `GE_ADDITIVE_OWNER = "generated_additive_tbv"` (`:507`; step 1 renames it
-  `GE_GENERATED_OWNER = "generated"`, §5). Frequencies come from
+  owner `GE_GENERATED_OWNER = "generated"` (`:507`; renamed in step 1, §5). Frequencies come from
   `base_tbl` via `extract_allele_freq()`. The scalar rescale is `rescale_effects_to_target()`
   (`:741`). The multi-trait path is `MASS::mvrnorm` (`:417, :425`) then the same rescale
   (`:443-456`).
 - **Targets**: `trait_var_comp`, with `define_effect_cov_matrix()` already accepting
-  `"gen_add"`, `"dominance"`, `"epistasis"` (`R/define_effect_cov_matrix.R:124`).
-  `schema.R:331` documents the latter two as "future". §6B renames them to `additive`,
-  `dominance`, `additive_by_additive`.
+  `"additive"`, `"dominance"`, `"additive_by_additive"` (`R/define_effect_cov_matrix.R:124`;
+  renamed from `gen_add` / `epistasis` in step 1, §6B). `schema.R:331` documents the
+  latter two as reserved, with no generator yet.
 - **Results**: `ind_tbv` (`add_tbv()`, reserved additive owner only) and `ind_tgv`
   (`add_tgv()`, every term).
 
@@ -689,7 +688,7 @@ because they measure `ind_tgv`, and nobody would notice.
   a model written only with `define_genome_effect_terms()`. The check becomes "the trait has
   at least one term", and its message stops naming `formula_tbv`.
 - **Prevalence thresholds use the total genetic variance.** `R/add_phenotype_stages.R:1146`
-  sets a binary trait's liability threshold from `get_trait_var(pop, "gen_add", t)` alone.
+  sets a binary trait's liability threshold from `get_trait_var(pop, "additive", t)` alone.
   Once the liability carries the total genetic value, the threshold uses the variance of
   the **active** model *(decided 2026-10-02, Codex review finding 2)*: the sum of the
   stored diagonals (`line_name IS NULL` rows, §6C) of `additive`, `dominance` and
@@ -1545,7 +1544,7 @@ then retarget the same code (§6A), keeping the tests.
   `expect_identical()` under `SET threads = 1` and `SET threads = 8` (the step 3 form of
   this test is PH5).
 - **B-2. A prevalence threshold silently uses zero genetic variance.**
-  `R/add_phenotype_stages.R:1146` calls `get_trait_var(pop, "gen_add", t)` with the
+  `R/add_phenotype_stages.R:1146` calls `get_trait_var(pop, "additive", t)` with the
   **phenotype** name `t`. For a composite phenotype (`phenotype_components` or
   `formula_tbv`) no `trait_var_comp` row has that name, and for a simple trait with no
   stored additive target there is no row either. Both return `NA`, which the next line
@@ -1689,7 +1688,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 
 **Rename release (step 1)**
 
-- R1. After step 1, `grep -rnw "define_genome_effects"` over `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md`, `package_summary.md`, `README.md`, `_pkgdown.yml`, `plans/TODO.md` and `.claude/skills/` returns nothing. The same holds for `gen_add` (including the test view `gen_add_flat`, renamed `additive_flat`), for `epistasis` used as an `effect_name`, for `generated_additive_tbv` / `GE_ADDITIVE_OWNER`, and for `define_effect_cov_matrix(trait_names =`. `NEWS.md` (past entries) and closed plans are excluded. `define_genome_effect_terms` is exported, documented, and listed in `NAMESPACE`. In step 5 this gate's `define_genome_effects` check is replaced by "no message or roxygen written in steps 1–4 names `define_genome_effects()`" (checked by `grep` before step 5 starts), since the name then returns as the generator.
+- R1. After step 1, `grep -rnw "define_genome_effects"` over `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md`, `package_summary.md`, `README.md`, `_pkgdown.yml`, `tools/`, `plans/` (except the rename records: this plan, `_phase_1.md`, the Codex review) and `.claude/skills/` returns nothing. The same holds for `gen_add` (including the test view `gen_add_flat`, renamed `additive_flat`), for `epistasis` used as an `effect_name`, for `generated_additive_tbv` / `GE_ADDITIVE_OWNER`, and for `define_effect_cov_matrix(trait_names =`. `NEWS.md` (past entries) and closed plans are excluded. `define_genome_effect_terms` is exported, documented, and listed in `NAMESPACE`. In step 5 this gate's `define_genome_effects` check is replaced by "no message or roxygen written in steps 1–4 names `define_genome_effects()`" (checked by `grep` before step 5 starts), since the name then returns as the generator.
 - R2. The full suite passes with only renamed calls and strings changed in `tests/`: no assertion, tolerance or fixture changes. A `git diff --stat` of `tests/` shows renames only.
 
 **Part A**
@@ -1777,7 +1776,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - PH5. Exact total (§6A): `ind_tgv_total` for a model with all four components is `expect_identical()` under `SET threads = 1` and `SET threads = 8`, and so is the phenotype built from it. The same holds for a composite phenotype with a `group_sum()` and a `group_mean()` contributor, read both as `"total"` and as one listed component. Use groups large enough for DuckDB to parallelise the aggregate (pens of 200, as in `test-group-contributor-determinism.R`): at pens of 10 the old floating `SUM()` never diverged, so a small fixture passes on broken code.
 - PH6. Precheck (§6A): a simple phenotype whose trait has **only** custom-owner terms (written with `define_genome_effect_terms()`) records phenotypes, with no "call define_additive_effects() first" error. A trait with no terms still errors.
 - PH7. Prevalence (§6A): with stored `additive` and `dominance` targets and a model with both kinds of terms, the binary threshold uses their sum. With `additive` only it is unchanged from the additive-only formula. A stored A + D + A×A target with the model generated from a filter that left A×A out: the threshold uses A + D only. A model with terms but no stored target (manual `effects`, or custom terms only) errors, naming `thresholds =`, as does a composite phenotype with `prevalence`. Explicit `thresholds` works in every one of these cases. Each error leaves `ind_phenotype` and `phenotype_random_effects` unchanged (D7).
-- PH8. Step-3 grep gate: `ind_tbv`, `add_tbv`, `tbv_value`, `formula_tbv`, `order1_` and `generated_additive_tbv` appear nowhere in `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md` or the skills (past `NEWS.md` entries and closed plans excepted). `test-add_phenotype_failure_contract.R` asserts the D7 contract against `add_tgv()`.
+- PH8. Step-3 grep gate: `ind_tbv`, `add_tbv`, `tbv_value`, `formula_tbv` and `order1_` appear nowhere in `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md` or the skills (past `NEWS.md` entries and closed plans excepted). `test-add_phenotype_failure_contract.R` asserts the D7 contract against `add_tgv()`.
 
 ---
 
@@ -1820,7 +1819,7 @@ from one owner's terms). That leaves protection and the replacement boundary, wh
 owner expresses exactly. The alternative, two owners (`generated_additive`,
 `generated_genome`) with mutual exclusion per trait, was rejected:
 - Switching generators for a trait would need a "clear the other owner" call, and **none
-  exists**: the writer rejects empty `terms` (`R/define_genome_effects.R:246`), and row
+  exists**: the writer rejects empty `terms` (`R/define_genome_effect_terms.R:246`), and row
   deletion from the `genome_effect*` tables is refused by design.
 - An additive-only model would differ by owner depending on which generator wrote it.
 - The owner would record provenance (which function), which nothing reads.
@@ -2082,7 +2081,7 @@ shared/default pattern.
 | **Evaluation parameters** | what the breeder's genetic evaluation *assumes*, per line and over time: user-supplied, or REML estimates | **not yet**; there is no place for them | `add_ebv()` |
 
 **Current defect.** `add_ebv()` builds the BLUPF90 parameter file from the generation
-targets: `load_trait_cov(pop, "gen_add")` and the residual blocks of
+targets: `load_trait_cov(pop, "additive")` and the residual blocks of
 `phenotype_var_comp` (`R/blupf90_helpers.R:325-326`). So every evaluation is told the
 base-population truth, whichever line it runs on and however far selection has moved
 the variances. Worse, `add_ebv(update_covars = TRUE)` is documented to write REML

@@ -40,7 +40,7 @@ inside an explicit transaction: DuckDB 1.5.5 refuses to delete a parent row whos
 children were deleted earlier in the same transaction — for single-column and
 composite keys alike, in either delete order, whether the child delete was
 filtered or a whole-table `DELETE` — and succeeds only in autocommit. That makes
-every `replace_*` mode of `define_genome_effects()` impossible to write as one
+every `replace_*` mode of `define_genome_effect_terms()` impossible to write as one
 transaction, and a half-replaced effect model is a *different* genetic model, not
 a weaker one. The two keys are therefore dropped and the same integrity is
 enforced by `validate_genome_effects()`, which already reported orphans in both
@@ -349,7 +349,7 @@ schema; re-create it with `define_genome()`."
 - **`remove_rows()` on `genome_effects` must delete children first.** DuckDB refuses a
   parent delete with live children and does not cascade (audit item 3), so a naive
   single-table delete errors. Either teach `remove_rows()` the child order for these
-  three tables or reject the call and point at `define_genome_effects(mode = ...)`.
+  three tables or reject the call and point at `define_genome_effect_terms(mode = ...)`.
   **Rejecting is preferred** — effect definitions are configuration and should be
   replaced through the writer, not row-deleted.
   ★ **Phase B correction:** the two halves of this bullet contradicted each other.
@@ -743,18 +743,18 @@ disclaimer to say so. Pre-1.0 makes the rename free; scenario comparison stays w
 already is in this package — separate populations or separate replicates.
 
 **Two distinct defaults.** `define_additive_effects()` owns the reserved owner
-`generated_additive_tbv`; `define_genome_effects()` defaults to `custom`. v4.1 had
+`generated`; `define_genome_effect_terms()` defaults to `custom`. v4.1 had
 both on `'default'`, so rerunning the generator in replace mode would have deleted a
 user's custom terms. The general writer **refuses to mutate reserved owner names**
 without an explicit advanced override; reserved names are a closed package-owned list.
 
-**`add_tbv()` reads only order-one `additive` variants from `generated_additive_tbv`.**
+**`add_tbv()` reads only order-one `additive` variants from `generated`.**
 Filtering on `contrast_name = 'additive'` alone is not sufficient: under functional
 `(a, d)` input the stored coefficient is `a` while the breeding-value coefficient in a
 diploid HWE base is `α = a + d(q − p)`, and under epistasis average effects also
 depend on other loci and LD. So:
 
-- arbitrary terms written through `define_genome_effects()` contribute to
+- arbitrary terms written through `define_genome_effect_terms()` contribute to
   `ind_tgv` but **never silently redefine TBV**;
 - `add_tbv()` ignores additive members that appear inside interactions;
 - `ind_tbv` keeps its exact current meaning and its committed oracle;
@@ -861,7 +861,7 @@ value does not have.
 
 ★ **Known, time-boxed redundancy.** `ind_tbv` survives this plan unchanged, so the
 additive value appears in two places. They are not always the same number:
-`ind_tbv.tbv_value` is the breeding value from the reserved `generated_additive_tbv`
+`ind_tbv.tbv_value` is the breeding value from the reserved `generated`
 owner, while `ind_tgv`'s `'order1_additive'` row sums **every** additive-structured term
 in the model, including custom ones. Identical in the common case, subtly different with
 custom additive terms — a user trap, and the reason consolidation is scheduled as the
@@ -892,7 +892,7 @@ very next plan rather than left open-ended. See `plans/consolidate_genetic_value
 ## Writer API
 
 ```r
-define_genome_effects(
+define_genome_effect_terms(
   pop, trait_name, terms,
   effect_owner  = "custom",
   mode             = c("append", "replace_scope", "replace_owner", "replace_trait"),
@@ -960,7 +960,7 @@ term normally needs the data-frame form. The validator says which, naming the lo
 #### Example 1 — one dominance term (Cockerham, `p = 0.3`)
 
 ```r
-pop <- pop |> define_genome_effects(
+pop <- pop |> define_genome_effect_terms(
   trait_name = "ADG",
   terms = data.frame(
     locus_name    = "Locus_10",
@@ -992,7 +992,7 @@ surface <- rbind(
              genome_value  = cells$value)
 )
 
-pop <- pop |> define_genome_effects("ADG", surface[surface$genome_value != 0, ],
+pop <- pop |> define_genome_effect_terms("ADG", surface[surface$genome_value != 0, ],
                                     effect_owner = "epistasis_AxA")
 ```
 
@@ -1021,7 +1021,7 @@ origin <- data.frame(
   copy_count      = c(1L, 1L)
 )
 
-pop <- pop |> define_genome_effects("ADG", terms, origin = origin,
+pop <- pop |> define_genome_effect_terms("ADG", terms, origin = origin,
                                     effect_owner = "reciprocal")
 ```
 
@@ -1038,7 +1038,7 @@ seen.
 Helpers convert a genotype table into indicator terms and an `(a, d)` pair into
 `additive` + `dominance` (or functional `additive`@0.5 + `indicator`@(2,1)) — no
 additional tables. `define_additive_effects()` is reimplemented on the general writer,
-owns `generated_additive_tbv`, and uses `replace_scope`.
+owns `generated`, and uses `replace_scope`.
 
 ★ **`define_additive_effects()` gains `parent_origin = NULL`** — the ergonomic
 replacement for the deleted trait-wide `expressed_parent` flag: one argument reproduces
@@ -1340,7 +1340,7 @@ the additive formula from first principles and is not pre-change golden output.
 |---|---|---|
 | **A** ✅ | **Complete — `plans/update_genome_effects_phase_A.md`.** Fixtures **with hand-computed expected values** before DDL, including the origin truth table: common vs A-specific additive · generic A vs paternal-A · common vs A/B dominance · generic A/B vs both reciprocals · overlapping-incomparable rejection · common vs origin-specific A×A · partial specificity at one member of two · two disjoint specific combinations that must both contribute · absent / hemizygous-allele-0 / diploid-dosage-0 indicator states | ✅ Met: 19 fixtures, **no schema change required**; both evaluators agree with the hand computations. Containment order and multi-locus fallback settled before DDL. ★ Writing each fixture in the `terms` format moves to Phase C as a **round-trip** against this registry (gate 53) — it only becomes a real check once a writer exists to canonicalize it |
 | **B** ✅ | **Complete — `plans/update_genome_effects_phase_B.md`.** ★ `genome_meta` gains its `PRIMARY KEY` and the `open_pop.R:286` DDL is deleted **in the same commit** that adds the three tables to `GENOME_TABLES` — neither works alone; effect tables move into `define_genome()`; 4 tables + 24 registry entries; SQL constraints; containment checker; R validator; views, registered in all three schema lists | ✅ Met: gates 46–48 and 54, plus gate 41's row-local half. Every proposed constraint was probed against a real insert in DuckDB 1.5.5 before being written. **Two plan errors and five implementation issues found and fixed in review** — see the Phase B notes |
-| **C** ✅ | **Complete — `plans/update_genome_effects_phase_C.md`.** `define_genome_effects()` with the long `terms` format; `ad_terms()` and `genotype_terms()` builders; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ `trait_meta.expressed_parent` **deleted** at all 14 sites | ✅ Met: gates 34–35, 41–44, 50 and 53; every valid Phase-A fixture round-trips through the public writer. **One plan error and six implementation issues found in review** — see the Phase C notes. Gate 42 was restated: the four wrapper scopes cannot share one family, because `('exact' A, parent ANY)` and `('any', parent 1)` overlap without nesting and the validator refuses that pair by design |
+| **C** ✅ | **Complete — `plans/update_genome_effects_phase_C.md`.** `define_genome_effect_terms()` with the long `terms` format; `ad_terms()` and `genotype_terms()` builders; `define_additive_effects()` rebuilt on it with `replace_scope` and `parent_origin`; ★ origin-aware `scale_to_target`; ★ parent-only re-run warning; ★ `trait_meta.expressed_parent` **deleted** at all 14 sites | ✅ Met: gates 34–35, 41–44, 50 and 53; every valid Phase-A fixture round-trips through the public writer. **One plan error and six implementation issues found in review** — see the Phase C notes. Gate 42 was restated: the four wrapper scopes cannot share one family, because `('exact' A, parent ANY)` and `('any', parent 1)` overlap without nesting and the validator refuses that pair by design |
 | **D** ✅ | **Complete — `plans/update_genome_effects_phase_D.md`.** ★ **One** evaluator, built to §Evaluation strategy: label alphabet, resolved variant map, member reduction (incl. synthesized zero-copy state), family partitioner, containment resolver, label-vector preflight, term evaluator, `add_tgv()` writing `ind_tgv`. ★ `add_tbv()` becomes a **thin filtered call into that same evaluator** — reserved owner, order-1 `additive` variants only — not a second implementation | ✅ Met: the oracle agrees for every Phase A fixture and every individual; gates 1–39, 40, 45 and 51–52 pass. **Two plan corrections and ten implementation issues found in review** — see the Phase D notes. The largest: the fast path had to be restated per *member* rather than per family, or a high-order unscoped term is unevaluable |
 | **E** ✅ | **Complete — `plans/update_genome_effects_phase_E.md`.** Delete the old table shape; ★ the `restore_pop()` guard for pre-change files; move `extract_genotypes()` onto the locus view — **both** its nominal `table_name` check *and* its locus resolution, which still read `locus_name`; ★ `phenotype_components.genome_effect_types` → `component_names`, the last column naming a deleted vocabulary | ✅ Met: gate 49, and no legacy genome-effect name remains in `R/`, `tests/`, `vignettes/` or `man/`. **Three plan corrections and eight implementation issues found in review** — see the Phase E notes. The largest: the locus view had to gain `genome_value`, or moving the reader onto it silently deletes the documented "large-effect QTL" workflow |
 
@@ -1405,7 +1405,7 @@ actually select from. Renamed, still reserved, still unread.
 |---|---|---|
 | 1 | **Origin-row count is not a valid specificity order** — silently disabled reciprocals | Predicate containment over two small finite lattices, fully specified with worked cases; ≤ 1 origin row per additive member |
 | 2 | **Dosage alone is not a genotype state** — the indicator escape hatch was broken exactly where v4.1 sent users | `copy_count_value` column; state is `(copy_count, dosage)`; in the family signature; zero-copy state synthesized by the evaluator |
-| 3 | **`add_tbv()` cannot infer TBV from arbitrary additive terms** | Reserved `generated_additive_tbv` owner; `add_tbv()` reads only order-1 additive variants from it |
+| 3 | **`add_tbv()` cannot infer TBV from arbitrary additive terms** | Reserved `generated` owner; `add_tbv()` reads only order-1 additive variants from it |
 | 4 | **Shared `'default'` permitted accidental deletion**, and per-line replace would delete sibling variants | Reserved vs `custom` defaults; reserved-name protection; **`replace_scope`** mode using predicate equality |
 | 5 | Reported mean must not be copied into `phenotype_meta.mean` | Instruction removed; `μ` reported, never written; running total narrowed to single-locus main effects |
 | 6 | Displayed DDL omitted the promised `locus_id` FK | Declared (**confirmed missing** — the DDL carried it only as a comment). ★ v4.8: declaring it also requires a `PRIMARY KEY` on `genome_meta`, which the table never had — see §Schema. `ind_tgv.id_ind` stays R-enforced, matching `ind_tbv` |
@@ -1554,7 +1554,7 @@ without doing anything that looks wrong — `define_additive_effects(base =
 families and sum, and the additive coefficient quietly stops being an average
 effect. Phase D's warning catches it at `add_tbv()` time — the right safety net
 at the wrong moment. Candidates for a better one, none scheduled: a write-time
-warning from `define_genome_effects()`, realized-orthogonality reporting as part
+warning from `define_genome_effect_terms()`, realized-orthogonality reporting as part
 of §Future limitations item 6, or letting `ad_terms()` inherit `p` from the
 stored additive term. See **§Q1, Tracked for later** in
 `plans/update_genome_effects_phase_D.md`.
@@ -1588,7 +1588,7 @@ is a constant, and the message says so rather than dividing by zero — an
 intercept, which this model has no place for.
 
 **This does not close the mismatched-centre trap** (`..._phase_D.md`). That one
-is two terms in *different* families — a `generated_additive_tbv` additive term
+is two terms in *different* families — a `generated` additive term
 centred at the realized frequency and a `custom` dominance term centred where the
 user typed. Different family, so they sum, and no duplicate guard can fire. Q2
 is about terms that collide; the trap is about terms that do not.

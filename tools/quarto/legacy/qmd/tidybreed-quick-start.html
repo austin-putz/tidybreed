@@ -3296,11 +3296,11 @@ Filter: sex == &quot;M&quot;
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb76"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="co"># add this additive genetic covariance matrix to a table with function</span></span>
 <span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> pop <span class="sc">%&gt;%</span></span>
 <span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_effect_cov_matrix</span>(</span>
-<span id="cb76-4"><a href="#cb76-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">effect_name =</span> <span class="st">&quot;gen_add&quot;</span>,              <span class="co"># gen_add is a keyword, be careful</span></span>
+<span id="cb76-4"><a href="#cb76-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">effect_name =</span> <span class="st">&quot;additive&quot;</span>,              <span class="co"># additive is a keyword, be careful</span></span>
 <span id="cb76-5"><a href="#cb76-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">cov_matrix  =</span> mat.add.gen.vars</span>
 <span id="cb76-6"><a href="#cb76-6" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>Stored &#39;gen_add&#39; covariance matrix for trait(s): NW, ADG, BF.</code></pre>
+<pre><code>Stored &#39;additive&#39; covariance matrix for trait(s): NW, ADG, BF.</code></pre>
 </div>
 </div>
 <p><strong>New tables</strong> created in the database:</p>
@@ -3315,15 +3315,15 @@ Filter: sex == &quot;M&quot;
 # A tibble: 9 × 5
   id_trait_effect_cov effect_name trait_name_1 trait_name_2 cov_value
                 &lt;int&gt; &lt;chr&gt;       &lt;chr&gt;        &lt;chr&gt;            &lt;dbl&gt;
-1                   1 gen_add     NW           NW                0.9 
-2                   2 gen_add     NW           ADG               3.07
-3                   3 gen_add     NW           BF                0.21
-4                   4 gen_add     ADG          NW                3.07
-5                   5 gen_add     ADG          ADG            1050   
-6                   6 gen_add     ADG          BF               17.8 
-7                   7 gen_add     BF           NW                0.21
-8                   8 gen_add     BF           ADG              17.8 
-9                   9 gen_add     BF           BF                1.2 </code></pre>
+1                   1 additive     NW           NW                0.9 
+2                   2 additive     NW           ADG               3.07
+3                   3 additive     NW           BF                0.21
+4                   4 additive     ADG          NW                3.07
+5                   5 additive     ADG          ADG            1050   
+6                   6 additive     ADG          BF               17.8 
+7                   7 additive     BF           NW                0.21
+8                   8 additive     BF           ADG              17.8 
+9                   9 additive     BF           BF                1.2 </code></pre>
 </div>
 </div>
 <p>Obviously if you want <strong>variances</strong> only just filter to extract them:</p>
@@ -3337,9 +3337,9 @@ Filter: trait_name_1 == trait_name_2
 # A tibble: 3 × 5
   id_trait_effect_cov effect_name trait_name_1 trait_name_2 cov_value
                 &lt;int&gt; &lt;chr&gt;       &lt;chr&gt;        &lt;chr&gt;            &lt;dbl&gt;
-1                   1 gen_add     NW           NW                 0.9
-2                   5 gen_add     ADG          ADG             1050  
-3                   9 gen_add     BF           BF                 1.2</code></pre>
+1                   1 additive     NW           NW                 0.9
+2                   5 additive     ADG          ADG             1050  
+3                   9 additive     BF           BF                 1.2</code></pre>
 </div>
 </div>
 <p>Now add the <strong>residual (co)variance</strong> matrix:</p>

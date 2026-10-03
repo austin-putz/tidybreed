@@ -466,7 +466,7 @@ pop <- pop |>
 # Define G matrix (genetic covariance across traits)
 G <- matrix(c(100, 40, 40, 25), nrow = 2,
             dimnames = list(c("ADG","BW"), c("ADG","BW")))
-pop <- pop |> define_effect_cov_matrix("gen_add", G)
+pop <- pop |> define_effect_cov_matrix("additive", G)
 
 # Assign correlated QTL effects
 pop <- pop |>

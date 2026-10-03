@@ -40,7 +40,7 @@ Two covariance structures:
 ## What Already Works — Don't Change
 
 - The 2×2 genetic covariance matrix for `(attack_direct, attack_received)`:
-  `define_effect_cov_matrix("gen_add", G)` already handles this.
+  `define_effect_cov_matrix("additive", G)` already handles this.
 - Correlated QTL effect sampling: `define_additive_effects(c("attack_direct", "attack_received"), G = G)`
   already works for the multi-trait case.
 - The `phenotype_components` mechanism with `contributor_type` is the right abstraction —
@@ -193,7 +193,7 @@ G <- matrix(c(0.25, 0.06, 0.06, 0.20), 2, 2,
 pop <- pop |>
   define_trait("attack_direct",   target_add_var = 0.25) |>
   define_trait("attack_received", target_add_var = 0.20) |>
-  define_effect_cov_matrix("gen_add", G)
+  define_effect_cov_matrix("additive", G)
 
 pop <- pop |>
   get_table("genome_meta") |>

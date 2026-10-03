@@ -24,7 +24,7 @@ stored centres would leave the base validated but unqueried and prove only
 storage-path parity. A full read-through of the plan then fixed six things an
 implementer would have tripped on: the §4.5 dominance example lacked
 `copy_count = 2L` (a scalar `origin` list scopes additive members but is refused
-for a genotype member, `R/define_genome_effects.R:52-56`);
+for a genotype member, `R/define_genome_effect_terms.R:52-56`);
 `.founder_base_empty_error()` was sketched with two different signatures;
 the `NA`-in-`p_base` check was not pinned to run *before* the two
 `rescale_effects_to_target()` call sites that would fold `NA` into `V_A`;
@@ -50,7 +50,7 @@ amendments — all verified against the tree and accepted:
 2. **The `needs_fill` test in §3.4 was wrong for the plan's own showcase example.**
    An omitted `center_value` column makes `terms$center_value` `NULL`, and
    `any(NULL & …)` is `FALSE` — no query, then `.ge_build()` (which creates the
-   column as `NA_real_`, `R/define_genome_effects.R:245-249`) raises the old
+   column as `NA_real_`, `R/define_genome_effect_terms.R:245-249`) raises the old
    error. The decision now normalises the column exactly as `.ge_build()` does,
    and test 18 covers both an explicit `NA` and an omitted column.
 3. **Acceptance test 17 was non-deterministic.** Realized `line_origin == "Duroc"`
@@ -92,9 +92,9 @@ checked against the tree before acceptance:
    lazy projection and keeps the wrapper, so dispatching on `table_name` alone can
    hand the user a raw DuckDB error. Required columns are now part of the contract,
    and the same-connection check applies to both writers.
-2. **The `define_genome_effects()` fill lives inside `.ge_build()`** (§3.4).
+2. **The `define_genome_effect_terms()` fill lives inside `.ge_build()`** (§3.4).
    `.ge_build()` builds `members` and calls `.ge_check_member_fields()` with no seam
-   between (`R/define_genome_effects.R:304-321`); v1's "fill before validation"
+   between (`R/define_genome_effect_terms.R:304-321`); v1's "fill before validation"
    could not be bolted on from outside.
 3. **Two overclaims corrected.** v1 said the generic empty check preserved the
    "no rows for line X, available: …" diagnostic — it cannot; the founder-specific
@@ -147,7 +147,7 @@ lazily** — a wrong object errors whether or not any centre happens to need fil
    place per-locus allele frequency is computed from a `tidybreed_table`, used by
    both writers internally and by users to obtain `p` for `ad_terms()`. It follows
    the `extract_` contract — returns analysis data, changes no state.
-6. **`define_genome_effects()` gains the same `base_tbl`,** used only to fill
+6. **`define_genome_effect_terms()` gains the same `base_tbl`,** used only to fill
    `center_value` where the user left it `NA` on an `additive` or `dominance`
    member. An explicit `center_value` always wins; `indicator` members are never
    touched. The fill happens inside `.ge_build()`, before member validation.
@@ -182,7 +182,7 @@ NULL` supplied → force pooling". `compute_base_allele_freq()`
 list via `sql_in_list()`. Its zero-initialised output vector silently centres any
 locus absent from the base at `p = 0`.
 
-`define_genome_effects()` has no base argument at all: `center_value` is supplied
+`define_genome_effect_terms()` has no base argument at all: `center_value` is supplied
 in `terms`, and `ad_terms()` refuses to run without an explicit `p`. There is no
 sanctioned way to *get* `p` from the database — users must write their own
 `AVG(allele)` query.
@@ -289,7 +289,7 @@ p <- pop |> get_table("founder_haplotypes") |> filter(line_name == "A") |>
 loci <- c("Locus_10", "Locus_44")
 tt <- ad_terms(loci, a = c(0.4, 0.1), d = c(0.2, 0.05),
                p = p$allele_freq[match(loci, p$locus_name)], coding = "cockerham")
-pop |> define_genome_effects("ADG", tt, effect_owner = "custom")
+pop |> define_genome_effect_terms("ADG", tt, effect_owner = "custom")
 ```
 
 ### 2.3 Accepted `base_tbl` kinds
@@ -336,10 +336,10 @@ whole `founder_haplotypes` — is an intentional selection and is not diagnosed 
 pooling. `extract_allele_freq()` itself never warns: it is a computation, not a
 modelling check.
 
-### 2.4 `define_genome_effects()`
+### 2.4 `define_genome_effect_terms()`
 
 ```r
-define_genome_effects(pop, trait_name, terms,
+define_genome_effect_terms(pop, trait_name, terms,
                       effect_owner = "custom",
                       mode = c("append", "replace_scope", "replace_owner", "replace_trait"),
                       origin = NULL,
@@ -378,7 +378,7 @@ Two workflows, stated plainly so neither implies the other:
 
 ```r
 # A hand-written dominance term with no p lookup step
-pop |> define_genome_effects("ADG",
+pop |> define_genome_effect_terms("ADG",
   data.frame(locus_name = "Locus_10", contrast_name = "dominance", genome_value = 0.8),
   base_tbl = get_table(pop, "founder_haplotypes") |> filter(line_name == "A"))
 ```
@@ -392,12 +392,12 @@ RNG use that would depend on arguments, and a reserved-owner permission that
 would become conditional — the same reasoning as the `add_offspring()` /
 `add_doubled_haploids()` split in `plans/doubled_haploids.md`).
 
-| | `define_genome_effects()` | `define_additive_effects()` |
+| | `define_genome_effect_terms()` | `define_additive_effects()` |
 |---|---|---|
 | Altitude | **writer** — you supply coefficients | **generator** — samples coefficients to a target variance, then writes |
 | Input | `terms` data frame | filtered `genome_meta` + trait spec |
 | RNG | none | yes (`seed`) |
-| `effect_owner` | any non-reserved | always `generated_additive_tbv` (what `add_tbv()` reads) |
+| `effect_owner` | any non-reserved | always `generated` (what `add_tbv()` reads) |
 | Replace | explicit `mode` | `replace_scope`, implicit |
 | `base_tbl` | fills `NA` `center_value` | supplies `p` for centring **and** `scale_to_target` |
 | Storage path | `.ge_build → .ge_read_model → .ge_resolve_deletes → .ge_commit` | **the same** (`R/define_additive_effects.R:333-337, 657-667`) |
@@ -414,7 +414,7 @@ asserted — see acceptance test 22. Both share `extract_allele_freq()` for `p`,
 so a base selection means the same population in either call.
 
 The roxygen for each function carries one sentence naming the family:
-*"`define_genome_effects()` writes any effect you supply; `define_*_effects()`
+*"`define_genome_effect_terms()` writes any effect you supply; `define_*_effects()`
 functions sample effects of one shape and write them through the same path."*
 This is what a future `define_dominance_effects()` inherits.
 
@@ -615,15 +615,15 @@ selections change wording (and the "Did you call `define_founder_haplotypes()`?"
 hint may move); this is behavioural parity on valid inputs, not identical failure
 modes.
 
-### 3.4 `define_genome_effects()` fill — inside `.ge_build()`
+### 3.4 `define_genome_effect_terms()` fill — inside `.ge_build()`
 
-`.ge_build()` (`R/define_genome_effects.R:195`) resolves `locus_name → locus_id`,
+`.ge_build()` (`R/define_genome_effect_terms.R:195`) resolves `locus_name → locus_id`,
 assembles `members` (line 304), infers copy counts (320) and validates member
 fields (321) in one pass with no seam. The fill goes **into** `.ge_build()` via a
 new argument, the smaller of the two shapes the review offered:
 
 ```r
-# define_genome_effects()
+# define_genome_effect_terms()
   if (!is.null(base_tbl)) .validate_base_tbl(base_tbl, pop)      # always
   # An omitted center_value column is the documented way to ask for a fill
   # (§2.4), and terms$center_value is then NULL -- any(NULL & ...) is FALSE, so the
@@ -717,7 +717,7 @@ deprecation messages, no tests that exercise them.
    `compute_base_allele_freq()`; rewrite its tests; migrate every
    `current_pop` call site from §3.6.
 3. Add `base_freq` to `.ge_build()`, expose `base_tbl` on
-   `define_genome_effects()`; tests.
+   `define_genome_effect_terms()`; tests.
 4. Only after both writer paths pass the full suite: roxygen (including the
    one-sentence family statement from §2.5 on both functions), `NAMESPACE`,
    `man/`, `CLAUDE.md` (the `define_additive_effects()` section and its
@@ -796,9 +796,9 @@ deprecation messages, no tests that exercise them.
     `genome_effect_loci`), snapshot the three effect tables and `ind_tbv`, then
     **on the same population** (so the base is identical by construction) write
     those values with
-    `define_genome_effects(terms = <locus_name, contrast_name = "additive",
+    `define_genome_effect_terms(terms = <locus_name, contrast_name = "additive",
     genome_value>, origin = <the composed scope>,
-    effect_owner = "generated_additive_tbv", mode = "replace_scope",
+    effect_owner = "generated", mode = "replace_scope",
     allow_reserved_owner = TRUE, base_tbl = <the same base>)` — with
     **`center_value` omitted**, so the writer must fill it from `base_tbl`.
     Copying the stored centres would leave `base_tbl` validated but unqueried
@@ -902,7 +902,7 @@ any depth, and the evaluator's per-copy fallback already handles copies whose
 founding line has no variant of its own. Line-specific pools are optional —
 §4.2's shared-pool default covers programs that start from one base.
 
-### 4.5 Line-scoped terms in `define_genome_effects()`
+### 4.5 Line-scoped terms in `define_genome_effect_terms()`
 
 One `base_tbl` per call gives one `p` per locus per call. That is the same
 one-scope-per-call shape `define_additive_effects()` has, and the writer already
@@ -912,10 +912,10 @@ time:
 ```r
 # copy_count = 2: a dominance member takes an exact multiset summing to the
 # state's copy count; a scalar list without it is refused for genotype members
-pop |> define_genome_effects("ADG", dom_terms,
+pop |> define_genome_effect_terms("ADG", dom_terms,
   origin   = list(line_match_type = "exact", line_name = "Duroc", copy_count = 2L),
   base_tbl = get_table(pop, "founder_haplotypes") |> filter(line_name == "Duroc"))
-pop |> define_genome_effects("ADG", dom_terms,
+pop |> define_genome_effect_terms("ADG", dom_terms,
   origin   = list(line_match_type = "exact", line_name = "Landrace", copy_count = 2L),
   base_tbl = get_table(pop, "founder_haplotypes") |> filter(line_name == "Landrace"))
 ```
@@ -1000,7 +1000,7 @@ zero-initialised vector silently centres at `p = 0` — exactly the bug this pla
 removes. (b) changes the QTL set behind the user's back, which violates "no
 implicit selection". (c) invents a frequency.
 
-### Q5. Should `define_genome_effects()` get `base_tbl` at all, or is `extract_allele_freq()` enough?
+### Q5. Should `define_genome_effect_terms()` get `base_tbl` at all, or is `extract_allele_freq()` enough?
 
 **Options.** (a) Both: the helper for `ad_terms()`, plus the `NA`-fill in the
 writer. (b) Helper only; `center_value` stays fully user-supplied.

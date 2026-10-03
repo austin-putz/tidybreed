@@ -32,7 +32,7 @@ and the failure they were hiding (below, issue 7) is fixed too.
 | `tests/testthat/test-genome-effects-schema.R` | +1 test | The coefficient is on every member row, and is not split |
 | `tests/testthat/test-extract_genotypes.R` | +1 test, 5 retargeted | The large-effect filter, end to end |
 | `tests/testthat/test-sql_injection_hardening.R` | retargeted | `loci_tbl` is now the only name-driven `IN` list |
-| `tests/testthat/helper-genome-effects-db.R` | alias dropped | `gen_add_flat` exposes `center_value`, not `base_allele_freq` |
+| `tests/testthat/helper-genome-effects-db.R` | alias dropped | `additive_flat` exposes `center_value`, not `base_allele_freq` |
 | `tests/testthat/test-genome-effects-writer.R` | join qualified | The two views now share three columns; gate 35's join had to say which one it meant |
 | `tests/testthat/parity_golden/tbv.rds` | re-captured | Phase C's origin-aware rescale, finally visible — see issue 6 |
 | `vignettes/`, `CLAUDE.md`, `NEWS.md`, `man/` | docs | The old shape is not taught anywhere |
@@ -64,7 +64,7 @@ locus). Genome effects are now stored as terms: one coefficient in
 'genome_effects', its loci in 'genome_effect_members', and their scope in
 'genome_effect_member_origins'. There is no in-place migration -- rebuild the
 population with define_genome() and re-declare the effects with
-define_additive_effects() / define_genome_effects().
+define_additive_effects() / define_genome_effect_terms().
 ```
 
 Detected on two independent signals, because a half-migrated file fails either

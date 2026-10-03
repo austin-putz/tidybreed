@@ -19,14 +19,14 @@ wording notes:
 | Explicit pooled call called a default call | Corrected in test 16 |
 
 I also reviewed the new §2.5 decision about whether to merge
-`define_additive_effects()` and `define_genome_effects()`.
+`define_additive_effects()` and `define_genome_effect_terms()`.
 
 ### Verdict: keep both functions
 
 I agree with the split. They are two user-facing operations at different levels,
 not duplicate spellings of one operation:
 
-- `define_genome_effects()` is a deterministic general writer. The caller owns the
+- `define_genome_effect_terms()` is a deterministic general writer. The caller owns the
   terms, coefficients, owner, origin predicates, and replacement mode.
 - `define_additive_effects()` is a model generator. It selects QTL, samples or
   accepts additive coefficients, optionally realizes a multi-trait covariance,
@@ -45,7 +45,7 @@ also clear:
 
 - use `define_additive_effects()` when asking tidybreed to generate an additive
   architecture; and
-- use `define_genome_effects()` when supplying an architecture yourself.
+- use `define_genome_effect_terms()` when supplying an architecture yourself.
 
 This remains coherent even though `base_tbl = NULL` differs intentionally: the
 generator has a domain default and resolves the appropriate founder pool, while the
@@ -223,7 +223,7 @@ The plan is close, but it should be revised before implementation in five areas:
 
 1. specify one shared validation contract for `base_tbl`, including connection
    provenance and required projected columns;
-2. show the actual `define_genome_effects()` / `.ge_build()` refactor needed to fill
+2. show the actual `define_genome_effect_terms()` / `.ge_build()` refactor needed to fill
    centres before validation;
 3. correct the claims about preserved empty-line diagnostics and the call-site blast
    radius;
@@ -257,7 +257,7 @@ No change is needed to the proposed storage or evaluation model.
 ### 1. Define and reuse a complete `base_tbl` validator
 
 The sketch validates connection identity only in `define_additive_effects()`. The
-same requirement applies to `define_genome_effects()`, because its `base_tbl` is also
+same requirement applies to `define_genome_effect_terms()`, because its `base_tbl` is also
 rendered and executed against the writer population. Put this in one internal helper,
 used by both writers before calling `extract_allele_freq()`.
 
@@ -317,7 +317,7 @@ simply state:
 
 - use `extract_allele_freq()` when building terms through `ad_terms()`;
 - use a hand-written terms data frame with missing `center_value` when intentionally
-  asking `define_genome_effects(base_tbl = ...)` to fill centres.
+  asking `define_genome_effect_terms(base_tbl = ...)` to fill centres.
 
 This keeps `ad_terms()` pure and avoids implying an unsupported workflow.
 
@@ -443,7 +443,7 @@ haplotype tables would remove useful and distinct selections.
 model, while `p = 0.5` fabricates data. The check should be limited to loci that will
 actually be written for each trait, especially in the multi-trait path.
 
-### Q5. Add `base_tbl` to `define_genome_effects()`?
+### Q5. Add `base_tbl` to `define_genome_effect_terms()`?
 
 **Agree with (a), with the `.ge_build()` revision above.** Supplying `base_tbl` is an
 explicit opt-in that gives missing `center_value` a clear contextual meaning. Without
@@ -486,9 +486,9 @@ In addition to the proposed tests, add or make explicit:
    and missing column, not a raw DuckDB error.
 2. `ind_meta`, repeated-row `ind_phenotype`, and direct `ind_haplotype` selections
    agree when they select the same allele copies.
-3. Both `define_additive_effects()` and `define_genome_effects()` reject a
+3. Both `define_additive_effects()` and `define_genome_effect_terms()` reject a
    `base_tbl` from another population/connection.
-4. `define_genome_effects()` does not query the base when all centres are explicit.
+4. `define_genome_effect_terms()` does not query the base when all centres are explicit.
 5. Missing-centre errors retain `term_id` and locus names after a failed fill.
 6. A base with some, but not all, loci returns `NA` only at absent loci; a writer
    errors only when an absent locus is actually being written.
@@ -506,7 +506,7 @@ In addition to the proposed tests, add or make explicit:
    tests.
 2. Rewire `define_additive_effects()` and migrate all current-population call sites.
 3. Refactor `.ge_build()` to accept optional base frequencies, then expose
-   `base_tbl` on `define_genome_effects()`.
+   `base_tbl` on `define_genome_effect_terms()`.
 4. Update documentation, namespace, NEWS, and version only after both writer paths
    pass the full test suite.
 5. Log, but do not implement here, the `add_ebv()` table-query cleanup and the

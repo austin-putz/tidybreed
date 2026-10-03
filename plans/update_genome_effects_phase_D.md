@@ -363,7 +363,7 @@ that looks wrong:
 pop |> get_table("genome_meta") |> define_additive_effects("ADG", base = "current_pop")
 
 # centre = 0.30, because that is what the user typed
-pop |> define_genome_effects("ADG", ad_terms("Locus_10", a = 0, d = 0.5, p = 0.30,
+pop |> define_genome_effect_terms("ADG", ad_terms("Locus_10", a = 0, d = 0.5, p = 0.30,
                                              coding = "cockerham"))
 ```
 
@@ -382,7 +382,7 @@ Phase D's warning catches it **at `add_tbv()` time**, which is the right safety
 net but the wrong moment — by then the model is stored and the user is reading a
 number. Three things are worth considering later, in rough order of appeal:
 
-1. **Warn at write time**, in `define_genome_effects()`, when a `dominance`
+1. **Warn at write time**, in `define_genome_effect_terms()`, when a `dominance`
    member lands at a locus whose existing additive variant carries a different
    `center_value`. That is where the mistake is made, and the writer already has
    both rows in hand. It cannot be an *error* — different centres across scope

@@ -240,7 +240,7 @@ Manually inserting into two normalized tables requires users to coordinate:
 That is not a simple custom-effect interface, even though it is a small database
 schema.
 
-Add an exported `define_genome_effects()` writer. It should accept named loci and a
+Add an exported `define_genome_effect_terms()` writer. It should accept named loci and a
 tidy or list-based term specification, resolve locus IDs, canonicalize members,
 validate the entire model, and replace or append in one transaction. Convenience
 helpers may convert common inputs such as a 3 x 3 genotype surface into indicator
@@ -356,7 +356,7 @@ validated order-one copy-additive shortcut and document the limitation plainly.
 
 ### Required API and execution pieces
 
-1. `define_genome_effects()` as the only documented general writer.
+1. `define_genome_effect_terms()` as the only documented general writer.
 2. A member evaluator that reduces haplotype rows to one value per
    individual/effect/member before multiplying members.
 3. A model evaluator that sums terms into a clearly named total genetic value.
@@ -408,7 +408,7 @@ golden output; it independently checks the current formula.
 | `effect_class` as a validated materialized field | **Redesign or derive** |
 | `model_name` without model selection | **Remove or wire through completely** |
 | Duplicated `locus_name` in members | **Remove; expose through a view** |
-| Raw table insertion as custom-effect workflow | **Reject; add `define_genome_effects()`** |
+| Raw table insertion as custom-effect workflow | **Reject; add `define_genome_effect_terms()`** |
 | Storage representability as Phase A gate | **Replace with numerical evaluation fixtures** |
 | Two tables under a restricted line scope | **Acceptable** |
 | Three tables with a complete origin resolver | **Preferred for the stated across-lines goal** |

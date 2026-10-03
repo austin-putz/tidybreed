@@ -952,7 +952,7 @@ table.
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   define_effect_cov_matrix(
-    effect_name = "gen_add",              # gen_add is a keyword, be careful
+    effect_name = "additive",              # additive is a keyword, be careful
     cov_matrix  = mat.add.gen.vars
   )
 ```

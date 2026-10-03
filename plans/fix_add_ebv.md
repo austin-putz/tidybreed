@@ -72,7 +72,7 @@ avoid breaking existing scripts (including `plans/run_blupf90_manual.md`).
 ### Bug 1 — `load_effect_cov()` ✅ ALREADY FIXED
 
 `write_renum_par()` already calls `load_phenotype_cov()` (residual) and
-`load_trait_cov()` (gen_add). No action needed.
+`load_trait_cov()` (additive). No action needed.
 
 ---
 
@@ -133,13 +133,13 @@ checked against `effects_df$phenotype_name`, not component trait names.
 ```r
 # CURRENT — function names are correct but argument is wrong for maternal
 R_mat <- load_phenotype_cov(pop, "residual", trait)   # trait = "WW" ✓
-G_mat <- load_trait_cov(pop,     "gen_add",  trait)   # trait = "WW" ✗
+G_mat <- load_trait_cov(pop,     "additive",  trait)   # trait = "WW" ✗
 ```
 
 `load_phenotype_cov(pop, "residual", "WW")` is correct — residuals live in
 `phenotype_var_comp` keyed by phenotype name.
 
-`load_trait_cov(pop, "gen_add", "WW")` returns `NULL` for a maternal phenotype
+`load_trait_cov(pop, "additive", "WW")` returns `NULL` for a maternal phenotype
 because `"WW"` is not in `trait_var_comp` — only `"WWD"` and `"WWM"` are.
 The G matrix must use the component trait names extracted from `formula_tbv`.
 
@@ -148,7 +148,7 @@ The G matrix must use the component trait names extracted from `formula_tbv`.
 
 ```r
 R_mat <- load_phenotype_cov(pop, "residual", phenotype_name)
-G_mat <- load_trait_cov(pop,     "gen_add",  component_trait_names)
+G_mat <- load_trait_cov(pop,     "additive",  component_trait_names)
 ```
 
 For simple traits, `component_trait_names` equals `phenotype_name` and both
@@ -321,7 +321,7 @@ col 5: id_parent_2 (dam ID — for maternal random effect)
 - Accept both `phenotype_name` (scalar, drives R matrix / TRAITS / data
   column) and `component_trait_names` (drives G matrix) as arguments.
 - R matrix: `load_phenotype_cov(pop, "residual", phenotype_name)`
-- G matrix: `load_trait_cov(pop, "gen_add", component_trait_names)`
+- G matrix: `load_trait_cov(pop, "additive", component_trait_names)`
 - For the maternal model, add an `OPTIONAL mat` line to the `RANDOM animal`
   block and add the dam ID column to `FIELDS_PASSED TO OUTPUT` tracking in
   `col_map`.
