@@ -109,7 +109,8 @@ functions:
 
 | You want to specify | Function | Examples |
 |---|---|---|
-| Genetic architecture | `define_trait()` | `target_add_var`, `target_add_mean`, `units` |
+| Genetic component | `define_trait()` | `description`, `units` |
+| Genetic target and QTL effects | `define_additive_effects()` | `G`, `anchor`, `method`, `base_tbl` |
 | What gets observed | `define_phenotype()` | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
 
 For a simple trait the two share a name and you call both. The payoff comes later:
@@ -312,12 +313,12 @@ pop |> get_table("ind_ebv") |> mutate_table(model_version = NA_character_)
 
 ## Define a trait
 
-The genetic layer. `target_add_var` is the additive genetic variance the QTL
-effects will be scaled to hit.
+The genetic layer. A trait is just a name here; its additive genetic variance
+target comes with its QTL effects, below.
 
 ```{r trait}
 pop <- pop |>
-  define_trait("ADG", target_add_var = 0.25, units = "kg/day")
+  define_trait("ADG", units = "kg/day")
 
 pop |> get_table("trait_meta") |> collect()
 ```
@@ -328,13 +329,16 @@ observation-layer properties and come later.
 ## Assign QTL effects
 
 Which loci are QTL is decided by the filter you pipe in. Here chromosomes 4 and 5
-carry the QTL, leaving 1–3 free for a SNP chip.
+carry the QTL, leaving 1–3 free for a SNP chip. `G = 0.25` is the additive
+genetic variance target: it is stored in `trait_var_comp`, and the sampled
+effects are calibrated so they deliver it exactly at the founder pool's allele
+frequencies.
 
 ```{r qtl}
 pop <- pop |>
   get_table("genome_meta") |>
   filter(chr %in% c(4L, 5L)) |>
-  define_additive_effects("ADG")
+  define_additive_effects("ADG", G = 0.25)
 
 pop |> get_table("genome_effect_terms") |> collect() |> head()
 ```
@@ -347,7 +351,7 @@ legitimately centres against its own line's base frequency.
 
 ## Define the phenotype
 
-The observation layer. With `target_add_var = 0.25` and `residual_var = 0.75`,
+The observation layer. With an additive target of 0.25 and `residual_var = 0.75`,
 this trait has a heritability of 0.25.
 
 ```{r pheno_def}
@@ -422,10 +426,14 @@ pop |>
 ## A second, genetically correlated trait
 
 Real programs select on several traits at once. Define the second trait, then
-supply a genetic covariance matrix.
+supply a genetic covariance matrix for both.
+
+ADG already has a stored 1 x 1 target. A stored target is never overwritten
+(not even by the same number), so the ADG-only block is removed first, then the
+2 x 2 block is written together with the new effects:
 
 ```{r trait2}
-pop <- pop |> define_trait("BF", target_add_var = 0.30, units = "mm")
+pop <- pop |> define_trait("BF", units = "mm")
 
 G <- matrix(
   c(0.25, 0.08,
@@ -434,20 +442,26 @@ G <- matrix(
   dimnames = list(c("ADG", "BF"), c("ADG", "BF"))
 )
 
-pop <- pop |> define_effect_cov_matrix("additive", G)
+pop <- pop |>
+  get_table("trait_var_comp") |>
+  filter(effect_name == "additive", trait_name_1 == "ADG") |>
+  remove_rows()
+
+pop <- pop |>
+  get_table("genome_meta") |>
+  filter(chr %in% c(4L, 5L)) |>
+  define_additive_effects(c("ADG", "BF"), G = G)
 
 pop |> get_table("trait_var_comp") |> collect()
 ```
 
-Covariance matrices are stored in the database, not passed around in R. Now one
-call draws correlated effects for both traits from `MVN(0, G)`:
+Covariance matrices are stored in the database, not passed around in R. The one
+call drew correlated effects for both traits from `MVN(0, G)` and then
+calibrated them, so variances **and** the genetic correlation are exactly
+those of `G` at the founder pool's allele frequencies. BF then gets its
+observation layer:
 
 ```{r qtl2}
-pop <- pop |>
-  get_table("genome_meta") |>
-  filter(chr %in% c(4L, 5L)) |>
-  define_additive_effects(c("ADG", "BF"))
-
 pop <- pop |>
   define_phenotype("BF", type = "continuous", mean = 12, residual_var = 0.70)
 ```
@@ -470,10 +484,15 @@ pop |>
 
 The realised variances are in the neighbourhood of the 0.25 and 0.30 we asked
 for, but they are not exact — and that is worth understanding rather than
-glossing over. `target_add_var` scales the QTL effects so the additive variance
-comes out right **in the founder haplotype pool**. The animals you actually
-created are a finite sample from that pool, so their realised variance wobbles
-around the target. Larger founder populations wobble less.
+glossing over. The calibration is exact for the *genic* anchor: the
+random-mating limit at the founder pool's allele frequencies, which a
+population approaches over generations of random mating. The animals you
+actually created are a finite sample from that pool, with their own linkage
+disequilibrium, so their realised variance wobbles around the target, and
+`define_additive_effects()` warns when the pool expectation is far off. Larger
+founder populations wobble less. For a single-generation study,
+`anchor = "realised"` makes the covariance exact in the named individuals
+themselves.
 
 ## Make some offspring
 
@@ -639,7 +658,6 @@ Functions not shown above, with a pointer to their help page:
 | `?define_residual_cov` | Correlated or heterogeneous residual (co)variances |
 | `?define_effect_random` | Named random effects such as pen, litter, or herd-year-season |
 | `?define_effect_fixed_cov` | Fixed regression on a covariate |
-| `?define_trait_simple` | Shortcut wrapper: `define_trait()` + `define_additive_effects()` |
 | `?archive_replicate` | Collect many replicates into one archive database |
 | `?remove_rows` | Delete rows safely across related tables |
 | `?mutate_group_seq` | Litter and group utilities (`mutate_group_*`) |

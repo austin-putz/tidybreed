@@ -10,7 +10,7 @@ make_subset_pop <- function(pop_name) {
   pop <- pop |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 10, n_females = 10, line_name = "A", gen = 0L)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(chr == 1) |>
     define_additive_effects("ADG")
   pop

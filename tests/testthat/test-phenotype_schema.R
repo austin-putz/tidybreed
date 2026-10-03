@@ -31,7 +31,7 @@ test_that("store_liability and cat_names populate base columns without ALTER TAB
   set.seed(11)
   pop <- make_test_pop(n_males = 50, n_females = 50, n_loci = 100, n_chr = 2)
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- with_additive_target(pop, "mort", 1)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("mort")
   pop <- define_phenotype(pop, "mort",
                           type            = "categorical",
@@ -64,7 +64,7 @@ test_that("a continuous phenotype leaves liability_value and cat_name NULL", {
   set.seed(12)
   pop <- make_test_pop(n_males = 10, n_females = 10, n_loci = 100, n_chr = 2)
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- with_additive_target(pop, "ADG", 100)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
   pop <- define_phenotype(pop, "ADG", mean = 500, residual_var = 50)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")

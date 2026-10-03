@@ -18,7 +18,7 @@ make_managed_pop <- function(tmp, tools) {
     define_founder_haplotypes(n_haplotypes = 10) |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 2, n_females = 2, line_name = "A") |>
-    define_trait("ADG", target_add_var = 0.25)
+    with_additive_target("ADG", 0.25)
 }
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ test_that("add_ebv() error fires even when no tools are registered (only base)",
     define_founder_haplotypes(n_haplotypes = 10) |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 2, n_females = 2, line_name = "A") |>
-    define_trait("ADG", target_add_var = 0.25)
+    with_additive_target("ADG", 0.25)
   on.exit(close_pop(pop), add = TRUE)
 
   err <- tryCatch(
@@ -188,7 +188,7 @@ test_that("add_ebv() fallback mode creates eval dir under run_dir (not managed)"
 
   pop <- make_test_pop(n_loci = 20, n_chr = 1, n_males = 2, n_females = 2,
                        n_haplotypes = 10) |>
-    define_trait("ADG", target_add_var = 0.25)
+    with_additive_target("ADG", 0.25)
   on.exit(close_pop(pop), add = TRUE)
 
   # pop$run_dirs is empty (in-memory) → fallback path

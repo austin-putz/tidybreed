@@ -926,9 +926,15 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 #' `built` may carry several traits' rows at once (the multi-trait
 #' [define_additive_effects()] path), which is why ids are assigned here.
 #'
+#' `before_commit`, when given, is called with `conn` inside the transaction
+#' after the whole-table validation and before `COMMIT`: the hook through which
+#' a generator writes its target (`.tvc_write_block()`) atomically with the
+#' terms. DuckDB has no nested `BEGIN`, so the target insert cannot open its
+#' own.
+#'
 #' @keywords internal
 #' @noRd
-.ge_commit <- function(conn, delete_ids, built) {
+.ge_commit <- function(conn, delete_ids, built, before_commit = NULL) {
   n  <- nrow(built$terms)
   # Locally-indexed ids become real ones only now, so a build is reusable and
   # nothing depends on a MAX() read taken before the deletes.
@@ -978,6 +984,10 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
   }
 
   validate_genome_effects(conn, labels = labels)
+  # A generator's new target (define_additive_effects(G = )) commits with its
+  # terms or not at all: a failed call must not leave a target the model does
+  # not deliver, nor terms calibrated to a target that was never stored.
+  if (!is.null(before_commit)) before_commit(conn)
   DBI::dbExecute(conn, "COMMIT")
   ok <- TRUE
   invisible(unname(remap))

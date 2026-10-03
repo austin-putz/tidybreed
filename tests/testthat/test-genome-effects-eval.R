@@ -20,7 +20,7 @@ gev_pop <- function() {
     define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
     define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
     define_chromosome("Y", recombines = FALSE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "ADG", 1.0)
 
   cp  <- gefx_copies()
   lid <- DBI::dbGetQuery(pop$db_conn, "SELECT locus_id, locus_name FROM genome_meta")
@@ -191,7 +191,7 @@ gev_lines_pop <- function(name = "gevl", n_loci = 6) {
   pop <- pop |> get_table("founder_haplotypes") |>
     dplyr::filter(line_name == "B") |>
     add_founders(n_males = 2, n_females = 2, line_name = "B")
-  define_trait(pop, "ADG", target_add_var = 1.0)
+  with_additive_target(pop, "ADG", 1.0)
 }
 
 gev_loci <- function(pop) {
@@ -574,7 +574,7 @@ gev_sex_pop <- function(name = "gev_sex") {
                                    allele_freq = 0.5)
   pop <- pop |> get_table("founder_haplotypes") |>
     add_founders(n_males = 3, n_females = 3, line_name = "A")
-  define_trait(pop, "ADG", target_add_var = 1.0)
+  with_additive_target(pop, "ADG", 1.0)
 }
 
 test_that("gate 45: a paternally qualified X term contributes 0 beside a matching autosomal term", {
@@ -728,7 +728,7 @@ gev_scale_pop <- function(name, n_ind) {
   pop <- pop |> get_table("founder_haplotypes") |>
     dplyr::filter(line_name == "B") |>
     add_founders(n_males = n_ind / 4, n_females = n_ind / 4, line_name = "B")
-  pop <- define_trait(pop, "ADG", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "ADG", 1.0)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1.0, length(loci)),
@@ -844,7 +844,7 @@ test_that("add_tgv() refuses a trait with no terms and a table with no id_ind", 
 test_that("add_tgv() defaults to every trait in trait_meta", {
   pop <- gev_lines_pop("gev_all_traits")
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "BW", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "BW", 1.0)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1.0, length(loci)),

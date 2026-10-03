@@ -159,6 +159,8 @@ This pass found internal inconsistencies, which are now fixed:
       - `_pkgdown.yml`, the roxygen example and the stale error strings;
       - the Q21 refusal is scoped by line;
       - the `ad_terms()` coding for step 3.
+16. **2026-10-03 — step 2 built (0.73.0).** Deviations in Step 2's "As built" paragraph
+    and `_phase_2.md`. New open question Q22 (default `warn_bounds` on small pools).
 
 ---
 
@@ -359,6 +361,7 @@ inline fixtures to `tests/testthat/helper-qtl-effects.R`.
 | `test_qtl_effects_paper.R` tests 1–4, 6, 8, 9 (on the ported internals) | `tests/testthat/test-qtl-congruence.R` | A |
 | same, tests 5, 7, 11 (dual) | same file, `skip_on_cran()`; internals only (Q6) | A |
 | same, tests 10, 12 (generational) | `tests/testthat/test-define_additive_effects-anchor.R`, using `add_offspring()` instead of the script's own transmission code | A |
+| *(as built, 0.73.0)* | Test 10 is a property of the **dual** anchor (internal, Q6), so it is an algebraic check inside `paper-9` in `test-qtl-congruence.R`. Test 11 (dual) is there too, with the source's own transmission code. Only test 12 goes through `add_offspring()` | A |
 | `test_qtl_effects.R` | not ported with Part A (Q5) | — |
 | `test_qtl_effects_nonadd.R` construction tests | `tests/testthat/test-genome-effects-calibration.R` | C |
 | same, decomposition / measurement tests | `tests/testthat/test-extract_genetic_variance.R` | B |
@@ -1166,6 +1169,8 @@ or a structured pairing, gives something else. Label it "pool expectation" in me
 never "founders". When `base_tbl` selects individuals, use their $\mathrm{Cov}(\mathbf X)$
 and label it "observed".
 
+*(As built 0.73.0: the default warns on most small founder pools; see Q22.)*
+
 **Storage: none.** Diagnostics are printed (`message()` / `warning()`) and not stored: not
 as an attribute on the pop (CLAUDE.md: never in the R object), and not as rows in
 `trait_var_comp` (a table of *targets* that generators read back, principle 6). This is a
@@ -1557,7 +1562,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 0 | Merge `feat/genome-effects-v49` to `main` | — | **done** (v0.71.1) |
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
 | 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
-| 2 | Part A + §6C targets | 0.73.0 | 1 |
+| 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18 | 0.74.0 | 2 (the `line_name` readers, §6C) |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
 | 5 | Part C | 0.76.0 | 2, 3, 4 |
@@ -1667,7 +1672,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   - Internal vector arguments named `trait_names`: `load_trait_cov()`, `.gev_read_model()`, `.dae_warn_parent_only()`.
   - §2's audit, a 0.71.0 snapshot that still names the old writer.
 - **Review (0.72.1):** realigned continuation lines after the rename, and reworded the `trait_var_comp` schema description. Whitespace and wording only (`_phase_1.md`, "Review pass").
-### Step 2 — Part A and the §6C target rules (0.73.0)
+### Step 2 — Part A and the §6C target rules (0.73.0) *(**done** 2026-10-03, see `import_qtl_effect_methods_phase_2.md`)*
 
 - `R/qtl_congruence.R` (congruence, PSD validation, diagnostics), `anchor =`, and
   `.draw_additive_architecture()` (§7.1–§7.5).
@@ -1713,6 +1718,31 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
     (`R/define_additive_effects.R:274`, `R/add_phenotype_stages.R:1165`);
   - scalar `G` for one trait (A15) is **new** code: today's single-trait path ignores `G`
     entirely, and it is read only in the multi-trait path (`:321`).
+
+**As built (deviations), 0.73.0.** Full list in `_phase_2.md`.
+- **k = 1 goes through the congruence too.** `rescale_effects_to_target()` is deleted;
+  one calibration path serves every k (A1 holds to ~1e-16). As a consequence, a QTL set
+  with no segregating locus is now the "anchor cannot carry the target" error instead of
+  the old "Falconer V_A is zero" warning that wrote the draw unscaled.
+- **`G` and `trait_var_comp_tbl` together** are refused ("not both"). §6C only said the
+  same block in both is the "already stored" error; refusing the combination outright is
+  simpler and covers it.
+- **`anchor = "realised"` also refuses** manual `effects` and `scale_to_target = FALSE`
+  (an anchor only means something for a calibration).
+- **`define_effect_cov_matrix()` accepts a single number** when one name is given, like
+  the generators' `G` (used by the test helper `with_additive_target()`).
+- **Reserved names** are refused for fixed effects too (`define_effect_fixed_class()`,
+  `define_effect_fixed_cov()`), not only random effects (A20), and in
+  `write_phenotype_cov_block()`.
+- **Diagnostics (§7.4).** An `ind_haplotype` base is skipped (a copy selection has no
+  pairing to compare with); a comparison above `QTL_REALISED_MAX_CELLS`, or individuals
+  whose genotypes cannot be collected, is skipped with a `message()`. Diagnostics run
+  for the common scope only. **Observed: the default `warn_bounds` fires on most small
+  founder pools** (116 of the suite's 127 warnings, pools of 20–100 haplotypes), because
+  the pool's sampling LD moves `2 Cov(H)` well away from the genic limit. See Q22.
+- **`seed`** must be an integer scalar (validated with the other arguments).
+- Paper tests 10 and 11 stay on the internals (dual anchor); test 12 uses
+  `add_offspring()` (§1A).
 
 ### Step 3 — consolidation, P2 and Q18 (0.74.0)
 
@@ -2224,6 +2254,24 @@ own numbers, and those belong in the writer. Applied in §0A, §6A, §7.1, Q2, s
 gates A12 (withdrawn), A19 and PH7.
 
 ---
+
+### Q22 — Default of `warn_bounds` on small founder pools *(open; found in step 2)*
+
+§7.4 compares the calibrated covariance with what another population sees. With a
+founder-pool base the comparison is the pool expectation `2 Cov(H)`, which carries the
+pool's **sampling** LD. On pools of 20–100 haplotypes it routinely leaves `[0.8, 1.25]`
+(a 100-haplotype pool with 200 QTL gave a spectrum of `[0.72, 1.05]`), so the default
+call warns in most small simulations: 116 of the suite's 127 warnings at 0.73.0. The
+warning is true (the founders `add_founders()` draws will see roughly that covariance),
+but a warning that almost always fires gets ignored.
+
+| Option | Effect |
+|---|---|
+| (a) Keep as built | Honest; noisy for small pools. Users pass `warn_bounds = NULL` |
+| (b) Pool comparison as a `message()`, `warning()` only for an **observed** base (real individuals) or the realised anchor's genic limit | Keeps the information; warns only when real individuals are off |
+| (c) Widen the default for the pool comparison by its expected sampling error (~`1/sqrt(n_haplotypes)`) | Warns only beyond sampling noise; more machinery |
+
+Recommended: (b). Decide before step 5, which reuses the diagnostics.
 
 ## 13. Explicitly out of scope
 

@@ -268,7 +268,7 @@ api <- api[names(api_meta)[names(api_meta) %in% names(api)]]
 pipeline_order <- c(
   "open_pop", "restore_pop", "close_pop",
   "define_genome", "define_chromosome", "define_founder_haplotypes", "define_chip",
-  "define_trait", "define_trait_simple", "define_additive_effects", "define_genome_effect_terms",
+  "define_trait", "define_additive_effects", "define_genome_effect_terms",
   "define_phenotype", "define_residual_cov", "define_effect_cov_matrix", "define_effect_random",
   "define_effect_fixed_class", "define_effect_fixed_cov", "define_effect_intercept",
   "define_index", "define_table", "define_schema_description",

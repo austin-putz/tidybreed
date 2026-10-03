@@ -887,7 +887,6 @@ warning("Define AP - Age at Puberty")
 pop <- pop %>%
   define_trait(
     trait_name      = "AP",
-    target_add_mean = 0,
     description     = "Age at Puberty",
     units           = "days",
     overwrite       = TRUE
@@ -1131,7 +1130,6 @@ pop <- pop %>%
     trait_name      = "ADG",
     description     = "Average Daily Gain",   # 
     units           = "kg/d",                  # grams per day during testing period
-    target_add_mean = 0,                      # mean TBV in 'base'
     overwrite       = TRUE                    # wipe this row if it exists and replace with this new data
   ) %>%
   define_phenotype(
@@ -1212,7 +1210,6 @@ pop <- pop %>%
     trait_name      = "BF",
     description     = "Ultrasound Backfat", 
     units           = "mm", 
-    target_add_mean = 0,                 # mean TBV in 'base'
     overwrite       = TRUE
   ) %>%
   define_phenotype(
@@ -1285,7 +1282,6 @@ pop <- pop %>%
     trait_name      = "ADFI",
     description     = "Average Daily Feed Intake", 
     units           = "kg/d", 
-    target_add_mean = 0,                 # mean TBV in 'base'
     overwrite       = TRUE
   ) %>%
   define_phenotype(
@@ -1396,7 +1392,6 @@ pop <- pop %>%
     trait_name       = "WWD",
     description      = "Weaning Weight - Direct Genetic Effect",
     units            = "kg",
-    target_add_mean  = 0,
     overwrite        = TRUE
   )
 
@@ -1414,7 +1409,6 @@ pop <- pop %>%
     trait_name       = "WWM",
     description      = "Weaning Weight - Maternal Genetic Effect",
     units            = "kg",
-    target_add_mean  = 0,
     overwrite        = TRUE
   )
 
@@ -1484,7 +1478,6 @@ pop <- pop %>%
     trait_name      = "NW",
     description     = "Number Weaned", 
     units           = "count",
-    target_add_mean = 0,
     overwrite       = TRUE
   ) %>%
   define_phenotype(

@@ -25,11 +25,11 @@ apply_random_qtl <- function(pop, trait_names, n_qtl, seed = NULL) {
 }
 
 # Helper: define trait + phenotype + QTL for a single continuous trait
-setup_simple_trait <- function(pop, trait_name, target_add_var = 0.25,
+setup_simple_trait <- function(pop, trait_name, target_var = 0.25,
                                 residual_var = 0.75, mean = 0,
                                 n_qtl = 50, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  pop <- define_trait(pop, trait_name, target_add_var = target_add_var)
+  pop <- with_additive_target(pop, trait_name, target_var)
   pop <- apply_random_qtl(pop, trait_name, n_qtl = n_qtl)
   pop <- define_phenotype(pop, trait_name,
                           type         = "continuous",
@@ -43,7 +43,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
   set.seed(99)
   pop <- make_pheno_pop("ph_cont")
   pop <- setup_simple_trait(pop, "ADG",
-                             target_add_var = 0.25, residual_var = 0.75,
+                             target_var = 0.25, residual_var = 0.75,
                              mean = 10, n_qtl = 80, seed = 1)
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
@@ -252,7 +252,7 @@ test_that("categorical trait with prevalence respects target rate approximately"
   pop <- pop |>
     get_table("founder_haplotypes") |>
     add_founders( n_males = 500, n_females = 500, line_name = "A")
-  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- with_additive_target(pop, "mort", 1)
   pop <- apply_random_qtl(pop, "mort", n_qtl = 50)
   pop <- define_phenotype(pop, "mort",
                           type            = "categorical",
@@ -281,7 +281,7 @@ test_that("categorical trait with prevalence respects target rate approximately"
 test_that("prevalence on a composite phenotype is refused in define_phenotype()", {
   pop <- make_pheno_pop("ph_prev_comp", n_ind = 20, n_loci = 100)
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- with_additive_target(pop, "mort", 1)
   expect_error(
     define_phenotype(pop, "mort_total", type = "categorical",
                      prevalence = 0.1, residual_var = 1, formula_tbv = "mort"),
@@ -295,7 +295,7 @@ test_that("add_phenotype() refuses prevalence on a composite even past define_ph
   set.seed(12)
   pop <- make_pheno_pop("ph_prev_backstop", n_ind = 20, n_loci = 100)
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- with_additive_target(pop, "mort", 1)
   pop <- suppressMessages(apply_random_qtl(pop, "mort", n_qtl = 20))
   pop <- define_phenotype(pop, "mort", type = "categorical",
                           prevalence = 0.1, residual_var = 1)
@@ -352,7 +352,7 @@ test_that("categorical trait with explicit thresholds produces correct categorie
   pop <- pop |>
     get_table("founder_haplotypes") |>
     add_founders( n_males = 250, n_females = 250, line_name = "A")
-  pop <- define_trait(pop, "body_score", target_add_var = 1)
+  pop <- with_additive_target(pop, "body_score", 1)
   pop <- apply_random_qtl(pop, "body_score", n_qtl = 40)
   pop <- define_phenotype(pop, "body_score",
                           type            = "categorical",
@@ -376,7 +376,7 @@ test_that("categorical trait with explicit thresholds produces correct categorie
 test_that("count trait clips to min/max", {
   set.seed(3)
   pop <- make_pheno_pop("ph_count", n_ind = 200)
-  pop <- define_trait(pop, "litter", target_add_var = 4, target_add_mean = 10)
+  pop <- with_additive_target(pop, "litter", 4)
   pop <- apply_random_qtl(pop, "litter", n_qtl = 60)
   pop <- define_phenotype(pop, "litter",
                           type         = "count",
@@ -421,7 +421,7 @@ test_that("user_values override bypasses the model", {
 test_that("fixed-effect class shifts phenotype by level", {
   set.seed(11)
   pop <- make_pheno_pop("ph_covariate", n_ind = 400)
-  pop <- define_trait(pop, "ADG", target_add_var = 0.01)
+  pop <- with_additive_target(pop, "ADG", 0.01)
   pop <- apply_random_qtl(pop, "ADG", n_qtl = 20)
   pop <- define_phenotype(pop, "ADG",
                           type         = "continuous",
@@ -450,7 +450,7 @@ make_pheno_pop_with_trait <- function() {
   set.seed(42)
   pop <- make_pheno_pop("ph_extra", n_ind = 20, n_loci = 100)
   pop <- setup_simple_trait(pop, "ADG",
-                             target_add_var = 0.25, residual_var = 0.75,
+                             target_var = 0.25, residual_var = 0.75,
                              n_qtl = 20, seed = 1)
   pop
 }
@@ -484,7 +484,7 @@ test_that("add_phenotype() defaults to all phenotypes in phenotype_meta", {
   set.seed(5)
   pop <- make_pheno_pop("ph_default_pheno", n_ind = 40, n_loci = 200)
   pop <- setup_simple_trait(pop, "ADG", n_qtl = 30)
-  pop <- setup_simple_trait(pop, "BW",  target_add_var = 2, residual_var = 2, n_qtl = 30)
+  pop <- setup_simple_trait(pop, "BW",  target_var = 2, residual_var = 2, n_qtl = 30)
 
   pop <- pop |> get_table("ind_meta") |> add_phenotype()  # no trait_name
 
@@ -499,7 +499,7 @@ test_that("add_phenotype() defaults to all phenotypes in phenotype_meta", {
 test_that("sex-limited phenotype only records correct sex", {
   set.seed(21)
   pop <- make_pheno_pop("ph_sex_lim", n_ind = 100)
-  pop <- define_trait(pop, "milk", target_add_var = 10)
+  pop <- with_additive_target(pop, "milk", 10)
   pop <- apply_random_qtl(pop, "milk", n_qtl = 40)
   pop <- define_phenotype(pop, "milk",
                           type          = "continuous",
@@ -539,7 +539,7 @@ test_that("non-repeatable phenotype refuses second record for same individual", 
 test_that("repeatable phenotype allows multiple records per individual", {
   set.seed(14)
   pop <- make_pheno_pop("ph_rep", n_ind = 20)
-  pop <- define_trait(pop, "LS", target_add_var = 1)
+  pop <- with_additive_target(pop, "LS", 1)
   pop <- apply_random_qtl(pop, "LS", n_qtl = 20)
   pop <- define_phenotype(pop, "LS",
                           type         = "continuous",

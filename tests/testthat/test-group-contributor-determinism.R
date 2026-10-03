@@ -24,8 +24,8 @@ grp_pop <- function(name) {
   pens <- tibble::tibble(id_ind = ind_ids,
                          pen_id = paste0("pen", rep(1:2, each = 200)))
   pop <- get_table(pop, "ind_meta") |> mutate_table(pen_id = pens)
-  pop <- define_trait(pop, "D", target_add_var = 1)
-  pop <- define_trait(pop, "S", target_add_var = 0.3)
+  pop <- define_trait(pop, "D")
+  pop <- define_trait(pop, "S")
   pop <- suppressMessages(pop |> get_table("genome_meta") |>
     define_additive_effects(c("D", "S"),
       G = matrix(c(1, 0.1, 0.1, 0.3), 2, 2,

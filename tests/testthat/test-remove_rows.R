@@ -3,7 +3,7 @@ make_pop_for_remove <- function(n_males = 3, n_females = 3) {
   pop <- make_test_pop(n_males = n_males, n_females = n_females)
 
   pop <- pop |>
-    define_trait(trait_name = "ADG", target_add_var = 100) |>
+    with_additive_target("ADG", 100) |>
     define_phenotype(phenotype_name = "ADG", mean = 500, residual_var = 50)
 
   # Assign additive effects to all loci before calling add_phenotype
@@ -122,7 +122,7 @@ test_that("remove_rows() deletes ind_tbv rows filtered by trait_name only", {
 
   # Add a second trait so we can check only ADG is deleted
   pop <- pop |>
-    define_trait(trait_name = "BW", target_add_var = 50) |>
+    with_additive_target("BW", 50) |>
     define_phenotype(phenotype_name = "BW", mean = 100, residual_var = 10)
   pop <- pop |>
     get_table("genome_meta") |>

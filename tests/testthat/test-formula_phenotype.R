@@ -36,8 +36,8 @@ add_offspring_gen <- function(pop, n_off = 40) {
 }
 
 setup_ww_traits <- function(pop) {
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
-  pop <- define_trait(pop, "WWM", target_add_var = 80)
+  pop <- define_trait(pop, "WWD")
+  pop <- define_trait(pop, "WWM")
   G_ww <- matrix(c(200, 40, 40, 80), 2, 2,
                  dimnames = list(c("WWD", "WWM"), c("WWD", "WWM")))
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
@@ -50,8 +50,8 @@ setup_ww_traits <- function(pop) {
 }
 
 setup_sge_traits <- function(pop) {
-  pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
-  pop <- define_trait(pop, "ADG_SGE",    target_add_var = 0.15)
+  pop <- define_trait(pop, "ADG_direct")
+  pop <- define_trait(pop, "ADG_SGE")
   G_sge <- matrix(c(0.4, -0.1, -0.1, 0.15), 2, 2,
                   dimnames = list(c("ADG_direct", "ADG_SGE"),
                                   c("ADG_direct", "ADG_SGE")))
@@ -96,8 +96,8 @@ test_that("formula is stored in phenotype_meta for derived_formula", {
   set.seed(2)
   pop <- make_formula_pop("fA2")
   on.exit(close_pop(pop))
-  pop <- define_trait(pop, "ADFI", target_add_var = 0.1)
-  pop <- define_trait(pop, "ADG",  target_add_var = 0.1)
+  pop <- define_trait(pop, "ADFI")
+  pop <- define_trait(pop, "ADG")
   G_fcr <- matrix(c(0.1, 0.06, 0.06, 0.1), 2, 2,
                   dimnames = list(c("ADFI", "ADG"), c("ADFI", "ADG")))
   pop <- get_table(pop, "genome_meta") |>
@@ -155,7 +155,7 @@ test_that("unknown trait in formula_tbv raises error with close-match suggestion
   pop <- make_formula_pop("fA5")
   on.exit(close_pop(pop))
   # Only WWD is defined; WWM is not — should error when formula references dam(WWM)
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
+  pop <- with_additive_target(pop, "WWD", 200)
 
   expect_error(
     define_phenotype(pop, "WW2",
@@ -171,7 +171,7 @@ test_that("formula_tbv with invalid R syntax raises a parse error", {
   set.seed(6)
   pop <- make_formula_pop("fA6")
   on.exit(close_pop(pop))
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
+  pop <- with_additive_target(pop, "WWD", 200)
 
   expect_error(
     define_phenotype(pop, "WW3",
@@ -347,9 +347,9 @@ test_that("formula_tbv multiple group terms in one formula work", {
   pop <- make_formula_pop("fC3")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG_direct",  target_add_var = 0.4)
-  pop <- define_trait(pop, "SGE_pen",     target_add_var = 0.1)
-  pop <- define_trait(pop, "SGE_barn",    target_add_var = 0.05)
+  pop <- define_trait(pop, "ADG_direct")
+  pop <- define_trait(pop, "SGE_pen")
+  pop <- define_trait(pop, "SGE_barn")
   G3 <- diag(c(0.4, 0.1, 0.05))
   dimnames(G3) <- list(c("ADG_direct","SGE_pen","SGE_barn"),
                        c("ADG_direct","SGE_pen","SGE_barn"))
@@ -418,8 +418,8 @@ test_that("formula_tbv missing group column errors at add_phenotype with clear m
 setup_fcr_pop <- function(pop_name, n = 50, seed = 999) {
   set.seed(seed)
   pop <- make_formula_pop(pop_name, n_males = n %/% 2, n_females = n %/% 2)
-  pop <- define_trait(pop, "ADFI", target_add_var = 0.1)
-  pop <- define_trait(pop, "ADG",  target_add_var = 0.1)
+  pop <- define_trait(pop, "ADFI")
+  pop <- define_trait(pop, "ADG")
   G_fcr <- matrix(c(0.1, 0.06, 0.06, 0.1), 2, 2,
                   dimnames = list(c("ADFI", "ADG"), c("ADFI", "ADG")))
   sel  <- dplyr::collect(get_table(pop, "genome_meta")) |>
@@ -517,9 +517,9 @@ test_that("RFI with scalar coefficients: ADFI - 0.036*ADG - 0.0072*MBW", {
   pop <- make_formula_pop("fD5", n_males = 25, n_females = 25)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADFI", target_add_var = 0.1)
-  pop <- define_trait(pop, "ADG",  target_add_var = 0.1)
-  pop <- define_trait(pop, "MBW",  target_add_var = 5)
+  pop <- define_trait(pop, "ADFI")
+  pop <- define_trait(pop, "ADG")
+  pop <- define_trait(pop, "MBW")
   G3rfi <- diag(c(0.1, 0.1, 5))
   dimnames(G3rfi) <- list(c("ADFI","ADG","MBW"), c("ADFI","ADG","MBW"))
   sel3 <- dplyr::collect(get_table(pop, "genome_meta")) |>
@@ -618,7 +618,7 @@ test_that("simple phenotype (no formula, no components) still works", {
   set.seed(503)
   pop <- make_formula_pop("fE3")
   on.exit(close_pop(pop))
-  pop <- define_trait(pop, "ADG", target_add_var = 0.4)
+  pop <- with_additive_target(pop, "ADG", 0.4)
   sel <- dplyr::collect(get_table(pop, "genome_meta")) |>
     dplyr::slice_sample(n = 100) |>
     dplyr::pull(locus_name)

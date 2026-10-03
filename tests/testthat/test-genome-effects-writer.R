@@ -8,7 +8,7 @@
 gew_pop <- function(n_loci = 20, n_chr = 2, traits = "ADG", var = 0.25) {
   pop <- open_pop(pop_name = "gew", db_name = ":memory:") |>
     define_genome(n_loci = n_loci, n_chr = n_chr, chr_len_Mb = 50)
-  for (t in traits) pop <- define_trait(pop, t, target_add_var = var)
+  for (t in traits) pop <- with_additive_target(pop, t, var)
   pop
 }
 
@@ -26,7 +26,7 @@ gew_fixture_pop <- function() {
     define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
     define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
     define_chromosome("Y", recombines = FALSE)
-  define_trait(pop, "ADG", target_add_var = 1.0)
+  with_additive_target(pop, "ADG", 1.0)
 }
 
 gew_lines_pop <- function(n_loci = 6) {
@@ -35,7 +35,7 @@ gew_lines_pop <- function(n_loci = 6) {
   set.seed(11)
   pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "A")
   pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "B")
-  define_trait(pop, "ADG", target_add_var = 1.0)
+  with_additive_target(pop, "ADG", 1.0)
 }
 
 # Pool A as an explicit base: these tests define population-wide effects on a
@@ -705,7 +705,10 @@ test_that("gate 43: scale_to_target lands on V for parent-qualified effects too"
 test_that("gate 44: parent_origin resolves per trait, in all three input forms", {
   mk <- function(po) {
     pop <- gew_lines_pop()
-    pop <- define_trait(pop, "BW", target_add_var = 1.0)
+    pop <- define_trait(pop, "BW")
+    # gew_lines_pop() stores ADG's 1 x 1 target; G below writes the 2 x 2 block.
+    pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+      remove_rows(confirm_all = TRUE))
     pop <- suppressWarnings(
       pop |> get_table("genome_meta") |>
         define_additive_effects(c("ADG", "BW"), effects = NULL,
@@ -730,7 +733,7 @@ test_that("gate 44: parent_origin resolves per trait, in all three input forms",
 test_that("gate 44: a mixed-origin correlated call is rejected, with the reason", {
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "BW", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "BW", 1.0)
 
   expect_error(
     pop |> get_table("genome_meta") |>
@@ -1010,7 +1013,7 @@ gew_base_pop <- function(n_loci = 6) {
   pop <- define_founder_haplotypes(pop, n_haplotypes = 20, line_name = "B")
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "A") |>
     add_founders(n_males = 2, n_females = 2, line_name = "A")
-  define_trait(pop, "ADG", target_add_var = 1.0)
+  with_additive_target(pop, "ADG", 1.0)
 }
 
 gew_centres <- function(pop, owner) {

@@ -25,3 +25,16 @@ make_test_pop <- function(pop_name     = "t",
     get_table("founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A")
 }
+
+#' Define a trait and store its population-wide additive target
+#'
+#' Test-only shorthand for `define_trait()` followed by
+#' `define_effect_cov_matrix("additive", var, trait_name =)`: since 0.73.0
+#' targets enter only through `trait_var_comp`'s writers. Neither call draws
+#' from the RNG. Not a package function: `define_trait_simple()` was removed
+#' on purpose (plans/import_qtl_effect_methods.md §6C).
+with_additive_target <- function(pop, trait_name, var, ...) {
+  pop <- define_trait(pop, trait_name, ...)
+  suppressMessages(
+    define_effect_cov_matrix(pop, "additive", var, trait_name = trait_name))
+}

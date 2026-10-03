@@ -191,9 +191,9 @@ per component to \code{phenotype_components}.
 \dontrun{
 # ── Simple continuous trait ──────────────────────────────────────────────
 pop <- pop |>
-  define_trait("ADG", target_add_var = 100) |>
+  define_trait("ADG") |>
   get_table("genome_meta") |>
-  define_additive_effects("ADG") |>
+  define_additive_effects("ADG", G = 100) |>
   define_phenotype("ADG",
     type         = "continuous",
     mean         = 850,
@@ -201,9 +201,9 @@ pop <- pop |>
 
 # ── Count trait with clipping bounds ────────────────────────────────────
 pop <- pop |>
-  define_trait("NW", target_add_var = 2) |>
+  define_trait("NW") |>
   get_table("genome_meta") |>
-  define_additive_effects("NW") |>
+  define_additive_effects("NW", G = 2) |>
   define_phenotype("NW",
     type         = "count",
     mean         = 10,
@@ -213,9 +213,9 @@ pop <- pop |>
 
 # ── Categorical trait (binary via prevalence) ────────────────────────────
 pop <- pop |>
-  define_trait("mort", target_add_var = 0.05) |>
+  define_trait("mort") |>
   get_table("genome_meta") |>
-  define_additive_effects("mort") |>
+  define_additive_effects("mort", G = 0.05) |>
   define_phenotype("mort",
     type       = "categorical",
     prevalence = 0.05,
@@ -258,6 +258,5 @@ pop <- pop |>
 }
 }
 \seealso{
-\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_residual_cov]{define_residual_cov()}}, \code{\link[=add_phenotype]{add_phenotype()}},
-\code{\link[=define_trait_simple]{define_trait_simple()}}
+\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_residual_cov]{define_residual_cov()}}, \code{\link[=add_phenotype]{add_phenotype()}}
 }

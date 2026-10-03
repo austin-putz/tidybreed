@@ -25,7 +25,7 @@ DEFERRED_COLS <- list(
 make_pop_all_tables <- function() {
   pop <- make_test_pop(n_males = 2, n_females = 2, n_loci = 50, n_chr = 2)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- with_additive_target(pop, "ADG", 100)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
   pop <- define_phenotype(pop, "ADG", mean = 500, residual_var = 50)
 

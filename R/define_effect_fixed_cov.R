@@ -58,6 +58,7 @@ define_effect_fixed_cov <- function(pop,
   validate_tidybreed_pop(pop)
   validate_sql_identifier(phenotype_name, what = "phenotype name")
   validate_sql_identifier(effect_name,    what = "effect name")
+  .check_effect_name_input(effect_name)
   validate_sql_identifier(source_column,  what = "source_column")
   validate_sql_identifier(source_table,   what = "source_table")
   stopifnot(is.numeric(slope), length(slope) == 1, !is.na(slope))

@@ -46,7 +46,8 @@ to get the same tool dirs back automatically.
 pop <- open_pop(pop_name = "cattle", db_name = "cattle_sim.duckdb") |>
   define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
-pop <- define_trait(pop, trait_name = "milk", target_add_var = 10)
+pop <- define_trait(pop, trait_name = "milk") |>
+  define_effect_cov_matrix("additive", 10, trait_name = "milk")
 db_path <- pop$db_path
 close_pop(pop)
 

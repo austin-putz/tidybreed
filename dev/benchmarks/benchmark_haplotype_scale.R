@@ -98,7 +98,8 @@ run_scale <- function(scale_name, cfg) {
   )
 
   # -- add_tbv(): population-wide-only effects ---------------------------------
-  pop <- define_trait(pop, "ADG_popwide", target_add_var = 1.0)
+  pop <- define_trait(pop, "ADG_popwide") |>
+    define_effect_cov_matrix("additive", 1.0, trait_name = "ADG_popwide")
   set.seed(3)
   pop <- pop |>
     get_table("genome_meta") |>
@@ -116,7 +117,8 @@ run_scale <- function(scale_name, cfg) {
   )
 
   # -- add_tbv(): line-specific effects with fallback (Stage 2 query) ---------
-  pop <- define_trait(pop, "ADG_lineSpec", target_add_var = 1.0)
+  pop <- define_trait(pop, "ADG_lineSpec") |>
+    define_effect_cov_matrix("additive", 1.0, trait_name = "ADG_lineSpec")
   set.seed(4)
   qtl_tbl <- pop |> get_table("genome_meta") |> dplyr::filter(locus_id %% 10L == 0L)
   pop <- define_additive_effects(qtl_tbl, "ADG_lineSpec",

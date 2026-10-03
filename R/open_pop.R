@@ -277,6 +277,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
     CREATE TABLE trait_var_comp (
       id_trait_var_comp INTEGER PRIMARY KEY,
       effect_name       VARCHAR,
+      line_name         VARCHAR,
       trait_name_1      VARCHAR,
       trait_name_2      VARCHAR,
       cov_value         DOUBLE

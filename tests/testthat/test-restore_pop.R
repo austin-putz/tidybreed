@@ -289,7 +289,7 @@ test_that("restore_pop() refuses pre-0.72.0 stored names", {
   tmp <- tempfile(fileext = ".duckdb")
   pop <- open_pop(pop_name = "old_names", db_name = tmp) |>
     define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10) |>
-    define_trait("T", target_add_var = 1)
+    with_additive_target("T", 1)
   close_pop(pop)
 
   conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
@@ -314,7 +314,7 @@ test_that("restore_pop() refuses the pre-0.72.0 reserved owner", {
     define_founder_haplotypes(n_haplotypes = 20)
   pop <- pop |> get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A") |>
-    define_trait("T", target_add_var = 1)
+    with_additive_target("T", 1)
   pop <- get_table(pop, "genome_meta") |>
     dplyr::filter(locus_id <= 3) |>
     define_additive_effects(trait_name = "T")

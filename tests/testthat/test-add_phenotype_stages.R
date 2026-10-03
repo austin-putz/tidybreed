@@ -15,7 +15,7 @@ make_stage_pop <- function(pop_name, traits = "A", seed = 11) {
   pop <- suppressMessages(make_test_pop(pop_name, n_loci = 60, n_chr = 1,
                                         n_males = 6, n_females = 6))
   for (t in traits) {
-    pop <- suppressMessages(define_trait(pop, t, target_add_var = 1))
+    pop <- suppressMessages(with_additive_target(pop, t, 1))
     pop <- suppressMessages(
       pop |> get_table("genome_meta") |> define_additive_effects(t))
     pop <- suppressMessages(define_phenotype(

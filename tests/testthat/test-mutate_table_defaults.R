@@ -350,8 +350,11 @@ test_that("DEFAULT works with add_phenotype()", {
   pop <- create_test_pop()
 
   # Add trait and founders
-  pop <- pop |>
-    define_trait_simple("ADG", n_qtl = 10, target_add_var = 100, residual_var = 50)
+  pop <- with_additive_target(pop, "ADG", 100)
+  pop <- get_table(pop, "genome_meta") |>
+    dplyr::filter(locus_id <= 10) |>
+    define_additive_effects("ADG")
+  pop <- define_phenotype(pop, "ADG", residual_var = 50)
 
   pop <- pop |>
     get_table("founder_haplotypes") |>

@@ -299,22 +299,53 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 
 - `define_trait()` — **genetic layer only**. Writes one row to `trait_meta` and
   a global `(index_name = NULL, trait_name, economic_weight = 0)` row to
-  `index_meta`. Accepted arguments: `trait_name`, `target_add_var` (writes to
-  `trait_var_comp`), `target_add_mean`, `description`, `units`, `overwrite`. **Never** pass observation-layer arguments here
+  `index_meta`. Accepted arguments: `trait_name`, `description`, `units`,
+  `overwrite`. It writes **no target** (0.73.0): targets enter only through
+  `define_effect_cov_matrix()` or a generator's `G =`. `define_trait_simple()`
+  was removed; chain `define_trait()` → `define_additive_effects(G = )` →
+  `define_phenotype()`. **Never** pass observation-layer arguments here
   (`type`, `mean`, `expressed_sex`, `residual_var`, etc.) — those belong
   in `define_phenotype()`. `overwrite = FALSE` (default) errors if the trait
   already exists; `overwrite = TRUE` replaces both the `trait_meta` row and its
   `index_meta` entry.
 - `define_additive_effects()` — accepts a `tidybreed_table` from
   `get_table("genome_meta")` (optionally filtered) as its **first argument**.
-  `trait_name` accepts a scalar **or vector** of trait names:
-  - **Single trait** — manual (`effects` vector) or sampled (`distribution =
-    "normal"/"gamma"`) with optional Falconer rescale. Reads `target_add_var`
-    from `trait_var_comp`.
-  - **Multiple traits** — draws correlated effects from `MVN(0, G)` via
-    `MASS::mvrnorm`. `G = NULL` reads from `trait_var_comp`. `method =
-    "shared"` (all traits use the filtered loci) or `"union"` (per-trait QTL
-    sets from existing `genome_effects` rows, restricted to the filtered loci).
+  `trait_name` accepts a scalar **or vector** of trait names. One flow for
+  k = 1 and k >= 2 (0.73.0):
+  1. **Validate** everything; no RNG use before the draw (`seed` is applied
+     after every check). `G` with manual `effects` or `scale_to_target = FALSE`
+     is refused (nothing would be calibrated to it). `anchor = "realised"`
+     needs an individuals `base_tbl` and the common scope.
+  2. **Target** (`.dae_resolve_target()`, plan §6C): a passed `G` (matrix, or a
+     number for one trait; dimnames checked, never relabelled; PSD) is written
+     with the terms and refused over any stored block (whole-table check, even
+     identical; the error gives a working `remove_rows()` call). `G = NULL`
+     reads the stored rows (line block, else population-wide), or
+     `trait_var_comp_tbl` rows. Refused: a stored block pairing a call trait
+     with an outside trait; a stored `dominance` / `additive_by_additive` block
+     for the traits; a partial block; two candidate sets. Manual effects take
+     no target and skip these checks; unscaled k >= 2 draws read it only as
+     the draw's Sigma.
+  3. **Draw** the architecture with `.draw_additive_architecture()` (today's
+     draws: rnorm / signed gamma for k = 1, `MASS::mvrnorm(G)` rows for k >= 2,
+     masked per trait under `"union"`). The same seed gives the same `B0`.
+  4. **Calibrate** with `.qtl_congruence()` (`R/qtl_congruence.R`, ported from
+     the source method): `B = B0 A` with `B' M B = G` exactly. `M` is the
+     anchor: `"genic"` = `diag(n_eligible p q)` at the base frequencies;
+     `"realised"` = `Cov(X)` of the base individuals (collected in R, size
+     guard `QTL_REALISED_MAX_CELLS`). k = 1 reduces to the scalar rescale.
+     Two distinct rank errors: rank(G) > rank(M), rank(B0'MB0) < rank(G).
+     `"union"` (k >= 2) scales each trait alone and warns "approximate" for a
+     non-zero covariance.
+  5. **Commit** terms and any new target in one transaction:
+     `.ge_commit(..., before_commit = function(conn) .tvc_write_block(...))`.
+  6. **Diagnostics** (common scope only, nothing stored): the relative
+     spectrum of what another population sees vs the target — pool
+     expectation `2 Cov(H)` (founder base), observed `Cov(X)` (individuals
+     base), or the genic limit (realised anchor) — warns outside
+     `warn_bounds` (default `c(0.8, 1.25)`, `NULL` = off).
+  7. **Message** says "exact" / "approximate" / "not calibrated" with the
+     delivered covariance; a line-scoped call adds the line-mean message.
 
   Writes one order-one `additive` term per locus under the reserved effect
   owner `generated`, with `center_value` = the base allele
@@ -487,11 +518,26 @@ pop |> define_genome_effect_terms(
 
 `R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_intercept.R`
 
-- `define_effect_cov_matrix(pop, effect_name, cov_matrix, trait_name = NULL)` — **single entry
-  point for all variance/covariance data**. Routes by `effect_name`:
-  genetic effects (`"additive"`, `"dominance"`, `"additive_by_additive"`) → `trait_var_comp`;
+- `define_effect_cov_matrix(pop, effect_name, cov_matrix, trait_name = NULL, line_name = NULL)` — **single entry
+  point for all variance/covariance data**. `cov_matrix` may be a number when
+  one name is given; a named matrix must match `trait_name` in order (never
+  relabelled). Routes by `effect_name`:
+  genetic effects (`GENETIC_EFFECT_NAMES`: `"additive"`, `"dominance"`,
+  `"additive_by_additive"`) → `trait_var_comp` through `.tvc_write_block()`
+  (PSD, `%.17g` full precision, one transaction, **never overwrites** a stored
+  block for the same `effect_name` × any trait × `line_name`; `line_name` is
+  genetic-only);
   `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
   any other name → `phenotype_var_comp` with that `effect_name`.
+  `GENETIC_EFFECT_NAMES_FUTURE` (`additive_by_dominance`,
+  `dominance_by_dominance`) → "not yet supported"; `DERIVED_EFFECT_NAMES`
+  (`total`, `unpartitioned`, `between_components`) → refused. The phenotype
+  layer (`define_effect_random()`, `define_effect_fixed_*()`,
+  `write_phenotype_cov_block()`) refuses all three sets as effect names
+  (`.check_effect_name_input()`).
+  Readers `get_trait_var()` / `load_trait_cov()` take `line_name = NULL`
+  (population-wide rows; a named line uses its own rows when it has any,
+  else falls back; lines are never mixed).
   Can be called before `define_trait()` or `define_effect_random()`.
 - `define_effect_random()` — `variance = NULL` (default) requires a value
   already in `phenotype_var_comp`; a number writes a 1 × 1 block and is an error
@@ -504,7 +550,7 @@ pop |> define_genome_effect_terms(
   batch needs the batch in the level (`pen_batch`), not a new feature.
 - `define_effect_fixed_class()` — discrete level → shift mapping.
 - `define_effect_fixed_cov()` — linear regression term (`slope * (x - center)`).
-- `define_effect_intercept()` — sets intercept (`target_add_mean`) for a trait.
+- `define_effect_intercept()` — sets the phenotype intercept (`phenotype_meta.mean`).
 
 ### `define_phenotype()` / `define_residual_cov()`
 
@@ -702,16 +748,6 @@ Reference implementations live in `tests/testthat/helper-genome-effects.R`
 (Phase A: two independent evaluators, hand-computed fixtures, no database);
 `tests/testthat/test-genome-effects-eval.R` asserts the SQL evaluator agrees
 with them for every fixture and every individual.
-
-### `define_trait_simple()`
-
-`R/define_trait_simple.R`
-
-Convenience wrapper that chains `define_trait()` and `define_additive_effects()` for
-a single uncorrelated trait. QTL are always placed randomly (n = `n_qtl`).
-For non-random QTL placement or correlated multi-trait effects, use the
-functions individually with `get_table("genome_meta") |> filter(...)  |>
-define_additive_effects()`.
 
 ### `define_index()` / `add_index()`
 

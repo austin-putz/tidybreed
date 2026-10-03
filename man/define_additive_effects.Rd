@@ -10,11 +10,14 @@ define_additive_effects(
   effects = NULL,
   distribution = c("normal", "gamma"),
   G = NULL,
+  trait_var_comp_tbl = NULL,
+  anchor = c("genic", "realised"),
   method = c("shared", "union"),
   base_tbl = NULL,
   line_name = NULL,
   parent_origin = NULL,
   scale_to_target = TRUE,
+  warn_bounds = c(0.8, 1.25),
   seed = NULL
 )
 }
@@ -23,101 +26,167 @@ define_additive_effects(
 optional \code{\link[dplyr:filter]{dplyr::filter()}}). The filtered rows determine which loci are QTL.}
 
 \item{trait_name}{Character scalar \strong{or} vector. Name(s) of existing traits
-in \code{trait_meta}. When length >= 2, effects are drawn jointly from
-\code{MVN(0, G)} and \code{G} / \code{method} become active.}
+in \code{trait_meta}. When length >= 2, the architecture is drawn jointly from
+\code{MVN(0, G)} and \code{method} becomes active.}
 
 \item{effects}{Optional numeric vector of length \code{n_qtl} (manual mode, single
-trait only), in ascending \code{locus_id} order. Error if \code{length(trait_name) > 1}.}
+trait only), in ascending \code{locus_id} order, written unchanged. Error if
+\code{length(trait_name) > 1} or with \code{G}.}
 
-\item{distribution}{Character. \code{"normal"} (default) or \code{"gamma"}, used when
-\code{effects} is \code{NULL} and \code{length(trait_name) == 1}. Ignored for multi-trait.}
+\item{distribution}{Character. \code{"normal"} (default) or \code{"gamma"}, the
+single-trait architecture. Ignored for multi-trait (always MVN).}
 
-\item{G}{Optional numeric matrix of additive-genetic (co)variances (multi-trait
-only). Must be square and symmetric with side length \code{length(trait_name)}.
-When supplied, stored to \code{trait_var_comp} under \code{"additive"}. When \code{NULL},
-read from \code{trait_var_comp}.}
+\item{G}{Optional additive-genetic (co)variance target: a \verb{k x k} matrix
+(named in \code{trait_name} order, or unnamed), or a single number for one
+trait. Written to \code{trait_var_comp} (with the call's \code{line_name}) in the
+same transaction as the effects, and never over a stored block. \code{NULL}
+reads the stored target (see \emph{Targets}).}
+
+\item{trait_var_comp_tbl}{Optional filtered
+\code{get_table(pop, "trait_var_comp")}: the stored rows to calibrate to. Use it
+to pick a block explicitly, e.g. to leave a stored non-additive block out
+or to calibrate one trait of a stored block alone. Not with \code{G}.}
+
+\item{anchor}{Character. \code{"genic"} (default) or \code{"realised"}: the
+reference covariance the calibration is exact for. See \emph{Details}.}
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}. Multi-trait only.
 \code{"shared"} — all listed traits use the filtered loci as their shared QTL
-set. \code{"union"} — per-trait QTL sets are read from existing \code{genome_effects}
-rows, restricted to the filtered loci.}
+set; exact. \code{"union"} — per-trait QTL sets are read from existing generated
+terms at this scope, restricted to the filtered loci; per-trait scaling,
+approximate for a non-zero covariance.}
 
 \item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
 filtered) selecting the allele copies that define base allele
 frequencies: \code{founder_haplotypes}, \code{ind_haplotype}, or any table with an
 \code{id_ind} column. Must come from the same \code{pop} as \code{tbl}. \code{NULL} (default)
 resolves to the founder pool of the line the effect applies to — see
-\emph{Which population centers the effects} above.}
+\emph{Which population centers the effects}. Under \code{anchor = "realised"} it is
+required and names the individuals whose \code{Cov(X)} is the anchor.}
 
 \item{line_name}{Optional character. When set, effects are scoped to allele
 copies of this genetic line: a copy whose \code{line_origin} matches takes these
 values, and falls back per copy to the common variant where no
-line-specific one exists. Also selects the default \code{base_tbl}.
-\code{NULL} (default) means the common scope, matching every copy.}
+line-specific one exists. Also selects the default \code{base_tbl} and the
+line's own target block. \code{NULL} (default) means the common scope.}
 
 \item{parent_origin}{Optional \code{1} (sire / parent_1) or \code{2} (dam / parent_2) —
 imprinting, restricting the term to copies inherited from that parent.
 \code{NULL} (default) means both parents' copies. \strong{Per trait}: a scalar is
 recycled, a vector must match \code{trait_name} positionally, or name its
-entries by trait. A call mixing origins across traits while supplying \code{G}
-is rejected — under random mating the paternal and maternal copies at a
-locus are independent, so the requested genetic covariance between a
-paternal-only and a maternal-only trait is zero and cannot be realized.
-For imprinting that varies locus by locus, write the terms with
+entries by trait. A correlated call must use one origin for every trait —
+under random mating the paternal and maternal copies at a locus are
+independent, so the requested genetic covariance between a paternal-only
+and a maternal-only trait is zero and cannot be realized. For imprinting
+that varies locus by locus, write the terms with
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}.}
 
-\item{scale_to_target}{Logical. If \code{TRUE}, rescale effects so the expected
-additive variance equals the stored \code{target_add_var}:
-\verb{V_A = sum_j n_eligible,j * p_j q_j a_j^2}, where \code{n_eligible} is 2 for an
-unparented term and 1 for a parent-qualified one.}
+\item{scale_to_target}{Logical. \code{TRUE} (default) calibrates sampled effects
+to the target. \code{FALSE} writes the draw unscaled and takes no target.}
 
-\item{seed}{Optional integer for reproducibility.}
+\item{warn_bounds}{Numeric length 2, \code{c(lower, upper)} with
+\verb{0 < lower <= upper}, or \code{NULL} to turn the comparison warning off.
+Default \code{c(0.8, 1.25)} (±25\%, multiplicative).}
+
+\item{seed}{Optional integer, applied with \code{\link[=set.seed]{set.seed()}} after every check
+and immediately before the draw, so a refused call never touches the RNG.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
-Selects QTL from a filtered \code{genome_meta} table and writes one order-one
-\code{additive} term per locus through the same engine as
+Selects QTL from a filtered \code{genome_meta} table, samples an effect
+architecture, \strong{calibrates} it to the stored additive target, and writes
+one order-one \code{additive} term per locus and trait through the same engine as
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, under the reserved effect owner
-\code{"generated"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
-\code{additive} variants from that owner and nothing else, so effects written here
-and effects a user writes with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} can never be
-confused for one another.
+\code{"generated"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one \code{additive} variants from that
+owner and nothing else, so effects written here and effects a user writes
+with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} can never be confused for one another.
+}
+\details{
+\strong{When the result is exact.} The requested covariance \code{G} is delivered
+exactly, \verb{B' M B = G} to machine precision, \strong{only} for sampled effects
+with \code{method = "shared"} and \code{scale_to_target = TRUE}, when the rank is
+feasible: \code{rank(G) <= rank(M)} (the anchor has enough independent
+segregating directions at the selected loci) and \verb{rank(G) <= rank(B0' M B0)} (the drawn architecture does too). Each infeasibility is its
+own error. The closing message says "exact" or "approximate" and gives the
+delivered covariance under the anchor.
 
-\strong{Single trait} (\code{trait_name} length 1) — two modes:
+\strong{How.} Effects are drawn as today (one draw per QTL for one trait; joint
+\code{MVN(0, G)} rows for several), and that draw is only the \emph{architecture}
+\code{B0}. It is then right-multiplied by a \verb{k x k} matrix \code{A} so that
+\verb{B = B0 A} satisfies \verb{B' M B = G} exactly (the congruence of
+Proposition 2 in the source method). For one trait this is exactly the
+scalar rescale \verb{b0 * sqrt(G / sum(w b0^2))}. For two or more it also fixes
+the genetic \strong{correlations}, which a per-trait rescale cannot: at 200 QTL
+and a target correlation of 0.4 a scalar rescale delivers anything from
+about 0.18 to 0.60. The same seed gives the same \code{B0}.
+
+\strong{The anchor \code{M}} is the reference-population genotype covariance the
+calibration is exact for:
 \itemize{
-\item \strong{Manual}: pass \code{effects}, a numeric vector of length \code{n_qtl} (number of
-filtered loci) in ascending \code{locus_id} order.
-\item \strong{Sampled}: draw effects from \code{distribution} (\code{"normal"} or \code{"gamma"}).
-If \code{scale_to_target = TRUE}, effects are rescaled using the Falconer
-formula so the expected additive variance in the base population equals
-the \code{target_add_var} stored for this trait.
+\item \code{anchor = "genic"} (default): \code{M = diag(n_eligible * p * q)} at the base
+allele frequencies, the random-mating (HWE + linkage-equilibrium) limit.
+Use it for multi-generation studies: under random mating the realised
+covariance converges to it. The manuscript's "reference" anchor is this
+plus a non-default \code{base_tbl}, whose frequencies the weights use.
+\item \code{anchor = "realised"}: \code{M = Cov(X)} of the individuals \code{base_tbl} selects,
+linkage disequilibrium included. The single-generation / clonal option.
+\code{base_tbl} must select \strong{individuals} (a table with \code{id_ind}, not
+\code{founder_haplotypes} or \code{ind_haplotype}) with complete genotypes at the
+QTL, and the call must use the common scope (no \code{line_name}, no
+\code{parent_origin}). The genotype matrix is collected into memory, so there
+is a size limit; above it the call errors and suggests \code{"genic"}.
 }
 
-\strong{Multiple traits} (\code{trait_name} length >= 2) — effects are drawn jointly
-from a multivariate normal distribution keyed by the additive-genetic
-covariance matrix \code{G}. Two locus-selection methods:
+Under \code{method = "union"} each trait keeps its own QTL set and is scaled by
+its own variance only, so a non-zero target covariance is \strong{approximate}:
+a warning gives the delivered covariance and correlation and names
+\code{method = "shared"} as the exact option.
+
+After calibration the delivered covariance is compared with what another
+population sees (§7.4 of the plan): the \strong{pool expectation} \verb{2 Cov(H)}
+when the base is the founder pool, the \strong{observed} \code{Cov(X)} when it selects
+individuals, and the genic limit under \code{anchor = "realised"}. A relative
+spectrum outside \code{warn_bounds} is a warning. Nothing is stored.
+}
+\section{Targets}{
+
+The target is the population-wide (or line) \code{additive} block of
+\code{trait_var_comp}, the single source of generation targets:
 \itemize{
-\item \code{method = "shared"} — the loci in \code{tbl} become the QTL set of every
-trait, and each locus receives one joint draw.
-\item \code{method = "union"} — the loci in \code{tbl} form the candidate pool; per-trait
-membership is read from the terms already stored at this scope, and a
-locus draws jointly only for the traits it is a QTL for.
+\item pass \code{G} (a \verb{k x k} matrix, or a number for one trait) to write it \strong{and}
+calibrate to it, in the same transaction as the effects. If a block is
+already stored for any of the traits at that \code{line_name} the call errors,
+even for an identical matrix, and gives the \code{\link[=remove_rows]{remove_rows()}} call;
+\item or leave \code{G = NULL} to use the stored rows, optionally chosen with
+\code{trait_var_comp_tbl = get_table(pop, "trait_var_comp") |> filter(...)}.
+The rows for the call's traits must form one complete symmetric block. A
+stored block that pairs one of the traits with a trait outside the call
+is an error (calibrating one trait alone would break the stored
+covariance), as is a stored \code{dominance} or \code{additive_by_additive} block
+for the traits: this generator calibrates the additive block only and
+never silently ignores a stored target. Filter them away with
+\code{trait_var_comp_tbl} to say so explicitly.
 }
 
-\code{define_genome_effect_terms()} writes any effect you supply; \verb{define_*_effects()}
-functions such as this one sample effects of one shape and write them
-through the same path.
+With \code{line_name = "C"} the default reads line C's block when one exists and
+otherwise the population-wide one.
+
+Manual \code{effects} are written unchanged and take no target; so do sampled
+effects with \code{scale_to_target = FALSE} (which for several traits still use
+the stored \code{G} as the draw's covariance). \code{G} with either is an error:
+nothing would be calibrated to it.
 }
+
 \section{Which population centers the effects}{
 
 Base allele frequencies center the true breeding value (the Falconer
-\code{allele - p} term) and set the \verb{2pq} denominator used by \code{scale_to_target}.
-They come from \code{base_tbl}, a filtered \code{tidybreed_table} whose identity says
-\emph{what kind of thing} is selected and whose \code{\link[dplyr:filter]{dplyr::filter()}} says \emph{which}
-(see \code{\link[=extract_allele_freq]{extract_allele_freq()}} for the three accepted shapes: the founder
-pool, allele copies in \code{ind_haplotype}, or individuals from any table with
+\code{allele - p} term) and set the genic weights \verb{n_eligible * p q}. They come
+from \code{base_tbl}, a filtered \code{tidybreed_table} whose identity says \emph{what kind
+of thing} is selected and whose \code{\link[dplyr:filter]{dplyr::filter()}} says \emph{which} (see
+\code{\link[=extract_allele_freq]{extract_allele_freq()}} for the three accepted shapes: the founder pool,
+allele copies in \code{ind_haplotype}, or individuals from any table with
 \code{id_ind}).
 
 When \code{base_tbl = NULL} the base is \strong{the population the effect applies to},
@@ -127,14 +196,11 @@ pool, or on the shared (\code{line_name = NULL}) pool when no named pool exists;
 a population-wide effect (\code{line_name = NULL}) centers on the whole founder
 table. Only that last case warns when the founder table holds more than one
 pool: pooling divergent lines overstates within-line heterozygosity — the
-Wahlund effect. Two lines fixed for opposite alleles each have zero
-within-line variance, but pool to \code{p = 0.5} and an apparent \verb{2pq = 0.5};
-the inflated denominator then makes \code{scale_to_target} \strong{under}-scale the
-effects, and realized within-line additive variance falls short of
-\code{target_add_var}. An explicit \code{base_tbl} is an intentional selection and
-never warns — pass \code{base_tbl = get_table(pop, "founder_haplotypes")} to pool
-on purpose, which is how the common fallback variant of a crossbreeding
-model is defined.
+Wahlund effect — so the calibration \strong{under}-scales the effects and the
+realised within-line additive variance falls short of the target. An
+explicit \code{base_tbl} is an intentional selection and never warns — pass
+\code{base_tbl = get_table(pop, "founder_haplotypes")} to pool on purpose, which
+is how the common fallback variant of a crossbreeding model is defined.
 
 A selected QTL locus with no allele copies in the base is an error, never
 silently centered at \code{p = 0}.
@@ -144,6 +210,17 @@ The centering constant is stored per member as
 evaluation applies each allele copy's own line's centering — a crossbred
 animal's line-A alleles are centered on line A and its line-B alleles on
 line B.
+}
+
+\section{Lines and line means}{
+
+Line-specific effects (\code{line_name = "A"}) are centred on line A's own base,
+so they add \strong{no} difference between line means. Differences between lines
+come from allele-frequency differences at QTL whose effects are shared:
+use common effects centred on one reference line, e.g.
+\code{base_tbl = get_table(pop, "founder_haplotypes") |> filter(line_name == "Terminal")}. The calibration then hits the target
+within that line, and the other lines get whatever variance their
+frequencies give.
 }
 
 \section{Scope, and what a re-run replaces}{
@@ -170,43 +247,43 @@ case.
 
 \examples{
 \dontrun{
-# Single trait — all loci on chr 1-5 become QTL; scale to target variance
+# Single trait — all loci on chr 1-5 become QTL; write the target and
+# calibrate to it in one call
+pop <- pop |> define_trait("ADG")
 pop <- pop |>
-  define_trait("ADG", target_add_var = 0.25) |>
   get_table("genome_meta") |>
-  dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG", distribution = "normal")
+  dplyr::filter(chr_name \%in\% as.character(1:5)) |>
+  define_additive_effects("ADG", G = 0.25)
 
-# Multiple correlated traits — shared QTL set, joint MVN draw
+# Correlated traits — shared QTL set, exact G (variances and correlation)
+pop <- pop |> define_trait("BW")
 G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
 pop <- pop |>
-  define_effect_cov_matrix("additive", G) |>
   get_table("genome_meta") |>
-  dplyr::filter(chr \%in\% 1:5) |>
   define_additive_effects(c("ADG", "BW"), G = G)
 
-# Generation-0 individuals define the base allele frequencies
+# A target stored beforehand is read back: no G
+pop <- pop |> define_trait("FCR") |>
+  define_effect_cov_matrix("additive", 0.1, trait_name = "FCR")
+pop <- pop |> get_table("genome_meta") |> define_additive_effects("FCR")
+
+# Exact in the generation-0 individuals themselves, LD included
 pop <- pop |>
   get_table("genome_meta") |>
-  dplyr::filter(chr \%in\% 1:5) |>
-  define_additive_effects("ADG",
+  define_additive_effects("FCR", anchor = "realised",
     base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
 
 # Crossbreeding: three variants. The common fallback names its base to say
 # "yes, pool"; each line's variant centers on its own founder pool by default.
-gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr \%in\% 1:5)
+gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1")
 pop <- gm |> define_additive_effects("ADG",
                base_tbl = get_table(pop, "founder_haplotypes"))
 pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
 pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
-
-# Duroc allele copies wherever they sit, including inside crossbreds
-pop <- gm |> define_additive_effects("ADG", line_name = "Duroc",
-  base_tbl = get_table(pop, "ind_haplotype") |>
-    dplyr::filter(line_origin == "Duroc"))
 }
 }
 \seealso{
-\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}.
+\code{\link[=define_trait]{define_trait()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}},
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=extract_allele_freq]{extract_allele_freq()}}.
 }

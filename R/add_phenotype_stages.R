@@ -1161,9 +1161,8 @@ NULL
         "Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
         "additive target, but trait_var_comp has no 'additive' row for '", t,
         "' (its effects were written without one, e.g. manual `effects` or ",
-        "scale_to_target = FALSE). Store a target with ",
-        "define_effect_cov_matrix() or define_trait(target_add_var = ), or ",
-        "give explicit cutpoints with define_phenotype(thresholds = ).",
+        "scale_to_target = FALSE). Give explicit cutpoints with ",
+        "define_phenotype(thresholds = ).",
         call. = FALSE)
     }
   }

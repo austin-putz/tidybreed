@@ -111,8 +111,8 @@ run_parity_sim <- function() {
   # One non-imprinted trait and one imprinted trait. Imprinting now rides on
   # the effect's origin scope, not on a trait-wide flag: IMP's terms are scoped
   # to ('any', parent 1), so only sire-derived copies contribute.
-  pop <- define_trait(pop, "ADG", target_add_var = 1.0)
-  pop <- define_trait(pop, "IMP", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "ADG", 1.0)
+  pop <- with_additive_target(pop, "IMP", 1.0)
 
   set.seed(301)
   pop <- pop |>

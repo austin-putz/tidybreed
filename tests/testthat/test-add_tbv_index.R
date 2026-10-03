@@ -10,7 +10,7 @@ make_index_pop <- function(pop_name = "ix", n_ind = 10, traits = c("ADG", "BW"))
     get_table("founder_haplotypes") |>
     add_founders(n_males = n_ind / 2, n_females = n_ind / 2, line_name = "A")
   for (t in traits) {
-    pop <- define_trait(pop, t, target_add_var = 0.25)
+    pop <- with_additive_target(pop, t, 0.25)
     sel <- get_table(pop, "genome_meta") |>
       dplyr::collect() |> dplyr::slice_sample(n = 30) |> dplyr::pull(locus_name)
     pop <- pop |>
@@ -369,7 +369,7 @@ test_that("add_tbv() errors on a trait that is not in trait_meta", {
 test_that("add_tbv() errors on a trait with no additive effects", {
   set.seed(12006)
   pop <- make_index_pop("ix_noqtl")
-  pop <- define_trait(pop, "NOQTL", target_add_var = 0.25)
+  pop <- with_additive_target(pop, "NOQTL", 0.25)
   expect_error(
     pop |> get_table("ind_meta") |> add_tbv("NOQTL"),
     "No order-one additive effects found"

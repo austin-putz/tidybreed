@@ -11,7 +11,7 @@ make_ap_pop <- function() {
     add_founders( n_males = 5, n_females = 10, line_name = "L")
   pop <- get_table(pop, "ind_meta") |>
     mutate_table(birth_date = as.Date("2024-01-01"))
-  pop <- define_trait(pop, "AP", target_add_var = 1, target_add_mean = 180)
+  pop <- with_additive_target(pop, "AP", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
   pop <- pop |>

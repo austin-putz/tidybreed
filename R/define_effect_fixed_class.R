@@ -53,6 +53,7 @@ define_effect_fixed_class <- function(pop,
   validate_tidybreed_pop(pop)
   validate_sql_identifier(phenotype_name, what = "phenotype name")
   validate_sql_identifier(effect_name,    what = "effect name")
+  .check_effect_name_input(effect_name)
   validate_sql_identifier(source_column,  what = "source_column")
   stopifnot(is.character(source_table), nzchar(source_table))
   null_class_action <- match.arg(null_class_action)

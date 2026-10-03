@@ -64,7 +64,7 @@ test_that("low-cardinality VARCHAR column gets frequency table display", {
 
 test_that("DOUBLE column gets 5-number summary display", {
   pop <- make_summary_pop()
-  pop <- pop |> define_trait("ADG", target_add_var = 1)
+  pop <- pop |> with_additive_target("ADG", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
   pop <- pop |>

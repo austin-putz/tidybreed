@@ -22,7 +22,7 @@ make_resid_pop <- function(pop_name, traits = c("A", "B"), n_males = 6,
   pop <- suppressMessages(make_test_pop(pop_name, n_loci = 60, n_chr = 1,
                                         n_males = n_males, n_females = n_females))
   for (t in traits) {
-    pop <- suppressMessages(define_trait(pop, t, target_add_var = 1))
+    pop <- suppressMessages(with_additive_target(pop, t, 1))
     pop <- suppressMessages(
       pop |> get_table("genome_meta") |> define_additive_effects(t))
     pop <- suppressMessages(define_phenotype(

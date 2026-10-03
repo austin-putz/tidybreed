@@ -497,7 +497,8 @@ the per-locus frequency of the pool **written most recently**.
 > `base = "current_pop"` with a line-filtered `base_tbl` in
 > `define_additive_effects()`; `base = "founder_haplotypes"` recomputes the base
 > frequency by pooling **all** lines together (which overstates within-line
-> heterozygosity — Wahlund — and under-scales `target_add_var`).
+> heterozygosity — Wahlund — and under-scales the effects against the stored
+> additive target).
 
 ### 4. Add founder individuals
 
@@ -636,7 +637,9 @@ vars.mat.add <- matrix(c(
   dimnames = list(c("ADG", "WWD", "WWM"),
                   c("ADG", "WWD", "WWM")))
 
-# store matrix in a table called 'trait_var_comp'
+# store matrix in a table called 'trait_var_comp' (written once: a stored
+# genetic block is never overwritten; define_additive_effects(G = ) can write
+# it together with the effects instead)
 pop <- pop |>
   define_effect_cov_matrix(effect_name = "additive", cov_matrix = vars.mat.add)
 
@@ -671,7 +674,6 @@ pop <- pop |>
     trait_name      = "ADG",
     description     = "Average Daily Gain",
     units           = "kg/d",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   )
 ```
@@ -703,14 +705,12 @@ pop <- pop |>
     trait_name      = "WWD",
     description     = "Weaning Weight - Direct",
     units           = "kg",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   ) |>
   define_trait(
     trait_name      = "WWM",
     description     = "Weaning Weight - Maternal",
     units           = "kg",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   )
 
@@ -1120,7 +1120,6 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | Function | Purpose |
 |----------|---------|
 | `define_trait()` | Register a genetic-layer trait in `trait_meta` |
-| `define_trait_simple()` | Convenience wrapper: `define_trait()` + `define_additive_effects()` |
 | `define_phenotype()` | Register an observed phenotype in `phenotype_meta` |
 | `define_additive_effects()` | Assign QTL effects to filtered loci (single or correlated multi-trait) |
 | `define_effect_cov_matrix()` | Load a (co)variance matrix into `trait_var_comp` or `phenotype_var_comp` |

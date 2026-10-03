@@ -7,8 +7,6 @@
 define_trait(
   pop,
   trait_name,
-  target_add_var = NULL,
-  target_add_mean = 0,
   description = NULL,
   units = NULL,
   overwrite = FALSE
@@ -19,16 +17,6 @@ define_trait(
 
 \item{trait_name}{Character. Unique identifier for this genetic component
 trait. Must be a valid SQL identifier.}
-
-\item{target_add_var}{Numeric. Target additive genetic variance. Written to
-\code{trait_var_comp} as a diagonal entry under \code{effect_name = "additive"}.
-Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to rescale effects. If already set via
-\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave \code{NULL}.}
-
-\item{target_add_mean}{Numeric. TBV centering mean for the base population.
-Default \code{0}; \code{E[TBV] = 0} when TBVs are centered on base allele
-frequencies. The phenotypic population mean (intercept) is set separately
-in \code{\link[=define_phenotype]{define_phenotype()}}.}
 
 \item{description}{Character. Free-text description of the trait.}
 
@@ -48,19 +36,29 @@ additive genetic variance in \code{trait_var_comp}. Contains no
 phenotype-level information.
 
 To register the \strong{observed phenotype} that individuals receive records for,
-call \code{\link[=define_phenotype]{define_phenotype()}} after this function. For the common one-off case
-use \code{\link[=define_trait_simple]{define_trait_simple()}}, which chains both steps together.
+call \code{\link[=define_phenotype]{define_phenotype()}} after this function.
+
+The trait's genetic \strong{targets} are not set here. Store them with
+\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} (\code{effect_name = "additive"}), or pass \code{G} to
+\code{\link[=define_additive_effects]{define_additive_effects()}}, which writes the target together with the
+effects calibrated to it. The usual chain is \code{define_trait()} →
+\code{define_additive_effects(G = )} → \code{\link[=define_phenotype]{define_phenotype()}}.
 }
 \examples{
 \dontrun{
-# Simple genetic component trait:
+# Simple genetic component trait, its target and its effects:
 pop <- pop |>
-  define_trait("ADG", target_add_var = 100, units = "g/day")
+  define_trait("ADG", units = "g/day")
+pop <- get_table(pop, "genome_meta") |>
+  define_additive_effects("ADG", G = 100)
 
 # Maternal component traits (no define_phenotype call needed for WWD/WWM):
 pop <- pop |>
-  define_trait("WWD", target_add_var = 200) |>
-  define_trait("WWM", target_add_var = 80)
+  define_trait("WWD") |>
+  define_trait("WWM")
+pop <- get_table(pop, "genome_meta") |>
+  define_additive_effects(c("WWD", "WWM"),
+    G = matrix(c(200, -40, -40, 80), 2, 2))
 
 # Then define the observed composite phenotype:
 pop <- pop |>
@@ -76,5 +74,5 @@ pop <- pop |>
 \seealso{
 \code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
 \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
-\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_trait_simple]{define_trait_simple()}}
+\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}
 }

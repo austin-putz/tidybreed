@@ -18,7 +18,7 @@ make_identical_pop <- function(pop_name) {
     get_table("founder_haplotypes") |>
     add_founders(n_males = 6, n_females = 6, line_name = "A")
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1.0)
+  pop <- with_additive_target(pop, "ADG", 1.0)
 
   set.seed(503)
   pop <- pop |>

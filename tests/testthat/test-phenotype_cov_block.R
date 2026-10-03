@@ -13,7 +13,7 @@ make_block_pop <- function(pop_name = "blk", traits = c("A", "B", "C")) {
   pop <- suppressMessages(make_test_pop(pop_name, n_loci = 60, n_chr = 1,
                                         n_males = 6, n_females = 6))
   for (t in traits) {
-    pop <- suppressMessages(define_trait(pop, t, target_add_var = 1))
+    pop <- suppressMessages(with_additive_target(pop, t, 1))
     pop <- suppressMessages(
       pop |> get_table("genome_meta") |> define_additive_effects(t))
   }

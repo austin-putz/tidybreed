@@ -349,8 +349,8 @@ get_chr_rules_map <- function(conn, line_name = NULL) {
 
 #' Error if any of the given loci sit on a non-diploid-autosomal chromosome
 #'
-#' `rescale_effects_to_target()`'s Falconer variance formula
-#' (`2 * p * (1-p) * a^2`) assumes every QTL is diploid/autosomal — it would
+#' The genic anchor of `define_additive_effects()` (weights `2 * p * (1-p)`,
+#' variance `2 * p * (1-p) * a^2`) assumes every QTL is diploid/autosomal — it would
 #' silently overstate the variance contribution of any QTL on a hemizygous locus
 #' (a single-copy Bernoulli(p) draw has genic variance `p*(1-p)*a^2`, not
 #' `2*p*(1-p)*a^2`). Rather than generalizing the formula,

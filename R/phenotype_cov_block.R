@@ -523,6 +523,7 @@ write_phenotype_cov_block <- function(conn, effect_name, phenotype_names,
                                       condition_level  = NULL,
                                       caller = "define_residual_cov()",
                                       tol    = 1e-8) {
+  if (!identical(effect_name, "residual")) .check_effect_name_input(effect_name)
   DBI::dbExecute(conn, "BEGIN TRANSACTION")
   committed <- FALSE
   on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),

@@ -97,6 +97,7 @@ define_effect_random <- function(pop,
     stop("'residual' is reserved for the residual; use define_residual_cov().",
          call. = FALSE)
   }
+  .check_effect_name_input(effect_name)
   if (!is.null(variance) &&
       (!is.numeric(variance) || length(variance) != 1 ||
        is.na(variance) || variance < 0)) {

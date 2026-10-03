@@ -13,7 +13,7 @@ test_that("define_phenotype() inserts a row into phenotype_meta", {
   pop <- make_pheno_base_pop("dp_basic")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- define_phenotype(pop, "ADG",
                           type         = "continuous",
                           mean         = 500,
@@ -33,7 +33,7 @@ test_that("define_phenotype() residual_var writes to phenotype_var_comp", {
   pop <- make_pheno_base_pop("dp_resid")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- define_phenotype(pop, "ADG", residual_var = 150)
 
   rcov <- DBI::dbGetQuery(pop$db_conn,
@@ -48,7 +48,7 @@ test_that("define_phenotype() overwrite = FALSE errors on duplicate", {
   pop <- make_pheno_base_pop("dp_dup")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- define_phenotype(pop, "ADG", residual_var = 100)
   expect_error(define_phenotype(pop, "ADG", residual_var = 200), "already exists")
 })
@@ -58,7 +58,7 @@ test_that("define_phenotype() overwrite = TRUE replaces the row", {
   pop <- make_pheno_base_pop("dp_overwrite")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- define_phenotype(pop, "ADG", mean = 100, residual_var = 50)
   pop <- define_phenotype(pop, "ADG", mean = 999, residual_var = 77,
                           overwrite = TRUE)
@@ -78,7 +78,7 @@ test_that("define_phenotype() categorical with prevalence validates correctly", 
   pop <- make_pheno_base_pop("dp_cat_prev")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- with_additive_target(pop, "mort", 1)
 
   # Must supply thresholds OR prevalence
   expect_error(
@@ -114,7 +114,7 @@ test_that("define_phenotype() categorical with thresholds stores them correctly"
   pop <- make_pheno_base_pop("dp_cat_thresh")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "score", target_add_var = 1)
+  pop <- with_additive_target(pop, "score", 1)
   pop <- define_phenotype(pop, "score",
                           type        = "categorical",
                           thresholds  = c(-1, 0, 1),
@@ -135,7 +135,7 @@ test_that("define_phenotype() validates cat_values and cat_names lengths", {
   pop <- make_pheno_base_pop("dp_cat_len")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "x", target_add_var = 1)
+  pop <- with_additive_target(pop, "x", 1)
 
   # 1 threshold → 2 categories; cat_values must be length 2
   expect_error(
@@ -164,7 +164,7 @@ test_that("define_phenotype() expressed_sex is stored", {
   pop <- make_pheno_base_pop("dp_sex")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "milk", target_add_var = 1)
+  pop <- with_additive_target(pop, "milk", 1)
   pop <- define_phenotype(pop, "milk",
                           expressed_sex = "F",
                           residual_var  = 5)
@@ -179,8 +179,8 @@ test_that("define_phenotype() stores components in phenotype_components", {
   pop <- make_pheno_base_pop("dp_comp")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
-  pop <- define_trait(pop, "WWM", target_add_var = 80)
+  pop <- with_additive_target(pop, "WWD", 200)
+  pop <- with_additive_target(pop, "WWM", 80)
 
   pop <- define_phenotype(pop, "WW",
                           type         = "continuous",
@@ -213,7 +213,7 @@ test_that("define_residual_cov() writes conditional residual rows", {
   pop <- make_pheno_base_pop("dp_cond_resid")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "BW", target_add_var = 100)
+  pop <- with_additive_target(pop, "BW", 100)
   pop <- define_phenotype(pop, "BW", residual_var = 600)
 
   pop <- define_residual_cov(pop,
@@ -242,8 +242,8 @@ test_that("define_effect_cov_matrix() with effect_name='residual' routes to phen
   pop <- make_pheno_base_pop("dp_cov_mat_route")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
-  pop <- define_trait(pop, "BW",  target_add_var = 2)
+  pop <- with_additive_target(pop, "ADG", 1)
+  pop <- with_additive_target(pop, "BW", 2)
   pop <- define_phenotype(pop, "ADG", residual_var = NULL)
   pop <- define_phenotype(pop, "BW",  residual_var = NULL)
 
@@ -266,7 +266,7 @@ test_that("missing_component_action stored in phenotype_meta, defaults to 'skip'
   pop <- make_pheno_base_pop("dp_mca")
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   # Default: skip
   pop <- define_phenotype(pop, "ADG", residual_var = 1)
@@ -275,7 +275,7 @@ test_that("missing_component_action stored in phenotype_meta, defaults to 'skip'
   expect_equal(row$missing_component_action, "skip")
 
   # Explicit: error
-  pop <- define_trait(pop, "BW", target_add_var = 1)
+  pop <- with_additive_target(pop, "BW", 1)
   pop <- define_phenotype(pop, "BW", residual_var = 1,
                           missing_component_action = "error")
   row2 <- DBI::dbGetQuery(pop$db_conn,

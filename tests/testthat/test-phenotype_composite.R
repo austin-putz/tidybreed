@@ -51,8 +51,8 @@ test_that("composite maternal phenotype assembles correctly", {
   on.exit(close_pop(pop))
 
   # Define two component traits
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
-  pop <- define_trait(pop, "WWM", target_add_var = 80)
+  pop <- define_trait(pop, "WWD")
+  pop <- define_trait(pop, "WWM")
 
   # Sample correlated QTL effects
   G_ww <- matrix(c(200, 40, 40, 80), 2, 2,
@@ -103,8 +103,8 @@ test_that("composite phenotype excludes founders with missing dam TBV", {
   pop <- make_composite_pop("mat_missing_dam", n_males = 10, n_females = 10)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "WWD", target_add_var = 200)
-  pop <- define_trait(pop, "WWM", target_add_var = 80)
+  pop <- with_additive_target(pop, "WWD", 200)
+  pop <- with_additive_target(pop, "WWM", 80)
 
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 80) |> dplyr::pull(locus_name)
@@ -146,7 +146,7 @@ test_that("repeatable phenotype with PE random effect produces multiple records"
   pop <- make_composite_pop("rep_pe", n_males = 20, n_females = 20, n_loci = 200)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "LS", target_add_var = 1)
+  pop <- with_additive_target(pop, "LS", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 50) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -186,7 +186,7 @@ test_that("heterogeneous residuals by sex produce different variance groups", {
   pop <- make_composite_pop("het_resid", n_males = 100, n_females = 100)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "BW", target_add_var = 0.1)
+  pop <- with_additive_target(pop, "BW", 0.1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 80) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -242,7 +242,7 @@ test_that("sex-limited phenotype only generates records for the specified sex", 
   pop <- make_composite_pop("sex_lim", n_males = 50, n_females = 50)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "milk", target_add_var = 10)
+  pop <- with_additive_target(pop, "milk", 10)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 60) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -274,7 +274,7 @@ test_that("phenotype mean in phenotype_meta controls liability intercept", {
                              n_loci = 200)
   on.exit(close_pop(pop))
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 80) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -291,37 +291,6 @@ test_that("phenotype mean in phenotype_meta controls liability intercept", {
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(mean(ph$pheno_value), 750, tolerance = 0.5)
-})
-
-
-# ── 6. define_trait_simple() chains through define_phenotype() ────────────────
-
-test_that("define_trait_simple() creates both trait_meta and phenotype_meta rows", {
-  set.seed(9)
-  pop <- make_composite_pop("dts_chain", n_males = 30, n_females = 30)
-  on.exit(close_pop(pop))
-
-  pop <- define_trait_simple(pop, "ADG",
-                              n_qtl          = 50,
-                              target_add_var = 100,
-                              mean           = 850,
-                              residual_var   = 120)
-
-  # trait_meta row
-  tm <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM trait_meta WHERE trait_name = 'ADG'")
-  expect_equal(nrow(tm), 1L)
-
-  # phenotype_meta row
-  pm <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT * FROM phenotype_meta WHERE phenotype_name = 'ADG'")
-  expect_equal(nrow(pm), 1L)
-  expect_equal(pm$mean, 850)
-
-  # Can phenotype after define_trait_simple
-  pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
-  ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  expect_equal(nrow(ph), 60)
 })
 
 
@@ -352,8 +321,8 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
   G <- matrix(c(0.4, -0.1, -0.1, 0.15), 2, 2,
               dimnames = list(c("ADG_direct","ADG_social"),
                               c("ADG_direct","ADG_social")))
-  pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
-  pop <- define_trait(pop, "ADG_social", target_add_var = 0.15)
+  pop <- define_trait(pop, "ADG_direct")
+  pop <- define_trait(pop, "ADG_social")
   pop <- get_table(pop, "genome_meta") |>
     define_additive_effects(c("ADG_direct","ADG_social"), G = G)
 
@@ -530,8 +499,8 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
     cage_id = tibble::tibble(id_ind = ind_ids, cage_id = cage_ids)
   )
 
-  pop <- define_trait(pop, "mort_direct", target_add_var = 0.05)
-  pop <- define_trait(pop, "mort_social", target_add_var = 0.01)
+  pop <- define_trait(pop, "mort_direct")
+  pop <- define_trait(pop, "mort_social")
   pop <- get_table(pop, "genome_meta") |>
     define_additive_effects(c("mort_direct", "mort_social"),
       G = matrix(c(0.05, 0, 0, 0.01), 2, 2,
@@ -580,8 +549,8 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
     pen_id = tibble::tibble(id_ind = ind_ids, pen_id = pen_ids)
   )
 
-  pop <- define_trait(pop, "ADG_direct", target_add_var = 0.4)
-  pop <- define_trait(pop, "ADG_social", target_add_var = 0.15)
+  pop <- define_trait(pop, "ADG_direct")
+  pop <- define_trait(pop, "ADG_social")
   pop <- get_table(pop, "genome_meta") |>
     define_additive_effects(c("ADG_direct","ADG_social"),
       G = matrix(c(0.4, -0.05, -0.05, 0.15), 2, 2,
@@ -650,7 +619,7 @@ test_that("weight_type = 'covariate' multiplies by the individual's covariate; a
   set.seed(1303)
   pop <- make_composite_pop("comp_cov", n_males = 4, n_females = 4)
   on.exit(close_pop(pop))
-  pop <- define_trait(pop, "T1", target_add_var = 1)
+  pop <- with_additive_target(pop, "T1", 1)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("T1")
   ids <- sort(dplyr::collect(get_table(pop, "ind_meta"))$id_ind)
   pop <- pop |> get_table("ind_meta") |>

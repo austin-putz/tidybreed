@@ -42,14 +42,32 @@
 #' See [define_residual_cov()] for the full rules. A rejected call changes
 #' nothing.
 #'
+#' **Genetic blocks are written once.** A genetic block (`"additive"`,
+#' `"dominance"`, `"additive_by_additive"`) is validated as positive
+#' semi-definite, stored at full double precision, and never overwritten: if
+#' any row already exists for that `effect_name`, any of the named traits and
+#' the same `line_name`, the call is an error, even when the matrix is
+#' identical. The error gives the [remove_rows()] call that clears the stored
+#' block. `trait_var_comp` is the single source of generation targets; the
+#' effect generators read it and never overwrite it either.
+#'
+#' `"additive_by_dominance"` and `"dominance_by_dominance"` are reserved for
+#' future generators and refused. `"total"`, `"unpartitioned"` and
+#' `"between_components"` are output names of the variance extractor and
+#' refused as input.
+#'
 #' @param pop A `tidybreed_pop` object.
 #' @param effect_name Character. Label for the variance component, e.g.
 #'   `"additive"`, `"residual"`, `"hys"`.
-#' @param cov_matrix A numeric square matrix. Must be symmetric within `tol`.
-#'   Row and column names are used as trait/phenotype names when `trait_name`
-#'   is not supplied.
-#' @param trait_name Optional character vector of trait/phenotype names (length
-#'   == `nrow(cov_matrix)`). Overrides the matrix's `rownames` / `colnames`.
+#' @param cov_matrix A numeric square matrix, or a single number when one
+#'   trait/phenotype is named. Must be symmetric within `tol`. A named matrix
+#'   must carry the same names as `trait_name`, in the same order (it is never
+#'   relabelled); an unnamed one is taken in `trait_name` order.
+#' @param trait_name Character vector of trait/phenotype names (length
+#'   == `nrow(cov_matrix)`). Optional when the matrix has names.
+#' @param line_name Character or `NULL` (default). Genetic effects only: the
+#'   line whose generation target this is. `NULL` is the population-wide
+#'   target, which a line without its own block falls back to.
 #' @param tol Numeric. Tolerance for symmetry check (default `1e-9`).
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
@@ -65,6 +83,10 @@
 #' pop <- pop |>
 #'   define_effect_cov_matrix("additive", G)
 #'
+#' # One trait: a number is a 1 x 1 matrix
+#' pop <- pop |>
+#'   define_effect_cov_matrix("additive", 0.25, trait_name = "WW")
+#'
 #' # Residual → phenotype_var_comp (effect_name = "residual")
 #' R <- matrix(c(30, 5, 5, 10), 2, 2,
 #'             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
@@ -79,39 +101,18 @@
 #' }
 #' @export
 define_effect_cov_matrix <- function(pop,
-                                   effect_name,
-                                   cov_matrix,
-                                   trait_name  = NULL,
-                                   tol         = 1e-9) {
+                                     effect_name,
+                                     cov_matrix,
+                                     trait_name  = NULL,
+                                     line_name   = NULL,
+                                     tol         = 1e-9) {
   stopifnot(inherits(pop, "tidybreed_pop"))
   validate_tidybreed_pop(pop)
   validate_sql_identifier(effect_name, what = "effect name")
+  .check_effect_name_input(effect_name, genetic_ok = TRUE)
 
-  if (!is.matrix(cov_matrix) || !is.numeric(cov_matrix)) {
-    stop("`cov_matrix` must be a numeric matrix.", call. = FALSE)
-  }
-  n <- nrow(cov_matrix)
-  if (ncol(cov_matrix) != n) {
-    stop("`cov_matrix` must be square.", call. = FALSE)
-  }
-
-  if (!is.null(trait_name)) {
-    if (length(trait_name) != n) {
-      stop("`trait_name` length (", length(trait_name),
-           ") must equal matrix dimension (", n, ").", call. = FALSE)
-    }
-  } else {
-    trait_name <- rownames(cov_matrix)
-    if (is.null(trait_name) || any(!nzchar(trait_name))) {
-      stop("`cov_matrix` must have row names, or supply `trait_name`.",
-           call. = FALSE)
-    }
-  }
-  lapply(trait_name, validate_sql_identifier, what = "trait name")
-  if (anyDuplicated(trait_name)) {
-    stop("`trait_name` must not contain duplicates.", call. = FALSE)
-  }
-  dimnames(cov_matrix) <- list(trait_name, trait_name)
+  cov_matrix <- .check_cov_dimnames(cov_matrix, trait_name, "cov_matrix")
+  trait_name <- rownames(cov_matrix)
 
   if (!isSymmetric(unname(cov_matrix), tol = tol)) {
     stop("`cov_matrix` must be symmetric (max discrepancy: ",
@@ -121,36 +122,28 @@ define_effect_cov_matrix <- function(pop,
     stop("Diagonal entries (variances) must be non-negative.", call. = FALSE)
   }
 
-  # Genetic effects -> trait_var_comp; phenotype-level effects -> phenotype_var_comp
-  genetic_effects <- c("additive", "dominance", "additive_by_additive")
-
-  if (effect_name %in% genetic_effects) {
-    quoted_names <- paste0("'", trait_name, "'", collapse = ", ")
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0("DELETE FROM trait_var_comp WHERE effect_name = '", effect_name,
-             "' AND trait_name_1 IN (", quoted_names,
-             ") AND trait_name_2 IN (", quoted_names, ")")
-    )
-    # Build multi-row INSERT to avoid DBI::dbWriteTable() which consumes R's RNG
-    n_rows    <- n * n
-    start_id  <- next_int_id(pop$db_conn, "trait_var_comp", "id_trait_var_comp")
-    value_rows <- character(n_rows)
-    k <- 1L
-    for (i in seq_len(n)) {
-      for (j in seq_len(n)) {
-        value_rows[k] <- paste0("(", start_id + k - 1L, ", '", effect_name, "', '",
-                                trait_name[i], "', '", trait_name[j], "', ",
-                                format(cov_matrix[i, j], scientific = FALSE), ")")
-        k <- k + 1L
-      }
+  is_genetic <- effect_name %in% GENETIC_EFFECT_NAMES
+  if (!is.null(line_name)) {
+    if (!is_genetic) {
+      stop("`line_name` applies to genetic effects (",
+           paste0("'", GENETIC_EFFECT_NAMES, "'", collapse = ", "),
+           ") only, not to '", effect_name, "'.", call. = FALSE)
     }
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0("INSERT INTO trait_var_comp ",
-             "(id_trait_var_comp, effect_name, trait_name_1, trait_name_2, cov_value) VALUES ",
-             paste(value_rows, collapse = ", "))
-    )
+    if (!is.character(line_name) || length(line_name) != 1L || is.na(line_name)) {
+      stop("`line_name` must be a single character string or NULL.", call. = FALSE)
+    }
+    validate_sql_identifier(line_name, what = "line name")
+  }
+
+  if (is_genetic) {
+    conn <- pop$db_conn
+    DBI::dbExecute(conn, "BEGIN TRANSACTION")
+    committed <- FALSE
+    on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
+            add = TRUE)
+    .tvc_write_block(conn, effect_name, cov_matrix, line_name)
+    DBI::dbExecute(conn, "COMMIT")
+    committed <- TRUE
   } else if (identical(effect_name, "residual")) {
     define_residual_cov(pop,
       phenotype_names  = trait_name,
@@ -164,8 +157,233 @@ define_effect_cov_matrix <- function(pop,
   }
 
   message("Stored '", effect_name, "' covariance matrix for: ",
-          paste(trait_name, collapse = ", "), ".")
+          paste(trait_name, collapse = ", "),
+          if (!is.null(line_name)) paste0(" (line '", line_name, "')"), ".")
   invisible(pop)
+}
+
+
+# ---------------------------------------------------------------------------
+# Effect-name vocabulary (plans/import_qtl_effect_methods.md §6B rule 5)
+# ---------------------------------------------------------------------------
+
+#' Genetic variance components a target can be stored for
+#'
+#' Routed to `trait_var_comp` by [define_effect_cov_matrix()]. A finite list,
+#' not a pattern: a name moves here when a generator can calibrate it.
+#' @keywords internal
+GENETIC_EFFECT_NAMES <- c("additive", "dominance", "additive_by_additive")
+
+#' Genetic variance components reserved for future generators
+#' @keywords internal
+GENETIC_EFFECT_NAMES_FUTURE <- c("additive_by_dominance", "dominance_by_dominance")
+
+#' Output-only names of the genetic variance extractor
+#' @keywords internal
+DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
+
+#' Refuse a reserved name where a user-named effect is expected
+#'
+#' `genetic_ok = TRUE` (only [define_effect_cov_matrix()]) lets the genetic
+#' names through, because that function routes them to `trait_var_comp`. Every
+#' phenotype-layer definer passes `FALSE`: a random or fixed effect named
+#' `"additive"` would collide with the genetic vocabulary.
+#' @keywords internal
+.check_effect_name_input <- function(effect_name, genetic_ok = FALSE) {
+  if (effect_name %in% GENETIC_EFFECT_NAMES_FUTURE) {
+    stop("effect_name '", effect_name, "' is reserved but not yet supported: ",
+         "no generator calibrates it. Write such effects by hand with ",
+         "define_genome_effect_terms().", call. = FALSE)
+  }
+  if (effect_name %in% DERIVED_EFFECT_NAMES) {
+    stop("effect_name '", effect_name, "' is reserved for derived output ",
+         "(variance extraction) and cannot be defined.", call. = FALSE)
+  }
+  if (!genetic_ok && effect_name %in% GENETIC_EFFECT_NAMES) {
+    stop("effect_name '", effect_name, "' is a reserved genetic variance ",
+         "component (", paste0("'", GENETIC_EFFECT_NAMES, "'", collapse = ", "),
+         ") and cannot name a phenotype-level effect. Choose another name.",
+         call. = FALSE)
+  }
+  invisible(effect_name)
+}
+
+
+#' Check a covariance matrix's names against `trait_name`, never relabelling
+#'
+#' A single number is a 1 x 1 matrix when one name is given. A named matrix
+#' (row names, and column names when present) must equal `trait_name` in
+#' order; an unnamed one is taken in `trait_name` order. With no
+#' `trait_name`, the row names are the names. Before 0.73.0 the names were
+#' assigned over whatever the matrix carried, so a matrix named
+#' `c("BF", "ADG")` passed with `trait_name = c("ADG", "BF")` was stored with
+#' its rows the wrong way round.
+#'
+#' @return The matrix with `dimnames = list(names, names)`.
+#' @keywords internal
+.check_cov_dimnames <- function(x, trait_name, arg = "cov_matrix") {
+  if (is.numeric(x) && is.null(dim(x)) && length(x) == 1L) {
+    if (is.null(trait_name) || length(trait_name) != 1L) {
+      stop("A single number for `", arg, "` needs exactly one `trait_name`.",
+           call. = FALSE)
+    }
+    x <- matrix(x, 1L, 1L)
+  }
+  if (!is.matrix(x) || !is.numeric(x)) {
+    stop("`", arg, "` must be a numeric matrix.", call. = FALSE)
+  }
+  n <- nrow(x)
+  if (ncol(x) != n) stop("`", arg, "` must be square.", call. = FALSE)
+  rn <- rownames(x); cn <- colnames(x)
+  if (!is.null(rn) && !is.null(cn) && !identical(rn, cn)) {
+    stop("`", arg, "` row names (", paste(rn, collapse = ", "),
+         ") and column names (", paste(cn, collapse = ", "), ") differ.",
+         call. = FALSE)
+  }
+  nm <- if (!is.null(rn)) rn else cn
+  if (!is.null(trait_name)) {
+    if (length(trait_name) != n) {
+      stop("`trait_name` length (", length(trait_name),
+           ") must equal matrix dimension (", n, ").", call. = FALSE)
+    }
+    if (!is.null(nm) && !identical(as.character(nm), as.character(trait_name))) {
+      stop("`", arg, "` is named (", paste(nm, collapse = ", "),
+           ") but `trait_name` is (", paste(trait_name, collapse = ", "),
+           "). Names must match in order; the matrix is never relabelled.",
+           call. = FALSE)
+    }
+    nm <- trait_name
+  }
+  if (is.null(nm) || any(is.na(nm)) || any(!nzchar(nm))) {
+    stop("`", arg, "` must have row names, or supply `trait_name`.",
+         call. = FALSE)
+  }
+  nm <- as.character(nm)
+  lapply(nm, validate_sql_identifier, what = "trait name")
+  if (anyDuplicated(nm)) {
+    stop("`trait_name` must not contain duplicates.", call. = FALSE)
+  }
+  dimnames(x) <- list(nm, nm)
+  x
+}
+
+
+# ---------------------------------------------------------------------------
+# trait_var_comp: the one writer and the readers
+# ---------------------------------------------------------------------------
+
+#' SQL predicate for a `line_name` value, NULL-safe
+#' @keywords internal
+.tvc_line_sql <- function(conn, line_name) {
+  if (is.null(line_name)) "line_name IS NULL"
+  else paste0("line_name = ", DBI::dbQuoteLiteral(conn, line_name))
+}
+
+#' The traits of the stored block(s) touching `traits`
+#'
+#' A block is found from the rows themselves: the traits linked by
+#' off-diagonal rows within one `effect_name` x `line_name`. No block id is
+#' stored. Returns the connected closure of `traits`, restricted to traits
+#' that have at least one stored row.
+#' @keywords internal
+.tvc_block_traits <- function(conn, effect_name, line_name, traits) {
+  rows <- DBI::dbGetQuery(conn, paste0(
+    "SELECT trait_name_1, trait_name_2 FROM trait_var_comp WHERE effect_name = ",
+    DBI::dbQuoteLiteral(conn, effect_name), " AND ",
+    .tvc_line_sql(conn, line_name)))
+  stored <- unique(c(rows$trait_name_1, rows$trait_name_2))
+  block  <- intersect(traits, stored)
+  repeat {
+    hit <- rows$trait_name_1 %in% block | rows$trait_name_2 %in% block
+    grown <- union(block, c(rows$trait_name_1[hit], rows$trait_name_2[hit]))
+    if (length(grown) == length(block)) break
+    block <- grown
+  }
+  sort(block)
+}
+
+#' The `remove_rows()` call that clears one stored block
+#' @keywords internal
+.tvc_removal_call <- function(effect_name, line_name, block) {
+  line_pred <- if (is.null(line_name)) "is.na(line_name)"
+               else paste0('line_name == "', line_name, '"')
+  paste0(
+    '  get_table(pop, "trait_var_comp") |>\n',
+    '    dplyr::filter(effect_name == "', effect_name, '", ', line_pred, ',\n',
+    '                  trait_name_1 %in% c(',
+    paste0('"', block, '"', collapse = ", "), ')) |>\n',
+    '    remove_rows()')
+}
+
+#' Write one genetic covariance block to `trait_var_comp`
+#'
+#' The single write path for generation targets, shared by
+#' [define_effect_cov_matrix()] and the generators' `G =`. It
+#' * validates the block as finite, symmetric and positive semidefinite;
+#' * refuses when **any** row exists for `effect_name`, any of the block's
+#'   traits and the same `line_name` (NULL-safe), checked on the whole table,
+#'   even for an identical matrix;
+#' * inserts all n^2 rows with `%.17g` literals, which round-trip a double
+#'   exactly, through `dbExecute()` (never `dbWriteTable()`, which advances
+#'   the RNG).
+#'
+#' It opens **no** transaction: the caller owns one, so a generator commits
+#' the target together with its terms.
+#'
+#' @param G Named square matrix (`dimnames` = trait names).
+#' @keywords internal
+.tvc_write_block <- function(conn, effect_name, G, line_name = NULL) {
+  traits <- rownames(G)
+  what <- paste0("'", effect_name, "' covariance for ",
+                 paste(traits, collapse = ", "))
+  if (anyNA(G) || any(!is.finite(G))) {
+    stop("The ", what, " must contain only finite values.", call. = FALSE)
+  }
+  .qtl_target_eigen(unname(G), name = paste0("the ", what), rel_tol = 1e-10)
+  G <- (G + t(G)) / 2
+
+  block <- .tvc_block_traits(conn, effect_name, line_name, traits)
+  if (length(block)) {
+    stop("A '", effect_name, "' block is already stored for ",
+         paste(block, collapse = ", "),
+         if (is.null(line_name)) " (population-wide)"
+         else paste0(" (line '", line_name, "')"),
+         ". Stored targets are never overwritten, even by an identical matrix. ",
+         "To replace it, remove it first:\n",
+         .tvc_removal_call(effect_name, line_name, block), call. = FALSE)
+  }
+
+  n     <- length(traits)
+  start <- next_int_id(conn, "trait_var_comp", "id_trait_var_comp")
+  q     <- function(x) DBI::dbQuoteLiteral(conn, x)
+  ln    <- if (is.null(line_name)) "NULL" else q(line_name)
+  ij    <- expand.grid(j = seq_len(n), i = seq_len(n))
+  vals  <- sprintf("(%d, %s, %s, %s, %s, %s)",
+                   start + seq_len(n * n) - 1L, q(effect_name), ln,
+                   vapply(traits[ij$i], q, character(1)),
+                   vapply(traits[ij$j], q, character(1)),
+                   sprintf("%.17g", G[cbind(ij$i, ij$j)]))
+  DBI::dbExecute(conn, paste0(
+    "INSERT INTO trait_var_comp (id_trait_var_comp, effect_name, line_name, ",
+    "trait_name_1, trait_name_2, cov_value) VALUES ",
+    paste(vals, collapse = ", ")))
+  invisible(traits)
+}
+
+#' The `line_name` whose rows a reader should use
+#'
+#' `NULL` reads the population-wide rows. A named line reads its own rows when
+#' it has any for `effect_name` and these traits, and otherwise falls back to
+#' the population-wide rows. The fallback is decided per `effect_name`.
+#' @keywords internal
+.tvc_resolve_line <- function(conn, effect_name, traits, line_name) {
+  if (is.null(line_name)) return(NULL)
+  n <- DBI::dbGetQuery(conn, paste0(
+    "SELECT COUNT(*) AS n FROM trait_var_comp WHERE effect_name = ",
+    DBI::dbQuoteLiteral(conn, effect_name), " AND ",
+    .tvc_line_sql(conn, line_name), " AND trait_name_1 IN (",
+    paste(DBI::dbQuoteLiteral(conn, traits), collapse = ", "), ")"))$n
+  if (n > 0) line_name else NULL
 }
 
 
@@ -174,16 +392,19 @@ define_effect_cov_matrix <- function(pop,
 #' @param pop A `tidybreed_pop` object.
 #' @param effect_name Character.
 #' @param trait_name Character.
+#' @param line_name `NULL` (population-wide rows) or a line, which falls back
+#'   to the population-wide rows when it has none of its own.
 #' @return Numeric scalar, or `NA_real_` if not found.
 #' @keywords internal
-get_trait_var <- function(pop, effect_name, trait_name) {
-  row <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT cov_value FROM trait_var_comp ",
-           "WHERE effect_name = '", effect_name, "' ",
-           "AND trait_name_1 = '", trait_name, "' ",
-           "AND trait_name_2 = '", trait_name, "'")
-  )
+get_trait_var <- function(pop, effect_name, trait_name, line_name = NULL) {
+  conn <- pop$db_conn
+  line_name <- .tvc_resolve_line(conn, effect_name, trait_name, line_name)
+  tn  <- DBI::dbQuoteLiteral(conn, trait_name)
+  row <- DBI::dbGetQuery(conn, paste0(
+    "SELECT cov_value FROM trait_var_comp WHERE effect_name = ",
+    DBI::dbQuoteLiteral(conn, effect_name), " AND ",
+    .tvc_line_sql(conn, line_name), " AND trait_name_1 = ", tn,
+    " AND trait_name_2 = ", tn))
   if (nrow(row) == 0L) NA_real_ else row$cov_value[[1L]]
 }
 
@@ -212,51 +433,26 @@ get_phenotype_var <- function(pop, effect_name, phenotype_name) {
 #' @param pop A `tidybreed_pop` object.
 #' @param effect_name Character.
 #' @param trait_names Character vector of trait names.
+#' @param line_name `NULL` (population-wide rows) or a line, which falls back
+#'   to the population-wide rows when it has none of its own. Lines are never
+#'   mixed.
 #' @return Named numeric matrix, or `NULL` if any entry is missing.
 #' @keywords internal
-load_trait_cov <- function(pop, effect_name, trait_names) {
+load_trait_cov <- function(pop, effect_name, trait_names, line_name = NULL) {
+  conn <- pop$db_conn
+  line_name <- .tvc_resolve_line(conn, effect_name, trait_names, line_name)
   n <- length(trait_names)
   R <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(trait_names, trait_names))
-  rows <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT trait_name_1, trait_name_2, cov_value FROM trait_var_comp ",
-           "WHERE effect_name = '", effect_name, "' ",
-           "AND trait_name_1 IN (", paste0("'", trait_names, "'", collapse = ", "), ") ",
-           "AND trait_name_2 IN (", paste0("'", trait_names, "'", collapse = ", "), ")")
-  )
+  tn <- paste(DBI::dbQuoteLiteral(conn, trait_names), collapse = ", ")
+  rows <- DBI::dbGetQuery(conn, paste0(
+    "SELECT trait_name_1, trait_name_2, cov_value FROM trait_var_comp ",
+    "WHERE effect_name = ", DBI::dbQuoteLiteral(conn, effect_name), " AND ",
+    .tvc_line_sql(conn, line_name), " AND trait_name_1 IN (", tn, ") ",
+    "AND trait_name_2 IN (", tn, ")"))
   if (nrow(rows) == 0L) return(NULL)
   for (i in seq_len(nrow(rows))) {
     R[rows$trait_name_1[i], rows$trait_name_2[i]] <- rows$cov_value[i]
   }
   if (any(is.na(R))) return(NULL)
   R
-}
-
-
-#' Write a single diagonal entry to trait_var_comp
-#'
-#' Used internally by define_trait() to write a per-trait variance as a 1x1
-#' diagonal entry. Uses dbExecute() to avoid consuming R's RNG.
-#'
-#' @param pop A `tidybreed_pop` object.
-#' @param effect_name Character.
-#' @param trait_name Character.
-#' @param variance Numeric scalar.
-#' @return The modified `tidybreed_pop` (invisibly).
-#' @keywords internal
-write_trait_var_diag <- function(pop, effect_name, trait_name, variance) {
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("DELETE FROM trait_var_comp WHERE effect_name = '", effect_name,
-           "' AND trait_name_1 = '", trait_name, "' AND trait_name_2 = '", trait_name, "'")
-  )
-  new_id <- next_int_id(pop$db_conn, "trait_var_comp", "id_trait_var_comp")
-  DBI::dbExecute(
-    pop$db_conn,
-    paste0("INSERT INTO trait_var_comp ",
-           "(id_trait_var_comp, effect_name, trait_name_1, trait_name_2, cov_value) VALUES (",
-           new_id, ", '", effect_name, "', '", trait_name, "', '", trait_name, "', ",
-           format(as.numeric(variance), scientific = FALSE), ")")
-  )
-  invisible(pop)
 }

@@ -4,7 +4,7 @@
 \alias{get_trait_var}
 \title{Get the variance (diagonal) for one trait from trait_var_comp}
 \usage{
-get_trait_var(pop, effect_name, trait_name)
+get_trait_var(pop, effect_name, trait_name, line_name = NULL)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
@@ -12,6 +12,9 @@ get_trait_var(pop, effect_name, trait_name)
 \item{effect_name}{Character.}
 
 \item{trait_name}{Character.}
+
+\item{line_name}{\code{NULL} (population-wide rows) or a line, which falls back
+to the population-wide rows when it has none of its own.}
 }
 \value{
 Numeric scalar, or \code{NA_real_} if not found.

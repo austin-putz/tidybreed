@@ -21,7 +21,7 @@ make_qtl_pop <- function(pop_name = "qtl_test", n_males = 5, n_females = 5) {
     define_founder_haplotypes(n_haplotypes = 20) |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = n_males, n_females = n_females, line_name = "A") |>
-    define_trait("ADG", target_add_mean = 100, target_add_var = 400)
+    with_additive_target("ADG", 400)
 
   # chr 1 loci are QTL (50 loci)
   pop <- pop |>

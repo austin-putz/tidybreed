@@ -29,11 +29,11 @@ make_effects_pop <- function(pop_name = "eff", n_ind = 500, n_loci = 500) {
 }
 
 
-test_that("define_additive_effects() rescales to target_add_var within tolerance", {
+test_that("define_additive_effects() rescales to the stored additive target", {
   set.seed(42)
   pop <- make_effects_pop("eff_scale", n_ind = 600, n_loci = 600)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 0.5)
+  pop <- with_additive_target(pop, "ADG", 0.5)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -51,7 +51,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   a[idx] <- eff$genome_value
 
   # The rescaler's actual contract: the Falconer expected additive variance
-  # under the base allele frequencies, sum(2 p q a^2), equals target_add_var.
+  # under the base allele frequencies, sum(2 p q a^2), equals the target.
   # This is deterministic given the effects, so it is asserted tightly.
   p <- DBI::dbGetQuery(pop$db_conn,
     "SELECT center_value AS p, genome_value AS a
@@ -76,7 +76,7 @@ test_that("TBV mean is approximately 0 for founder population", {
   set.seed(7)
   pop <- make_effects_pop("eff_mean", n_ind = 500, n_loci = 500)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 100, target_add_mean = 0)
+  pop <- with_additive_target(pop, "ADG", 100)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 200) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -90,7 +90,7 @@ test_that("TBV mean is approximately 0 for founder population", {
   expect_equal(nrow(tbv_df), 500)
   # mean TBV should be close to 0 (within ~2 SE = 2*sqrt(100/500) ≈ 0.9)
   expect_equal(mean(tbv_df$tbv_value), 0, tolerance = 2.0)
-  # var TBV should be close to target_add_var = 100
+  # var TBV should be close to the target, 100
   expect_equal(var(tbv_df$tbv_value), 100, tolerance = 15)
 
   close_pop(pop)
@@ -100,7 +100,7 @@ test_that("TBV mean is approximately 0 for founder population", {
 test_that("center_value written to genome_effect_members, not genome_meta", {
   pop <- make_effects_pop("eff_base_col")
 
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 50) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -128,7 +128,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
   pop <- make_effects_pop("eff_currpop", n_ind = 200, n_loci = 300)
 
   pop <- get_table(pop, "ind_meta") |> mutate_table(gen = 0L)
-  pop <- define_trait(pop, "ADG", target_add_var = 50)
+  pop <- with_additive_target(pop, "ADG", 50)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 100) |> dplyr::pull(locus_name)
 
@@ -154,7 +154,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
 
 test_that("define_additive_effects() accepts manual effects", {
   pop <- make_effects_pop("eff_manual")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
   pop <- pop |>
@@ -173,7 +173,7 @@ test_that("define_additive_effects() accepts manual effects", {
 
 test_that("re-calling define_additive_effects() replaces existing rows", {
   pop <- make_effects_pop("eff_replace")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
 
@@ -209,8 +209,8 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
   set.seed(123)
   pop <- make_effects_pop("eff_multi", n_ind = 800, n_loci = 600)
 
-  pop <- define_trait(pop, "ADG", target_add_var = 0.25)
-  pop <- define_trait(pop, "BW",  target_add_var = 0.50)
+  pop <- define_trait(pop, "ADG")
+  pop <- define_trait(pop, "BW")
 
   # Same QTL for both traits (full pleiotropy via method = "shared")
   sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
@@ -253,7 +253,7 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
 
 test_that("define_additive_effects() errors on bare tidybreed_pop", {
   pop <- make_effects_pop("eff_err_pop")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   expect_error(
     define_additive_effects(pop, "ADG"),
@@ -265,7 +265,7 @@ test_that("define_additive_effects() errors on bare tidybreed_pop", {
 
 test_that("define_additive_effects() errors when filter returns zero rows", {
   pop <- make_effects_pop("eff_err_empty")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(locus_name == "NONEXISTENT") |>
@@ -294,7 +294,7 @@ make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20)
 test_that("scale_to_target = TRUE errors when QTL set includes a sex-linked locus", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
@@ -306,7 +306,7 @@ test_that("scale_to_target = TRUE errors when QTL set includes a sex-linked locu
 test_that("scale_to_target = FALSE with manual effects works fine for sex-linked QTL", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   n_x <- DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM genome_meta WHERE chr_name = 'X'")$n
@@ -320,7 +320,7 @@ test_that("scale_to_target = FALSE with manual effects works fine for sex-linked
 test_that("scale_to_target = TRUE still works for purely autosomal QTL on a genome that also has a sex chromosome", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   expect_no_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1") |>
@@ -367,7 +367,7 @@ stored_center <- function(pop, ln) {
 test_that("default base is the effect's own line pool; population-wide pools and warns", {
   pop <- make_two_line_pop("bt_inherit")
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
@@ -391,7 +391,7 @@ test_that("default base is the effect's own line pool; population-wide pools and
 test_that("an explicit whole founder table pools on purpose and never warns", {
   pop <- make_two_line_pop("bt_forced")
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   # Line-specific effect deliberately centered on the pooled base.
   expect_no_warning(
@@ -411,7 +411,7 @@ test_that("an explicit whole founder table pools on purpose and never warns", {
 test_that("default resolution: line pool -> shared pool -> error", {
   # (b) only a shared pool: a line-scoped effect falls back to it, silently.
   pop <- make_two_line_pop("bt_shared", lines = NA_character_)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   expect_no_warning(
     pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", effects = rep(1, 40), line_name = "A"))
@@ -439,7 +439,7 @@ test_that("default resolution: line pool -> shared pool -> error", {
   # pool-level fallback, the same rule as (b).
   pop <- make_two_line_pop("bt_fallback", lines = c("A", NA_character_))
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   expect_no_warning(
     pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", effects = rep(1, 40), line_name = "B"))
@@ -448,14 +448,14 @@ test_that("default resolution: line pool -> shared pool -> error", {
   # (d) neither: loud, listing what exists.
   pop2 <- make_two_line_pop("bt_none")            # A and B, no NULL pool
   on.exit(close_pop(pop2), add = TRUE)
-  pop2 <- define_trait(pop2, "ADG", target_add_var = 1)
+  pop2 <- with_additive_target(pop2, "ADG", 1)
   expect_error(
     pop2 |> get_table("genome_meta") |>
       define_additive_effects("ADG", effects = rep(1, 40), line_name = "NOPE"),
     "No founder_haplotypes rows for line 'NOPE'. Available: 'A', 'B'")
 })
 
-test_that("per-line centering recovers target_add_var that pooling misses", {
+test_that("per-line centering recovers the target that pooling misses", {
   # Line A: allele 0 fixed at half the loci, polymorphic at the rest, so the
   # within-line and pooled frequencies genuinely differ.
   set.seed(404)
@@ -479,7 +479,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
   mk_line("B", 0.9)   # common allele in B -- pooled sits near 0.5
   pop$tables <- unique(c(pop$tables, "founder_haplotypes"))
   pop <- ge_flat_view(pop)
-  pop <- define_trait(pop, "ADG", target_add_var = 2)
+  pop <- with_additive_target(pop, "ADG", 2)
 
   falconer <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -518,7 +518,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
 test_that("base_tbl is validated: class, same pop, and column projection", {
   pop <- make_two_line_pop("bt_valid")
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   gm  <- pop |> get_table("genome_meta")
 
   expect_error(gm |> define_additive_effects("ADG", effects = rep(1, 40),
@@ -549,8 +549,8 @@ test_that("a selected QTL with no base copies errors, per trait under union", {
                                    method = "fixed", allele_freq = 0.5)
   pop <- pop |> get_table("founder_haplotypes") |>
     add_founders(n_males = 2, n_females = 2, line_name = "A")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
-  pop <- define_trait(pop, "BW",  target_add_var = 1)
+  pop <- define_trait(pop, "ADG")
+  pop <- define_trait(pop, "BW")
 
   # Copies exist at loci 1-4 only.
   half <- get_table(pop, "ind_haplotype") |> dplyr::filter(locus_id <= 4L)
@@ -578,9 +578,11 @@ test_that("a selected QTL with no base copies errors, per trait under union", {
                               base_tbl = half),
     "no existing generated additive effects")
   # Shared: every trait writes every candidate, so the gap now bites, per trait.
+  # (The union call stored G; a stored target is never rewritten, so the
+  # shared call reads it back.)
   expect_error(
     pop |> get_table("genome_meta") |>
-      define_additive_effects(c("ADG", "BW"), G = G, method = "shared",
+      define_additive_effects(c("ADG", "BW"), method = "shared",
                               base_tbl = half),
     "no allele copies at 4 selected QTL for trait 'ADG'")
 })
@@ -593,7 +595,7 @@ test_that("same seed reproduces itself under the new surface", {
     set.seed(3)
     pop <- define_founder_haplotypes(pop, n_haplotypes = 30, line_name = "A")
     pop <- ge_flat_view(pop)
-    pop <- define_trait(pop, "ADG", target_add_var = 1)
+    pop <- with_additive_target(pop, "ADG", 1)
     pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", line_name = "A", seed = 42)
     DBI::dbGetQuery(pop$db_conn,
@@ -605,7 +607,7 @@ test_that("same seed reproduces itself under the new surface", {
 
 test_that("defining effects for one line does not clobber another line's rows", {
   pop <- make_two_line_pop("bln_clobber")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
@@ -642,7 +644,7 @@ test_that("centres and effects follow locus_id whatever order or projection tbl 
   set.seed(7)
   pop <- define_founder_haplotypes(pop, n_haplotypes = 40, method = "uniform",
                                    line_name = "A")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
 
   p <- extract_allele_freq(get_table(pop, "founder_haplotypes"))
   expect_gt(length(unique(round(p$allele_freq, 6))), 3L)   # p really varies

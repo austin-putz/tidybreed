@@ -19,7 +19,7 @@ det_pop <- function(name, n_loci = 500L, n_ind = 40L) {
   pop <- suppressMessages(make_test_pop(name, n_loci = n_loci, n_chr = 1,
                                         n_males = n_ind / 2,
                                         n_females = n_ind / 2))
-  pop <- suppressMessages(define_trait(pop, "A", target_add_var = 1))
+  pop <- suppressMessages(with_additive_target(pop, "A", 1))
   suppressMessages(pop |> get_table("genome_meta") |> define_additive_effects("A"))
 }
 
@@ -81,7 +81,7 @@ test_that("a genetic value too large for the exact accumulator errors with a tid
   pop <- suppressMessages(make_test_pop("det_big", n_loci = 4, n_chr = 1,
                                         n_males = 1, n_females = 1))
   on.exit(close_pop(pop), add = TRUE)
-  pop <- suppressMessages(define_trait(pop, "A", target_add_var = 1))
+  pop <- suppressMessages(with_additive_target(pop, "A", 1))
   pop <- suppressMessages(define_genome_effect_terms(pop, "A", data.frame(
     locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.5, genome_value = 1e30)))

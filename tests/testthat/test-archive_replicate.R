@@ -57,7 +57,7 @@ test_that("archive_replicate() creates store_and_reset tables with replicate col
 
 test_that("archive_replicate() creates store_once tables WITHOUT replicate column", {
   pop <- make_test_pop()
-  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- with_additive_target(pop, "ADG", 100)
 
   arc <- tempfile(fileext = ".duckdb")
   on.exit({
@@ -116,7 +116,7 @@ test_that("second call appends new replicate rows without overwriting prior ones
 
 test_that("store_once tables are NOT duplicated on second call", {
   pop <- make_test_pop()
-  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- with_additive_target(pop, "ADG", 100)
 
   arc <- tempfile(fileext = ".duckdb")
   on.exit({
@@ -342,7 +342,7 @@ test_that("archive_replicate() returns pop invisibly", {
 # output, so the next replicate re-draws instead of inheriting.
 make_random_effect_pop <- function() {
   pop <- make_test_pop(n_loci = 50, n_chr = 2)
-  pop <- define_trait(pop, "ADG", target_add_var = 100)
+  pop <- with_additive_target(pop, "ADG", 100)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
   pop <- define_phenotype(pop, "ADG", mean = 500, residual_var = 50)
   define_effect_random(pop, "ADG", effect_name = "pen",

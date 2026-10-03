@@ -9,6 +9,7 @@ define_effect_cov_matrix(
   effect_name,
   cov_matrix,
   trait_name = NULL,
+  line_name = NULL,
   tol = 1e-09
 )
 }
@@ -18,12 +19,17 @@ define_effect_cov_matrix(
 \item{effect_name}{Character. Label for the variance component, e.g.
 \code{"additive"}, \code{"residual"}, \code{"hys"}.}
 
-\item{cov_matrix}{A numeric square matrix. Must be symmetric within \code{tol}.
-Row and column names are used as trait/phenotype names when \code{trait_name}
-is not supplied.}
+\item{cov_matrix}{A numeric square matrix, or a single number when one
+trait/phenotype is named. Must be symmetric within \code{tol}. A named matrix
+must carry the same names as \code{trait_name}, in the same order (it is never
+relabelled); an unnamed one is taken in \code{trait_name} order.}
 
-\item{trait_name}{Optional character vector of trait/phenotype names (length
-== \code{nrow(cov_matrix)}). Overrides the matrix's \code{rownames} / \code{colnames}.}
+\item{trait_name}{Character vector of trait/phenotype names (length
+== \code{nrow(cov_matrix)}). Optional when the matrix has names.}
+
+\item{line_name}{Character or \code{NULL} (default). Genetic effects only: the
+line whose generation target this is. \code{NULL} is the population-wide
+target, which a line without its own block falls back to.}
 
 \item{tol}{Numeric. Tolerance for symmetry check (default \code{1e-9}).}
 }
@@ -72,6 +78,20 @@ call that clears them). In a block of two or more phenotypes every
 \code{distribution = "normal"} and read the same \verb{(source_column, source_table)}.
 See \code{\link[=define_residual_cov]{define_residual_cov()}} for the full rules. A rejected call changes
 nothing.
+
+\strong{Genetic blocks are written once.} A genetic block (\code{"additive"},
+\code{"dominance"}, \code{"additive_by_additive"}) is validated as positive
+semi-definite, stored at full double precision, and never overwritten: if
+any row already exists for that \code{effect_name}, any of the named traits and
+the same \code{line_name}, the call is an error, even when the matrix is
+identical. The error gives the \code{\link[=remove_rows]{remove_rows()}} call that clears the stored
+block. \code{trait_var_comp} is the single source of generation targets; the
+effect generators read it and never overwrite it either.
+
+\code{"additive_by_dominance"} and \code{"dominance_by_dominance"} are reserved for
+future generators and refused. \code{"total"}, \code{"unpartitioned"} and
+\code{"between_components"} are output names of the variance extractor and
+refused as input.
 }
 \examples{
 \dontrun{
@@ -80,6 +100,10 @@ G <- matrix(c(100, -20, -20, 50), 2, 2,
             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
   define_effect_cov_matrix("additive", G)
+
+# One trait: a number is a 1 x 1 matrix
+pop <- pop |>
+  define_effect_cov_matrix("additive", 0.25, trait_name = "WW")
 
 # Residual → phenotype_var_comp (effect_name = "residual")
 R <- matrix(c(30, 5, 5, 10), 2, 2,

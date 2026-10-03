@@ -103,7 +103,7 @@ test_that("extract_genotypes() with a real quote-embedded locus_name still retur
     define_founder_haplotypes(n_haplotypes = 10) |>
     get_table("founder_haplotypes") |>
     add_founders(n_males = 2, n_females = 2, line_name = "A") |>
-    define_trait("ADG", target_add_mean = 100, target_add_var = 400)
+    with_additive_target("ADG", 400)
   on.exit(close_pop(pop), add = TRUE)
 
   pop <- pop |>

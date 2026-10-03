@@ -7,20 +7,17 @@
 #' phenotype-level information.
 #'
 #' To register the **observed phenotype** that individuals receive records for,
-#' call [define_phenotype()] after this function. For the common one-off case
-#' use [define_trait_simple()], which chains both steps together.
+#' call [define_phenotype()] after this function.
+#'
+#' The trait's genetic **targets** are not set here. Store them with
+#' [define_effect_cov_matrix()] (`effect_name = "additive"`), or pass `G` to
+#' [define_additive_effects()], which writes the target together with the
+#' effects calibrated to it. The usual chain is `define_trait()` →
+#' `define_additive_effects(G = )` → [define_phenotype()].
 #'
 #' @param pop A `tidybreed_pop` object.
 #' @param trait_name Character. Unique identifier for this genetic component
 #'   trait. Must be a valid SQL identifier.
-#' @param target_add_var Numeric. Target additive genetic variance. Written to
-#'   `trait_var_comp` as a diagonal entry under `effect_name = "additive"`.
-#'   Used by [define_additive_effects()] to rescale effects. If already set via
-#'   [define_effect_cov_matrix()], leave `NULL`.
-#' @param target_add_mean Numeric. TBV centering mean for the base population.
-#'   Default `0`; `E[TBV] = 0` when TBVs are centered on base allele
-#'   frequencies. The phenotypic population mean (intercept) is set separately
-#'   in [define_phenotype()].
 #' @param description Character. Free-text description of the trait.
 #' @param units Character. Measurement units, e.g. `"kg"`, `"count"`.
 #' @param overwrite Logical. If `TRUE` and a trait with the same name already
@@ -31,18 +28,23 @@
 #'
 #' @seealso [define_phenotype()], [define_additive_effects()],
 #'   [define_effect_fixed_class()], [define_effect_fixed_cov()],
-#'   [define_effect_random()], [add_phenotype()], [define_trait_simple()]
+#'   [define_effect_random()], [add_phenotype()], [define_effect_cov_matrix()]
 #'
 #' @examples
 #' \dontrun{
-#' # Simple genetic component trait:
+#' # Simple genetic component trait, its target and its effects:
 #' pop <- pop |>
-#'   define_trait("ADG", target_add_var = 100, units = "g/day")
+#'   define_trait("ADG", units = "g/day")
+#' pop <- get_table(pop, "genome_meta") |>
+#'   define_additive_effects("ADG", G = 100)
 #'
 #' # Maternal component traits (no define_phenotype call needed for WWD/WWM):
 #' pop <- pop |>
-#'   define_trait("WWD", target_add_var = 200) |>
-#'   define_trait("WWM", target_add_var = 80)
+#'   define_trait("WWD") |>
+#'   define_trait("WWM")
+#' pop <- get_table(pop, "genome_meta") |>
+#'   define_additive_effects(c("WWD", "WWM"),
+#'     G = matrix(c(200, -40, -40, 80), 2, 2))
 #'
 #' # Then define the observed composite phenotype:
 #' pop <- pop |>
@@ -57,8 +59,6 @@
 #' @export
 define_trait <- function(pop,
                          trait_name,
-                         target_add_var   = NULL,
-                         target_add_mean  = 0,
                          description      = NULL,
                          units            = NULL,
                          overwrite        = FALSE) {
@@ -95,23 +95,13 @@ define_trait <- function(pop,
              gsub("'", "''", trait_name), "'"))
   }
 
-  if (!is.null(target_add_var)) {
-    if (!is.numeric(target_add_var) || length(target_add_var) != 1 ||
-        is.na(target_add_var) || target_add_var < 0) {
-      stop("`target_add_var` must be a non-negative number.", call. = FALSE)
-    }
-    pop <- write_trait_var_diag(pop, "additive", trait_name,
-                               as.numeric(target_add_var))
-  }
-
   row <- tibble::tibble(
     id_trait         = next_int_id(pop$db_conn, "trait_meta", "id_trait"),
     trait_name       = trait_name,
     description      = if (is.null(description)) NA_character_
                        else as.character(description),
     units            = if (is.null(units)) NA_character_
-                       else as.character(units),
-    target_add_mean  = as.numeric(target_add_mean)
+                       else as.character(units)
   )
 
   DBI::dbWriteTable(pop$db_conn, "trait_meta", row, append = TRUE)
@@ -166,8 +156,7 @@ ensure_trait_tables <- function(pop) {
         id_trait         INTEGER PRIMARY KEY,
         trait_name       VARCHAR UNIQUE NOT NULL,
         description      VARCHAR,
-        units            VARCHAR,
-        target_add_mean  DOUBLE DEFAULT 0
+        units            VARCHAR
       )
     ",
 

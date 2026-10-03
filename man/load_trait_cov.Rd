@@ -4,7 +4,7 @@
 \alias{load_trait_cov}
 \title{Load a full covariance matrix from trait_var_comp}
 \usage{
-load_trait_cov(pop, effect_name, trait_names)
+load_trait_cov(pop, effect_name, trait_names, line_name = NULL)
 }
 \arguments{
 \item{pop}{A \code{tidybreed_pop} object.}
@@ -12,6 +12,10 @@ load_trait_cov(pop, effect_name, trait_names)
 \item{effect_name}{Character.}
 
 \item{trait_names}{Character vector of trait names.}
+
+\item{line_name}{\code{NULL} (population-wide rows) or a line, which falls back
+to the population-wide rows when it has none of its own. Lines are never
+mixed.}
 }
 \value{
 Named numeric matrix, or \code{NULL} if any entry is missing.

@@ -75,7 +75,7 @@ test_that("id_ind tables: frequency depends on which individuals, not how many r
   expect_equal(via_meta$allele_freq, expected)
 
   # Repeated rows per animal: five phenotype records each. Must not weight.
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 6), line_name = "Duroc")
   pop <- define_phenotype(pop, "ADG", mean = 0, residual_var = 1,
@@ -246,7 +246,7 @@ test_that("with F1s present, line_origin selects copies and ind_meta.line_name s
   set.seed(21)
   pop <- make_freq_pop("af_f1")
   on.exit(close_pop(pop))
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 6),
                             base_tbl = get_table(pop, "founder_haplotypes"))

@@ -1,3 +1,82 @@
+# tidybreed 0.73.0 (2026-10-03)
+
+Step 2 of `plans/import_qtl_effect_methods.md`: Part A (exact multi-trait
+calibration, `anchor =`) and the §6C generation-target rules. Summary in
+`plans/import_qtl_effect_methods_phase_2.md`.
+
+**Databases written by earlier versions are not readable** (pre-1.0, no
+migration): `trait_var_comp` gained `line_name` and `trait_meta` lost
+`target_add_mean`. `restore_pop()` refuses such a file and says to rebuild.
+
+## Breaking changes
+
+* `define_trait()` loses `target_add_var` and `target_add_mean`, and
+  `trait_meta` loses the `target_add_mean` column (it was written and never
+  read). Targets enter **only** through `define_effect_cov_matrix()` or a
+  generator's `G =`.
+* `define_trait_simple()` is removed. Chain `define_trait()` →
+  `define_additive_effects(G = )` → `define_phenotype()`.
+* `trait_var_comp` is the single source of generation targets, and a stored
+  genetic block is **never overwritten**: `define_effect_cov_matrix()` and
+  `define_additive_effects(G = )` refuse when any row exists for that
+  `effect_name`, any of the traits and the same `line_name`, even for an
+  identical matrix. The error gives the `remove_rows()` call that clears it.
+* Genetic blocks are validated positive semidefinite, and a named matrix must
+  match `trait_name` in order (it used to be relabelled silently, so a
+  `c("BF", "ADG")` matrix passed with `trait_name = c("ADG", "BF")` was stored
+  the wrong way round).
+* For k >= 2, `define_additive_effects()` values change for the same seed, by
+  design: the draw `B0` is unchanged, but it is now calibrated exactly instead
+  of rescaled per trait. For k = 1 the values are the same rescale (to
+  rounding).
+* `define_additive_effects()` refuses `G` together with manual `effects` or
+  `scale_to_target = FALSE` (nothing would be calibrated to it), and refuses a
+  stored target it cannot use whole: a block pairing a call trait with a trait
+  outside the call, or a stored `dominance` / `additive_by_additive` block.
+* `define_effect_cov_matrix()` refuses `additive_by_dominance` and
+  `dominance_by_dominance` ("not yet supported") and the derived names
+  `total`, `unpartitioned`, `between_components`. Phenotype-level random and
+  fixed effects may not use any genetic or derived name (`additive`, ...).
+* Error messages no longer suggest `define_trait(target_add_var = )`.
+
+## New features
+
+* `define_additive_effects()` calibrates by the exact congruence of the source
+  method (`R/qtl_congruence.R`): `B = B0 A` with `B' M B = G` to machine
+  precision, correlations included. At 200 QTL and a target genetic
+  correlation of 0.4 the old per-trait rescale delivered anything from about
+  0.18 to 0.60.
+* `anchor = c("genic", "realised")`: exact at the random-mating limit of the
+  base frequencies (default), or in the `Cov(X)` of the base individuals,
+  LD included (single-generation / clonal studies; an in-memory size limit
+  applies).
+* `G =` accepts a single number for one trait, and is written to
+  `trait_var_comp` in the **same transaction** as the effects (a failed call
+  used to keep the new target with the old effects).
+* `trait_var_comp_tbl =` chooses the stored rows to calibrate to.
+* `trait_var_comp.line_name`: per-line targets with fallback to the
+  population-wide block; `define_effect_cov_matrix(line_name = )`.
+* Two distinct rank errors: the anchor cannot carry the target, or the drawn
+  architecture cannot.
+* `warn_bounds =`: after calibration, a warning when another population (the
+  founder pool's expectation, the observed base individuals, or the genic
+  limit) sees a covariance outside the bounds. Nothing is stored.
+* `method = "union"` warns "approximate" for a non-zero target covariance,
+  with the delivered covariance and correlation.
+* The closing message says "exact" / "approximate" and gives the delivered
+  covariance. A line-scoped call explains that line effects add no difference
+  between line means.
+
+## Bug fixes
+
+* Targets are stored at full double precision (`%.17g`); they were truncated
+  to 7 significant digits.
+* `define_additive_effects(seed = )` applies the seed after every check, so a
+  refused call no longer changes `.Random.seed`.
+* A calibrated QTL set with no segregating locus in the base now errors (the
+  anchor cannot carry the target) instead of warning "Falconer V_A is zero"
+  and writing the draw unscaled.
+
 # tidybreed 0.72.5 (2026-10-03)
 
 ## Documentation

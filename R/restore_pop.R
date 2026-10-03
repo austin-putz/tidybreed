@@ -34,7 +34,8 @@
 #' pop <- open_pop(pop_name = "cattle", db_name = "cattle_sim.duckdb") |>
 #'   define_genome(n_loci = 50000, n_chr = 29, chr_len_Mb = 100) |>
 #'   define_founder_haplotypes(n_haplotypes = 100, line_name = "A")
-#' pop <- define_trait(pop, trait_name = "milk", target_add_var = 10)
+#' pop <- define_trait(pop, trait_name = "milk") |>
+#'   define_effect_cov_matrix("additive", 10, trait_name = "milk")
 #' db_path <- pop$db_path
 #' close_pop(pop)
 #'
@@ -170,6 +171,21 @@ restore_pop <- function(db_path,
       "carries pre-v0.72.0 stored names (", paste(old_strings, collapse = ", "),
       "). They are now 'additive', 'additive_by_additive' and the owner ",
       "'generated'; the current code reads only the new names."))
+  }
+
+  # v0.73.0: trait_var_comp gained line_name (generation targets per line) and
+  # trait_meta lost the never-read target_add_mean. trait_var_comp is created
+  # by open_pop(), so its check always fires on an older file; trait_meta is
+  # created lazily and may be absent.
+  if ("trait_var_comp" %in% existing_tables &&
+      !"line_name" %in% DBI::dbListFields(db_conn, "trait_var_comp")) {
+    stop_stale(paste0(
+      "carries the pre-v0.73.0 'trait_var_comp' shape (no line_name column)."))
+  }
+  if ("trait_meta" %in% existing_tables &&
+      "target_add_mean" %in% DBI::dbListFields(db_conn, "trait_meta")) {
+    stop_stale(paste0(
+      "carries the pre-v0.73.0 'trait_meta' shape (column target_add_mean)."))
   }
 
   # Infer pop_name from filename when not supplied

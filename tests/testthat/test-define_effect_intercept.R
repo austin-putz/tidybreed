@@ -13,7 +13,7 @@ make_int_pop <- function(pop_name = "ic", n_ind = 10) {
 }
 
 setup_int_trait <- function(pop, mean = 0, n_qtl = 30) {
-  pop <- define_trait(pop, "ADG", target_add_var = 0.25)
+  pop <- with_additive_target(pop, "ADG", 0.25)
   sel <- get_table(pop, "genome_meta") |>
     dplyr::collect() |>
     dplyr::slice_sample(n = n_qtl) |>
@@ -91,7 +91,7 @@ test_that("define_effect_intercept() only touches the named phenotype", {
   pop <- make_int_pop("ic_scoped")
   pop <- setup_int_trait(pop, mean = 10)
 
-  pop <- define_trait(pop, "BW", target_add_var = 0.1)
+  pop <- with_additive_target(pop, "BW", 0.1)
   sel <- get_table(pop, "genome_meta") |>
     dplyr::collect() |> dplyr::slice_sample(n = 20) |> dplyr::pull(locus_name)
   pop <- pop |>

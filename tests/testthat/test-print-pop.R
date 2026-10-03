@@ -49,7 +49,7 @@ test_that("print.tidybreed_pop() shows Model / Individuals / Records for a full 
     get_table("founder_haplotypes") |> dplyr::filter(line_name == "Landrace") |>
     add_founders(n_males = 5, n_females = 10, line_name = "Landrace")
 
-  pop <- pop |> define_trait("ADG", target_add_var = 0.25)
+  pop <- pop |> with_additive_target("ADG", 0.25)
   pop <- pop |>
     get_table("genome_meta") |> dplyr::filter(chr %in% 1:2) |>
     define_additive_effects("ADG",

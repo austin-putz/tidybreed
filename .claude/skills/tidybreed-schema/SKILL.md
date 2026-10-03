@@ -298,7 +298,10 @@ Observation-layer metadata lives in `phenotype_meta`.
 | trait_name      | VARCHAR | Unique identifier; equals `phenotype_name` for simple traits       |
 | description     | VARCHAR | Free text                                                          |
 | units           | VARCHAR | e.g. `"kg"`, `"g/day"`                                             |
-| target_add_mean | DOUBLE  | TBV centering mean for the base population; default `0`            |
+
+No target columns: `target_add_mean` (written, never read) was dropped in
+0.73.0, and targets live only in `trait_var_comp`. `restore_pop()` refuses a
+file whose `trait_meta` still has it.
 
 **What does NOT belong here** (all moved to `phenotype_meta` in v0.31.0):
 `type`, `expressed_sex`, `repeatable`, `mean`, `min_value`, `max_value`,
@@ -307,9 +310,27 @@ Observation-layer metadata lives in `phenotype_meta`.
 
 ### `trait_var_comp`
 
-Genetic-layer variance components. One row per (effect_name, trait_name_1, trait_name_2).
-Both `(i,j)` and `(j,i)` pairs stored. Populated by `define_effect_cov_matrix()` and
-`define_trait()`. Stores **only** genetic effects — no phenotype-level variances.
+**Generation targets**: the genetic covariances the effect generators
+calibrate to. One row per (effect_name, line_name, trait_name_1, trait_name_2);
+both `(i,j)` and `(j,i)` pairs stored. Populated **only** by
+`define_effect_cov_matrix()` and a generator's `G =`, both through
+`.tvc_write_block()`. Stores **only** genetic effects — no phenotype-level
+variances, and never estimates (those are evaluation parameters, plan Q20).
+
+Invariants (0.73.0, plan §6C):
+- **Single source of truth**: every target a generator calibrates to comes
+  from here, and a generator never overwrites it.
+- **Written once**: a write for `effect_name` × any of its traits ×
+  `line_name` (NULL-safe) is refused when any row exists for that key, even an
+  identical matrix. Replace by `remove_rows()` first.
+- **Full precision**: values are inserted as `%.17g` literals and read back
+  `identical()`.
+- **PSD**: every block is validated positive semidefinite before writing.
+- **Blocks** are found from the rows (traits linked by off-diagonal rows
+  within one `effect_name` × `line_name`); no block id is stored.
+- **Lines**: `line_name = NULL` is the population-wide target; a line uses its
+  own block when one exists and otherwise falls back to `NULL`, decided per
+  `effect_name`. Readers never mix lines.
 
 Valid `effect_name` values: `"additive"` (additive genetic G matrix);
 reserved, with no generator yet: `"dominance"`,
@@ -320,6 +341,7 @@ go to `phenotype_var_comp`, not here.
 |------------------|---------|----------------------------------------------------|
 | id_trait_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
 | effect_name      | VARCHAR | `"additive"`; reserved: `"dominance"`, `"additive_by_additive"` |
+| line_name        | VARCHAR | Line the target applies to; `NULL` = population-wide (the fallback). In the base `CREATE TABLE`; `restore_pop()` refuses a file without it |
 | trait_name_1     | VARCHAR |                                                    |
 | trait_name_2     | VARCHAR |                                                    |
 | cov_value        | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |

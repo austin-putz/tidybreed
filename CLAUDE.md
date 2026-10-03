@@ -132,14 +132,26 @@ to all lines.
 5. **No abbreviations in column names when the full word is unambiguous.**
    `index_weight` not `index_wt`; `trait_name_1`/`trait_name_2` not `trait_1`/`trait_2`.
 
+6. **The genetic `effect_name` values are reserved words, one vocabulary.**
+   Lowercase full words naming the specific component: `additive`,
+   `dominance`, `additive_by_additive` (`GENETIC_EFFECT_NAMES`, routed to
+   `trait_var_comp`); `additive_by_dominance`, `dominance_by_dominance` are
+   reserved but not yet supported (`GENETIC_EFFECT_NAMES_FUTURE`); `total`,
+   `unpartitioned`, `between_components` are derived output names
+   (`DERIVED_EFFECT_NAMES`). None of them may name a phenotype-level random or
+   fixed effect. A name joins `GENETIC_EFFECT_NAMES` only when a generator can
+   calibrate it — never a pattern such as `*_by_*`.
+
 ## Two-Layer Phenotype Design (v0.31.0+)
 
 The model is split into two distinct layers with a strict boundary between them:
 
 **Genetic component layer** — managed by `define_trait()`:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
-- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance in `trait_var_comp`
-- Arguments: `target_add_var`, `target_add_mean`, `description`, `units`
+- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance target in `trait_var_comp`
+- Arguments: `description`, `units` only. Targets enter **only** through
+  `define_effect_cov_matrix()` or a generator's `G =` (`define_additive_effects()`),
+  and a stored target block is never overwritten
 - No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
 **Observation layer** — managed by `define_phenotype()`:

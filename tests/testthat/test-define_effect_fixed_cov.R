@@ -20,7 +20,7 @@ make_cov_pop <- function(pop_name = "fc", n_ind = 10, ages = NULL) {
 
 # Trait + QTL + phenotype with a deterministic (zero-residual) phenotype model
 setup_cov_trait <- function(pop, mean = 100, n_qtl = 30) {
-  pop <- define_trait(pop, "ADG", target_add_var = 0.25)
+  pop <- with_additive_target(pop, "ADG", 0.25)
   sel <- get_table(pop, "genome_meta") |>
     dplyr::collect() |>
     dplyr::slice_sample(n = n_qtl) |>

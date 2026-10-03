@@ -52,7 +52,8 @@ build_pop <- function(n_ind, shape) {
       filter(line_name == ln) |>
       add_founders(n_males = n_ind / 4, n_females = n_ind / 4, line_name = ln)
   }
-  pop <- define_trait(pop, "ADG", target_add_var = 1.0)
+  pop <- define_trait(pop, "ADG") |>
+    define_effect_cov_matrix("additive", 1.0, trait_name = "ADG")
 
   qtl <- pop |> get_table("genome_meta") |> collect() |>
     arrange(locus_id) |> slice_head(n = n_qtl) |> pull(locus_name)

@@ -139,16 +139,15 @@
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
-#' @seealso [define_trait()], [define_residual_cov()], [add_phenotype()],
-#'   [define_trait_simple()]
+#' @seealso [define_trait()], [define_residual_cov()], [add_phenotype()]
 #'
 #' @examples
 #' \dontrun{
 #' # ── Simple continuous trait ──────────────────────────────────────────────
 #' pop <- pop |>
-#'   define_trait("ADG", target_add_var = 100) |>
+#'   define_trait("ADG") |>
 #'   get_table("genome_meta") |>
-#'   define_additive_effects("ADG") |>
+#'   define_additive_effects("ADG", G = 100) |>
 #'   define_phenotype("ADG",
 #'     type         = "continuous",
 #'     mean         = 850,
@@ -156,9 +155,9 @@
 #'
 #' # ── Count trait with clipping bounds ────────────────────────────────────
 #' pop <- pop |>
-#'   define_trait("NW", target_add_var = 2) |>
+#'   define_trait("NW") |>
 #'   get_table("genome_meta") |>
-#'   define_additive_effects("NW") |>
+#'   define_additive_effects("NW", G = 2) |>
 #'   define_phenotype("NW",
 #'     type         = "count",
 #'     mean         = 10,
@@ -168,9 +167,9 @@
 #'
 #' # ── Categorical trait (binary via prevalence) ────────────────────────────
 #' pop <- pop |>
-#'   define_trait("mort", target_add_var = 0.05) |>
+#'   define_trait("mort") |>
 #'   get_table("genome_meta") |>
-#'   define_additive_effects("mort") |>
+#'   define_additive_effects("mort", G = 0.05) |>
 #'   define_phenotype("mort",
 #'     type       = "categorical",
 #'     prevalence = 0.05,

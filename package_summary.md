@@ -48,7 +48,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | Prefix | Functions |
 |---|---|
 | `open_` / `restore_` / `close_` | `open_pop`, `restore_pop`, `close_pop` |
-| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_trait_simple`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description` |
+| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description` |
 | `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tbv`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
 | `mutate_` | `mutate_table`, `mutate_derived`, `mutate_group_seq`, `mutate_group_named`, `mutate_group_concatenate` |
 | `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `archive_replicate` |
@@ -62,7 +62,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | `schema.R` | 1,520 | Table registry, descriptions, `schema()` / `describe_table()` |
 | `add_phenotype.R` | 1,146 | Phenotype simulation (composite, SGE, fixed/random effects, residuals) |
 | `define_genome_effect_terms.R` | 917 | General genome-effect writer: terms, members, origins, replace modes |
-| `define_additive_effects.R` | 912 | QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope |
+| `define_additive_effects.R` | 912 | QTL effect sampling, exact calibration by congruence (`anchor =`), §6C target resolution, line/parent-origin scope |
 | `genome_effects_eval.R` | 874 | The one evaluator behind `add_tbv()` / `add_tgv()` |
 | `add_offspring.R` | 823 | Mating, gamete formation, offspring haplotype writes |
 
@@ -118,8 +118,8 @@ Keys: 22 tables declare a SQL `PRIMARY KEY`; 5 use a logical key enforced in R (
 
 | Table | Kind | Cols | Key | Created by | Archive | Description |
 |---|---|---:|---|---|---|---|
-| `trait_meta` | table | 5 | `id_trait` | `define_trait()` | once | Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait(). |
-| `trait_var_comp` | table | 5 | `id_trait_var_comp` | `open_pop()` | once | Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet. |
+| `trait_meta` | table | 4 | `id_trait` | `define_trait()` | once | Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait(). |
+| `trait_var_comp` | table | 6 | `id_trait_var_comp` | `open_pop()` | once | Generation targets. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored; a block is written once, at full precision, never overwritten (0.73.0). Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet. |
 
 ### Observation model (5)
 

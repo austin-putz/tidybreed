@@ -273,7 +273,7 @@ test_that("crossbreeding end to end with default bases: common + two line varian
     add_founders(n_males = 3, n_females = 3, line_name = "Duroc", gen = 0L)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Landrace") |>
     add_founders(n_males = 3, n_females = 3, line_name = "Landrace", gen = 0L)
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   gm  <- pop |> get_table("genome_meta")
 
   expect_no_warning(
@@ -535,7 +535,7 @@ test_that("add_tbv() / add_tgv() accept any table with id_ind (unfiltered ind_eb
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
   pop <- pop |> get_table("founder_haplotypes") |>
     add_founders(n_males = 5, n_females = 5, line_name = "A")
-  pop <- define_trait(pop, "ADG", target_add_var = 1)
+  pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |> define_additive_effects("ADG")
 
   ids <- head(dplyr::collect(get_table(pop, "ind_meta"))$id_ind, 3)
