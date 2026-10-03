@@ -1,3 +1,13 @@
+# tidybreed 0.72.4 (2026-10-03)
+
+## Documentation
+
+* Plan only: Q21 in `plans/import_qtl_effect_methods.md` is decided. In step 3,
+  `define_additive_effects()` loses `effects` and `scale_to_target` and always
+  calibrates. Exact coefficients go through `define_genome_effect_terms()`.
+  The `prevalence` threshold then trusts a stored target only when every
+  active term is `generated`. The planned named-table `effects` is withdrawn.
+
 # tidybreed 0.72.3 (2026-10-03)
 
 Response to the Codex review of steps 0b and 1

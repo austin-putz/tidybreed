@@ -87,3 +87,9 @@ with `expect_identical()` at 1 and 8 threads. It was checked against reverted co
 with `.group_mate_tbv()` back on a plain `SUM(t.tbv_value)`, both the formula and the
 components tests fail, and both pass on the fix. A first version with only one group
 contributor passed on the broken code, so it was replaced.
+
+**Decision on finding 1 (user, 2026-10-03): Q21 option (a).** In step 3,
+`define_additive_effects()` loses `effects` and `scale_to_target` and always calibrates.
+Exact coefficients go through `define_genome_effect_terms()`. The prevalence threshold
+then trusts a stored target only when every active term is `generated`, and
+`define_effect_cov_matrix()` refuses to rewrite a target under existing generated terms.
