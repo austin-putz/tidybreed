@@ -1,3 +1,27 @@
+# tidybreed 0.71.2 (2026-10-02)
+
+Step 0b of `plans/import_qtl_effect_methods.md`: two bugs found while
+reviewing that plan, fixed ahead of it. Summary in
+`plans/import_qtl_effect_methods_phase_0b.md`.
+
+## Bug fixes
+
+* **Group contributors are now bit-identical across DuckDB thread counts
+  (B-1).** The group-mate sum behind `group_sum()` / `group_mean()` (and
+  `contributor_type = "group"` components) was a plain floating `SUM()`, so
+  a large pen could give phenotypes that differed in the last bits between
+  thread counts. It now accumulates exactly through `GEV_ACC_TYPE`, as the
+  genome-effect evaluator does. New test
+  `tests/testthat/test-group-contributor-determinism.R`.
+* **`prevalence` no longer silently assumes zero genetic variance (B-2).**
+  The threshold looked up the additive target under the *phenotype* name, so
+  a composite phenotype, or a trait whose effects were written without a
+  stored target, got `Va = 0` and the wrong prevalence with no message.
+  Behaviour change: `define_phenotype()` now refuses `prevalence` together
+  with `components` or `formula_tbv` (use `thresholds`), and
+  `add_phenotype()` errors before any write or draw when a simple trait has
+  no stored `gen_add` target.
+
 # tidybreed 0.71.1 (2026-09-23)
 
 ## Developer documentation

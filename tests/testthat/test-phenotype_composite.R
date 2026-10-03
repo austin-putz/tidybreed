@@ -538,15 +538,22 @@ test_that("Binary mortality trait with cage SGE: all birds phenotyped, values in
                  dimnames = list(c("mort_direct","mort_social"),
                                  c("mort_direct","mort_social"))))
 
+  mort_components <- tibble::tribble(
+    ~source_trait_name, ~contributor_type, ~group_column,
+    "mort_direct",      "self",            NA_character_,
+    "mort_social",      "group",           "cage_id"
+  )
+  # A composite liability has no stored variance to place a prevalence
+  # threshold with (it used to fall back silently to zero genetic variance).
+  expect_error(
+    define_phenotype(pop, "mortality", type = "categorical", prevalence = 0.1,
+                     residual_var = 1, components = mort_components),
+    "not supported for a composite phenotype")
   pop <- define_phenotype(pop, "mortality",
     type         = "categorical",
-    prevalence   = 0.1,
+    thresholds   = 1.3,
     residual_var = 1,
-    components   = tibble::tribble(
-      ~source_trait_name, ~contributor_type, ~group_column,
-      "mort_direct",      "self",            NA_character_,
-      "mort_social",      "group",           "cage_id"
-    )
+    components   = mort_components
   )
   pop <- get_table(pop, "ind_meta") |> add_phenotype("mortality")
 

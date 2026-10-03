@@ -163,6 +163,13 @@ NULL
     }
   }
 
+  # A prevalence threshold needs a stored genetic variance (see
+  # .ap_liability_records()). Checked here, before any TBV write or draw.
+  # user_values bypass the model, so no threshold is ever placed for them.
+  if (is.null(user_values)) {
+    .ap_check_prevalence(pop, pheno_meta, has_components | has_formula_tbv)
+  }
+
   # Derived formulas read the phenotypes they reference, so those go first.
   if (any(has_formula)) {
     phenos              <- .topo_sort_phenotypes(pheno_meta)
@@ -1117,6 +1124,53 @@ NULL
 }
 
 
+#' The message refusing `prevalence` on a composite phenotype
+#'
+#' Shared by [define_phenotype()] and `.ap_check_prevalence()`.
+#' @keywords internal
+.prevalence_composite_msg <- function(phenotype_name) {
+  paste0(
+    "Phenotype '", phenotype_name, "': `prevalence` is not supported for a ",
+    "composite phenotype (`components` or `formula_tbv`). Its genetic ",
+    "liability combines several traits and contributors, which no stored ",
+    "variance describes, so the threshold cannot be placed. Give explicit ",
+    "liability cutpoints with define_phenotype(thresholds = ) instead.")
+}
+
+
+#' Refuse a prevalence threshold that has no genetic variance to use
+#'
+#' A categorical phenotype defined by `prevalence` gets its liability threshold
+#' from the stored additive target of its trait. A composite phenotype has no
+#' such target, and neither does a simple trait whose effects were never
+#' calibrated to one; both used to fall back silently to zero genetic variance.
+#'
+#' @param pheno_meta The call's `phenotype_meta` rows.
+#' @param composite Logical, per row: has `phenotype_components` or
+#'   `formula_tbv`.
+#' @keywords internal
+.ap_check_prevalence <- function(pop, pheno_meta, composite) {
+  for (i in seq_len(nrow(pheno_meta))) {
+    m <- pheno_meta[i, , drop = FALSE]
+    if (is.na(m$type) || m$type != "categorical") next
+    if (!is.na(m$thresholds) && nzchar(m$thresholds)) next
+    t <- m$phenotype_name
+    if (composite[[i]]) stop(.prevalence_composite_msg(t), call. = FALSE)
+    if (is.na(get_trait_var(pop, "gen_add", t))) {
+      stop(
+        "Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
+        "additive target, but trait_var_comp has no 'gen_add' row for '", t,
+        "' (its effects were written without one, e.g. manual `effects` or ",
+        "scale_to_target = FALSE). Store a target with ",
+        "define_effect_cov_matrix() or define_trait(target_add_var = ), or ",
+        "give explicit cutpoints with define_phenotype(thresholds = ).",
+        call. = FALSE)
+    }
+  }
+  invisible(NULL)
+}
+
+
 #' Liability to phenotype records for one phenotype (in memory)
 #'
 #' @param r The phenotype's element of the residual adapter's result:
@@ -1144,7 +1198,11 @@ NULL
       }
       pheno_mean <- if (is.na(m$mean)) 0 else m$mean
       va <- get_trait_var(pop, "gen_add", t)
-      va <- if (is.na(va)) 0 else va
+      if (is.na(va)) {
+        stop("Internal error: phenotype '", t, "' reached the prevalence ",
+             "threshold without a stored additive target; ",
+             ".ap_check_prevalence() should have refused it.", call. = FALSE)
+      }
       thresh_vec <- pheno_mean +
         stats::qnorm(1 - m$prevalence) * sqrt(va + r$var_unconditional)
     }

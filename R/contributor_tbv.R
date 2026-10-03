@@ -128,14 +128,19 @@ NULL
   on.exit(try(duckdb::duckdb_unregister(conn, "__ap_focal_groups"),
               silent = TRUE), add = TRUE)
   if (!any(has)) return(out)
-  agg <- DBI::dbGetQuery(conn, paste0(
-    "SELECT f.id_ind, SUM(t.tbv_value) AS total, COUNT(t.tbv_value) AS n_mates ",
+  # The mate sum accumulates exactly (GEV_ACC_TYPE), as the evaluator does: a
+  # parallel floating SUM() over three or more mates adds them in thread order,
+  # and the result must not depend on DuckDB's thread count (CLAUDE.md).
+  agg <- tryCatch(DBI::dbGetQuery(conn, paste0(
+    "SELECT f.id_ind, ",
+    "CAST(SUM(CAST(t.tbv_value AS ", GEV_ACC_TYPE, ")) AS DOUBLE) AS total, ",
+    "COUNT(t.tbv_value) AS n_mates ",
     "FROM __ap_focal_groups AS f ",
     "LEFT JOIN ", .group_members_sql(group_column, group_table), " AS m ",
     "ON m.group_val = f.group_val AND m.id_ind <> f.id_ind ",
     "LEFT JOIN ind_tbv AS t ON t.id_ind = m.id_ind AND t.trait_name = ",
     DBI::dbQuoteLiteral(conn, trait_name), " ",
-    "GROUP BY f.id_ind"))
+    "GROUP BY f.id_ind")), error = .gev_accumulator_error)
   k <- match(focal_ids[has], agg$id_ind)
   total <- agg$total[k]
   n_mates <- agg$n_mates[k]

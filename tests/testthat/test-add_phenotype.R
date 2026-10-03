@@ -275,6 +275,75 @@ test_that("categorical trait with prevalence respects target rate approximately"
 })
 
 
+# A prevalence threshold is placed with the trait's stored additive target.
+# Without one it used to fall back silently to zero genetic variance (tidybreed
+# 0.71.2, plans/import_qtl_effect_methods.md step 0b, B-2).
+test_that("prevalence on a composite phenotype is refused in define_phenotype()", {
+  pop <- make_pheno_pop("ph_prev_comp", n_ind = 20, n_loci = 100)
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "mort", target_add_var = 1)
+  expect_error(
+    define_phenotype(pop, "mort_total", type = "categorical",
+                     prevalence = 0.1, residual_var = 1, formula_tbv = "mort"),
+    "not supported for a composite phenotype")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_meta"))), 0L)
+})
+
+test_that("add_phenotype() refuses prevalence on a composite even past define_phenotype()", {
+  # define_phenotype() refuses the combination; this is the PLAN-stage
+  # backstop for a phenotype_components row written by other means.
+  set.seed(12)
+  pop <- make_pheno_pop("ph_prev_backstop", n_ind = 20, n_loci = 100)
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "mort", target_add_var = 1)
+  pop <- suppressMessages(apply_random_qtl(pop, "mort", n_qtl = 20))
+  pop <- define_phenotype(pop, "mort", type = "categorical",
+                          prevalence = 0.1, residual_var = 1)
+  DBI::dbExecute(pop$db_conn, paste(
+    "INSERT INTO phenotype_components",
+    "(id_phenotype_comp, phenotype_name, source_trait_name, contributor_type)",
+    "VALUES (1, 'mort', 'mort', 'dam')"))
+  seed_before <- .Random.seed
+  expect_error(pop |> get_table("ind_meta") |> add_phenotype("mort"),
+               "not supported for a composite phenotype")
+  expect_identical(.Random.seed, seed_before)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+})
+
+test_that("prevalence without a stored additive target errors before any write or draw", {
+  set.seed(11)
+  pop <- make_pheno_pop("ph_prev_notarget", n_ind = 40, n_loci = 200)
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "mort")
+  pop <- suppressMessages(pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_id <= 30L) |>
+    define_additive_effects("mort", scale_to_target = FALSE))
+  pop <- define_phenotype(pop, "mort", type = "categorical",
+                          prevalence = 0.1, residual_var = 1)
+
+  seed_before <- .Random.seed
+  expect_error(
+    pop |> get_table("ind_meta") |> add_phenotype("mort"),
+    "no 'gen_add' row for 'mort'.*thresholds")
+  expect_identical(.Random.seed, seed_before)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0L)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+
+  # user_values bypass the model and place no threshold, so they still work.
+  ids <- sort(dplyr::collect(get_table(pop, "ind_meta"))$id_ind)[1:5]
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind %in% !!ids) |>
+    add_phenotype("mort", user_values = c(0, 1, 0, 0, 1))
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 5L)
+  DBI::dbExecute(pop$db_conn, "DELETE FROM ind_phenotype")
+
+  # The same trait with explicit cutpoints records phenotypes.
+  pop <- define_phenotype(pop, "mort", type = "categorical",
+                          thresholds = 1.3, residual_var = 1, overwrite = TRUE)
+  pop <- pop |> get_table("ind_meta") |> add_phenotype("mort")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 40L)
+})
+
+
 test_that("categorical trait with explicit thresholds produces correct categories", {
   set.seed(42)
   pop <- open_pop(pop_name = "ph_cat_thresh", db_name = ":memory:") |>

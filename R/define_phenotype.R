@@ -31,7 +31,13 @@
 #'   `NULL` means no limit.
 #' @param prevalence Numeric between 0 and 1. For categorical traits with one
 #'   threshold (two categories), the fraction expected above the threshold.
-#'   Mutually exclusive with `thresholds`.
+#'   Mutually exclusive with `thresholds`. The threshold is placed on the
+#'   liability scale from `mean`, the unconditional residual variance and the
+#'   trait's stored additive target (`trait_var_comp`, `effect_name =
+#'   "gen_add"`), so [add_phenotype()] errors when no target is stored. Not
+#'   valid for composite phenotypes (`components` or `formula_tbv`): their
+#'   genetic liability combines several traits and contributors, which no
+#'   stored variance describes. Give `thresholds` instead.
 #' @param thresholds Numeric vector of length K−1 for K ordered categories.
 #'   Liability cutpoints in ascending order. Mutually exclusive with
 #'   `prevalence`.
@@ -254,6 +260,9 @@ define_phenotype <- function(pop,
     }
     if (has_thresholds && has_prevalence) {
       stop("Supply `thresholds` OR `prevalence`, not both.", call. = FALSE)
+    }
+    if (has_prevalence && (!is.null(components) || !is.null(formula_tbv))) {
+      stop(.prevalence_composite_msg(phenotype_name), call. = FALSE)
     }
 
     n_cats <- if (has_thresholds) length(thresholds) + 1L else 2L

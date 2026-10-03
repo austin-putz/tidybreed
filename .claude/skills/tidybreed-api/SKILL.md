@@ -528,7 +528,16 @@ pop |> define_genome_effects(
     `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
     columns: `weight`, `weight_type`, `aggregation`, `group_column`,
     `group_table`, `covariate_name`, etc. Writes to `phenotype_components`.
-    `NULL` (default) = simple single-self trait.
+    `NULL` (default) = simple single-self trait. A `group` contributor's
+    mate sum accumulates exactly (`GEV_ACC_TYPE`, `.group_mate_tbv()`), so
+    `group_sum()` / `group_mean()` are bit-identical across thread counts.
+  - `prevalence` (categorical, two categories) — the threshold is
+    `mean + qnorm(1 - prevalence) * sqrt(Va + Ve)`, with `Va` the trait's
+    stored `gen_add` diagonal. Refused with `components` / `formula_tbv`
+    (no stored variance describes a composite liability: use `thresholds`).
+    `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`, before any
+    write or draw) when the trait has no stored `gen_add` row; there is no
+    silent `Va = 0`. Skipped for `user_values` calls, which place no threshold.
   - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
     `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
     missing composite piece (missing group assignment, missing dam/sire TBV,

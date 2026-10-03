@@ -53,7 +53,12 @@ Default \code{FALSE}.}
 
 \item{prevalence}{Numeric between 0 and 1. For categorical traits with one
 threshold (two categories), the fraction expected above the threshold.
-Mutually exclusive with \code{thresholds}.}
+Mutually exclusive with \code{thresholds}. The threshold is placed on the
+liability scale from \code{mean}, the unconditional residual variance and the
+trait's stored additive target (\code{trait_var_comp}, \code{effect_name = "gen_add"}), so \code{\link[=add_phenotype]{add_phenotype()}} errors when no target is stored. Not
+valid for composite phenotypes (\code{components} or \code{formula_tbv}): their
+genetic liability combines several traits and contributors, which no
+stored variance describes. Give \code{thresholds} instead.}
 
 \item{thresholds}{Numeric vector of length K−1 for K ordered categories.
 Liability cutpoints in ascending order. Mutually exclusive with
