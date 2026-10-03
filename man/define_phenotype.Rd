@@ -55,8 +55,12 @@ Default \code{FALSE}.}
 threshold (two categories), the fraction expected above the threshold.
 Mutually exclusive with \code{thresholds}. The threshold is placed on the
 liability scale from \code{mean}, the unconditional residual variance and the
-trait's stored additive target (\code{trait_var_comp}, \code{effect_name = "additive"}), so \code{\link[=add_phenotype]{add_phenotype()}} errors when no target is stored. Not
-valid for composite phenotypes (\code{components} or \code{formula_tbv}): their
+trait's stored additive target (\code{trait_var_comp}, \code{effect_name = "additive"}), so \code{\link[=add_phenotype]{add_phenotype()}} errors when no target is stored. The
+target is taken as given: if the trait's effects were written without
+being calibrated to it (manual \code{effects}, or \code{scale_to_target = FALSE} in
+\code{\link[=define_additive_effects]{define_additive_effects()}}), the threshold describes a variance the model
+does not deliver and the realised prevalence is wrong, with no error. Give
+\code{thresholds} for such a trait. Not valid for composite phenotypes (\code{components} or \code{formula_tbv}): their
 genetic liability combines several traits and contributors, which no
 stored variance describes. Give \code{thresholds} instead.}
 

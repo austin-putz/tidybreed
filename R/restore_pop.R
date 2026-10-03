@@ -104,10 +104,11 @@ restore_pop <- function(db_path,
   }
 
   # Files written by a package version whose schema the current code cannot
-  # read. Both checks below fail later and further away if they are not made
+  # read. The checks below fail later and further away if they are not made
   # here: the first as a missing-column error from inside add_tbv(), the second
-  # as a DuckDB append error from inside define_phenotype(). Pre-1.0 there is no
-  # migration, so the only useful thing to do is say which file and which shape.
+  # as a DuckDB append error from inside define_phenotype(), the third not at
+  # all (old rows are silently ignored). Pre-1.0 there is no migration, so the
+  # only useful thing to do is say which file and which shape.
   stop_stale <- function(msg) {
     DBI::dbDisconnect(db_conn, shutdown = TRUE)
     stop("'", db_path, "' ", msg,
@@ -139,6 +140,36 @@ restore_pop <- function(db_path,
       "column 'genome_effect_types' is now 'component_names', naming ",
       "ind_tgv.component_name values rather than a deleted genome-effect ",
       "vocabulary."))
+  }
+
+  # v0.72.0 renamed stored strings, not columns: trait_var_comp's 'gen_add' /
+  # 'epistasis' became 'additive' / 'additive_by_additive', and the reserved
+  # owner 'generated_additive_tbv' became 'generated'. The shape checks above
+  # pass such a file, and the old rows are then invisible to every reader --
+  # get_trait_var() returns NA and add_tbv() finds no generated terms -- while
+  # new writes sit next to them under the new names.
+  old_strings <- character(0)
+  if ("trait_var_comp" %in% existing_tables) {
+    old <- DBI::dbGetQuery(db_conn, paste0(
+      "SELECT DISTINCT effect_name FROM trait_var_comp ",
+      "WHERE effect_name IN ('gen_add', 'epistasis') ORDER BY effect_name"))
+    old_strings <- c(old_strings, sprintf("trait_var_comp.effect_name '%s'",
+                                          old$effect_name))
+  }
+  if ("genome_effects" %in% existing_tables) {
+    old <- DBI::dbGetQuery(db_conn, paste0(
+      "SELECT COUNT(*) AS n FROM genome_effects ",
+      "WHERE effect_owner = 'generated_additive_tbv'"))
+    if (old$n > 0) {
+      old_strings <- c(old_strings,
+                       "genome_effects.effect_owner 'generated_additive_tbv'")
+    }
+  }
+  if (length(old_strings) > 0L) {
+    stop_stale(paste0(
+      "carries pre-v0.72.0 stored names (", paste(old_strings, collapse = ", "),
+      "). They are now 'additive', 'additive_by_additive' and the owner ",
+      "'generated'; the current code reads only the new names."))
   }
 
   # Infer pop_name from filename when not supplied

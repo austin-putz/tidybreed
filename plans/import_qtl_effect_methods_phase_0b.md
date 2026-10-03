@@ -123,3 +123,17 @@ Also updated:
 ## Next
 
 Step 1, the rename-only release (0.72.0).
+
+## Addendum 2026-10-03 — scope of B-2 (Codex review finding 1)
+
+B-2 fixed two cases: a **missing** target and a **composite** phenotype. It did not
+fix a third: a **stored target that the active terms were not calibrated to**. This
+happens with manual `effects` or `scale_to_target = FALSE` written over an existing
+target row. The threshold still uses that target, with no error. This behaviour is
+unchanged from before 0.71.2, so B-2 did not cause it, but the "What a user sees
+differently" list above should not be read as covering it. 0.72.3 documents it in the
+`define_phenotype(prevalence = )` roxygen, with `thresholds =` as the workaround. The
+fix is a design decision, Q21 in the main plan, due before step 3.
+
+The same review asked for a components-route determinism test (finding 3). It is added
+in 0.72.3, and it fails on the old floating `SUM()`.

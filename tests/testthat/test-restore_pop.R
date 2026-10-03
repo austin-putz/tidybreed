@@ -281,3 +281,51 @@ test_that("restore_pop() refuses a pre-0.68.0 phenotype_components shape", {
 
   unlink(tmp)
 })
+
+test_that("restore_pop() refuses pre-0.72.0 stored names", {
+  # 0.72.0 renamed strings, not columns, so the shape checks pass an older
+  # file. Without this refusal the old target is invisible (get_trait_var()
+  # returns NA) and a new one is written next to it.
+  tmp <- tempfile(fileext = ".duckdb")
+  pop <- open_pop(pop_name = "old_names", db_name = tmp) |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10) |>
+    define_trait("T", target_add_var = 1)
+  close_pop(pop)
+
+  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  DBI::dbExecute(conn, paste0("UPDATE trait_var_comp SET effect_name = ",
+                              "'gen_add' WHERE effect_name = 'additive'"))
+  DBI::dbDisconnect(conn, shutdown = TRUE)
+
+  expect_error(restore_pop(tmp), "pre-v0\\.72\\.0.*'gen_add'")
+
+  conn2 <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  expect_true("trait_var_comp" %in% DBI::dbListTables(conn2))
+  DBI::dbDisconnect(conn2, shutdown = TRUE)
+
+  unlink(tmp)
+})
+
+test_that("restore_pop() refuses the pre-0.72.0 reserved owner", {
+  set.seed(1)
+  tmp <- tempfile(fileext = ".duckdb")
+  pop <- open_pop(pop_name = "old_owner", db_name = tmp) |>
+    define_genome(n_loci = 10, n_chr = 1, chr_len_Mb = 10) |>
+    define_founder_haplotypes(n_haplotypes = 20)
+  pop <- pop |> get_table("founder_haplotypes") |>
+    add_founders(n_males = 5, n_females = 5, line_name = "A") |>
+    define_trait("T", target_add_var = 1)
+  pop <- get_table(pop, "genome_meta") |>
+    dplyr::filter(locus_id <= 3) |>
+    define_additive_effects(trait_name = "T")
+  close_pop(pop)
+
+  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  DBI::dbExecute(conn, paste0("UPDATE genome_effects SET effect_owner = ",
+                              "'generated_additive_tbv'"))
+  DBI::dbDisconnect(conn, shutdown = TRUE)
+
+  expect_error(restore_pop(tmp), "pre-v0\\.72\\.0.*generated_additive_tbv")
+
+  unlink(tmp)
+})

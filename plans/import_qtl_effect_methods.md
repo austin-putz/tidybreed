@@ -137,6 +137,15 @@ This pass found internal inconsistencies, which are now fixed:
     merged into §6 (precondition P1), so this plan is the single source for all five
     steps. The K1–K8 amendment labels are gone. Its gates are now T1–T9 (§11), and the
     old file is a pointer to §6.
+15. **2026-10-03 — Codex review of steps 0b and 1**
+    (`plans/import_qtl_effect_methods_phase_0b_1_review.md`, response at its end).
+    - Finding 2 fixed in 0.72.3: `restore_pop()` refuses the pre-0.72.0 stored strings.
+    - Finding 3 fixed in 0.72.3: a `phenotype_components` group-contributor
+      determinism test, checked to fail on the old floating `SUM()`.
+    - Finding 1 is a design gap, not a step-0b defect. A stored `additive` target does
+      not prove the active terms were calibrated to it. The §6A active-block rule
+      could not tell the difference either. Recorded as **Q21** (open, must be
+      decided before step 3). §6A, step 3 and gate PH7 point to it.
 
 ---
 
@@ -709,6 +718,11 @@ because they measure `ind_tgv`, and nobody would notice.
   `define_phenotype()` already refuses `prevalence` with `components` / `formula_tbv`,
   and `.ap_check_prevalence()` (PLAN stage) refuses a missing target. Step 3 extends
   that check to the active-block rule rather than adding a new one.
+  **Open (Q21):** a stored target is used only if it describes the active terms. The
+  rule above checks that a target *exists*, not that the terms were calibrated to it.
+  Manual `effects` or `scale_to_target = FALSE` written over a stored target pass the
+  rule and get a wrong threshold. Q21 decides how the threshold proves calibration
+  before step 3 implements this bullet.
 
 Under an additive-only model the total equals `additive`, so this is a no-op for
 every existing test. It belongs in the consolidation release (step 3, §10), not in
@@ -1653,7 +1667,8 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   - The `component_names` DDL default becomes `'total'`.
   - `add_phenotype()` calls `add_tgv()`.
   - `ind_tgv_total` sums exactly.
-  - The simple-phenotype precheck and the prevalence threshold change.
+  - The simple-phenotype precheck and the prevalence threshold change. The threshold
+    also needs Q21's calibration rule, which must be decided before this step starts.
   - `define_phenotype()` roxygen states that `mean` is an intercept.
 - The `ind_tgv` half of §6B: `order1_*` → `additive` / `dominance` / `indicator`.
 - The §6.2 breeding-value roxygen sentence on `add_tgv()`, `define_genome_effect_terms()` and `ad_terms()`.
@@ -1775,7 +1790,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - PH4. Mean: on a non-HWE / LD base with dominance, the realised base phenotypic mean minus `phenotype_meta.mean` equals the base mean of `ind_tgv_total` (plus the sample mean of residuals), showing that `mean` is an intercept.
 - PH5. Exact total (§6A): `ind_tgv_total` for a model with all four components is `expect_identical()` under `SET threads = 1` and `SET threads = 8`, and so is the phenotype built from it. The same holds for a composite phenotype with a `group_sum()` and a `group_mean()` contributor, read both as `"total"` and as one listed component. Use groups large enough for DuckDB to parallelise the aggregate (pens of 200, as in `test-group-contributor-determinism.R`): at pens of 10 the old floating `SUM()` never diverged, so a small fixture passes on broken code.
 - PH6. Precheck (§6A): a simple phenotype whose trait has **only** custom-owner terms (written with `define_genome_effect_terms()`) records phenotypes, with no "call define_additive_effects() first" error. A trait with no terms still errors.
-- PH7. Prevalence (§6A): with stored `additive` and `dominance` targets and a model with both kinds of terms, the binary threshold uses their sum. With `additive` only it is unchanged from the additive-only formula. A stored A + D + A×A target with the model generated from a filter that left A×A out: the threshold uses A + D only. A model with terms but no stored target (manual `effects`, or custom terms only) errors, naming `thresholds =`, as does a composite phenotype with `prevalence`. Explicit `thresholds` works in every one of these cases. Each error leaves `ind_phenotype` and `phenotype_random_effects` unchanged (D7).
+- PH7. Prevalence (§6A): with stored `additive` and `dominance` targets and a model with both kinds of terms, the binary threshold uses their sum. With `additive` only it is unchanged from the additive-only formula. A stored A + D + A×A target with the model generated from a filter that left A×A out: the threshold uses A + D only. A model with terms but no stored target (manual `effects`, or custom terms only) errors, naming `thresholds =`, as does a composite phenotype with `prevalence`. A stored target with active terms that were **not** calibrated to it errors too (Q21). Fixture: a trait with `target = 1`, manual effects that deliver a genic variance of about 550, and `prevalence = 0.1`. This passes silently at 0.72.3 (Codex review 2026-10-03, finding 1). Explicit `thresholds` works in every one of these cases. Each error leaves `ind_phenotype` and `phenotype_random_effects` unchanged (D7).
 - PH8. Step-3 grep gate: `ind_tbv`, `add_tbv`, `tbv_value`, `formula_tbv` and `order1_` appear nowhere in `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md` or the skills (past `NEWS.md` entries and closed plans excepted). `test-add_phenotype_failure_contract.R` asserts the D7 contract against `add_tgv()`.
 
 ---
@@ -2109,6 +2124,37 @@ either table.
 This is an `add_ebv()` / schema change, not part of Parts A–C. It constrains Q15, though:
 under §6C, `trait_var_comp` holds **generation targets only**, and nothing else
 writes to it.
+
+### Q21 — How does the prevalence threshold know a target describes the active terms? *(open; decide before step 3)*
+
+**The gap** (Codex review 2026-10-03, finding 1). The `prevalence` threshold is
+`mean + qnorm(1 − prev)·sqrt(target + Ve)`. It is right only if the trait's terms
+deliver `target`. Today, and under §6A's active-block rule as written, the code checks
+only that a target row **exists**. Some calls write terms that ignore a stored target:
+- `define_additive_effects(effects = )`;
+- `scale_to_target = FALSE`;
+- `define_genome_effect_terms()` terms next to generated ones.
+
+Such a call leaves an old target row that the model does not deliver. A reproduction
+has target 1, a delivered variance of about 553, `prevalence = 0.1`, and a realised
+45.5%, with no message. §7.1 makes this deliberate ("a stored block neither blocks them
+nor is checked"). Until step 3, the workaround is explicit `thresholds =`, now stated in
+the `define_phenotype()` roxygen (0.72.3).
+
+**Options:**
+
+| Option | How calibration is proven | Cost |
+|---|---|---|
+| **(a) The owner is the provenance** ← recommended | Generators write only calibrated terms. Manual `effects` and `scale_to_target` leave `define_additive_effects()`, as §9.1 already does for `define_genome_effects()` ("samples and calibrates only"). Exact coefficients go through `define_genome_effect_terms()` (`ad_terms()`) under a user owner. The threshold uses the targets only when **every** active term of the trait is `generated`. A user-owner term errors, naming `thresholds =`. One remaining hole: a target removed (`remove_rows()`) and rewritten after generation. Closed by `define_effect_cov_matrix()` refusing a genetic block whose traits already have `generated` terms of that kind. The fix is to regenerate with `G =`, which writes target and terms atomically (§7.1) | Breaking: reverses §7.1's named-table `effects` decision and removes `scale_to_target`. About 76 test call sites move to `define_genome_effect_terms()`. Must land in step 3 or later, because before consolidation `add_tbv()` reads only `generated` terms (§5) |
+| (b) Check against delivered variance | At PLAN, recompute the genic variance of the active terms from their stored `center_value` and origin scope. Compare it to the target, and error on a mismatch | No API change. Wrong under `anchor = "realised"` (step 2): a correctly calibrated model fails a genic check. Dominance and A×A need step 4's Part B machinery, which comes after step 3. Needs a tolerance |
+| (c) Store calibration provenance | A column on `genome_effects` (e.g. the target the term was calibrated to) | Stored derived metadata (CLAUDE.md principle 6), and a DDL change to the `genome_effect*` tables, which this plan otherwise avoids |
+
+(a) gives "generated ⇔ calibrated to the stored target" by construction, with no
+tolerance and no new metadata. It also makes `define_additive_effects()` and
+`define_genome_effects()` the same kind of function. If (a) is chosen, update §7.1
+(drop the named-table `effects` bullet and `scale_to_target`), §6A's error list, gate
+A19, and step 2's "Named manual `effects`" bullet. Step 2 can then skip the
+named-table work entirely.
 
 ---
 

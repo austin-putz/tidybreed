@@ -1,3 +1,32 @@
+# tidybreed 0.72.3 (2026-10-03)
+
+Response to the Codex review of steps 0b and 1
+(`plans/import_qtl_effect_methods_phase_0b_1_review.md`).
+
+## Bug fixes
+
+* `restore_pop()` refuses a database written before 0.72.0. Such a file still
+  holds `trait_var_comp.effect_name` `'gen_add'` / `'epistasis'` or the
+  reserved owner `'generated_additive_tbv'`. It used to restore successfully,
+  and then the old rows were invisible: `get_trait_var()` returned `NA`,
+  `add_tbv()` found no generated terms, and new targets were written next to
+  the old ones.
+
+## Documentation
+
+* `define_phenotype(prevalence = )` states what 0.71.2 did and did not fix.
+  A missing target and a composite phenotype are refused. A stored target is
+  still taken as given, so effects written without calibrating to it (manual
+  `effects`, `scale_to_target = FALSE`) give a wrong threshold with no error.
+  Use `thresholds =` for such a trait. The design fix is open as Q21 in
+  `plans/import_qtl_effect_methods.md`, to be decided before step 3.
+
+## Tests
+
+* `test-group-contributor-determinism.R` covers the `phenotype_components`
+  route to the exact group sum, as well as the formula route. The new test
+  fails on the pre-0.71.2 floating `SUM()`.
+
 # tidybreed 0.72.2 (2026-10-03)
 
 ## Documentation

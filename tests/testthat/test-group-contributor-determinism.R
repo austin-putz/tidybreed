@@ -82,3 +82,28 @@ test_that("a seeded SGE phenotype is bit-identical at 1 and 8 threads", {
   expect_length(one, 400L)
   expect_identical(run("grp_det_t8", 8L), one)
 })
+
+test_that("a phenotype_components group contributor is bit-identical at 1 and 8 threads", {
+  # The second caller of .group_mate_tbv(): the components route, not the
+  # formula DSL. Step 3 retargets the helper to ind_tgv_total, and both
+  # routes must keep the exact sum. Same contributors as the formula test
+  # above, which is what makes the old floating SUM() diverge here.
+  run <- function(name, threads) {
+    pop <- grp_pop(name)
+    on.exit(close_pop(pop), add = TRUE)
+    DBI::dbExecute(pop$db_conn, paste0("SET threads = ", threads))
+    pop <- define_phenotype(pop, "W", residual_var = 1,
+      components = tibble::tribble(
+        ~source_trait_name, ~contributor_type, ~group_column, ~aggregation,
+        "D",                "self",            NA_character_, "sum",
+        "S",                "group",           "pen_id",      "sum",
+        "D",                "group",           "pen_id",      "mean"))
+    set.seed(77)
+    pop <- pop |> get_table("ind_meta") |> add_phenotype("W")
+    DBI::dbGetQuery(pop$db_conn,
+      "SELECT pheno_value FROM ind_phenotype ORDER BY id_ind")$pheno_value
+  }
+  one <- run("grp_cmp_t1", 1L)
+  expect_length(one, 400L)
+  expect_identical(run("grp_cmp_t8", 8L), one)
+})

@@ -34,8 +34,12 @@
 #'   Mutually exclusive with `thresholds`. The threshold is placed on the
 #'   liability scale from `mean`, the unconditional residual variance and the
 #'   trait's stored additive target (`trait_var_comp`, `effect_name =
-#'   "additive"`), so [add_phenotype()] errors when no target is stored. Not
-#'   valid for composite phenotypes (`components` or `formula_tbv`): their
+#'   "additive"`), so [add_phenotype()] errors when no target is stored. The
+#'   target is taken as given: if the trait's effects were written without
+#'   being calibrated to it (manual `effects`, or `scale_to_target = FALSE` in
+#'   [define_additive_effects()]), the threshold describes a variance the model
+#'   does not deliver and the realised prevalence is wrong, with no error. Give
+#'   `thresholds` for such a trait. Not valid for composite phenotypes (`components` or `formula_tbv`): their
 #'   genetic liability combines several traits and contributors, which no
 #'   stored variance describes. Give `thresholds` instead.
 #' @param thresholds Numeric vector of length K−1 for K ordered categories.
