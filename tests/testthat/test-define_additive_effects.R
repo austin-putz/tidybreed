@@ -1,7 +1,7 @@
 # These tests were written against the flat genome_effects table: one row per
 # (locus, line), carrying the coefficient and its centring frequency together.
 # Effects now live as terms over members with an origin scope, so the flat shape
-# is reconstructed as the test-only `gen_add_flat` view (ge_flat_view(), in
+# is reconstructed as the test-only `additive_flat` view (ge_flat_view(), in
 # helper-genome-effects-db.R). The package deliberately ships no such view --
 # the point of the new schema is that a term is not a locus -- but every
 # assertion below is about *generated additive* effects, which are exactly the
@@ -43,7 +43,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
 
   # Effects are now in genome_effects, not genome_meta columns
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT locus_name, genome_value FROM additive_flat WHERE trait_name = 'ADG'")
   locus_order <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
   a <- rep(0, nrow(locus_order))
@@ -55,7 +55,7 @@ test_that("define_additive_effects() rescales to target_add_var within tolerance
   # This is deterministic given the effects, so it is asserted tightly.
   p <- DBI::dbGetQuery(pop$db_conn,
     "SELECT center_value AS p, genome_value AS a
-       FROM gen_add_flat WHERE trait_name = 'ADG'")
+       FROM additive_flat WHERE trait_name = 'ADG'")
   expect_equal(sum(2 * p$p * (1 - p$p) * p$a^2), 0.5, tolerance = 1e-8)
 
   # The variance *realised* in the sampled founders is a noisy estimate of that
@@ -115,7 +115,7 @@ test_that("center_value written to genome_effect_members, not genome_meta", {
   expect_false("is_QTL_ADG"          %in% genome_cols)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT center_value FROM additive_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 50)
   expect_true(all(eff$center_value >= 0 & eff$center_value <= 1))
 
@@ -140,7 +140,7 @@ test_that("base = 'current_pop' via base_tbl argument works", {
                           distribution = "normal", seed = 5)
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, genome_value, center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT locus_name, genome_value, center_value FROM additive_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 100)
 
   # TBV mean should be ≈ 0
@@ -163,7 +163,7 @@ test_that("define_additive_effects() accepts manual effects", {
     define_additive_effects("ADG", effects = rep(2.0, 10))
 
   eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT genome_value FROM additive_flat WHERE trait_name = 'ADG'")
   expect_equal(nrow(eff), 10)
   expect_true(all(eff$genome_value == 2.0))
 
@@ -183,7 +183,7 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
     define_additive_effects("ADG", effects = rep(1.0, 20))
 
   n_before <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM gen_add_flat WHERE trait_name = 'ADG'")$n
+    "SELECT COUNT(*) AS n FROM additive_flat WHERE trait_name = 'ADG'")$n
   expect_equal(n_before, 20L)
 
   # Call again with different loci set
@@ -195,10 +195,10 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
     define_additive_effects("ADG", effects = rep(3.0, 30))
 
   n_after <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM gen_add_flat WHERE trait_name = 'ADG'")$n
+    "SELECT COUNT(*) AS n FROM additive_flat WHERE trait_name = 'ADG'")$n
   expect_equal(n_after, 30L)
   eff_vals <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM gen_add_flat WHERE trait_name = 'ADG'")$genome_value
+    "SELECT genome_value FROM additive_flat WHERE trait_name = 'ADG'")$genome_value
   expect_true(all(eff_vals == 3.0))
 
   close_pop(pop)
@@ -229,7 +229,7 @@ test_that("define_additive_effects() hits target variances per trait (multi-trai
 
   load_eff <- function(t) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT locus_name, genome_value FROM gen_add_flat WHERE trait_name = '", t, "'"))
+      "SELECT locus_name, genome_value FROM additive_flat WHERE trait_name = '", t, "'"))
     a <- rep(0, n_loci)
     idx <- match(e$locus_name, locus_order$locus_name)
     a[idx] <- e$genome_value
@@ -359,7 +359,7 @@ make_two_line_pop <- function(pop_name, n_loci = 40, n_hap = 20,
 
 stored_center <- function(pop, ln) {
   DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT DISTINCT center_value FROM gen_add_flat ",
+    "SELECT DISTINCT center_value FROM additive_flat ",
     "WHERE trait_name = 'ADG' AND line_name ",
     if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$center_value
 }
@@ -483,7 +483,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
 
   falconer <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT center_value p, genome_value a FROM gen_add_flat ",
+      "SELECT center_value p, genome_value a FROM additive_flat ",
       "WHERE trait_name = 'ADG' AND line_name = '", ln, "'"))
     sum(2 * e$p * (1 - e$p) * e$a^2)
   }
@@ -491,7 +491,7 @@ test_that("per-line centering recovers target_add_var that pooling misses", {
   # OWN allele frequencies -- what the simulation actually delivers.
   realised <- function(ln) {
     e <- DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT e.locus_name, e.genome_value a, f.p FROM gen_add_flat e ",
+      "SELECT e.locus_name, e.genome_value a, f.p FROM additive_flat e ",
       "JOIN (SELECT locus_name, AVG(CAST(allele AS DOUBLE)) p ",
       "        FROM founder_haplotypes WHERE line_name = '", ln, "' ",
       "        GROUP BY locus_name) f ON f.locus_name = e.locus_name ",
@@ -597,7 +597,7 @@ test_that("same seed reproduces itself under the new surface", {
     pop |> get_table("genome_meta") |>
       define_additive_effects("ADG", line_name = "A", seed = 42)
     DBI::dbGetQuery(pop$db_conn,
-      "SELECT locus_name, genome_value FROM gen_add_flat ORDER BY locus_name")
+      "SELECT locus_name, genome_value FROM additive_flat ORDER BY locus_name")
   }
   expect_identical(run(), run())
 })
@@ -619,7 +619,7 @@ test_that("defining effects for one line does not clobber another line's rows", 
 
   counts <- DBI::dbGetQuery(pop$db_conn,
     "SELECT line_name, COUNT(*) AS n, MIN(genome_value) AS v
-       FROM gen_add_flat WHERE trait_name = 'ADG'
+       FROM additive_flat WHERE trait_name = 'ADG'
        GROUP BY line_name ORDER BY line_name NULLS LAST")
 
   expect_equal(nrow(counts), 3L)

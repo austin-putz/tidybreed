@@ -21,7 +21,7 @@ define_trait(
 trait. Must be a valid SQL identifier.}
 
 \item{target_add_var}{Numeric. Target additive genetic variance. Written to
-\code{trait_var_comp} as a diagonal entry under \code{effect_name = "gen_add"}.
+\code{trait_var_comp} as a diagonal entry under \code{effect_name = "additive"}.
 Used by \code{\link[=define_additive_effects]{define_additive_effects()}} to rescale effects. If already set via
 \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, leave \code{NULL}.}
 

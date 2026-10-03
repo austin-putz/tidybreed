@@ -55,7 +55,7 @@ reference:
   - define_trait
   - define_trait_simple
   - define_additive_effects
-  - define_genome_effects
+  - define_genome_effect_terms
   - ad_terms
   - genotype_terms
   - define_effect_cov_matrix

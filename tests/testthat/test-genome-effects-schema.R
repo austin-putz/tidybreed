@@ -123,7 +123,7 @@ test_that("orphans inside the effect set are caught by the R validator", {
   # origins to members. DuckDB 1.5.5 refuses to delete a parent row inside an
   # explicit transaction whose children were deleted earlier in the same
   # transaction, which would make every replace mode of
-  # define_genome_effects() unwritable atomically. The rule is enforced by
+  # define_genome_effect_terms() unwritable atomically. The rule is enforced by
   # validate_genome_effects() instead, which runs before every COMMIT.
   pop <- ge_pop()
   on.exit(close_pop(pop), add = TRUE)
@@ -181,12 +181,12 @@ test_that("remove_rows() refuses the effect tables and says why", {
   expect_error(
     pop |> get_table("genome_effects") |>
       dplyr::filter(id_genome_effect == 1L) |> remove_rows(),
-    "define_genome_effects"
+    "define_genome_effect_terms"
   )
   expect_error(
     pop |> get_table("genome_effect_members") |>
       dplyr::filter(id_genome_effect == 1L) |> remove_rows(),
-    "define_genome_effects"
+    "define_genome_effect_terms"
   )
 })
 

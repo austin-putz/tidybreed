@@ -1,4 +1,4 @@
-# Phase C of plans/update_genome_effects_v4.md (v4.9): define_genome_effects(),
+# Phase C of plans/update_genome_effects_v4.md (v4.9): define_genome_effect_terms(),
 # the terms/origin input format, the (a, d) and genotype-table builders, and
 # define_additive_effects() rebuilt on top of them.
 #
@@ -58,7 +58,7 @@ test_that("worked example 1 (one dominance term) round-trips", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
 
-  pop <- define_genome_effects(pop, "ADG", terms = data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", terms = data.frame(
     locus_name = "Locus_10", contrast_name = "dominance",
     center_value = 0.3, genome_value = 0.8))
 
@@ -95,7 +95,7 @@ test_that("worked example 2 (a 3x3 A x A surface) round-trips, sparse", {
     data.frame(term_id = seq_len(nrow(cells)), locus_name = "Locus_14",
                contrast_name = "indicator", dosage_value = cells$g2,
                genome_value  = cells$value))
-  pop <- define_genome_effects(pop, "ADG", surface[surface$genome_value != 0, ],
+  pop <- define_genome_effect_terms(pop, "ADG", surface[surface$genome_value != 0, ],
                                effect_owner = "epistasis_AxA")
 
   got <- gew_scopes(pop)
@@ -121,7 +121,7 @@ test_that("worked example 3 (reciprocal dominance) round-trips", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
 
-  pop <- define_genome_effects(
+  pop <- define_genome_effect_terms(
     pop, "ADG",
     terms = data.frame(term_id = 1L, locus_name = "Locus_10",
                        contrast_name = "dominance", center_value = 0.3,
@@ -143,7 +143,7 @@ test_that("worked example 3 (reciprocal dominance) round-trips", {
 
   # The mirror image is a second, disjoint variant: both apply, to different
   # individuals, so they never compete.
-  pop <- define_genome_effects(
+  pop <- define_genome_effect_terms(
     pop, "ADG",
     terms = data.frame(term_id = "mirror", locus_name = "Locus_10",
                        contrast_name = "dominance", center_value = 0.3,
@@ -168,7 +168,7 @@ test_that("origin rows are canonicalized, so input order does not matter", {
                     line_name = c("Duroc", "Landrace"),
                     parent_origin = c(1L, 2L), copy_count = c(1L, 1L))
     if (rev) o <- o[rev(seq_len(nrow(o))), ]
-    pop <- define_genome_effects(
+    pop <- define_genome_effect_terms(
       pop, "ADG",
       terms = data.frame(term_id = 1L, locus_name = "Locus_10",
                          contrast_name = "dominance", center_value = 0.3,
@@ -185,7 +185,7 @@ test_that("origin rows are canonicalized, so input order does not matter", {
 test_that("members are canonicalized by ascending locus_id whatever the input order", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = 1L, locus_name = c("Locus_14", "Locus_3"),
     contrast_name = "additive", center_value = 0.5, genome_value = 2.5))
 
@@ -238,7 +238,7 @@ test_that("every valid Phase A fixture round-trips through the writer", {
     }
 
     expect_message(
-      pop <- define_genome_effects(pop, "ADG", terms, origin = origin,
+      pop <- define_genome_effect_terms(pop, "ADG", terms, origin = origin,
                                    effect_owner = "custom",
                                    mode = "replace_owner"),
       "Wrote", label = nm)
@@ -264,7 +264,7 @@ test_that("every valid Phase A fixture round-trips through the writer", {
   # Phase A for want of a chr_inheritance table. It is now refused at the
   # writer, which is where the fixture's own note said it belongs.
   expect_error(
-    define_genome_effects(pop, "ADG", data.frame(
+    define_genome_effect_terms(pop, "ADG", data.frame(
       locus_name = "LX", contrast_name = "dominance", center_value = 0.5,
       genome_value = 3.0), mode = "replace_owner"),
     "needs a diploid locus")
@@ -275,40 +275,40 @@ test_that("a malformed terms call names the user's term_id, not a surrogate id",
   on.exit(close_pop(pop), add = TRUE)
 
   # Varying genome_value within one term.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "AxB", locus_name = c("Locus_1", "Locus_2"),
     contrast_name = "additive", center_value = 0.5,
     genome_value = c(1, 2))), "term_id 'AxB'.*genome_value")
 
   # The same locus twice in one term.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "dup", locus_name = c("Locus_1", "Locus_1"),
     contrast_name = "additive", center_value = 0.5,
     genome_value = 1)), "term_id 'dup'.*more than once")
 
   # An unknown column is rejected, never silently dropped.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1, base_allele_freq = 0.3)),
     "Unknown column in 'terms': 'base_allele_freq'")
 
   # effect_name varying within a term.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "lbl", locus_name = c("Locus_1", "Locus_2"),
     contrast_name = "additive", center_value = 0.5, genome_value = 1,
     effect_name = c("x", "y"))), "term_id 'lbl'.*effect_name")
 
   # A contrast/state mismatch is caught before any SQL, naming the locus.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "nc", locus_name = "Locus_1", contrast_name = "additive",
     genome_value = 1)), "term_id 'nc' locus 'Locus_1'.*center_value")
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "ic", locus_name = "Locus_1", contrast_name = "indicator",
     dosage_value = 1, center_value = 0.5, genome_value = 1)),
     "must not carry 'center_value'")
 
   # And a locus that is not in the genome.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "nope", contrast_name = "additive", center_value = 0.5,
     genome_value = 1)), "not in genome_meta")
 
@@ -320,11 +320,11 @@ test_that("a malformed terms call names the user's term_id, not a surrogate id",
 test_that("a duplicate family + scope identity is rejected and rolls back", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1))
 
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "again", locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.5, genome_value = 9)), "same logical term at the same scope")
   # The failed call left the first term untouched and added nothing.
@@ -350,12 +350,12 @@ test_that("require_complete rejects a sparse surface and names what is missing",
                genome_value  = cells$value))
 
   expect_error(
-    define_genome_effects(pop, "ADG", surface[surface$genome_value != 0, ],
+    define_genome_effect_terms(pop, "ADG", surface[surface$genome_value != 0, ],
                           require_complete = TRUE),
     "missing 5 of 9 reachable")
   # The complete surface is accepted, zeros and all.
   expect_message(
-    define_genome_effects(pop, "ADG", surface, require_complete = TRUE),
+    define_genome_effect_terms(pop, "ADG", surface, require_complete = TRUE),
     "Wrote 9")
 })
 
@@ -370,14 +370,14 @@ test_that("require_complete counts the absent state where a chromosome can be ab
                        contrast_name = "indicator",
                        copy_count_value = c(1L, 1L), dosage_value = c(0L, 1L),
                        genome_value = c(1.0, 2.0))
-  expect_error(define_genome_effects(pop, "ADG", states, require_complete = TRUE),
+  expect_error(define_genome_effect_terms(pop, "ADG", states, require_complete = TRUE),
                "missing 1 of 3 reachable")
 
   full <- rbind(states, data.frame(term_id = 3L, locus_name = "LY",
                                    contrast_name = "indicator",
                                    copy_count_value = 0L, dosage_value = 0L,
                                    genome_value = 3.0))
-  expect_message(define_genome_effects(pop, "ADG", full, require_complete = TRUE),
+  expect_message(define_genome_effect_terms(pop, "ADG", full, require_complete = TRUE),
                  "Wrote 3")
 })
 
@@ -387,11 +387,11 @@ test_that("copy_count_value cannot be inferred at a variable-copy locus", {
 
   # The X carries 1 copy in males and 2 in females, so dosage 0 is two different
   # biological situations and the writer must refuse to guess.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "LX", contrast_name = "indicator", dosage_value = 0L,
     genome_value = 1)), "cannot be inferred.*1 or 2 copies")
 
-  expect_message(define_genome_effects(pop, "ADG", data.frame(
+  expect_message(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "LX", contrast_name = "indicator", copy_count_value = 1L,
     dosage_value = 0L, genome_value = 1)), "Wrote 1")
 })
@@ -406,12 +406,12 @@ test_that("'any' without a parent_origin is refused by the writer and by SQL", {
   # Through the writer: a scope that constrains nothing is not the same thing
   # as the common scope, and asking for it is a mistake, not a synonym. The
   # message arrives before any SQL, naming the user's own term.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "t1", locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.5, genome_value = 1),
     origin = list(line_match_type = "any", line_name = "A")),
     "term_id 't1' locus 'Locus_1'.*takes no line_name")
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "t2", locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.5, genome_value = 1),
     origin = data.frame(term_id = "t2", locus_name = "Locus_1",
@@ -436,7 +436,7 @@ test_that("'any' on a genotype member is refused (cross-table, so R-only)", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
 
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 1), origin = list(line_match_type = "any",
                                      parent_origin = 1, copy_count = 2)),
@@ -449,7 +449,7 @@ test_that("a scoped genotype member must sum to its state's copy count", {
 
   # The scalar-list form gives one origin row, which is all an additive member
   # may have and is not enough for a dominance member.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 1), origin = list(line_name = "A")),
     "demands 1 copies but the member's state is defined over 2")
@@ -461,9 +461,9 @@ test_that("a scoped genotype member must sum to its state's copy count", {
 test_that("the reserved owner is refused to the general writer", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
-    genome_value = 1), effect_owner = "generated_additive_tbv"),
+    genome_value = 1), effect_owner = "generated"),
     "reserved effect owner")
 })
 
@@ -471,10 +471,10 @@ test_that("gate 34: rerunning define_additive_effects() cannot delete custom ter
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
 
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 5), effect_owner = "custom")
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_2", contrast_name = "additive", center_value = 0.5,
     genome_value = 7), effect_owner = "my_model")
 
@@ -488,7 +488,7 @@ test_that("gate 34: rerunning define_additive_effects() cannot delete custom ter
     "SELECT effect_owner, COUNT(*) n FROM genome_effect_terms ",
     "GROUP BY 1 ORDER BY 1"))
   expect_equal(owners$effect_owner,
-               c("custom", "generated_additive_tbv", "my_model"))
+               c("custom", "generated", "my_model"))
   expect_equal(owners$n, c(1, 6, 1))
   # And the custom values are untouched.
   expect_equal(DBI::dbGetQuery(pop$db_conn, paste0(
@@ -502,10 +502,10 @@ test_that("replace_trait refuses to take the reserved owner with it", {
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 6), base_tbl = gew_base_A(pop))
 
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 5), mode = "replace_trait"),
-    "reserved owner 'generated_additive_tbv'")
+    "reserved owner 'generated'")
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) n FROM genome_effects")$n, 6)
 })
@@ -774,7 +774,7 @@ test_that("ad_terms() expands functional (a, d) and reports the mean without wri
 
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_genome_effects(pop, "ADG", suppressMessages(
+  pop <- define_genome_effect_terms(pop, "ADG", suppressMessages(
     ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)), effect_owner = "func")
   # Two terms, two families: an additive main effect and a dominance main
   # effect at one locus sum, they do not compete.
@@ -821,7 +821,7 @@ test_that("genotype_terms() turns a genotype table into indicator terms", {
 
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_message(define_genome_effects(pop, "ADG", tt,
+  expect_message(define_genome_effect_terms(pop, "ADG", tt,
                                        effect_owner = "surface"), "Wrote 4")
 })
 
@@ -832,7 +832,7 @@ test_that("genotype_terms() carries copy_count through for a variable-copy locus
 
   pop <- gew_fixture_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_message(define_genome_effects(pop, "ADG", tt), "Wrote 2")
+  expect_message(define_genome_effect_terms(pop, "ADG", tt), "Wrote 2")
   expect_error(genotype_terms(cells, c(1, 2), copy_count = list(LZ = 1L)),
                "not a column of 'genotypes'")
 })
@@ -844,13 +844,13 @@ test_that("replace_owner and replace_trait clear what they say they clear", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
   add <- function(owner, locus, v) {
-    pop <<- define_genome_effects(pop, "ADG", data.frame(
+    pop <<- define_genome_effect_terms(pop, "ADG", data.frame(
       locus_name = locus, contrast_name = "additive", center_value = 0.5,
       genome_value = v), effect_owner = owner)
   }
   add("one", "Locus_1", 1); add("one", "Locus_2", 2); add("two", "Locus_3", 3)
 
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_5", contrast_name = "additive", center_value = 0.5,
     genome_value = 9), effect_owner = "one", mode = "replace_owner")
   got <- gew_scopes(pop)
@@ -862,7 +862,7 @@ test_that("replace_owner and replace_trait clear what they say they clear", {
     "SELECT 1 FROM genome_effects e ",
     "WHERE e.id_genome_effect = m.id_genome_effect)"))$n, 0)
 
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_7", contrast_name = "additive", center_value = 0.5,
     genome_value = 4), effect_owner = "three", mode = "replace_trait")
   expect_equal(gew_scopes(pop)$genome_value, 4)
@@ -871,7 +871,7 @@ test_that("replace_owner and replace_trait clear what they say they clear", {
 test_that("replace_scope refuses a per-member origin data frame", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_error(define_genome_effects(
+  expect_error(define_genome_effect_terms(
     pop, "ADG",
     terms = data.frame(term_id = 1L, locus_name = "Locus_1",
                        contrast_name = "dominance", center_value = 0.4,
@@ -886,7 +886,7 @@ test_that("replace_scope refuses a per-member origin data frame", {
 test_that("a rejected write leaves the database exactly as it was", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1), effect_owner = "keep")
   before <- lapply(c("genome_effects", "genome_effect_members",
@@ -897,7 +897,7 @@ test_that("a rejected write leaves the database exactly as it was", {
   # An overlapping-but-incomparable pair: neither scope is more specific, so no
   # variant could ever be selected. Rejected at write time, inside the
   # transaction that also deleted the old rows.
-  expect_error(define_genome_effects(
+  expect_error(define_genome_effect_terms(
     pop, "ADG",
     terms = data.frame(term_id = c("a", "b"), locus_name = "Locus_1",
                        contrast_name = "additive", center_value = 0.5,
@@ -919,13 +919,13 @@ test_that("a rejected write leaves the database exactly as it was", {
 test_that("the writer needs define_genome() and an existing trait", {
   pop <- open_pop(pop_name = "bare", db_name = ":memory:")
   on.exit(close_pop(pop), add = TRUE)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1)), "genome-effect tables do not exist")
 
   pop2 <- gew_pop()
   on.exit(close_pop(pop2), add = TRUE)
-  expect_error(define_genome_effects(pop2, "NOPE", data.frame(
+  expect_error(define_genome_effect_terms(pop2, "NOPE", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1)), "not found in trait_meta")
 })
@@ -933,12 +933,12 @@ test_that("the writer needs define_genome() and an existing trait", {
 test_that("a dominance member at a non-diploid locus is refused", {
   pop <- gew_fixture_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "LX", contrast_name = "dominance", center_value = 0.4,
     genome_value = 1)), "needs a diploid locus")
 
   # The escape is an exact multiset on that same member demanding two copies.
-  expect_message(define_genome_effects(
+  expect_message(define_genome_effect_terms(
     pop, "ADG",
     terms = data.frame(term_id = 1L, locus_name = "LX",
                        contrast_name = "dominance", center_value = 0.4,
@@ -954,17 +954,17 @@ test_that("a duplicate caused only by a different centring names the combined te
   # genuinely combinable, so the rejection says what single term to write.
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 2))
 
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "cockerham", locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.3, genome_value = 6)),
     "genome_value = 8, center_value = 0.35")
 
   # Cancelling coefficients leave a constant, which this model has no place for.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = "cancel", locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.3, genome_value = -2)),
     "coefficients cancel")
@@ -973,10 +973,10 @@ test_that("a duplicate caused only by a different centring names the combined te
   # is exactly the line-specific case the exclusion exists for.
   pop2 <- gew_pop()
   on.exit(close_pop(pop2), add = TRUE)
-  pop2 <- define_genome_effects(pop2, "ADG", data.frame(
+  pop2 <- define_genome_effect_terms(pop2, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 2))
-  expect_message(define_genome_effects(pop2, "ADG", data.frame(
+  expect_message(define_genome_effect_terms(pop2, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.3,
     genome_value = 6), origin = list(line_name = "A")), "Wrote 1")
 })
@@ -985,11 +985,11 @@ test_that("silent coercions are refused rather than stored as plausible values",
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
   # as.numeric() would turn this into a silent NA.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = "0.4")), "'genome_value' must be numeric")
   # as.integer() would truncate this to a different genotype state.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "indicator", dosage_value = 1.5,
     genome_value = 1)), "must be a non-negative whole number")
   expect_equal(DBI::dbGetQuery(pop$db_conn,
@@ -1027,7 +1027,7 @@ test_that("base_tbl fills missing centres on additive/dominance members only", {
   p    <- extract_allele_freq(fh_A)$allele_freq
 
   # Column omitted entirely (the documented way to ask for a fill).
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = c("Locus_1", "Locus_2"),
     contrast_name = c("dominance", "additive"), genome_value = c(0.8, 0.3),
     term_id = 1:2), effect_owner = "omitted", base_tbl = fh_A)
@@ -1035,32 +1035,32 @@ test_that("base_tbl fills missing centres on additive/dominance members only", {
   expect_equal(got$center_value, p[1:2])
 
   # Column present with NA.
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_3", contrast_name = "dominance",
     center_value = NA_real_, genome_value = 0.8),
     effect_owner = "explicit_na", base_tbl = fh_A)
   expect_equal(gew_centres(pop, "explicit_na")$center_value, p[3])
 
   # An explicit centre always wins.
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_4", contrast_name = "additive",
     center_value = 0.123, genome_value = 0.8),
     effect_owner = "explicit", base_tbl = fh_A)
   expect_equal(gew_centres(pop, "explicit")$center_value, 0.123)
 
   # Indicator members are never touched (and still refuse a centre).
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_5", contrast_name = "indicator", dosage_value = 1L,
     genome_value = 0.8), effect_owner = "ind", base_tbl = fh_A)
   expect_true(is.na(gew_centres(pop, "ind")$center_value))
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_5", contrast_name = "indicator", dosage_value = 1L,
     center_value = 0.5, genome_value = 0.8), effect_owner = "ind2",
     base_tbl = fh_A), "must not carry 'center_value'")
 
   # A different base gives a different p: the same population semantics as
   # define_additive_effects() (both go through extract_allele_freq()).
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", genome_value = 0.8),
     effect_owner = "from_copies",
     base_tbl = get_table(pop, "ind_haplotype") |> dplyr::filter(line_origin == "A"))
@@ -1072,10 +1072,10 @@ test_that("base_tbl fills missing centres on additive/dominance members only", {
 test_that("without base_tbl a missing centre is the error it always was", {
   pop <- gew_base_pop()
   on.exit(close_pop(pop), add = TRUE)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", genome_value = 0.8)),
     "needs 'center_value'")
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance",
     center_value = NA_real_, genome_value = 0.8)),
     "needs 'center_value'")
@@ -1087,12 +1087,12 @@ test_that("the base is validated always but queried only when a fill is needed",
   fh_A <- get_table(pop, "founder_haplotypes") |> dplyr::filter(line_name == "A")
 
   # Validated: a wrong object errors even though every centre is explicit.
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 0.8), base_tbl = "A"), "must be a tidybreed_table")
   other <- gew_base_pop()
   on.exit(close_pop(other), add = TRUE)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 0.8), base_tbl = get_table(other, "founder_haplotypes")),
     "same pop as 'tbl'")
@@ -1100,10 +1100,10 @@ test_that("the base is validated always but queried only when a fill is needed",
   # Not queried: a base whose *query* would fail (no copies anywhere at these
   # loci) is the sharp check -- if it were queried, the call would error.
   empty_base <- get_table(pop, "ind_haplotype") |> dplyr::filter(locus_id > 999L)
-  expect_no_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_no_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
     genome_value = 0.8), effect_owner = "explicit", base_tbl = empty_base))
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_2", contrast_name = "dominance", genome_value = 0.8),
     effect_owner = "needs", base_tbl = empty_base),
     "contains no allele copies")
@@ -1113,7 +1113,7 @@ test_that("a failed fill keeps the row-specific message and says why", {
   pop <- gew_base_pop()
   on.exit(close_pop(pop), add = TRUE)
   half <- get_table(pop, "ind_haplotype") |> dplyr::filter(locus_id <= 2L)
-  expect_error(define_genome_effects(pop, "ADG", data.frame(
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = c("t1", "t2"), locus_name = c("Locus_1", "Locus_4"),
     contrast_name = "dominance", genome_value = 0.8),
     effect_owner = "gap", base_tbl = half),
@@ -1123,7 +1123,7 @@ test_that("a failed fill keeps the row-specific message and says why", {
     "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 })
 
-test_that("generator == writer: define_additive_effects() is sugar over define_genome_effects()", {
+test_that("generator == writer: define_additive_effects() is sugar over define_genome_effect_terms()", {
   # plans/update_genome_effects_base_tbl.md §2.5 / test 22. Capture what the
   # generator wrote, then re-write the same coefficients through the general
   # writer with center_value OMITTED so the base must be queried -- proving
@@ -1161,11 +1161,11 @@ test_that("generator == writer: define_additive_effects() is sugar over define_g
 
     coef <- DBI::dbGetQuery(pop$db_conn, paste0(
       "SELECT locus_name, genome_value FROM genome_effect_loci ",
-      "WHERE effect_owner = 'generated_additive_tbv' ORDER BY locus_id"))
-    pop <- define_genome_effects(pop, "ADG",
+      "WHERE effect_owner = 'generated' ORDER BY locus_id"))
+    pop <- define_genome_effect_terms(pop, "ADG",
       terms = data.frame(term_id = seq_len(nrow(coef)), locus_name = coef$locus_name,
                          contrast_name = "additive", genome_value = coef$genome_value),
-      origin = origin, effect_owner = "generated_additive_tbv",
+      origin = origin, effect_owner = "generated",
       mode = "replace_scope", allow_reserved_owner = TRUE, base_tbl = base)
     pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
     wri <- snapshot(pop)

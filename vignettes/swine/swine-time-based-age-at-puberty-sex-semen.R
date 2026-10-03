@@ -700,7 +700,7 @@ if (isSymmetric(vars.mat.add)){
 # add this additive genetic covariance matrix to a table with function
 pop <- pop %>%
   define_effect_cov_matrix(
-    effect_name = "gen_add",    # fixed term for additive genetic (co)variance matrix
+    effect_name = "additive",    # fixed term for additive genetic (co)variance matrix
     cov_matrix  = vars.mat.add  # name of matrix with row/col names
   )
 

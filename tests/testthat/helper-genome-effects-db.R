@@ -15,7 +15,7 @@
 #' terms are guaranteed order-one additive.
 ge_flat_view <- function(pop) {
   DBI::dbExecute(pop$db_conn, paste0(
-    "CREATE OR REPLACE VIEW gen_add_flat AS ",
+    "CREATE OR REPLACE VIEW additive_flat AS ",
     "SELECT e.trait_name, l.locus_name, m.locus_id, ",
     "       m.center_value, e.genome_value, ",
     "       o.line_name, o.parent_origin ",
@@ -24,6 +24,6 @@ ge_flat_view <- function(pop) {
     "JOIN genome_effect_loci   l USING (id_genome_effect, member_slot) ",
     "LEFT JOIN genome_effect_member_origins o ",
     "  USING (id_genome_effect, member_slot) ",
-    "WHERE e.effect_owner = 'generated_additive_tbv'"))
+    "WHERE e.effect_owner = 'generated'"))
   pop
 }

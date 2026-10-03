@@ -82,7 +82,7 @@ test_that("a genetic value too large for the exact accumulator errors with a tid
                                         n_males = 1, n_females = 1))
   on.exit(close_pop(pop), add = TRUE)
   pop <- suppressMessages(define_trait(pop, "A", target_add_var = 1))
-  pop <- suppressMessages(define_genome_effects(pop, "A", data.frame(
+  pop <- suppressMessages(define_genome_effect_terms(pop, "A", data.frame(
     locus_name = "Locus_1", contrast_name = "additive",
     center_value = 0.5, genome_value = 1e30)))
 

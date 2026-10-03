@@ -15,7 +15,7 @@
 #' }
 #'
 #' `genome_value` and `center_value` come from the **order-one `additive`
-#' terms** under the reserved effect owner `generated_additive_tbv`, the terms
+#' terms** under the reserved effect owner `generated`, the terms
 #' [define_additive_effects()] writes. `center_value` is that variant's base
 #' allele frequency.
 #'
@@ -27,7 +27,7 @@
 #' \eqn{(a, d)} input the stored coefficient is \eqn{a}, while the
 #' breeding-value coefficient in a diploid HWE base is
 #' \eqn{\alpha = a + d(q - p)}; under epistasis, average effects depend on other
-#' loci and on LD. So arbitrary terms written through [define_genome_effects()]
+#' loci and on LD. So arbitrary terms written through [define_genome_effect_terms()]
 #' contribute to `ind_tgv` but **never silently redefine the breeding value**,
 #' additive members appearing inside interactions are ignored, and `ind_tbv`
 #' keeps its exact meaning. Deriving average effects from a general

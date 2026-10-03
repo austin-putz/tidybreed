@@ -324,7 +324,7 @@ test_that("prevalence without a stored additive target errors before any write o
   seed_before <- .Random.seed
   expect_error(
     pop |> get_table("ind_meta") |> add_phenotype("mort"),
-    "no 'gen_add' row for 'mort'.*thresholds")
+    "no 'additive' row for 'mort'.*thresholds")
   expect_identical(.Random.seed, seed_before)
   expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0L)
   expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)

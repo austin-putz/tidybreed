@@ -466,7 +466,7 @@ define_genome <- function(pop,
   # -- the FK index still holds the uncommitted child entries -- and it does so
   # for single-column and composite keys alike, in either delete order, whether
   # the child delete was filtered or a whole-table DELETE. It succeeds only in
-  # autocommit. That makes every replace mode of define_genome_effects()
+  # autocommit. That makes every replace mode of define_genome_effect_terms()
   # unwritable as one transaction, and a half-replaced effect model is not a
   # weaker version of the requested model, it is a different one.
   #
@@ -474,7 +474,7 @@ define_genome <- function(pop,
   # validate_genome_effects(), which runs inside every write transaction before
   # COMMIT and reports orphans in both directions. These tables are package-
   # owned: remove_rows() refuses them, every column is reserved, and
-  # define_genome_effects() is the only writer -- so the sole route to an orphan
+  # define_genome_effect_terms() is the only writer -- so the sole route to an orphan
   # is a raw DBI call, which bypasses every other guard in the package too.
   #
   # The locus_id key below stays: genome_meta rows are never deleted, so it is

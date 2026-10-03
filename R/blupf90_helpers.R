@@ -323,12 +323,12 @@ write_renum_par <- function(eval_dir, col_map, distinct_effects, effects_df,
 
   # Load variance components
   R_mat <- .blupf90_residual_cov(pop, trait)
-  G_mat <- load_trait_cov(pop, "gen_add",  trait)
+  G_mat <- load_trait_cov(pop, "additive",  trait)
 
   if (is.null(G_mat))
     stop("Additive genetic covariance matrix not found for traits: ",
          paste(trait, collapse = ", "),
-         ". Call define_effect_cov_matrix(pop, 'gen_add', ...) first.", call. = FALSE)
+         ". Call define_effect_cov_matrix(pop, 'additive', ...) first.", call. = FALSE)
 
   # Format matrix rows: one line per row
   fmt_mat <- function(mat) {

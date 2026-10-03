@@ -34,7 +34,7 @@
 #'   Mutually exclusive with `thresholds`. The threshold is placed on the
 #'   liability scale from `mean`, the unconditional residual variance and the
 #'   trait's stored additive target (`trait_var_comp`, `effect_name =
-#'   "gen_add"`), so [add_phenotype()] errors when no target is stored. Not
+#'   "additive"`), so [add_phenotype()] errors when no target is stored. Not
 #'   valid for composite phenotypes (`components` or `formula_tbv`): their
 #'   genetic liability combines several traits and contributors, which no
 #'   stored variance describes. Give `thresholds` instead.

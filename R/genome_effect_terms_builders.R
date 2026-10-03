@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Expands one locus's additive and dominance coefficients into the two member
-#' rows [define_genome_effects()] takes. There is no third table and no separate
+#' rows [define_genome_effect_terms()] takes. There is no third table and no separate
 #' storage mode — functional coding is `additive` with `center_value = 0.5` plus
 #' an `indicator` on the heterozygous state, Cockerham coding is `additive` plus
 #' `dominance`, both centred at `p`.
@@ -36,12 +36,12 @@
 #' @return A `terms` data frame: two rows per locus with a non-zero
 #'   coefficient, `term_id` `"<locus>_a"` / `"<locus>_d"`.
 #'
-#' @seealso [define_genome_effects()], [genotype_terms()].
+#' @seealso [define_genome_effect_terms()], [genotype_terms()].
 #'
 #' @examples
 #' \dontrun{
 #' tt <- ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)
-#' pop <- pop |> define_genome_effects("ADG", tt, effect_owner = "functional")
+#' pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
 #' }
 #' @export
 ad_terms <- function(locus_name, a, d = 0, p,
@@ -159,7 +159,7 @@ ad_terms <- function(locus_name, a, d = 0, p,
 #' representation, only rows.
 #'
 #' A cell you leave out is a term you did not write, contributing zero. Ask for
-#' the opposite with `define_genome_effects(require_complete = TRUE)`, which
+#' the opposite with `define_genome_effect_terms(require_complete = TRUE)`, which
 #' then demands every reachable `(copy_count, dosage)` state.
 #'
 #' @param genotypes A data frame whose columns are named by `locus_name` and
@@ -177,13 +177,13 @@ ad_terms <- function(locus_name, a, d = 0, p,
 #' @return A `terms` data frame with `nrow(genotypes) * ncol(genotypes)` rows
 #'   (before `drop_zero`).
 #'
-#' @seealso [define_genome_effects()], [ad_terms()].
+#' @seealso [define_genome_effect_terms()], [ad_terms()].
 #'
 #' @examples
 #' \dontrun{
 #' cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
 #' vals  <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-#' pop <- pop |> define_genome_effects(
+#' pop <- pop |> define_genome_effect_terms(
 #'   "ADG", genotype_terms(cells, vals), effect_owner = "epistasis_AxA")
 #' }
 #' @export

@@ -206,7 +206,7 @@ this file was updated before.
 - **Genome effects:** never `SUM(genome_value)` over `genome_effect_loci` (an
   interaction term counts once per member). Row deletion from the three
   `genome_effect*` tables is refused — replace through
-  `define_genome_effects(mode = ...)`. Do **not** re-add foreign keys *inside*
+  `define_genome_effect_terms(mode = ...)`. Do **not** re-add foreign keys *inside*
   that set: DuckDB 1.5.5 cannot delete parent and child rows in one transaction,
   so `validate_genome_effects()` checks orphans before every `COMMIT` instead
   (pinned in `tests/testthat/test-genome-effects-schema.R`).
@@ -230,11 +230,11 @@ this file was updated before.
 
 ### Longer-Term
 
-- `select_parents()` — selection index or truncation selection
+- Selection stays filter-based (`get_table() |> filter()` then `add_offspring()`); there is deliberately **no** `select_parents()`
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
 - Realized variance components from an arbitrary effect model
-- Consolidating `ind_tbv` into `ind_tgv` (see `plans/consolidate_genetic_values.md`)
+- Consolidating `ind_tbv` into `ind_tgv` (see `plans/import_qtl_effect_methods.md` §6, step 3)
 
 ## Future Compiled Code Policy
 

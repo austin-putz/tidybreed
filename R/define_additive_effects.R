@@ -3,10 +3,10 @@
 #' @description
 #' Selects QTL from a filtered `genome_meta` table and writes one order-one
 #' `additive` term per locus through the same engine as
-#' [define_genome_effects()], under the reserved effect owner
-#' `"generated_additive_tbv"`. [add_tbv()] reads order-one
+#' [define_genome_effect_terms()], under the reserved effect owner
+#' `"generated"`. [add_tbv()] reads order-one
 #' `additive` variants from that owner and nothing else, so effects written here
-#' and effects a user writes with [define_genome_effects()] can never be
+#' and effects a user writes with [define_genome_effect_terms()] can never be
 #' confused for one another.
 #'
 #' **Single trait** (`trait_name` length 1) — two modes:
@@ -28,7 +28,7 @@
 #'   membership is read from the terms already stored at this scope, and a
 #'   locus draws jointly only for the traits it is a QTL for.
 #'
-#' `define_genome_effects()` writes any effect you supply; `define_*_effects()`
+#' `define_genome_effect_terms()` writes any effect you supply; `define_*_effects()`
 #' functions such as this one sample effects of one shape and write them
 #' through the same path.
 #'
@@ -97,7 +97,7 @@
 #'   `effects` is `NULL` and `length(trait_name) == 1`. Ignored for multi-trait.
 #' @param G Optional numeric matrix of additive-genetic (co)variances (multi-trait
 #'   only). Must be square and symmetric with side length `length(trait_name)`.
-#'   When supplied, stored to `trait_var_comp` under `"gen_add"`. When `NULL`,
+#'   When supplied, stored to `trait_var_comp` under `"additive"`. When `NULL`,
 #'   read from `trait_var_comp`.
 #' @param method Character. `"shared"` (default) or `"union"`. Multi-trait only.
 #'   `"shared"` — all listed traits use the filtered loci as their shared QTL
@@ -123,7 +123,7 @@
 #'   locus are independent, so the requested genetic covariance between a
 #'   paternal-only and a maternal-only trait is zero and cannot be realized.
 #'   For imprinting that varies locus by locus, write the terms with
-#'   [define_genome_effects()].
+#'   [define_genome_effect_terms()].
 #' @param scale_to_target Logical. If `TRUE`, rescale effects so the expected
 #'   additive variance equals the stored `target_add_var`:
 #'   `V_A = sum_j n_eligible,j * p_j q_j a_j^2`, where `n_eligible` is 2 for an
@@ -147,7 +147,7 @@
 #' G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
 #'             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
 #' pop <- pop |>
-#'   define_effect_cov_matrix("gen_add", G) |>
+#'   define_effect_cov_matrix("additive", G) |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr %in% 1:5) |>
 #'   define_additive_effects(c("ADG", "BW"), G = G)
@@ -222,7 +222,7 @@ define_additive_effects <- function(tbl,
 
     validate_sql_identifier(trait_name, what = "trait name")
     .ge_require_trait(pop$db_conn, trait_name)
-    target_add_var <- get_trait_var(pop, "gen_add", trait_name)
+    target_add_var <- get_trait_var(pop, "additive", trait_name)
 
     loci_df <- dplyr::collect(tbl)
     if (!"locus_name" %in% names(loci_df)) {
@@ -270,7 +270,7 @@ define_additive_effects <- function(tbl,
         if (is.na(target_add_var)) {
           stop(
             "No additive genetic variance stored for trait '", trait_name, "'. ",
-            "Call define_effect_cov_matrix(pop, 'gen_add', ...) or ",
+            "Call define_effect_cov_matrix(pop, 'additive', ...) or ",
             "define_trait(pop, '", trait_name, "', target_add_var = ...) first.",
             call. = FALSE
           )
@@ -287,7 +287,7 @@ define_additive_effects <- function(tbl,
     built <- .dae_build(pop$db_conn, trait_name, selected_locus_names,
                         qtl_effects, as.numeric(p_base[qtl_tf]), scope)
     model <- .ge_read_model(pop$db_conn)
-    drop  <- .ge_resolve_deletes(model, trait_name, GE_ADDITIVE_OWNER,
+    drop  <- .ge_resolve_deletes(model, trait_name, GE_GENERATED_OWNER,
                                  "replace_scope", .ge_scope_from_origin(
                                    scope, "replace_scope"), TRUE)
     .ge_commit(pop$db_conn, drop, built)
@@ -325,13 +325,13 @@ define_additive_effects <- function(tbl,
     if (!isSymmetric(unname(G))) stop("`G` must be symmetric.", call. = FALSE)
     g_named <- G
     dimnames(g_named) <- list(trait_name, trait_name)
-    pop <- define_effect_cov_matrix(pop, "gen_add", g_named)
+    pop <- define_effect_cov_matrix(pop, "additive", g_named)
   } else {
-    G_stored <- load_trait_cov(pop, "gen_add", trait_name)
+    G_stored <- load_trait_cov(pop, "additive", trait_name)
     if (is.null(G_stored)) {
-      stop("No 'gen_add' covariance matrix found for traits: ",
+      stop("No 'additive' covariance matrix found for traits: ",
            paste(trait_name, collapse = ", "),
-           ". Call define_effect_cov_matrix(pop, 'gen_add', G) first or pass G directly.",
+           ". Call define_effect_cov_matrix(pop, 'additive', G) first or pass G directly.",
            call. = FALSE)
     }
     G <- G_stored
@@ -369,7 +369,7 @@ define_additive_effects <- function(tbl,
   }
 
   target_var <- stats::setNames(
-    vapply(trait_name, function(t) get_trait_var(pop, "gen_add", t), numeric(1)),
+    vapply(trait_name, function(t) get_trait_var(pop, "additive", t), numeric(1)),
     trait_name
   )
 
@@ -477,7 +477,7 @@ define_additive_effects <- function(tbl,
 
     scope_t <- .dae_scope(line_name, po[[t]])
     drop <- c(drop, .ge_resolve_deletes(
-      model, t, GE_ADDITIVE_OWNER, "replace_scope",
+      model, t, GE_GENERATED_OWNER, "replace_scope",
       .ge_scope_from_origin(scope_t, "replace_scope"), TRUE))
     built <- .dae_stack(built, .dae_build(pop$db_conn, t, locus_names_t,
                                           effects_t, p_base_qtl_t, scope_t))
@@ -504,7 +504,7 @@ define_additive_effects <- function(tbl,
 #'
 #' @keywords internal
 #' @noRd
-GE_ADDITIVE_OWNER <- "generated_additive_tbv"
+GE_GENERATED_OWNER <- "generated"
 
 #' Resolve `parent_origin` to one value per trait
 #'
@@ -605,7 +605,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
                                center_value  = as.numeric(centers),
                                genome_value  = as.numeric(effects),
                                stringsAsFactors = FALSE),
-            origin = scope, effect_owner = GE_ADDITIVE_OWNER)
+            origin = scope, effect_owner = GE_GENERATED_OWNER)
 }
 
 #' Concatenate two candidate builds, renumbering the second's local ids
@@ -637,7 +637,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 .dae_existing_loci <- function(model, trait_name, scope) {
   ids <- model$terms$id_genome_effect[
     model$terms$trait_name == trait_name &
-      model$terms$effect_owner == GE_ADDITIVE_OWNER]
+      model$terms$effect_owner == GE_GENERATED_OWNER]
   if (length(ids) == 0L) return(integer(0))
   sc  <- .ge_scope_from_origin(scope, "replace_scope")
   hit <- vapply(ids, function(id) {
@@ -671,7 +671,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
 .dae_warn_parent_only <- function(conn, trait_names) {
   model <- .ge_read_model(conn)
   t <- model$terms[model$terms$trait_name %in% trait_names &
-                     model$terms$effect_owner == GE_ADDITIVE_OWNER, ,
+                     model$terms$effect_owner == GE_GENERATED_OWNER, ,
                    drop = FALSE]
   if (nrow(t) < 2L) return(invisible(NULL))
   keys <- .ge_family_keys(t, model$members[
@@ -702,7 +702,7 @@ GE_ADDITIVE_OWNER <- "generated_additive_tbv"
           "the other falls back for the rest — which is a legal fallback pair ",
           "but is rarely what re-running the same call with a new ",
           "parent_origin was meant to do. Use mode replace_owner via ",
-          "define_genome_effects(), or remove the unwanted variant, if you ",
+          "define_genome_effect_terms(), or remove the unwanted variant, if you ",
           "meant to replace it.", call. = FALSE)
   invisible(NULL)
 }

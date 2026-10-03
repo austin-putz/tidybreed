@@ -19,7 +19,7 @@
 #' animal gives the same answer as `ind_meta` for the same animals.
 #'
 #' This is the single place tidybreed turns a population selection into `p`.
-#' [define_additive_effects()] and [define_genome_effects()] both call it for
+#' [define_additive_effects()] and [define_genome_effect_terms()] both call it for
 #' their `base_tbl`, so a base selection means the same population in either.
 #' Users call it to obtain `p` for [ad_terms()].
 #'
@@ -43,7 +43,7 @@
 #'   exactly `0` or `1` is a real value and is kept. Errors if no locus has a
 #'   copy at all. Never warns and never writes.
 #'
-#' @seealso [define_additive_effects()], [define_genome_effects()], [ad_terms()].
+#' @seealso [define_additive_effects()], [define_genome_effect_terms()], [ad_terms()].
 #'
 #' @examples
 #' \dontrun{

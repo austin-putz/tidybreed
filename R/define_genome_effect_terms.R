@@ -4,12 +4,12 @@
 #' or delete rows under these without `allow_reserved_owner = TRUE`, so that
 #' rerunning [define_additive_effects()] can never remove a user's own terms and
 #' a user's call can never remove the generated ones. Derived from
-#' `GE_ADDITIVE_OWNER` rather than repeating the literal, so the reserved list
+#' `GE_GENERATED_OWNER` rather than repeating the literal, so the reserved list
 #' and the writer that owns it cannot drift apart.
 #'
 #' @keywords internal
 #' @noRd
-GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
+GE_RESERVED_OWNERS <- GE_GENERATED_OWNER
 
 #' Define genome effects as terms over one or more loci
 #'
@@ -23,7 +23,7 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #' as every table [get_table()] returns. Scope is supplied separately in
 #' `origin` so the common case stays flat.
 #'
-#' `define_genome_effects()` writes any effect you supply; `define_*_effects()`
+#' `define_genome_effect_terms()` writes any effect you supply; `define_*_effects()`
 #' functions such as [define_additive_effects()] sample effects of one shape
 #' and write them through the same path.
 #'
@@ -111,7 +111,7 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #' @examples
 #' \dontrun{
 #' # One dominance term, Cockerham coding at p = 0.3
-#' pop <- pop |> define_genome_effects(
+#' pop <- pop |> define_genome_effect_terms(
 #'   trait_name = "ADG",
 #'   terms = data.frame(locus_name    = "Locus_10",
 #'                      contrast_name = "dominance",
@@ -130,11 +130,11 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #'              contrast_name = "indicator", dosage_value = cells$g2,
 #'              genome_value  = cells$value)
 #' )
-#' pop <- pop |> define_genome_effects("ADG", surface[surface$genome_value != 0, ],
+#' pop <- pop |> define_genome_effect_terms("ADG", surface[surface$genome_value != 0, ],
 #'                                     effect_owner = "epistasis_AxA")
 #'
 #' # Reciprocal dominance: the F1 value depends on which parent gave which line
-#' pop <- pop |> define_genome_effects(
+#' pop <- pop |> define_genome_effect_terms(
 #'   "ADG",
 #'   terms = data.frame(term_id = 1L, locus_name = "Locus_10",
 #'                      contrast_name = "dominance",
@@ -149,7 +149,7 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #'
 #' # Let the writer fill Cockerham p from a base population: leave
 #' # center_value out and pass base_tbl (see extract_allele_freq()).
-#' pop <- pop |> define_genome_effects(
+#' pop <- pop |> define_genome_effect_terms(
 #'   "ADG",
 #'   data.frame(locus_name = "Locus_10", contrast_name = "dominance",
 #'              genome_value = 0.8),
@@ -158,7 +158,7 @@ GE_RESERVED_OWNERS <- GE_ADDITIVE_OWNER
 #' )
 #' }
 #' @export
-define_genome_effects <- function(pop,
+define_genome_effect_terms <- function(pop,
                                   trait_name,
                                   terms,
                                   effect_owner        = "custom",

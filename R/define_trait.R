@@ -14,7 +14,7 @@
 #' @param trait_name Character. Unique identifier for this genetic component
 #'   trait. Must be a valid SQL identifier.
 #' @param target_add_var Numeric. Target additive genetic variance. Written to
-#'   `trait_var_comp` as a diagonal entry under `effect_name = "gen_add"`.
+#'   `trait_var_comp` as a diagonal entry under `effect_name = "additive"`.
 #'   Used by [define_additive_effects()] to rescale effects. If already set via
 #'   [define_effect_cov_matrix()], leave `NULL`.
 #' @param target_add_mean Numeric. TBV centering mean for the base population.
@@ -100,7 +100,7 @@ define_trait <- function(pop,
         is.na(target_add_var) || target_add_var < 0) {
       stop("`target_add_var` must be a non-negative number.", call. = FALSE)
     }
-    pop <- write_trait_var_diag(pop, "gen_add", trait_name,
+    pop <- write_trait_var_diag(pop, "additive", trait_name,
                                as.numeric(target_add_var))
   }
 

@@ -41,17 +41,17 @@ sum of indicator terms, so a hand-entered surface needs no second
 representation, only rows.
 
 A cell you leave out is a term you did not write, contributing zero. Ask for
-the opposite with \code{define_genome_effects(require_complete = TRUE)}, which
+the opposite with \code{define_genome_effect_terms(require_complete = TRUE)}, which
 then demands every reachable \verb{(copy_count, dosage)} state.
 }
 \examples{
 \dontrun{
 cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
 vals  <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-pop <- pop |> define_genome_effects(
+pop <- pop |> define_genome_effect_terms(
   "ADG", genotype_terms(cells, vals), effect_owner = "epistasis_AxA")
 }
 }
 \seealso{
-\code{\link[=define_genome_effects]{define_genome_effects()}}, \code{\link[=ad_terms]{ad_terms()}}.
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}.
 }

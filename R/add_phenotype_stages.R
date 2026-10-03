@@ -150,7 +150,7 @@ NULL
   # qualifies.
   for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
     n_eff <- nrow(.gev_reserved_additive(
-      .gev_read_model(conn, t, GE_ADDITIVE_OWNER))$terms)
+      .gev_read_model(conn, t, GE_GENERATED_OWNER))$terms)
     if (n_eff == 0L) {
       stop(
         "No additive effects found for phenotype '", t, "' in genome_effects. ",
@@ -1156,10 +1156,10 @@ NULL
     if (!is.na(m$thresholds) && nzchar(m$thresholds)) next
     t <- m$phenotype_name
     if (composite[[i]]) stop(.prevalence_composite_msg(t), call. = FALSE)
-    if (is.na(get_trait_var(pop, "gen_add", t))) {
+    if (is.na(get_trait_var(pop, "additive", t))) {
       stop(
         "Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
-        "additive target, but trait_var_comp has no 'gen_add' row for '", t,
+        "additive target, but trait_var_comp has no 'additive' row for '", t,
         "' (its effects were written without one, e.g. manual `effects` or ",
         "scale_to_target = FALSE). Store a target with ",
         "define_effect_cov_matrix() or define_trait(target_add_var = ), or ",
@@ -1197,7 +1197,7 @@ NULL
              call. = FALSE)
       }
       pheno_mean <- if (is.na(m$mean)) 0 else m$mean
-      va <- get_trait_var(pop, "gen_add", t)
+      va <- get_trait_var(pop, "additive", t)
       if (is.na(va)) {
         stop("Internal error: phenotype '", t, "' reached the prevalence ",
              "threshold without a stored additive target; ",

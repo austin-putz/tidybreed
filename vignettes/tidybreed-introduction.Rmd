@@ -434,7 +434,7 @@ G <- matrix(
   dimnames = list(c("ADG", "BF"), c("ADG", "BF"))
 )
 
-pop <- pop |> define_effect_cov_matrix("gen_add", G)
+pop <- pop |> define_effect_cov_matrix("additive", G)
 
 pop |> get_table("trait_var_comp") |> collect()
 ```

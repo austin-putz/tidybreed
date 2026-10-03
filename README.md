@@ -624,7 +624,7 @@ own field to `genome_meta` and filter yourself, the possibilities are quite adva
 
 ### 7. Define variance components
 
-Use a single entry point for all variance/covariance matrices. `effect_name = "gen_add"` routes to `trait_var_comp`; `"residual"` and named random effects (e.g. `"pen"`) route to `phenotype_var_comp`.
+Use a single entry point for all variance/covariance matrices. `effect_name = "additive"` routes to `trait_var_comp`; `"residual"` and named random effects (e.g. `"pen"`) route to `phenotype_var_comp`.
 
 ```r
 # Additive genetic (co)variance — 3 traits (ADG, WWD, WWM)
@@ -638,7 +638,7 @@ vars.mat.add <- matrix(c(
 
 # store matrix in a table called 'trait_var_comp'
 pop <- pop |>
-  define_effect_cov_matrix(effect_name = "gen_add", cov_matrix = vars.mat.add)
+  define_effect_cov_matrix(effect_name = "additive", cov_matrix = vars.mat.add)
 
 # Residual (co)variance — 2 phenotypes (ADG, WW)
 vars.mat.res <- matrix(c(

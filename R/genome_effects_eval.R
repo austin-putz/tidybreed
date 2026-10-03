@@ -179,7 +179,7 @@ GEV_ACC_MAX <- 1e20
 #' @noRd
 .gev_reserved_additive <- function(model) {
   keep <- model$terms$effect_order == 1L &
-    model$terms$effect_owner == GE_ADDITIVE_OWNER &
+    model$terms$effect_owner == GE_GENERATED_OWNER &
     model$terms$id_genome_effect %in%
       model$members$id_genome_effect[model$members$contrast_name == "additive"]
   terms <- model$terms[keep, , drop = FALSE]
@@ -532,7 +532,7 @@ GEV_ACC_MAX <- 1e20
          paste(ids[minimal], collapse = ", "),
          ". Overlapping but incomparable scopes are refused at write time, so ",
          "this indicates the stored model was not written through ",
-         "define_genome_effects() or define_additive_effects().", call. = FALSE)
+         "define_genome_effect_terms() or define_additive_effects().", call. = FALSE)
   }
   minimal
 }
@@ -685,7 +685,7 @@ GEV_ACC_MAX <- 1e20
          paste(utils::head(ids, 5), collapse = ", "),
          if (length(ids) > 5) ", ..." else "",
          " at a locus where they carry a number of copies other than 2. ",
-         "define_genome_effects() refuses a dominance member at a locus whose ",
+         "define_genome_effect_terms() refuses a dominance member at a locus whose ",
          "chr_inheritance is not 1,1, so this means those individuals' ",
          "ind_haplotype rows disagree with chr_inheritance.", call. = FALSE)
   }
@@ -809,13 +809,13 @@ GEV_ACC_MAX <- 1e20
   if (sum(model$terms$trait_name == trait) > 0L) return(invisible(NULL))
   if (tbv) {
     stop("No order-one additive effects found for trait '", trait,
-         "' under effect owner '", GE_ADDITIVE_OWNER, "'. ",
+         "' under effect owner '", GE_GENERATED_OWNER, "'. ",
          "Call define_additive_effects() first. Terms written through ",
-         "define_genome_effects() contribute to ind_tgv but never redefine ",
+         "define_genome_effect_terms() contribute to ind_tgv but never redefine ",
          "the breeding value.", call. = FALSE)
   }
   stop("No genome effects found for trait '", trait,
-       "'. Call define_additive_effects() or define_genome_effects() first.",
+       "'. Call define_additive_effects() or define_genome_effect_terms() first.",
        call. = FALSE)
 }
 
@@ -846,7 +846,7 @@ GEV_ACC_MAX <- 1e20
   mem <- full$members[full$members$id_genome_effect %in% terms$id_genome_effect, ,
                       drop = FALSE]
 
-  reserved <- terms$id_genome_effect[terms$effect_owner == GE_ADDITIVE_OWNER &
+  reserved <- terms$id_genome_effect[terms$effect_owner == GE_GENERATED_OWNER &
                                        terms$effect_order == 1L]
   res_mem <- mem[mem$id_genome_effect %in% reserved &
                    mem$contrast_name == "additive", , drop = FALSE]
@@ -878,7 +878,7 @@ GEV_ACC_MAX <- 1e20
     "(owner(s) ", paste0("'", sort(unique(hit$effect_owner)), "'", collapse = ", "),
     "; ", paste(sort(unique(kind_of[stale])), collapse = ", "), ") that ",
     "contribute to the additive component. tbv_value is the sum of the stored ",
-    "'", GE_ADDITIVE_OWNER, "' additive coefficients, which are no longer ",
+    "'", GE_GENERATED_OWNER, "' additive coefficients, which are no longer ",
     "average effects: under functional coding alpha = a + d(q - p), and under ",
     "epistasis the average effect depends on other loci and on LD. ",
     "Use add_tgv() for the full genetic value; deriving average effects from a ",

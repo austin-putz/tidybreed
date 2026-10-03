@@ -78,6 +78,6 @@ pop |> get_table("ind_tgv_total") |> dplyr::collect()
 }
 }
 \seealso{
-\code{\link[=add_tbv]{add_tbv()}} for the breeding value, \code{\link[=define_genome_effects]{define_genome_effects()}} and
+\code{\link[=add_tbv]{add_tbv()}} for the breeding value, \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} and
 \code{\link[=define_additive_effects]{define_additive_effects()}} for writing the terms this evaluates.
 }

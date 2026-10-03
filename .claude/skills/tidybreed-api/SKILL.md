@@ -1,6 +1,6 @@
 ---
 name: tidybreed-api
-description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effects, define_phenotype, add_phenotype stages, add_tbv/add_tgv and the evaluator, index functions. Load before changing or explaining any exported function.
+description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tbv/add_tgv and the evaluator, index functions. Load before changing or explaining any exported function.
 ---
 
 # tidybreed Implemented Functions
@@ -317,7 +317,7 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
     sets from existing `genome_effects` rows, restricted to the filtered loci).
 
   Writes one order-one `additive` term per locus under the reserved effect
-  owner `generated_additive_tbv`, with `center_value` = the base allele
+  owner `generated`, with `center_value` = the base allele
   frequency. `line_name` and `parent_origin` compose into the single origin row
   an additive member may carry:
 
@@ -400,21 +400,21 @@ rendered as a subquery via `dbplyr::sql_render()`; nothing else is collected.
 Never warns, never writes. Users call it to obtain `p` for `ad_terms()`. Also
 holds `.validate_base_tbl()`, shared by both genome-effect writers.
 
-**How the two writers relate.** `define_genome_effects()` writes any effect
+**How the two writers relate.** `define_genome_effect_terms()` writes any effect
 you supply; `define_*_effects()` functions sample effects of one shape and
 write them through the same engine (`.ge_build → .ge_read_model →
 .ge_resolve_deletes → .ge_commit`). `define_additive_effects()` is provably
 sugar over the writer — `tests/testthat/test-genome-effects-writer.R`
 ("generator == writer") reproduces its output exactly through
-`define_genome_effects()` with the reserved owner, `replace_scope`, and the
+`define_genome_effect_terms()` with the reserved owner, `replace_scope`, and the
 same `base_tbl`. `base_tbl = NULL` deliberately differs: the generator has a
 domain default; the writer fills nothing, so a missing centre is an error.
 
-### `define_genome_effects()` / `ad_terms()` / `genotype_terms()`
+### `define_genome_effect_terms()` / `ad_terms()` / `genotype_terms()`
 
-`R/define_genome_effects.R`, `R/genome_effect_terms_builders.R`
+`R/define_genome_effect_terms.R`, `R/genome_effect_terms_builders.R`
 
-`define_genome_effects(pop, trait_name, terms, effect_owner = "custom", mode =
+`define_genome_effect_terms(pop, trait_name, terms, effect_owner = "custom", mode =
 c("append", "replace_scope", "replace_owner", "replace_trait"), origin = NULL,
 base_tbl = NULL, require_complete = FALSE, allow_reserved_owner = FALSE)` — the
 general writer
@@ -460,18 +460,18 @@ representation:
 
 ```r
 # One dominance term, Cockerham coding at p = 0.3
-pop |> define_genome_effects("ADG", data.frame(
+pop |> define_genome_effect_terms("ADG", data.frame(
   locus_name = "Locus_10", contrast_name = "dominance",
   center_value = 0.3, genome_value = 0.8))
 
 # A 3x3 A x A surface: nine cells, nine terms, two members each
 cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
-pop |> define_genome_effects(
+pop |> define_genome_effect_terms(
   "ADG", genotype_terms(cells, c(0, 0, 0, 0, 1.4, 2.1, 0, 2.1, 3.6)),
   effect_owner = "epistasis_AxA")
 
 # Reciprocal dominance: the F1 value depends on which parent gave which line
-pop |> define_genome_effects(
+pop |> define_genome_effect_terms(
   "ADG",
   terms  = data.frame(term_id = 1L, locus_name = "Locus_10",
                       contrast_name = "dominance", center_value = 0.3,
@@ -487,9 +487,9 @@ pop |> define_genome_effects(
 
 `R/define_effect_cov_matrix.R`, `R/define_effect_random.R`, `R/define_effect_fixed_class.R`, `R/define_effect_fixed_cov.R`, `R/define_effect_intercept.R`
 
-- `define_effect_cov_matrix(pop, effect_name, cov_matrix)` — **single entry
+- `define_effect_cov_matrix(pop, effect_name, cov_matrix, trait_name = NULL)` — **single entry
   point for all variance/covariance data**. Routes by `effect_name`:
-  genetic effects (`"gen_add"`, `"dominance"`, `"epistasis"`) → `trait_var_comp`;
+  genetic effects (`"additive"`, `"dominance"`, `"additive_by_additive"`) → `trait_var_comp`;
   `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
   any other name → `phenotype_var_comp` with that `effect_name`.
   Can be called before `define_trait()` or `define_effect_random()`.
@@ -533,10 +533,10 @@ pop |> define_genome_effects(
     `group_sum()` / `group_mean()` are bit-identical across thread counts.
   - `prevalence` (categorical, two categories) — the threshold is
     `mean + qnorm(1 - prevalence) * sqrt(Va + Ve)`, with `Va` the trait's
-    stored `gen_add` diagonal. Refused with `components` / `formula_tbv`
+    stored `additive` diagonal. Refused with `components` / `formula_tbv`
     (no stored variance describes a composite liability: use `thresholds`).
     `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`, before any
-    write or draw) when the trait has no stored `gen_add` row; there is no
+    write or draw) when the trait has no stored `additive` row; there is no
     silent `Va = 0`. Skipped for `user_values` calls, which place no threshold.
   - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
     `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
@@ -629,7 +629,7 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
   `additive` — never a second implementation of the effect math. Computes
   centered TBV from the
-  order-one `additive` terms owned by `generated_additive_tbv`: each allele copy
+  order-one `additive` terms owned by `generated`: each allele copy
   takes the most specific variant whose origin predicate matches its
   `(line_origin, parent_origin)` label, falling back per copy to the common
   variant. This is what makes crossbreeding TBV correct (e.g. a Duroc × Landrace
@@ -651,7 +651,7 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   The filter is not conservatism. Under functional `(a, d)` input the stored
   coefficient is `a` while the breeding-value coefficient in a diploid HWE base
   is `α = a + d(q − p)`; under epistasis, average effects depend on other loci
-  and on LD. So terms written through `define_genome_effects()` move `ind_tgv`
+  and on LD. So terms written through `define_genome_effect_terms()` move `ind_tgv`
   and never silently redefine `ind_tbv`, and additive members sitting inside an
   interaction are ignored.
 

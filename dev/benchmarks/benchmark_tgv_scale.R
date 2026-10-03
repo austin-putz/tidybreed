@@ -67,7 +67,7 @@ build_pop <- function(n_ind, shape) {
                                                 line_name = "B")
   }
   if (shape == "dominance") {
-    pop <- define_genome_effects(pop, "ADG", data.frame(
+    pop <- define_genome_effect_terms(pop, "ADG", data.frame(
       locus_name = qtl[seq_len(50)], contrast_name = "dominance",
       center_value = 0.5, genome_value = 0.4), effect_owner = "dom")
   }

@@ -38,7 +38,7 @@ never on how many rows each has — \code{ind_phenotype} with five records per
 animal gives the same answer as \code{ind_meta} for the same animals.
 
 This is the single place tidybreed turns a population selection into \code{p}.
-\code{\link[=define_additive_effects]{define_additive_effects()}} and \code{\link[=define_genome_effects]{define_genome_effects()}} both call it for
+\code{\link[=define_additive_effects]{define_additive_effects()}} and \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} both call it for
 their \code{base_tbl}, so a base selection means the same population in either.
 Users call it to obtain \code{p} for \code{\link[=ad_terms]{ad_terms()}}.
 }
@@ -74,5 +74,5 @@ tt <- ad_terms(loci, a = c(0.4, 0.1), d = c(0.2, 0.05),
 }
 }
 \seealso{
-\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=define_genome_effects]{define_genome_effects()}}, \code{\link[=ad_terms]{ad_terms()}}.
+\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}.
 }

@@ -215,7 +215,7 @@ m$n_logical <- sum(tables$key_logical)
 purposes <- c(
   "schema.R"                  = "Table registry, descriptions, `schema()` / `describe_table()`",
   "add_phenotype.R"           = "Phenotype simulation (composite, SGE, fixed/random effects, residuals)",
-  "define_genome_effects.R"   = "General genome-effect writer: terms, members, origins, replace modes",
+  "define_genome_effect_terms.R"   = "General genome-effect writer: terms, members, origins, replace modes",
   "define_additive_effects.R" = "QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope",
   "genome_effects_eval.R"     = "The one evaluator behind `add_tbv()` / `add_tgv()`",
   "add_offspring.R"           = "Mating, gamete formation, offspring haplotype writes",
@@ -258,7 +258,7 @@ api_meta <- list(
   add_       = c(label = "`add_`",                                html = "add_",                          verb = "insert simulation output"),
   mutate_    = c(label = "`mutate_`",                             html = "mutate_",                       verb = "add or update columns"),
   extract_   = c(label = "`extract_` / `remove_` / `archive_`",  html = "extract_ / remove_ / archive_", verb = "read out, delete, stamp replicates"),
-  terms      = c(label = "Term builders",                         html = "term builders",                 verb = "rows for define_genome_effects()"),
+  terms      = c(label = "Term builders",                         html = "term builders",                 verb = "rows for define_genome_effect_terms()"),
   inspection = c(label = "Inspection",                            html = "inspection",                    verb = "lazy dplyr access")
 )
 api <- split(exports, vapply(exports, api_group, ""))
@@ -268,7 +268,7 @@ api <- api[names(api_meta)[names(api_meta) %in% names(api)]]
 pipeline_order <- c(
   "open_pop", "restore_pop", "close_pop",
   "define_genome", "define_chromosome", "define_founder_haplotypes", "define_chip",
-  "define_trait", "define_trait_simple", "define_additive_effects", "define_genome_effects",
+  "define_trait", "define_trait_simple", "define_additive_effects", "define_genome_effect_terms",
   "define_phenotype", "define_residual_cov", "define_effect_cov_matrix", "define_effect_random",
   "define_effect_fixed_class", "define_effect_fixed_cov", "define_effect_intercept",
   "define_index", "define_table", "define_schema_description",

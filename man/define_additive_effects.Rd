@@ -34,7 +34,7 @@ trait only), in ascending \code{locus_id} order. Error if \code{length(trait_nam
 
 \item{G}{Optional numeric matrix of additive-genetic (co)variances (multi-trait
 only). Must be square and symmetric with side length \code{length(trait_name)}.
-When supplied, stored to \code{trait_var_comp} under \code{"gen_add"}. When \code{NULL},
+When supplied, stored to \code{trait_var_comp} under \code{"additive"}. When \code{NULL},
 read from \code{trait_var_comp}.}
 
 \item{method}{Character. \code{"shared"} (default) or \code{"union"}. Multi-trait only.
@@ -64,7 +64,7 @@ is rejected — under random mating the paternal and maternal copies at a
 locus are independent, so the requested genetic covariance between a
 paternal-only and a maternal-only trait is zero and cannot be realized.
 For imprinting that varies locus by locus, write the terms with
-\code{\link[=define_genome_effects]{define_genome_effects()}}.}
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}.}
 
 \item{scale_to_target}{Logical. If \code{TRUE}, rescale effects so the expected
 additive variance equals the stored \code{target_add_var}:
@@ -79,10 +79,10 @@ The modified \code{tidybreed_pop} (invisibly).
 \description{
 Selects QTL from a filtered \code{genome_meta} table and writes one order-one
 \code{additive} term per locus through the same engine as
-\code{\link[=define_genome_effects]{define_genome_effects()}}, under the reserved effect owner
-\code{"generated_additive_tbv"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, under the reserved effect owner
+\code{"generated"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one
 \code{additive} variants from that owner and nothing else, so effects written here
-and effects a user writes with \code{\link[=define_genome_effects]{define_genome_effects()}} can never be
+and effects a user writes with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} can never be
 confused for one another.
 
 \strong{Single trait} (\code{trait_name} length 1) — two modes:
@@ -106,7 +106,7 @@ membership is read from the terms already stored at this scope, and a
 locus draws jointly only for the traits it is a QTL for.
 }
 
-\code{define_genome_effects()} writes any effect you supply; \verb{define_*_effects()}
+\code{define_genome_effect_terms()} writes any effect you supply; \verb{define_*_effects()}
 functions such as this one sample effects of one shape and write them
 through the same path.
 }
@@ -181,7 +181,7 @@ pop <- pop |>
 G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
 pop <- pop |>
-  define_effect_cov_matrix("gen_add", G) |>
+  define_effect_cov_matrix("additive", G) |>
   get_table("genome_meta") |>
   dplyr::filter(chr \%in\% 1:5) |>
   define_additive_effects(c("ADG", "BW"), G = G)

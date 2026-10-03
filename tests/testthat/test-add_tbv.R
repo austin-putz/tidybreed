@@ -32,7 +32,7 @@ independent_tbv <- function(pop, trait, ids) {
     "LEFT JOIN genome_effect_member_origins o ",
     "  USING (id_genome_effect, member_slot) ",
     "WHERE e.trait_name = '", trait, "' ",
-    "  AND e.effect_owner = 'generated_additive_tbv' ",
+    "  AND e.effect_owner = 'generated' ",
     "  AND m.contrast_name = 'additive' ",
     "  AND (SELECT COUNT(*) FROM genome_effect_members m2 ",
     "        WHERE m2.id_genome_effect = e.id_genome_effect) = 1"))
@@ -181,7 +181,7 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
   hap <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, allele FROM ind_haplotype WHERE id_ind = 'Duroc_1'")
   eff_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, center_value FROM gen_add_flat WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
+    "SELECT locus_name, center_value FROM additive_flat WHERE trait_name = 'ADG' AND line_name = 'Duroc'")
   hap <- merge(hap, eff_duroc, by = "locus_name")
   expect_equal(actual, sum((hap$allele - hap$center_value) * 5.0), tolerance = 1e-8)
 
@@ -241,9 +241,9 @@ test_that("add_tbv() centers each allele with its own line's center_value", {
                             base_tbl = landrace_tbl)
 
   base_duroc <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT center_value FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Duroc'")$center_value
+    "SELECT center_value FROM additive_flat WHERE trait_name='ADG' AND line_name='Duroc'")$center_value
   base_landrace <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT center_value FROM gen_add_flat WHERE trait_name='ADG' AND line_name='Landrace'")$center_value
+    "SELECT center_value FROM additive_flat WHERE trait_name='ADG' AND line_name='Landrace'")$center_value
   # Not a degenerate test: the two lines' realized founder allele frequencies differ.
   expect_true(any(abs(base_duroc - base_landrace) > 1e-6))
 
@@ -284,7 +284,7 @@ test_that("crossbreeding end to end with default bases: common + two line varian
 
   # Three variants, three centres: the pooled one and each line's own.
   centres <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT line_name, center_value FROM gen_add_flat ",
+    "SELECT line_name, center_value FROM additive_flat ",
     "WHERE trait_name = 'ADG' AND locus_name = 'Locus_1'"))
   expect_equal(nrow(centres), 3L)
   expect_setequal(centres$line_name, c(NA, "Duroc", "Landrace"))
@@ -518,7 +518,7 @@ test_that("base allele frequency is correct (row-count-agnostic) for a mixed aut
                             base_tbl = get_table(pop, "ind_meta"))
 
   p_from_effects <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT locus_name, center_value FROM gen_add_flat WHERE trait_name = 'ADG'")
+    "SELECT locus_name, center_value FROM additive_flat WHERE trait_name = 'ADG'")
   p_hand <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, AVG(CAST(allele AS DOUBLE)) AS p FROM ind_haplotype GROUP BY locus_name")
 

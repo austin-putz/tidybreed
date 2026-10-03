@@ -8,7 +8,7 @@ define_effect_cov_matrix(
   pop,
   effect_name,
   cov_matrix,
-  trait_names = NULL,
+  trait_name = NULL,
   tol = 1e-09
 )
 }
@@ -16,13 +16,13 @@ define_effect_cov_matrix(
 \item{pop}{A \code{tidybreed_pop} object.}
 
 \item{effect_name}{Character. Label for the variance component, e.g.
-\code{"gen_add"}, \code{"residual"}, \code{"hys"}.}
+\code{"additive"}, \code{"residual"}, \code{"hys"}.}
 
 \item{cov_matrix}{A numeric square matrix. Must be symmetric within \code{tol}.
-Row and column names are used as trait/phenotype names when \code{trait_names}
+Row and column names are used as trait/phenotype names when \code{trait_name}
 is not supplied.}
 
-\item{trait_names}{Optional character vector of trait/phenotype names (length
+\item{trait_name}{Optional character vector of trait/phenotype names (length
 == \code{nrow(cov_matrix)}). Overrides the matrix's \code{rownames} / \code{colnames}.}
 
 \item{tol}{Numeric. Tolerance for symmetry check (default \code{1e-9}).}
@@ -37,10 +37,11 @@ phenotype-level effects.
 
 Common \code{effect_name} values:
 \itemize{
-\item \code{"gen_add"} — additive genetic (co)variances (G matrix). Written to
+\item \code{"additive"} — additive genetic (co)variances (G matrix). Written to
 \code{trait_var_comp}. Used by \code{\link[=define_additive_effects]{define_additive_effects()}} when rescaling to
 target variance and as the sampling distribution for multi-trait draws.
-\item \code{"dominance"}, \code{"epistasis"} — future genetic effects. Written to
+\item \code{"dominance"}, \code{"additive_by_additive"} — reserved genetic effects; no
+generator calibrates them yet. Written to
 \code{trait_var_comp}. Row/column names are trait names.
 \item \code{"residual"} — residual (co)variances (R matrix). Routed to
 \code{phenotype_var_comp} with \code{effect_name = "residual"}. Row/column names are
@@ -78,7 +79,7 @@ nothing.
 G <- matrix(c(100, -20, -20, 50), 2, 2,
             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
-  define_effect_cov_matrix("gen_add", G)
+  define_effect_cov_matrix("additive", G)
 
 # Residual → phenotype_var_comp (effect_name = "residual")
 R <- matrix(c(30, 5, 5, 10), 2, 2,

@@ -212,7 +212,7 @@ TABLE_ROW_KEYS <- list(
   "effect definitions are configuration, not output, and the three tables are",
   "parent/child (DuckDB refuses a parent delete with live children and does",
   "not cascade). Replace them through the writer instead:",
-  "define_genome_effects(mode = 'replace_scope' | 'replace_owner' |",
+  "define_genome_effect_terms(mode = 'replace_scope' | 'replace_owner' |",
   "'replace_trait')."
 )
 

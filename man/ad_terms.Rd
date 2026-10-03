@@ -36,7 +36,7 @@ coefficient, \code{term_id} \code{"<locus>_a"} / \code{"<locus>_d"}.
 }
 \description{
 Expands one locus's additive and dominance coefficients into the two member
-rows \code{\link[=define_genome_effects]{define_genome_effects()}} takes. There is no third table and no separate
+rows \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} takes. There is no third table and no separate
 storage mode — functional coding is \code{additive} with \code{center_value = 0.5} plus
 an \code{indicator} on the heterozygous state, Cockerham coding is \code{additive} plus
 \code{dominance}, both centred at \code{p}.
@@ -64,9 +64,9 @@ frequencies and LD.
 \examples{
 \dontrun{
 tt <- ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)
-pop <- pop |> define_genome_effects("ADG", tt, effect_owner = "functional")
+pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
 }
 }
 \seealso{
-\code{\link[=define_genome_effects]{define_genome_effects()}}, \code{\link[=genotype_terms]{genotype_terms()}}.
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=genotype_terms]{genotype_terms()}}.
 }

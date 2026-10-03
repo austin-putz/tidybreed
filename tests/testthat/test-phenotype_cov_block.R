@@ -143,13 +143,13 @@ test_that("D1: two singleton blocks merge into one block when declared together"
                c("A", "B"))
 })
 
-test_that("define_effect_cov_matrix() honours trait_names for the residual route", {
-  pop <- make_block_pop("d1_trait_names")
+test_that("define_effect_cov_matrix() honours trait_name for the residual route", {
+  pop <- make_block_pop("d1_trait_name")
   on.exit(close_pop(pop))
 
   M <- matrix(c(1, .2, .2, 1), 2, 2)
   pop <- suppressMessages(
-    define_effect_cov_matrix(pop, "residual", M, trait_names = c("A", "B")))
+    define_effect_cov_matrix(pop, "residual", M, trait_name = c("A", "B")))
   expect_equal(nrow(resid_rows(pop)), 4L)
   expect_error(define_effect_cov_matrix(pop, "residual", M), "row names")
 })

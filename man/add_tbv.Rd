@@ -62,7 +62,7 @@ allele copy, not genotype dosage) for the individual, of:
 }
 
 \code{genome_value} and \code{center_value} come from the \strong{order-one \code{additive}
-terms} under the reserved effect owner \code{generated_additive_tbv}, the terms
+terms} under the reserved effect owner \code{generated}, the terms
 \code{\link[=define_additive_effects]{define_additive_effects()}} writes. \code{center_value} is that variant's base
 allele frequency.
 
@@ -74,7 +74,7 @@ The filter is deliberate and not merely conservative. Under functional
 \eqn{(a, d)} input the stored coefficient is \eqn{a}, while the
 breeding-value coefficient in a diploid HWE base is
 \eqn{\alpha = a + d(q - p)}; under epistasis, average effects depend on other
-loci and on LD. So arbitrary terms written through \code{\link[=define_genome_effects]{define_genome_effects()}}
+loci and on LD. So arbitrary terms written through \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}
 contribute to \code{ind_tgv} but \strong{never silently redefine the breeding value},
 additive members appearing inside interactions are ignored, and \code{ind_tbv}
 keeps its exact meaning. Deriving average effects from a general

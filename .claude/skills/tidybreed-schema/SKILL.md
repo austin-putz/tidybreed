@@ -68,7 +68,7 @@ coefficient over one or more loci, each locus contributing a named basis functio
 (`contrast_name`), each optionally scoped to allele copies of a given line and/or
 parent of origin. Created by `define_genome()` (not `open_pop()` — the `locus_id`
 foreign key needs `genome_meta` to exist first). Written by
-`define_genome_effects()` and, for the reserved `generated_additive_tbv` owner,
+`define_genome_effect_terms()` and, for the reserved `generated` owner,
 by `define_additive_effects()`.
 
 **`genome_effects`** — one row per term.
@@ -77,7 +77,7 @@ by `define_additive_effects()`.
 |------------------|---------|-----------------------------------------------------------|
 | id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
 | trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
-| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated_additive_tbv"` is reserved for `define_additive_effects()`, `"custom"` is the `define_genome_effects()` default |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()`, `"custom"` is the `define_genome_effect_terms()` default |
 | effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
 | genome_value     | DOUBLE  | The term's coefficient                                    |
 
@@ -109,7 +109,7 @@ allele copies. **No rows = the common scope**, which matches every copy.
 
 **Reserved**: all columns of all three. Row deletion is refused — effect
 definitions are configuration and are replaced through
-`define_genome_effects(mode = ...)`, not row-deleted.
+`define_genome_effect_terms(mode = ...)`, not row-deleted.
 
 **No foreign keys *inside* the set** (members → effects, origins → members),
 deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
@@ -311,14 +311,15 @@ Genetic-layer variance components. One row per (effect_name, trait_name_1, trait
 Both `(i,j)` and `(j,i)` pairs stored. Populated by `define_effect_cov_matrix()` and
 `define_trait()`. Stores **only** genetic effects — no phenotype-level variances.
 
-Valid `effect_name` values: `"gen_add"` (additive genetic G matrix);
-future: `"dominance"`, `"epistasis"`. Named random effects (HYS, litter, pen)
+Valid `effect_name` values: `"additive"` (additive genetic G matrix);
+reserved, with no generator yet: `"dominance"`,
+`"additive_by_additive"`. Named random effects (HYS, litter, pen)
 go to `phenotype_var_comp`, not here.
 
 | Column           | Type    | Notes                                              |
 |------------------|---------|----------------------------------------------------|
 | id_trait_var_comp| INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
-| effect_name      | VARCHAR | `"gen_add"`; future: `"dominance"`, `"epistasis"`  |
+| effect_name      | VARCHAR | `"additive"`; reserved: `"dominance"`, `"additive_by_additive"` |
 | trait_name_1     | VARCHAR |                                                    |
 | trait_name_2     | VARCHAR |                                                    |
 | cov_value        | DOUBLE  | Variance (diagonal) or covariance (off-diagonal)   |

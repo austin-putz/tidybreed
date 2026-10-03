@@ -378,7 +378,7 @@
       </div>
       <div class="api-row">
         <div class="prefix">define_<span class="verb">write model configuration</span></div>
-        <div class="fns"><code>define_genome</code><code>define_chromosome</code><code>define_founder_haplotypes</code><code>define_chip</code><code>define_trait</code><code>define_trait_simple</code><code>define_additive_effects</code><code>define_genome_effects</code><code>define_phenotype</code><code>define_residual_cov</code><code>define_effect_cov_matrix</code><code>define_effect_random</code><code>define_effect_fixed_class</code><code>define_effect_fixed_cov</code><code>define_effect_intercept</code><code>define_index</code><code>define_table</code><code>define_schema_description</code></div>
+        <div class="fns"><code>define_genome</code><code>define_chromosome</code><code>define_founder_haplotypes</code><code>define_chip</code><code>define_trait</code><code>define_trait_simple</code><code>define_additive_effects</code><code>define_genome_effect_terms</code><code>define_phenotype</code><code>define_residual_cov</code><code>define_effect_cov_matrix</code><code>define_effect_random</code><code>define_effect_fixed_class</code><code>define_effect_fixed_cov</code><code>define_effect_intercept</code><code>define_index</code><code>define_table</code><code>define_schema_description</code></div>
       </div>
       <div class="api-row">
         <div class="prefix">add_<span class="verb">insert simulation output</span></div>
@@ -393,7 +393,7 @@
         <div class="fns"><code>extract_genotypes</code><code>remove_rows</code><code>archive_replicate</code></div>
       </div>
       <div class="api-row">
-        <div class="prefix">term builders<span class="verb">rows for define_genome_effects()</span></div>
+        <div class="prefix">term builders<span class="verb">rows for define_genome_effect_terms()</span></div>
         <div class="fns"><code>ad_terms</code><code>genotype_terms</code></div>
       </div>
       <div class="api-row">
@@ -594,7 +594,7 @@
             <td class="arch">once</td>
           </tr>
           <tr>
-            <td><span class="tname">trait_var_comp</span><span class="tdesc">Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'gen_add', 'dominance' (future), 'epistasis' (future).</span></td>
+            <td><span class="tname">trait_var_comp</span><span class="tdesc">Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive'; 'dominance' and 'additive_by_additive' are reserved, with no generator yet.</span></td>
             <td class="kind table">table</td>
             <td class="num">5</td>
             <td class="key"><code>id_trait_var_comp</code></td>
@@ -773,7 +773,7 @@
         <div class="loc">1,146</div>
       </div>
       <div class="bar-row">
-        <div class="name">define_genome_effects.R<span class="purpose">General genome-effect writer: terms, members, origins, replace modes</span></div>
+        <div class="name">define_genome_effect_terms.R<span class="purpose">General genome-effect writer: terms, members, origins, replace modes</span></div>
         <div class="track"><div class="fill" style="width:60.3%"></div></div>
         <div class="loc">917</div>
       </div>

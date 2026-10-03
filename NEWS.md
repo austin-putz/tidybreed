@@ -1,3 +1,28 @@
+# tidybreed 0.72.0 (2026-10-02)
+
+Step 1 of `plans/import_qtl_effect_methods.md`: a rename-only release that
+frees the names the later steps need. Nothing else changes: the test suite
+passes with only renamed calls and strings. Summary in
+`plans/import_qtl_effect_methods_phase_1.md`.
+
+## Breaking changes
+
+* **`define_genome_effects()` is now `define_genome_effect_terms()`.** Same
+  arguments, same behaviour; the file is `R/define_genome_effect_terms.R`.
+  There is no alias. The old name is kept free for the effect generator
+  planned for Part C.
+* **Genetic `effect_name` values use full words.** `"gen_add"` is now
+  `"additive"`, and the reserved `"epistasis"` is now
+  `"additive_by_additive"`. This applies to `define_effect_cov_matrix()`,
+  `get_trait_var()` and the rows of `trait_var_comp`.
+* **The reserved effect owner is `"generated"`** (was
+  `"generated_additive_tbv"`); the internal constant is `GE_GENERATED_OWNER`.
+* **`define_effect_cov_matrix(trait_names =)` is now `trait_name =`**,
+  matching the `trait_name_1` / `trait_name_2` columns it fills.
+* Databases written by earlier versions are not readable by this one: their
+  stored `gen_add` and owner strings no longer match. There is no migration
+  (pre-1.0).
+
 # tidybreed 0.71.2 (2026-10-02)
 
 Step 0b of `plans/import_qtl_effect_methods.md`: two bugs found while

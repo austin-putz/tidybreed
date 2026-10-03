@@ -40,7 +40,7 @@ gev_pop <- function() {
 }
 
 # Insert a fixture model verbatim. Deliberately not through
-# define_genome_effects(): the point is to evaluate exactly the rows Phase A
+# define_genome_effect_terms(): the point is to evaluate exactly the rows Phase A
 # hand-checked, including F14, which the writer refuses on purpose.
 gev_write_model <- function(pop, model) {
   conn <- pop$db_conn
@@ -218,7 +218,7 @@ test_that("gate 14: an injected dominance term changes the genetic value", {
   before <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tgv_total FROM ind_tgv_total WHERE trait_name = 'ADG' ORDER BY id_ind")
 
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "dominance",
     center_value = 0.5, genome_value = 2.5), effect_owner = "dom")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -243,7 +243,7 @@ test_that("gate 14: an injected interaction changes the genetic value", {
   cells <- expand.grid(a = 0:2, b = 0:2)
   tt <- genotype_terms(stats::setNames(cells, loci[1:2]),
                        value = c(0, 0, 0, 0, 1.4, 2.1, 0, 2.1, 3.6))
-  pop <- define_genome_effects(pop, "ADG", tt, effect_owner = "AxA")
+  pop <- define_genome_effect_terms(pop, "ADG", tt, effect_owner = "AxA")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   after <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tgv_total FROM ind_tgv_total ORDER BY id_ind")
@@ -259,15 +259,15 @@ test_that("gate 21: each term maps to one component, and the components sum to t
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(0.7, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "dominance",
     center_value = 0.5, genome_value = 1.1), effect_owner = "dom")
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[2], contrast_name = "indicator",
     copy_count_value = 2L, dosage_value = 1L, genome_value = 0.9),
     effect_owner = "surface")
   cells <- expand.grid(a = 0:2, b = 0:2)
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     genotype_terms(stats::setNames(cells, loci[3:4]),
                    value = c(0, 0, 0, 0, 1.0, 2.0, 0, 2.0, 3.0)),
     effect_owner = "AxA")
@@ -311,7 +311,7 @@ test_that("a component that leaves the model leaves ind_tgv with it", {
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "dominance",
     center_value = 0.5, genome_value = 2.0), effect_owner = "dom")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -342,11 +342,11 @@ test_that("gates 32-33: custom terms move tgv_value and leave tbv_value alone", 
 
   # A functional dominance surface, and a custom additive term inside an
   # interaction. Neither is a breeding-value coefficient.
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "indicator",
     copy_count_value = 2L, dosage_value = 1L, genome_value = 1.7),
     effect_owner = "functional_d")
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = c(1L, 1L), locus_name = loci[2:3],
     contrast_name = "additive", center_value = 0.5,
     genome_value = 3.0), effect_owner = "AxA")
@@ -390,7 +390,7 @@ gev_add_centre <- function(pop, locus) {
     "SELECT DISTINCT m.center_value FROM genome_effect_members m ",
     "JOIN genome_effects e USING (id_genome_effect) ",
     "JOIN genome_effect_loci l USING (id_genome_effect, member_slot) ",
-    "WHERE e.effect_owner = '", tidybreed:::GE_ADDITIVE_OWNER, "' ",
+    "WHERE e.effect_owner = '", tidybreed:::GE_GENERATED_OWNER, "' ",
     "AND l.locus_name = '", locus, "'"))$center_value[1]
 }
 
@@ -405,7 +405,7 @@ test_that("Q1: a Cockerham dominance term at the additive centre is silent", {
   pop <- gev_q1_pop("gev_q1_cockerham")
   on.exit(close_pop(pop), add = TRUE)
   L <- gev_loci(pop)[1]
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "dominance",
     center_value = gev_add_centre(pop, L), genome_value = 1.3),
     effect_owner = "dom")
@@ -420,7 +420,7 @@ test_that("Q1: a dominance term centred somewhere else does warn", {
   on.exit(close_pop(pop), add = TRUE)
   L <- gev_loci(pop)[1]
   off <- gev_add_centre(pop, L) + 0.2
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "dominance",
     center_value = off, genome_value = 1.3), effect_owner = "dom")
   expect_warning(suppressMessages(
@@ -431,7 +431,7 @@ test_that("Q1: a functional indicator surface warns", {
   pop <- gev_q1_pop("gev_q1_functional")
   on.exit(close_pop(pop), add = TRUE)
   L <- gev_loci(pop)[1]
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
     dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
   w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
@@ -446,7 +446,7 @@ test_that("Q1: an interaction warns, and is named as one", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   cells <- expand.grid(a = 0:2, b = 0:2)
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     genotype_terms(stats::setNames(cells, loci[1:2]),
                    value = c(0, 0, 0, 0, 1, 2, 0, 2, 3)),
     effect_owner = "AxA")
@@ -460,7 +460,7 @@ test_that("Q1: a custom order-one additive term warns -- it is part of A", {
   pop <- gev_q1_pop("gev_q1_custom_add")
   on.exit(close_pop(pop), add = TRUE)
   L <- gev_loci(pop)[1]
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "additive", center_value = 0.5,
     genome_value = 0.9), effect_owner = "hand")
   w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
@@ -477,7 +477,7 @@ test_that("Q1: the warning never changes the number", {
     "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
 
   L <- gev_loci(pop)[1]
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
     dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
   suppressWarnings(suppressMessages(
@@ -498,10 +498,10 @@ test_that("gate 7 / 25: functional and Cockerham codings differ by exactly the r
   mu    <- a * (p - q) + 2 * p * q * d
   alpha <- a + d * (q - p)
 
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     suppressMessages(ad_terms(L, a = a, d = d, p = p, coding = "functional")),
     effect_owner = "fn")
-  pop <- define_genome_effects(pop, "COCK",
+  pop <- define_genome_effect_terms(pop, "COCK",
     suppressMessages(ad_terms(L, a = alpha, d = d, p = p, coding = "cockerham")),
     effect_owner = "ck")
 
@@ -518,12 +518,12 @@ test_that("gate 25: repeated (a, d) appends accumulate, locus by locus", {
   ids  <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta ORDER BY id_ind")$id_ind
   a <- 0.6; d <- 0.3; p <- 0.5
 
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     suppressMessages(ad_terms(loci[1], a = a, d = d, p = p)),
     effect_owner = "fn")
   one <- gev_totals(pop, ids)
 
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     suppressMessages(ad_terms(loci[2], a = a, d = d, p = p)),
     effect_owner = "fn")
   two <- gev_totals(pop, ids)
@@ -548,7 +548,7 @@ test_that("gate 39: an order-one surface is 'order1_other' and sums into the tot
   pop <- gev_lines_pop("gev_surface")
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
-  pop <- define_genome_effects(pop, "ADG", genotype_terms(
+  pop <- define_genome_effect_terms(pop, "ADG", genotype_terms(
     stats::setNames(data.frame(0:2), loci[1]), value = c(1.0, 4.0, 9.0),
     copy_count = stats::setNames(list(2L), loci[1])), effect_owner = "surface")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -634,7 +634,7 @@ test_that("gate 38: the preflight warns and then stops at the configured thresho
   # A two-member term with an origin scope on *both* members: the label-vector
   # count is the product of the two alphabets, which is the quantity the guard
   # is about. An unscoped term of any order is one label-vector (see below).
-  pop <- define_genome_effects(pop, "ADG",
+  pop <- define_genome_effect_terms(pop, "ADG",
     terms = data.frame(term_id = c(1L, 1L), locus_name = loci[1:2],
                        contrast_name = "additive", center_value = 0.5,
                        genome_value = 1.0),
@@ -660,7 +660,7 @@ test_that("an unscoped high-order term is one label-vector, not |labels|^order",
   pop <- gev_lines_pop("gev_unscoped_order", n_loci = 12)
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
-  pop <- define_genome_effects(pop, "ADG", data.frame(
+  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     term_id = 1L, locus_name = loci, contrast_name = "dominance",
     center_value = 0.5, genome_value = 1.0), effect_owner = "big")
   ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind

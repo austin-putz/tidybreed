@@ -53,7 +53,7 @@
 #' `getOption("tidybreed.label_vector_max", 1e6)`, so an accidental high-order
 #' scoped term fails loudly instead of appearing to hang.
 #'
-#' @seealso [add_tbv()] for the breeding value, [define_genome_effects()] and
+#' @seealso [add_tbv()] for the breeding value, [define_genome_effect_terms()] and
 #'   [define_additive_effects()] for writing the terms this evaluates.
 #'
 #' @examples

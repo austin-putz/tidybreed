@@ -1503,7 +1503,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 |---|---|---|---|
 | 0 | Merge `feat/genome-effects-v49` to `main` | — | **done** (v0.71.1) |
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
-| 1 | Rename only | 0.72.0 | 0b |
+| 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
 | 2 | Part A + §6C targets | 0.73.0 | 1 |
 | 3 | Consolidation + P2 + Q18 | 0.74.0 | 2 (the `line_name` readers, §6C) |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
@@ -1564,7 +1564,7 @@ in `add_phenotype()`, so it fails at definition time. B-1's regression test need
 200: at pens of 10 the old `SUM()` never diverged, so a small fixture would pass on the
 broken code.
 
-### Step 1 — rename only (0.72.0)
+### Step 1 — rename only (0.72.0) *(**done** 2026-10-02, see `import_qtl_effect_methods_phase_1.md`)*
 
 - Exported writer `define_genome_effects()` → `define_genome_effect_terms()` (§0A).
 - `trait_var_comp` strings `gen_add` → `additive`, `epistasis` → `additive_by_additive`
@@ -1600,6 +1600,19 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
    `devtools::document()`.
 3. Update every error and message string that names an old function or string.
 4. Run the full suite, and gates R1 and R2.
+
+**As built (deviations).**
+- The 0.71.2 census found four files the list above missed:
+  - `_pkgdown.yml` (the reference index; `pkgdown::check_pkgdown()` fails without it);
+  - `README.md`;
+  - `vignettes/swine/swine-time-based-age-at-puberty-sex-semen.R`;
+  - `dev/benchmarks/benchmark_tgv_scale.R`.
+- The test helper view `gen_add_flat` (`helper-genome-effects-db.R`) is renamed `additive_flat`, so R1's grep comes back clean.
+- The `trait_var_comp` descriptions in `R/schema.R` say "reserved, with no generator yet" instead of "future".
+- **Left alone, as outside this step:**
+  - `define_index(trait_names =)`, a different function. It breaks naming rule 1 the same way; this is a possible follow-up.
+  - Internal vector arguments named `trait_names`: `load_trait_cov()`, `.gev_read_model()`, `.dae_warn_parent_only()`.
+  - §2's audit, a 0.71.0 snapshot that still names the old writer.
 
 ### Step 2 — Part A and the §6C target rules (0.73.0)
 
@@ -1676,7 +1689,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 
 **Rename release (step 1)**
 
-- R1. After step 1, `grep -rnw "define_genome_effects"` over `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md`, `package_summary.md` and `.claude/skills/` returns nothing. The same holds for `gen_add`, for `epistasis` used as an `effect_name`, for `generated_additive_tbv` / `GE_ADDITIVE_OWNER`, and for `define_effect_cov_matrix(trait_names =`. `NEWS.md` (past entries) and closed plans are excluded. `define_genome_effect_terms` is exported, documented, and listed in `NAMESPACE`. In step 5 this gate's `define_genome_effects` check is replaced by "no message or roxygen written in steps 1–4 names `define_genome_effects()`" (checked by `grep` before step 5 starts), since the name then returns as the generator.
+- R1. After step 1, `grep -rnw "define_genome_effects"` over `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`, `CLAUDE.md`, `package_summary.md`, `README.md`, `_pkgdown.yml`, `plans/TODO.md` and `.claude/skills/` returns nothing. The same holds for `gen_add` (including the test view `gen_add_flat`, renamed `additive_flat`), for `epistasis` used as an `effect_name`, for `generated_additive_tbv` / `GE_ADDITIVE_OWNER`, and for `define_effect_cov_matrix(trait_names =`. `NEWS.md` (past entries) and closed plans are excluded. `define_genome_effect_terms` is exported, documented, and listed in `NAMESPACE`. In step 5 this gate's `define_genome_effects` check is replaced by "no message or roxygen written in steps 1–4 names `define_genome_effects()`" (checked by `grep` before step 5 starts), since the name then returns as the generator.
 - R2. The full suite passes with only renamed calls and strings changed in `tests/`: no assertion, tolerance or fixture changes. A `git diff --stat` of `tests/` shows renames only.
 
 **Part A**
