@@ -96,7 +96,7 @@ test_that("worked example 2 (a 3x3 A x A surface) round-trips, sparse", {
                contrast_name = "indicator", dosage_value = cells$g2,
                genome_value  = cells$value))
   pop <- define_genome_effect_terms(pop, "ADG", surface[surface$genome_value != 0, ],
-                               effect_owner = "epistasis_AxA")
+                                    effect_owner = "epistasis_AxA")
 
   got <- gew_scopes(pop)
   expect_equal(nrow(got), 4L)                   # the four non-zero cells
@@ -239,8 +239,8 @@ test_that("every valid Phase A fixture round-trips through the writer", {
 
     expect_message(
       pop <- define_genome_effect_terms(pop, "ADG", terms, origin = origin,
-                                   effect_owner = "custom",
-                                   mode = "replace_owner"),
+                                        effect_owner = "custom",
+                                        mode = "replace_owner"),
       "Wrote", label = nm)
 
     # Read back and compare to the fixture's own canonical form, keyed by the
@@ -351,7 +351,7 @@ test_that("require_complete rejects a sparse surface and names what is missing",
 
   expect_error(
     define_genome_effect_terms(pop, "ADG", surface[surface$genome_value != 0, ],
-                          require_complete = TRUE),
+                               require_complete = TRUE),
     "missing 5 of 9 reachable")
   # The complete surface is accepted, zeros and all.
   expect_message(
@@ -822,7 +822,7 @@ test_that("genotype_terms() turns a genotype table into indicator terms", {
   pop <- gew_pop()
   on.exit(close_pop(pop), add = TRUE)
   expect_message(define_genome_effect_terms(pop, "ADG", tt,
-                                       effect_owner = "surface"), "Wrote 4")
+                                            effect_owner = "surface"), "Wrote 4")
 })
 
 test_that("genotype_terms() carries copy_count through for a variable-copy locus", {

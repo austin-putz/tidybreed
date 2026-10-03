@@ -131,7 +131,7 @@ GE_RESERVED_OWNERS <- GE_GENERATED_OWNER
 #'              genome_value  = cells$value)
 #' )
 #' pop <- pop |> define_genome_effect_terms("ADG", surface[surface$genome_value != 0, ],
-#'                                     effect_owner = "epistasis_AxA")
+#'                                          effect_owner = "epistasis_AxA")
 #'
 #' # Reciprocal dominance: the F1 value depends on which parent gave which line
 #' pop <- pop |> define_genome_effect_terms(
@@ -159,17 +159,17 @@ GE_RESERVED_OWNERS <- GE_GENERATED_OWNER
 #' }
 #' @export
 define_genome_effect_terms <- function(pop,
-                                  trait_name,
-                                  terms,
-                                  effect_owner        = "custom",
-                                  mode                = c("append",
-                                                          "replace_scope",
-                                                          "replace_owner",
-                                                          "replace_trait"),
-                                  origin              = NULL,
-                                  base_tbl            = NULL,
-                                  require_complete    = FALSE,
-                                  allow_reserved_owner = FALSE) {
+                                       trait_name,
+                                       terms,
+                                       effect_owner        = "custom",
+                                       mode                = c("append",
+                                                               "replace_scope",
+                                                               "replace_owner",
+                                                               "replace_trait"),
+                                       origin              = NULL,
+                                       base_tbl            = NULL,
+                                       require_complete    = FALSE,
+                                       allow_reserved_owner = FALSE) {
 
   validate_tidybreed_pop(pop)
   mode <- match.arg(mode)

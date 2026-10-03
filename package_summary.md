@@ -119,7 +119,7 @@ Keys: 22 tables declare a SQL `PRIMARY KEY`; 5 use a logical key enforced in R (
 | Table | Kind | Cols | Key | Created by | Archive | Description |
 |---|---|---:|---|---|---|---|
 | `trait_meta` | table | 5 | `id_trait` | `define_trait()` | once | Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait(). |
-| `trait_var_comp` | table | 5 | `id_trait_var_comp` | `open_pop()` | once | Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive'; 'dominance' and 'additive_by_additive' are reserved, with no generator yet. |
+| `trait_var_comp` | table | 5 | `id_trait_var_comp` | `open_pop()` | once | Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet. |
 
 ### Observation model (5)
 

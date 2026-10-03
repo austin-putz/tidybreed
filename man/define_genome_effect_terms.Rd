@@ -149,7 +149,7 @@ surface <- rbind(
              genome_value  = cells$value)
 )
 pop <- pop |> define_genome_effect_terms("ADG", surface[surface$genome_value != 0, ],
-                                    effect_owner = "epistasis_AxA")
+                                         effect_owner = "epistasis_AxA")
 
 # Reciprocal dominance: the F1 value depends on which parent gave which line
 pop <- pop |> define_genome_effect_terms(

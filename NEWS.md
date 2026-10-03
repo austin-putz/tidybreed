@@ -1,3 +1,15 @@
+# tidybreed 0.72.1 (2026-10-03)
+
+Review of step 1 (`plans/import_qtl_effect_methods_phase_1.md`, "Review
+pass"). No behaviour change.
+
+## Documentation
+
+* The `trait_var_comp` description (`schema()`) no longer reads "Reserved …
+  reserved".
+* Code and examples that call `define_genome_effect_terms()` are realigned
+  after the rename.
+
 # tidybreed 0.72.0 (2026-10-02)
 
 Step 1 of `plans/import_qtl_effect_methods.md`: a rename-only release that

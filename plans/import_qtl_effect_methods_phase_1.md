@@ -4,7 +4,8 @@
 **Version:** 0.72.0.
 **Status:** complete.
 - Full suite: 66 files, 964 tests, 3521 expectations passed, 0 failed, 0 errors, 1 skipped.
-- The counts are one test and 16 expectations above the 0.71.2 figure in `_phase_0b.md`. That run predated step 0b's review-pass tests; step 1 itself adds or removes no tests.
+- The figure in `_phase_0b.md` (963 tests, 3505 expectations) came from a run before step 0b's review-pass tests. The one extra test is that pass's backstop test.
+- Step 1 adds or removes no tests: there are 964 `test_that()` blocks before and after the commit. Its test diff is renames only, so the 16 extra expectations do not come from step 1. Whether step 0b's review tests account for all 16 was not checked separately.
 
 **Date:** 2026-10-02.
 
@@ -27,10 +28,10 @@ A rename-only release. It frees the names the later steps need, and it changes n
 ## Census and method
 
 - **Hits counted before editing (0.71.2):**
-  - `define_genome_effects`: 176 hits.
-  - `gen_add`: about 45 hits, plus 21 for `gen_add_flat`.
-  - Owner: 29 hits.
-  - Quoted `epistasis`: 6 files.
+  - `define_genome_effects`: 182 hits in 32 files.
+  - `gen_add`: 45 hits in 20 files, plus 21 for `gen_add_flat` (3 files).
+  - Owner (`generated_additive_tbv` / `GE_ADDITIVE_OWNER`): 31 hits in 14 files.
+  - Quoted `epistasis`: 10 hits in 7 files (including `man/define_effect_cov_matrix.Rd`).
   - `trait_names` inside `define_effect_cov_matrix()`.
 - **Replacement method:** word-bounded `perl -pi`, run only over the files the census listed. Quoted `epistasis` and `trait_names` were changed in targeted edits.
 - **Prose and grammar:** reviewed with `git diff --word-diff`. No "a additive" constructions resulted.
@@ -48,7 +49,7 @@ A rename-only release. It frees the names the later steps need, and it changes n
   - The full suite is green.
   - The `tests/` diff is 129 lines in and 129 out across 10 files. With every rename mapped back to its old name, every changed line pairs with its original exactly. There are no assertion, tolerance or fixture-value changes.
 - **Vignette:** the introduction vignette's code runs end to end under `load_all()`, extracted with `knitr::purl` and then sourced.
-- **Docs:** `devtools::document()` gives a clean run.
+- **Docs:** `devtools::document()` gives a clean run. The first run, which deleted `define_genome_effects.Rd`, printed link warnings; the rerun printed none.
 
 ## Deviations from the plan
 
@@ -62,6 +63,24 @@ A rename-only release. It frees the names the later steps need, and it changes n
 - Internal vector arguments named `trait_names` (`load_trait_cov()`, `.gev_read_model()`, `.dae_warn_parent_only()`) are not exported arguments that map to a column.
 - §2 of the main plan is a 0.71.0 audit snapshot and still uses the old names.
 - Past `NEWS.md` entries and closed plans stay as written.
+
+## Review pass (2026-10-03)
+
+A check of this summary against the commit (`bd54462`) confirmed:
+- the version, the file and Rd renames, the export, and `_pkgdown.yml`;
+- gates R1 and R2;
+- the suite and vignette results;
+- the NEWS entry and the plan bookkeeping.
+
+It found these errors, all fixed in 0.72.1:
+- **Census counts were wrong in this summary.** The census had counted lines, not hits, and missed one Rd. The corrected numbers are above.
+- **Alignment.** Five continuation lines and the `define_genome_effect_terms()` signature were still aligned to the old, five-character-shorter name:
+  - `R/define_genome_effect_terms.R` (the signature, and the example at line 134);
+  - `test-genome-effects-writer.R` (lines 99, 242–243, 354 and 825).
+
+  They are realigned. Whitespace only.
+- **Wording.** The `trait_var_comp` description in `R/schema.R` read "Reserved … reserved". It now reads "Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet." The same text is fixed in `package_summary.md` and `dev/package_summary/package_summary.html`.
+- **Left as is:** `plans/dyadic_model.md`, `RFI.md`, `yaml_plan.md` and `fix_add_ebv.md` still say `gen_add`. They are older proposals, which count as closed history (§0A). Whoever revives one updates its strings then.
 
 ## Plan bookkeeping
 

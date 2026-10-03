@@ -328,7 +328,7 @@ register_schema_meta <- function(conn, entries) {
             "TBV centering mean for the base population; default 0"),
     # trait_var_comp
     .sm_tbl("trait_var_comp",
-            "Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive'; 'dominance' and 'additive_by_additive' are reserved, with no generator yet."),
+            "Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: 'additive', plus 'dominance' and 'additive_by_additive', which no generator writes yet."),
     .sm_col("trait_var_comp", "id_trait_var_comp",
             "Auto-incrementing primary key"),
     .sm_col("trait_var_comp", "effect_name",

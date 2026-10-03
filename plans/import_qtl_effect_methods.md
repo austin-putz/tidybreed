@@ -1613,7 +1613,7 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   - `define_index(trait_names =)`, a different function. It breaks naming rule 1 the same way; this is a possible follow-up.
   - Internal vector arguments named `trait_names`: `load_trait_cov()`, `.gev_read_model()`, `.dae_warn_parent_only()`.
   - §2's audit, a 0.71.0 snapshot that still names the old writer.
-
+- **Review (0.72.1):** realigned continuation lines after the rename, and reworded the `trait_var_comp` schema description. Whitespace and wording only (`_phase_1.md`, "Review pass").
 ### Step 2 — Part A and the §6C target rules (0.73.0)
 
 - `R/qtl_congruence.R` (congruence, PSD validation, diagnostics), `anchor =`, and
