@@ -12,8 +12,7 @@ define_genome_effect_terms(
   mode = c("append", "replace_scope", "replace_owner", "replace_trait"),
   origin = NULL,
   base_tbl = NULL,
-  require_complete = FALSE,
-  allow_reserved_owner = FALSE
+  require_complete = FALSE
 )
 }
 \arguments{
@@ -50,11 +49,6 @@ line-scoped surfaces are written one line at a time with
 every reachable \verb{(copy_count, dosage)} state on every member — including
 \code{copy_count_value = 0} where a chromosome can be absent. Default \code{FALSE}
 (sparse: a cell you do not write contributes zero).}
-
-\item{allow_reserved_owner}{Logical. Permit writing under a package-reserved
-\code{effect_owner}. Default \code{FALSE}; the package's own generator
-(\code{\link[=define_additive_effects]{define_additive_effects()}}) writes under its reserved owner through the
-same engine.}
 }
 \value{
 The \code{tidybreed_pop}, invisibly.

@@ -319,7 +319,8 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
 #'
 #' The single write path for generation targets, shared by
 #' [define_effect_cov_matrix()] and the generators' `G =`. It
-#' * validates the block as finite, symmetric and positive semidefinite;
+#' * validates the block as finite, symmetric and positive semidefinite, on
+#'   the correlation scale so the check does not depend on the traits' units;
 #' * refuses when **any** row exists for `effect_name`, any of the block's
 #'   traits and the same `line_name` (NULL-safe), checked on the whole table,
 #'   even for an identical matrix;
@@ -339,7 +340,7 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
   if (anyNA(G) || any(!is.finite(G))) {
     stop("The ", what, " must contain only finite values.", call. = FALSE)
   }
-  .qtl_target_eigen(unname(G), name = paste0("the ", what), rel_tol = 1e-10)
+  .qtl_target_std(unname(G), name = paste0("the ", what))
   G <- (G + t(G)) / 2
 
   block <- .tvc_block_traits(conn, effect_name, line_name, traits)

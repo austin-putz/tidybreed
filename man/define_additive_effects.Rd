@@ -74,11 +74,11 @@ line's own target block. \code{NULL} (default) means the common scope.}
 imprinting, restricting the term to copies inherited from that parent.
 \code{NULL} (default) means both parents' copies. \strong{Per trait}: a scalar is
 recycled, a vector must match \code{trait_name} positionally, or name its
-entries by trait. A correlated call must use one origin for every trait —
-under random mating the paternal and maternal copies at a locus are
-independent, so the requested genetic covariance between a paternal-only
-and a maternal-only trait is zero and cannot be realized. For imprinting
-that varies locus by locus, write the terms with
+entries by trait; each value must be exactly \code{1} or \code{2}. One call must
+use one origin for every trait: it calibrates against one reference
+covariance, defined for one set of inherited copies (a mixed-scope anchor
+is not supported yet). Define differently-scoped traits in separate
+calls. For imprinting that varies locus by locus, write the terms with
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}.}
 
 \item{scale_to_target}{Logical. \code{TRUE} (default) calibrates sampled effects
@@ -90,8 +90,12 @@ the bounds, an observed or genic-limit comparison warns; a founder-pool
 comparison adds the realised-anchor hint to its message.
 Default \code{c(0.8, 1.25)} (±25\%, multiplicative).}
 
-\item{seed}{Optional integer, applied with \code{\link[=set.seed]{set.seed()}} after every check
-and immediately before the draw, so a refused call never touches the RNG.}
+\item{seed}{Optional integer, applied with \code{\link[=set.seed]{set.seed()}} immediately before
+the draw, after every input check and after the anchor's feasibility
+check (\code{rank(G) <= rank(M)}), so those refusals never touch the RNG. A
+failure that depends on the draw itself -- the drawn architecture's rank,
+or a calibration that fails verification -- comes after the seed and has
+consumed RNG draws.}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -111,7 +115,13 @@ exactly, \verb{B' M B = G} to machine precision, \strong{only} for sampled effec
 with \code{method = "shared"} and \code{scale_to_target = TRUE}, when the rank is
 feasible: \code{rank(G) <= rank(M)} (the anchor has enough independent
 segregating directions at the selected loci) and \verb{rank(G) <= rank(B0' M B0)} (the drawn architecture does too). Each infeasibility is its
-own error. The closing message says "exact" or "approximate" and gives the
+own error. Rank and positive semidefiniteness are judged on the target's
+\strong{correlation} scale, so a trait recorded in small units is never
+truncated away. "Exact" is checked, not assumed: the delivered \verb{B' M B} is
+compared with \code{G} as stored, entry by entry, to a relative tolerance of
+\code{1e-8} on the correlation scale; a calibration that misses it (a
+numerically ill-conditioned architecture) is an error before anything is
+written. The closing message says "exact" or "approximate" and gives the
 delivered covariance under the anchor.
 
 \strong{How.} Effects are drawn as today (one draw per QTL for one trait; joint
@@ -142,9 +152,11 @@ is a size limit; above it the call errors and suggests \code{"genic"}.
 }
 
 Under \code{method = "union"} each trait keeps its own QTL set and is scaled by
-its own variance only, so a non-zero target covariance is \strong{approximate}:
-a warning gives the delivered covariance and correlation and names
-\code{method = "shared"} as the exact option.
+its own variance only, so the variances are exact and the covariances are
+\strong{approximate} -- including a zero target covariance, which overlapping QTL
+sets do not deliver. A warning gives the delivered covariance and
+correlation and names \code{method = "shared"} as the exact option. A trait with
+a positive target variance and no QTL in the call is an error.
 
 After calibration the delivered covariance is compared with what another
 population sees (§7.4 of the plan): the \strong{pool expectation} \verb{2 Cov(H)}

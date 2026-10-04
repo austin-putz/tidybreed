@@ -568,21 +568,20 @@ test_that("a selected QTL with no base copies errors, per trait under union", {
   pop |> get_table("genome_meta") |> dplyr::filter(locus_id %in% 1:4) |>
     define_additive_effects("ADG", effects = rep(1, 4), base_tbl = half)
 
-  # Union: ADG's existing QTL are 1-4 (covered); BW has none at this scope and
-  # is skipped with the existing warning. The candidate pool includes 5-8, but
-  # a gap outside a trait's written set is not that trait's problem.
+  # Union: ADG's existing QTL are 1-4 (covered); BW has none at this scope, so
+  # its positive target variance cannot be delivered and nothing is stored.
   G <- diag(2); dimnames(G) <- list(c("ADG", "BW"), c("ADG", "BW"))
-  expect_warning(
+  expect_error(
     pop |> get_table("genome_meta") |>
       define_additive_effects(c("ADG", "BW"), G = G, method = "union",
                               base_tbl = half),
-    "no existing generated additive effects")
+    "no existing generated additive effects.*cannot deliver its target variance 1")
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) n FROM trait_var_comp")$n, 0)
   # Shared: every trait writes every candidate, so the gap now bites, per trait.
-  # (The union call stored G; a stored target is never rewritten, so the
-  # shared call reads it back.)
   expect_error(
     pop |> get_table("genome_meta") |>
-      define_additive_effects(c("ADG", "BW"), method = "shared",
+      define_additive_effects(c("ADG", "BW"), G = G, method = "shared",
                               base_tbl = half),
     "no allele copies at 4 selected QTL for trait 'ADG'")
 })

@@ -1,9 +1,11 @@
 #' Reserved effect owners
 #'
-#' Owner names the package writes itself. The general writer refuses to create
-#' or delete rows under these without `allow_reserved_owner = TRUE`, so that
-#' rerunning [define_additive_effects()] can never remove a user's own terms and
-#' a user's call can never remove the generated ones. Derived from
+#' Owner names the package writes itself. The exported writer refuses to
+#' create or delete rows under these, with no override, so that rerunning
+#' [define_additive_effects()] can never remove a user's own terms, a user's
+#' call can never remove the generated ones, and "every active term is
+#' `generated`" proves the terms were calibrated to the stored target (Q21,
+#' Q23). Only the package's internal `.ge_write_terms()` may write them. Derived from
 #' `GE_GENERATED_OWNER` rather than repeating the literal, so the reserved list
 #' and the writer that owns it cannot drift apart.
 #'
@@ -98,10 +100,6 @@ GE_RESERVED_OWNERS <- GE_GENERATED_OWNER
 #'   every reachable `(copy_count, dosage)` state on every member — including
 #'   `copy_count_value = 0` where a chromosome can be absent. Default `FALSE`
 #'   (sparse: a cell you do not write contributes zero).
-#' @param allow_reserved_owner Logical. Permit writing under a package-reserved
-#'   `effect_owner`. Default `FALSE`; the package's own generator
-#'   ([define_additive_effects()]) writes under its reserved owner through the
-#'   same engine.
 #'
 #' @return The `tidybreed_pop`, invisibly.
 #'
@@ -168,11 +166,25 @@ define_genome_effect_terms <- function(pop,
                                                                "replace_trait"),
                                        origin              = NULL,
                                        base_tbl            = NULL,
-                                       require_complete    = FALSE,
-                                       allow_reserved_owner = FALSE) {
-
-  validate_tidybreed_pop(pop)
+                                       require_complete    = FALSE) {
   mode <- match.arg(mode)
+  .ge_write_terms(pop, trait_name, terms, effect_owner, mode, origin,
+                  base_tbl, require_complete, allow_reserved_owner = FALSE)
+}
+
+#' The writer behind [define_genome_effect_terms()]
+#'
+#' `allow_reserved_owner = TRUE` is internal only: the exported function always
+#' passes `FALSE`, so no exported path can write coefficients under the
+#' reserved owner (Q23). Tests use it to show the generator is sugar over this
+#' engine.
+#' @keywords internal
+#' @noRd
+.ge_write_terms <- function(pop, trait_name, terms, effect_owner = "custom",
+                            mode = "append", origin = NULL, base_tbl = NULL,
+                            require_complete = FALSE,
+                            allow_reserved_owner = FALSE) {
+  validate_tidybreed_pop(pop)
   conn <- pop$db_conn
 
   # base_tbl is validated whenever supplied (a wrong object should error
@@ -843,8 +855,9 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
       stop("mode = \"replace_trait\" would delete ", sum(reserved),
            " term(s) under the reserved owner '",
            paste(unique(t$effect_owner[reserved]), collapse = "', '"),
-           "', which define_additive_effects() owns. Re-run that function ",
-           "instead, or pass allow_reserved_owner = TRUE to take it over.",
+           "', which define_additive_effects() owns. Generated terms are ",
+           "replaced only by re-running that function; use replace_owner or ",
+           "replace_scope to replace your own terms.",
            call. = FALSE)
     }
   }

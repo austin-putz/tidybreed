@@ -16,7 +16,13 @@
 #' feasible: `rank(G) <= rank(M)` (the anchor has enough independent
 #' segregating directions at the selected loci) and `rank(G) <=
 #' rank(B0' M B0)` (the drawn architecture does too). Each infeasibility is its
-#' own error. The closing message says "exact" or "approximate" and gives the
+#' own error. Rank and positive semidefiniteness are judged on the target's
+#' **correlation** scale, so a trait recorded in small units is never
+#' truncated away. "Exact" is checked, not assumed: the delivered `B' M B` is
+#' compared with `G` as stored, entry by entry, to a relative tolerance of
+#' `1e-8` on the correlation scale; a calibration that misses it (a
+#' numerically ill-conditioned architecture) is an error before anything is
+#' written. The closing message says "exact" or "approximate" and gives the
 #' delivered covariance under the anchor.
 #'
 #' **How.** Effects are drawn as today (one draw per QTL for one trait; joint
@@ -46,9 +52,11 @@
 #'   is a size limit; above it the call errors and suggests `"genic"`.
 #'
 #' Under `method = "union"` each trait keeps its own QTL set and is scaled by
-#' its own variance only, so a non-zero target covariance is **approximate**:
-#' a warning gives the delivered covariance and correlation and names
-#' `method = "shared"` as the exact option.
+#' its own variance only, so the variances are exact and the covariances are
+#' **approximate** -- including a zero target covariance, which overlapping QTL
+#' sets do not deliver. A warning gives the delivered covariance and
+#' correlation and names `method = "shared"` as the exact option. A trait with
+#' a positive target variance and no QTL in the call is an error.
 #'
 #' After calibration the delivered covariance is compared with what another
 #' population sees (§7.4 of the plan): the **pool expectation** `2 Cov(H)`
@@ -189,11 +197,11 @@
 #'   imprinting, restricting the term to copies inherited from that parent.
 #'   `NULL` (default) means both parents' copies. **Per trait**: a scalar is
 #'   recycled, a vector must match `trait_name` positionally, or name its
-#'   entries by trait. A correlated call must use one origin for every trait —
-#'   under random mating the paternal and maternal copies at a locus are
-#'   independent, so the requested genetic covariance between a paternal-only
-#'   and a maternal-only trait is zero and cannot be realized. For imprinting
-#'   that varies locus by locus, write the terms with
+#'   entries by trait; each value must be exactly `1` or `2`. One call must
+#'   use one origin for every trait: it calibrates against one reference
+#'   covariance, defined for one set of inherited copies (a mixed-scope anchor
+#'   is not supported yet). Define differently-scoped traits in separate
+#'   calls. For imprinting that varies locus by locus, write the terms with
 #'   [define_genome_effect_terms()].
 #' @param scale_to_target Logical. `TRUE` (default) calibrates sampled effects
 #'   to the target. `FALSE` writes the draw unscaled and takes no target.
@@ -202,8 +210,12 @@
 #'   the bounds, an observed or genic-limit comparison warns; a founder-pool
 #'   comparison adds the realised-anchor hint to its message.
 #'   Default `c(0.8, 1.25)` (±25%, multiplicative).
-#' @param seed Optional integer, applied with [set.seed()] after every check
-#'   and immediately before the draw, so a refused call never touches the RNG.
+#' @param seed Optional integer, applied with [set.seed()] immediately before
+#'   the draw, after every input check and after the anchor's feasibility
+#'   check (`rank(G) <= rank(M)`), so those refusals never touch the RNG. A
+#'   failure that depends on the draw itself -- the drawn architecture's rank,
+#'   or a calibration that fails verification -- comes after the seed and has
+#'   consumed RNG draws.
 #'
 #' @return The modified `tidybreed_pop` (invisibly).
 #'
@@ -329,20 +341,23 @@ define_additive_effects <- function(tbl,
   }
   for (t in trait_name) .ge_require_trait(conn, t)
 
-  # A correlated draw across traits that express from different parents cannot
-  # deliver the requested off-diagonal: under random mating the paternal and
-  # maternal copies at a locus are independent, so the genetic covariance
-  # between a paternal-only and a maternal-only trait is exactly zero however
-  # strongly the sampled coefficients correlate. Unobtainable, not approximate.
+  # One call calibrates against one anchor, and the anchor's weights
+  # n_eligible * p q depend on which copies a term reads (2 for both parents,
+  # 1 for one). Traits reading different copies need a block anchor over the
+  # paternal and maternal copies separately, which does not exist yet. The
+  # covariance is not always zero: paternal-only vs maternal-only is zero under
+  # random mating, but both-parents vs paternal-only is pq per locus.
   po_keys <- vapply(trait_name, function(t) .dae_po_key(po[[t]]), character(1))
   if (length(unique(po_keys)) > 1L) {
-    stop("'parent_origin' differs across traits in one correlated call: ",
+    stop("'parent_origin' differs across traits in one call: ",
          paste0(trait_name, " = ", po_keys, collapse = ", "),
-         ". Under random mating a locus's paternal and maternal copies are ",
-         "independent, so the genetic covariance between a paternal-only and ",
-         "a maternal-only trait is zero — the off-diagonal of G cannot be ",
-         "realized, whatever the sampled coefficients. Use one ",
-         "parent_origin for the whole call, or define the traits separately.",
+         ". One call calibrates all its traits against one reference ",
+         "covariance, which is defined for one set of inherited copies; a ",
+         "mixed-scope anchor is not supported yet. Use one parent_origin for ",
+         "the whole call, or define the traits in separate calls (their ",
+         "genetic covariance is then whatever the effects give: zero in ",
+         "expectation for a paternal-only vs a maternal-only trait under ",
+         "random mating, but not in general when one trait reads both copies).",
          call. = FALSE)
   }
   n_elig <- .dae_n_eligible(po[[trait_name[1L]]])
@@ -384,9 +399,23 @@ define_additive_effects <- function(tbl,
       existing <- .dae_existing_loci(model, t, .dae_scope(line_name, po[[t]]))
       active   <- candidate & genome_order$locus_id %in% existing
       if (!any(active)) {
-        warning("Trait '", t, "' has no existing generated additive effects at ",
-                "this scope within the candidate loci; it will receive no ",
-                "effects from this call.", call. = FALSE)
+        # A positive target with no QTL to carry it would be stored (or kept)
+        # as a target the model does not deliver.
+        if (need == "target" && G[t, t] > 0) {
+          stop("Trait '", t, "' has no existing generated additive effects at ",
+               "this scope within the candidate loci, so method = \"union\" ",
+               "cannot deliver its target variance ", format(G[t, t]), ". ",
+               "Define its QTL first, or use method = \"shared\".",
+               call. = FALSE)
+        }
+        if (need == "target") {
+          message("Trait '", t, "' has no QTL in this call; its target ",
+                  "variance is 0, so it receives no effects.")
+        } else {
+          warning("Trait '", t, "' has no existing generated additive effects ",
+                  "at this scope within the candidate loci; it will receive no ",
+                  "effects from this call.", call. = FALSE)
+        }
       }
       mask[, t] <- active
     }
@@ -415,6 +444,28 @@ define_additive_effects <- function(tbl,
   design <- if (anchor == "realised")
     .dae_collect_dosages(pop, base$tbl, genome_order$locus_id[any_qtl])
 
+  w_all <- n_elig * p_base * (1 - p_base)
+  anchor_at <- function(rows) {
+    if (anchor == "genic") return(.qtl_anchor_diag(w_all[rows]))
+    cols <- match(genome_order$locus_id[rows], design$locus_id)
+    Xc   <- sweep(design$X[, cols, drop = FALSE], 2L,
+                  colMeans(design$X[, cols, drop = FALSE]), "-")
+    .qtl_anchor_design(Xc, nrow(Xc) - 1L)
+  }
+
+  # Anchor feasibility depends on the base alone, so it is refused before the
+  # seed: only an architecture-rank failure (step 5) depends on the draw.
+  std <- if (need == "target") .qtl_target_std(G)
+  if (need == "target") {
+    if (k == 1L || method == "shared") {
+      .qtl_anchor_rank_check(anchor_at(mask[, 1L])$rank(1e-10), std$rank)
+    } else {
+      for (t in trait_name) {
+        if (G[t, t] > 0) .qtl_anchor_rank_check(anchor_at(mask[, t])$rank(1e-10), 1L)
+      }
+    }
+  }
+
   # ── 4. Seed, then draw. No RNG use before this line. ──────────────────────
   if (!is.null(seed)) set.seed(seed)
   B <- if (!is.null(effects)) {
@@ -425,50 +476,52 @@ define_additive_effects <- function(tbl,
     .draw_additive_architecture(mask, distribution, G)
   }
 
-  # ── 5. Calibrate. ─────────────────────────────────────────────────────────
-  w_all <- n_elig * p_base * (1 - p_base)
-  anchor_at <- function(rows) {
-    if (anchor == "genic") return(.qtl_anchor_diag(w_all[rows]))
-    cols <- match(genome_order$locus_id[rows], design$locus_id)
-    Xc   <- sweep(design$X[, cols, drop = FALSE], 2L,
-                  colMeans(design$X[, cols, drop = FALSE]), "-")
-    .qtl_anchor_design(Xc, nrow(Xc) - 1L)
-  }
+  # ── 5. Calibrate, verified against the target as stored. ─────────────────
   exact <- NA
   if (need == "target") {
     if (k == 1L || method == "shared") {
       rows <- mask[, 1L]
-      cg <- .qtl_congruence(B[rows, , drop = FALSE], .qtl_target_eigen(G),
-                            anchor_at(rows))
-      B[rows, ] <- cg$B
-      exact <- TRUE
+      B[rows, ] <- .qtl_calibrate(B[rows, , drop = FALSE], std,
+                                  anchor_at(rows))$B
     } else {
       for (t in trait_name) {
         rows <- mask[, t]
         if (!any(rows)) next
-        cg <- .qtl_congruence(B[rows, t, drop = FALSE],
-                              .qtl_target_eigen(G[t, t, drop = FALSE]),
-                              anchor_at(rows))
-        B[rows, t] <- cg$B
+        B[rows, t] <- .qtl_calibrate(B[rows, t, drop = FALSE],
+                                     .qtl_target_std(G[t, t, drop = FALSE]),
+                                     anchor_at(rows))$B
       }
-      exact <- !any(G[upper.tri(G)] != 0)
     }
   }
 
   # Delivered covariance under the anchor, on every locus any trait uses.
+  # "exact" is a check of this against the target, never assumed: under
+  # "union" even a zero target covariance is missed where the QTL sets overlap.
   B_any     <- B[any_qtl, , drop = FALSE]
   B_any[is.na(B_any)] <- 0
   delivered <- anchor_at(any_qtl)$cov(B_any)
   dimnames(delivered) <- list(trait_name, trait_name)
+  if (need == "target") {
+    exact <- .qtl_target_error(delivered, std) <= QTL_CALIBRATION_TOL
+  }
   if (need == "target" && isFALSE(exact)) {
-    warning("method = \"union\" is approximate for a non-zero target covariance: ",
-            "each trait keeps its own QTL set and is scaled by its own variance ",
-            "only. Delivered covariance ", .dae_format_cov(delivered),
+    warning("method = \"union\" is approximate: each trait keeps its own QTL ",
+            "set and is scaled by its own variance only, so the covariances ",
+            "are not calibrated. Delivered covariance ", .dae_format_cov(delivered),
             " (correlation ", .dae_format_cor(delivered), ") against target ",
             .dae_format_cov(G), ". method = \"shared\" is exact.", call. = FALSE)
   }
 
-  # ── 6. Build, and commit terms with any new target in one transaction. ────
+  # ── 6. Diagnostics: what another population sees (§7.4). Computed before
+  # the commit, so a failure here leaves the database untouched; reported
+  # after it. Nothing stored.
+  diag_res <- if (need == "target" && !is.null(warn_bounds) &&
+                  is.null(line_name) && is.null(po[[trait_name[1L]]])) {
+    .dae_diagnostics(pop, base$tbl, anchor, genome_order, any_qtl, B_any, std,
+                     p_base)
+  }
+
+  # ── 7. Build, and commit terms with any new target in one transaction. ────
   built <- NULL
   drop  <- integer(0)
   for (t in trait_name) {
@@ -487,13 +540,7 @@ define_additive_effects <- function(tbl,
   }
   .ge_commit(conn, unique(drop), built, before_commit = write_target)
   .dae_warn_parent_only(conn, trait_name)
-
-  # ── 7. Diagnostics: what another population sees (§7.4). Nothing stored. ──
-  if (need == "target" && !is.null(warn_bounds) && is.null(line_name) &&
-      is.null(po[[trait_name[1L]]])) {
-    .dae_diagnostics(pop, base$tbl, anchor, genome_order, any_qtl, B_any, G,
-                     p_base, design, warn_bounds)
-  }
+  if (!is.null(diag_res)) .dae_report_diagnostics(diag_res, anchor, warn_bounds)
 
   # ── 8. Messages. ──────────────────────────────────────────────────────────
   calib <- if (need != "target") {
@@ -547,11 +594,20 @@ GE_GENERATED_OWNER <- "generated"
   if (is.null(parent_origin)) {
     return(stats::setNames(rep(list(NULL), length(trait_name)), trait_name))
   }
-  if (!is.numeric(parent_origin) && !is.integer(parent_origin)) {
-    stop("'parent_origin' must be 1 (sire / parent_1), 2 (dam / parent_2), or ",
-         "NULL (both parents' copies).", call. = FALSE)
+  # Checked on the values as given, before any coercion: as.integer(1.9) is 1,
+  # which would silently turn a typo into a paternal-only effect.
+  if (!is.numeric(parent_origin) || length(parent_origin) == 0L ||
+      anyNA(parent_origin) || !all(parent_origin %in% c(1, 2))) {
+    stop("'parent_origin' must be 1 (sire / parent_1) or 2 (dam / parent_2) ",
+         "for every trait, or NULL (both parents' copies); got ",
+         paste(format(parent_origin), collapse = ", "), ".", call. = FALSE)
   }
-  v <- stats::setNames(as.integer(parent_origin), names(parent_origin))
+  nms <- names(parent_origin)
+  if (!is.null(nms) && (anyNA(nms) || any(nms == "") || anyDuplicated(nms))) {
+    stop("A named 'parent_origin' must name each trait once, with no empty ",
+         "or duplicated names.", call. = FALSE)
+  }
+  v <- stats::setNames(as.integer(parent_origin), nms)
   if (!is.null(names(parent_origin))) {
     unknown <- setdiff(names(parent_origin), trait_name)
     if (length(unknown) > 0L) {
@@ -567,12 +623,6 @@ GE_GENERATED_OWNER <- "generated"
   } else {
     stop("'parent_origin' must have length 1, length(trait_name) (",
          length(trait_name), "), or be named by trait.", call. = FALSE)
-  }
-  bad <- vapply(out, function(x) !is.null(x) && (is.na(x) || !x %in% c(1L, 2L)),
-                logical(1))
-  if (any(bad)) {
-    stop("'parent_origin' must be 1 (sire / parent_1) or 2 (dam / parent_2); ",
-         "use NULL for both.", call. = FALSE)
   }
   out
 }
@@ -821,7 +871,31 @@ QTL_REALISED_MAX_CELLS <- 2e7
     if (anyNA(G) || any(!is.finite(G))) {
       stop("`G` must contain only finite values.", call. = FALSE)
     }
-    .qtl_target_eigen(unname(G), name = "G", rel_tol = 1e-10)
+    .qtl_target_std(unname(G), name = "G")
+    # A stored non-additive target is never silently ignored, whichever way
+    # the additive target arrives. With `G` there is no trait_var_comp_tbl to
+    # leave it out explicitly, so the explicit route is: store `G` first, then
+    # select the additive rows.
+    stored <- .dae_default_target_rows(conn, trait_name, line_name)
+    other  <- setdiff(unique(stored$effect_name[
+      stored$trait_name_1 %in% trait_name | stored$trait_name_2 %in% trait_name]),
+      "additive")
+    if (length(other)) {
+      stop("A stored '", paste(other, collapse = "', '"), "' target exists for ",
+           paste(trait_name, collapse = ", "), ". define_additive_effects() ",
+           "calibrates the additive block only and never silently ignores a ",
+           "stored target. To generate additive effects only, store `G` first ",
+           "and select it explicitly:\n",
+           "  define_effect_cov_matrix(pop, \"additive\", G, trait_name = c(",
+           paste0('"', trait_name, '"', collapse = ", "), ")",
+           if (!is.null(line_name)) paste0(', line_name = "', line_name, '"'),
+           ")\n  ... |> define_additive_effects(..., trait_var_comp_tbl = ",
+           'get_table(pop, "trait_var_comp") |>\n',
+           '      dplyr::filter(effect_name == "additive", ',
+           if (is.null(line_name)) "is.na(line_name)"
+           else paste0('line_name == "', line_name, '"'), "))\n",
+           "or remove the stored block with remove_rows().", call. = FALSE)
+    }
     block <- .tvc_block_traits(conn, "additive", line_name, trait_name)
     if (length(block)) {
       stop("An 'additive' block is already stored for ",
@@ -918,8 +992,7 @@ QTL_REALISED_MAX_CELLS <- 2e7
     stop("The stored 'additive' block for ", paste(trait_name, collapse = ", "),
          " is not symmetric.", call. = FALSE)
   }
-  .qtl_target_eigen(unname(M), name = "the stored 'additive' block",
-                    rel_tol = 1e-10)
+  .qtl_target_std(unname(M), name = "the stored 'additive' block")
   list(G = M, write = FALSE)
 }
 
@@ -1017,41 +1090,54 @@ QTL_REALISED_MAX_CELLS <- 2e7
   list(X = X, id_ind = ids, locus_id = sort(as.integer(locus_ids)))
 }
 
-#' Warn when another population sees a covariance far from the target (§7.4)
+#' Compare the delivered covariance with what another population sees (§7.4)
 #'
-#' Exact under the chosen anchor does not mean exact everywhere. Compares the
-#' delivered covariance with what the **other** population sees:
-#' * genic anchor, founder-pool base: the pool expectation under random
-#'   pairing, `2 Cov(H)` over the pool's haplotypes (keeps its LD; it is not
-#'   the covariance of the founders `add_founders()` will draw);
-#' * genic anchor, individuals base: their observed `Cov(X)`;
+#' Exact under the chosen anchor does not mean exact everywhere. Computes the
+#' relative spectrum of what the **other** population sees against the target:
+#' * genic anchor, founder-pool base: the pool expectation of a founder's
+#'   dosage covariance, `2 Cov(H)` with the **population** divisor `n_h`.
+#'   `add_founders()` draws each haplotype independently and with replacement
+#'   from the pool, so a founder's two copies are iid draws from the empirical
+#'   haplotype distribution, whose covariance divides by `n_h`, not `n_h - 1`
+#'   (the pool keeps its LD; the founders actually drawn scatter around this);
+#' * genic anchor, individuals base: their observed `Cov(X)` (`n - 1`);
 #' * realised anchor: the genic (random-mating) limit at their frequencies.
 #' An `ind_haplotype` copy selection has no pairing to compare with and is
 #' skipped, as is anything above `QTL_REALISED_MAX_CELLS` (with a message).
-#' Nothing is stored.
+#'
+#' Runs **before** the commit, so its queries cannot fail after the target
+#' and terms are written; `.dae_report_diagnostics()` emits the result after
+#' the commit. The pool's identity columns (`line_name`, `haplotype_id`) are
+#' read from the physical table with `base_tbl`'s filters re-applied, so a
+#' `select()`ed selection works. Nothing is stored.
+#' @return NULL (nothing to report) or list(spec, label, pool, n_h, note).
 #' @keywords internal
 #' @noRd
 .dae_diagnostics <- function(pop, base_tbl, anchor, genome_order, rows,
-                             B, G, p_base, design, warn_bounds) {
-  target <- .qtl_target_eigen(G)
-  if (target$rank == 0L) return(invisible(NULL))
+                             B, std, p_base) {
+  if (std$rank == 0L) return(NULL)
   conn <- pop$db_conn
   locus_ids <- genome_order$locus_id[rows]
   pool <- FALSE
+  n_h  <- NA_integer_
   if (anchor == "realised") {
     p <- p_base[rows]
     cand  <- crossprod(B * sqrt(2 * p * (1 - p)))
     label <- "genic limit (expectation)"
   } else if (base_tbl$table_name == "founder_haplotypes") {
-    sub <- as.character(dbplyr::sql_render(base_tbl$tbl))
+    lazy <- dplyr::tbl(conn, "founder_haplotypes")
+    if (length(base_tbl$pending_filter) > 0L) {
+      lazy <- dplyr::filter(lazy, !!!base_tbl$pending_filter)
+    }
+    sub <- as.character(dbplyr::sql_render(lazy))
     n_h <- DBI::dbGetQuery(conn, paste0(
       "SELECT COUNT(*) AS n FROM (SELECT DISTINCT line_name, haplotype_id ",
       "FROM (", sub, ") b)"))$n
-    if (n_h < 2L) return(invisible(NULL))
+    if (n_h < 2L) return(NULL)
     if (as.numeric(n_h) * length(locus_ids) > QTL_REALISED_MAX_CELLS) {
-      message("Skipped the pool-expectation comparison: ", n_h, " haplotypes x ",
-              length(locus_ids), " QTL is above the in-memory limit.")
-      return(invisible(NULL))
+      return(list(note = paste0(
+        "Skipped the pool-expectation comparison: ", n_h, " haplotypes x ",
+        length(locus_ids), " QTL is above the in-memory limit.")))
     }
     h <- DBI::dbGetQuery(conn, paste0(
       "SELECT COALESCE(b.line_name, '') || '|' || CAST(b.haplotype_id AS VARCHAR) ",
@@ -1061,41 +1147,54 @@ QTL_REALISED_MAX_CELLS <- 2e7
     haps <- sort(unique(h$hap))
     H <- matrix(NA_real_, length(haps), length(locus_ids))
     H[cbind(match(h$hap, haps), match(h$locus_id, locus_ids))] <- h$allele
-    if (anyNA(H)) return(invisible(NULL))
+    if (anyNA(H)) return(NULL)
     Hc <- sweep(H, 2L, colMeans(H), "-")
-    cand  <- 2 * crossprod(Hc %*% B) / (nrow(H) - 1)
+    cand  <- 2 * crossprod(Hc %*% B) / nrow(H)
     label <- "founder pool (pool expectation under random pairing)"
     pool  <- TRUE
   } else if (base_tbl$table_name == "ind_haplotype") {
-    return(invisible(NULL))
+    return(NULL)
   } else {
     X <- tryCatch(.dae_collect_dosages(pop, base_tbl, locus_ids)$X,
                   error = function(e) NULL)
     if (is.null(X)) {
-      message("Skipped the observed comparison: the base individuals' ",
-              "genotypes could not be collected (partial or above the ",
-              "in-memory limit).")
-      return(invisible(NULL))
+      return(list(note = paste0(
+        "Skipped the observed comparison: the base individuals' genotypes ",
+        "could not be collected (partial or above the in-memory limit).")))
     }
     Xc <- sweep(X, 2L, colMeans(X), "-")
     cand  <- crossprod(Xc %*% B) / (nrow(X) - 1)
     label <- "base individuals (observed)"
   }
-  spec <- .qtl_relative_spectrum(target, cand)
+  list(spec = .qtl_relative_spectrum_std(std, cand), label = label,
+       pool = pool, n_h = n_h)
+}
+
+#' Report a `.dae_diagnostics()` result
+#'
+#' A pool's departure is its sampling LD, not a mistake in the call (Q22):
+#' always a message, never a warning. The observed and genic-limit
+#' comparisons warn outside `warn_bounds`.
+#' @keywords internal
+#' @noRd
+.dae_report_diagnostics <- function(res, anchor, warn_bounds) {
+  if (!is.null(res$note)) {
+    message(res$note)
+    return(invisible(NULL))
+  }
+  spec <- res$spec
   outside <- min(spec) < warn_bounds[1] || max(spec) > warn_bounds[2]
-  if (pool) {
-    # A pool's departure is its sampling LD, not a mistake in the call (Q22):
-    # always reported, never a warning.
-    message("The ", label, " sees relative spectrum ",
-            .qtl_spectrum_text(spec), " of the target (sampling LD of ", n_h,
-            " haplotypes).",
+  if (res$pool) {
+    message("The ", res$label, " sees relative spectrum ",
+            .qtl_spectrum_text(spec), " of the target (sampling LD of ",
+            res$n_h, " haplotypes).",
             if (outside) paste0(
               " For the target exactly in the founders, add them first and ",
               "call again with anchor = \"realised\" and base_tbl = those ",
               "individuals."))
   } else if (outside) {
     warning("The calibration is exact under the ", anchor, " anchor, but the ",
-            label, " sees a covariance departing from the target: relative ",
+            res$label, " sees a covariance departing from the target: relative ",
             "spectrum ", .qtl_spectrum_text(spec), " outside warn_bounds [",
             warn_bounds[1], ", ", warn_bounds[2], "]. warn_bounds = NULL ",
             "turns this off.", call. = FALSE)

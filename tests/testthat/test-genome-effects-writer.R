@@ -465,6 +465,15 @@ test_that("the reserved owner is refused to the general writer", {
     locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
     genome_value = 1), effect_owner = "generated"),
     "reserved effect owner")
+  # Q23: there is no exported override, so manual coefficients can never be
+  # written under the owner that proves calibration.
+  expect_false("allow_reserved_owner" %in% names(formals(define_genome_effect_terms)))
+  expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
+    locus_name = "Locus_1", contrast_name = "additive", center_value = 0.5,
+    genome_value = 1), effect_owner = "generated", allow_reserved_owner = TRUE),
+    "unused argument")
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 })
 
 test_that("gate 34: rerunning define_additive_effects() cannot delete custom terms", {
@@ -739,7 +748,14 @@ test_that("gate 44: a mixed-origin correlated call is rejected, with the reason"
     pop |> get_table("genome_meta") |>
       define_additive_effects(c("ADG", "BW"), G = diag(2),
                               parent_origin = c(ADG = 1L, BW = 2L)),
-    "covariance between a paternal-only and a maternal-only trait is zero")
+    "differs across traits in one call.*one reference covariance.*separate calls")
+  # Common scope next to one parent is refused for the same reason (one
+  # anchor), not because the covariance would be zero: it is pq per locus.
+  expect_error(
+    pop |> get_table("genome_meta") |>
+      define_additive_effects(c("ADG", "BW"), G = diag(2),
+                              parent_origin = c(BW = 1L)),
+    "ADG = NULL, BW = 1.*mixed-scope anchor is not supported")
   # Nothing was written.
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) n FROM genome_effects")$n, 0)
@@ -754,6 +770,20 @@ test_that("parent_origin rejects values that are not 1 or 2", {
   expect_error(pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1, 6), parent_origin = "sire"),
     "must be 1 .*2 .*or NULL")
+  # Checked before any coercion: as.integer(1.9) would be a paternal effect.
+  for (bad in list(1.9, 2.5, Inf, NA_real_, numeric(0))) {
+    expect_error(pop |> get_table("genome_meta") |>
+      define_additive_effects("ADG", effects = rep(1, 6), parent_origin = bad),
+      "must be 1 .*or 2")
+  }
+  expect_error(.dae_parent_origin(c(ADG = 1, ADG = 2), c("ADG", "BW")),
+               "name each trait once")
+  expect_error(.dae_parent_origin(stats::setNames(c(1, 2), c("ADG", "")),
+                                  c("ADG", "BW")), "no empty")
+  expect_identical(.dae_parent_origin(c(BW = 2), c("ADG", "BW")),
+                   list(ADG = NULL, BW = 2L))
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 })
 
 
@@ -1165,7 +1195,8 @@ test_that("generator == writer: define_additive_effects() is sugar over define_g
     coef <- DBI::dbGetQuery(pop$db_conn, paste0(
       "SELECT locus_name, genome_value FROM genome_effect_loci ",
       "WHERE effect_owner = 'generated' ORDER BY locus_id"))
-    pop <- define_genome_effect_terms(pop, "ADG",
+    # The exported writer cannot write the reserved owner (Q23); its engine can.
+    pop <- .ge_write_terms(pop, "ADG",
       terms = data.frame(term_id = seq_len(nrow(coef)), locus_name = coef$locus_name,
                          contrast_name = "additive", genome_value = coef$genome_value),
       origin = origin, effect_owner = "generated",

@@ -313,7 +313,10 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   `trait_name` accepts a scalar **or vector** of trait names. One flow for
   k = 1 and k >= 2 (0.73.0):
   1. **Validate** everything; no RNG use before the draw (`seed` is applied
-     after every check). `G` with manual `effects` or `scale_to_target = FALSE`
+     after every input check and the anchor-rank check; only the
+     architecture-rank and verification failures come after it).
+     `parent_origin` must be exactly `1`/`2` before coercion. `G` with manual
+     `effects` or `scale_to_target = FALSE`
      is refused (nothing would be calibrated to it). `anchor = "realised"`
      needs an individuals `base_tbl` and the common scope.
   2. **Target** (`.dae_resolve_target()`, plan §6C): a passed `G` (matrix, or a
@@ -323,26 +326,39 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      reads the stored rows (line block, else population-wide), or
      `trait_var_comp_tbl` rows. Refused: a stored block pairing a call trait
      with an outside trait; a stored `dominance` / `additive_by_additive` block
-     for the traits; a partial block; two candidate sets. Manual effects take
+     for the traits (**with or without** a passed `G`); a partial block; two
+     candidate sets. Targets are validated by `.qtl_target_std()`: rank and
+     PSD on the **correlation scale**, never relative to `G`'s largest
+     eigenvalue (that depends on the traits' units). Manual effects take
      no target and skip these checks; unscaled k >= 2 draws read it only as
      the draw's Sigma.
   3. **Draw** the architecture with `.draw_additive_architecture()` (today's
      draws: rnorm / signed gamma for k = 1, `MASS::mvrnorm(G)` rows for k >= 2,
      masked per trait under `"union"`). The same seed gives the same `B0`.
-  4. **Calibrate** with `.qtl_congruence()` (`R/qtl_congruence.R`, ported from
-     the source method): `B = B0 A` with `B' M B = G` exactly. `M` is the
+  4. **Calibrate** with `.qtl_calibrate()` → `.qtl_congruence()`
+     (`R/qtl_congruence.R`, ported from the source method): `B = B0 A` with
+     `B' M B = G`, run on the correlation scale with `B0` columns normalised
+     to unit anchor variance, then **verified** against the stored `G` at
+     `QTL_CALIBRATION_TOL = 1e-8` (correlation scale); a miss errors before
+     any write. "exact" in the message is this check, never assumed. `M` is the
      anchor: `"genic"` = `diag(n_eligible p q)` at the base frequencies;
      `"realised"` = `Cov(X)` of the base individuals (collected in R, size
      guard `QTL_REALISED_MAX_CELLS`). k = 1 reduces to the scalar rescale.
-     Two distinct rank errors: rank(G) > rank(M), rank(B0'MB0) < rank(G).
-     `"union"` (k >= 2) scales each trait alone and warns "approximate" for a
-     non-zero covariance.
-  5. **Commit** terms and any new target in one transaction:
-     `.ge_commit(..., before_commit = function(conn) .tvc_write_block(...))`.
-  6. **Diagnostics** (common scope only, nothing stored): the relative
-     spectrum of what another population sees vs the target — pool
-     expectation `2 Cov(H)` (founder base), observed `Cov(X)` (individuals
-     base), or the genic limit (realised anchor). The founder-pool
+     Two distinct rank errors: rank(G) > rank(M) (checked before the seed),
+     rank(B0'MB0) < rank(G). `"union"` (k >= 2) scales each trait alone and
+     warns "approximate" whenever the delivered covariance misses `G`
+     (including a zero target covariance on overlapping sets); a trait with
+     positive target variance and no QTL is an error.
+  5. **Diagnostics computed** (common scope only, nothing stored), **before**
+     the commit so they cannot fail after it: the relative spectrum of what
+     another population sees vs the target — pool expectation `2 Cov(H)` with
+     divisor `n_h` (founder base; `add_founders()` samples with replacement;
+     identity columns read from the un-projected filtered pool), observed
+     `Cov(X)` with `n - 1` (individuals base), or the genic limit (realised
+     anchor).
+  6. **Commit** terms and any new target in one transaction:
+     `.ge_commit(..., before_commit = function(conn) .tvc_write_block(...))`,
+     then report the diagnostics. The founder-pool
      comparison is always a `message()` (sampling LD, Q22), adding the
      realised-anchor hint outside `warn_bounds`; the other two warn outside
      `warn_bounds` (default `c(0.8, 1.25)`, `NULL` = off).
@@ -368,9 +384,10 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   replacing one; that is a legal containment pair and rarely intended, so the
   function warns on exactly that case. `parent_origin` is **per trait** (scalar
   recycled, positional vector, or named by trait); a call mixing origins across
-  traits while supplying `G` is rejected, because the genetic covariance
-  between a paternal-only and a maternal-only trait is zero under random mating
-  and the requested off-diagonal is unobtainable, not merely approximate.
+  traits is rejected because one call has one anchor, defined for one set of
+  inherited copies (no mixed-scope anchor yet). The covariance is not always
+  zero: paternal-only vs maternal-only is zero under random mating, but
+  both-parents vs paternal-only is `pq` per locus.
 
   `scale_to_target` is origin-aware:
   `V_A = Σ_j n_eligible,j · p_j q_j a_j²`, `n_eligible` = 2 unparented, 1
@@ -449,7 +466,7 @@ domain default; the writer fills nothing, so a missing centre is an error.
 
 `define_genome_effect_terms(pop, trait_name, terms, effect_owner = "custom", mode =
 c("append", "replace_scope", "replace_owner", "replace_trait"), origin = NULL,
-base_tbl = NULL, require_complete = FALSE, allow_reserved_owner = FALSE)` — the
+base_tbl = NULL, require_complete = FALSE)` — the
 general writer
 for arbitrary genome effects. `terms` is a **long data frame, one row per
 (term × locus)**: `term_id` (user-facing only; never stored), `genome_value`,
@@ -457,7 +474,11 @@ for arbitrary genome effects. `terms` is a **long data frame, one row per
 `copy_count_value`, `dosage_value`. A single-term call may omit `term_id`.
 Scope lives in a separate `origin` argument — `NULL` (the common scope), a
 named scalar list applied to every member, or a data frame keyed by
-`locus_name` for the exact multisets a genotype member takes.
+`locus_name` for the exact multisets a genotype member takes. The reserved owner `generated` is refused
+with **no exported override** (Q23): only the internal engine
+`.ge_write_terms(..., allow_reserved_owner = TRUE)` may write it, so "every
+active term is `generated`" proves calibration. `replace_trait` refuses to
+delete generated terms; they are replaced only by re-running the generator.
 
 The writer resolves `locus_name` → `locus_id`, canonicalizes members by
 ascending `locus_id` and origin rows by the sorted tuple, infers

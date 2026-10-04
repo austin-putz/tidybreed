@@ -521,7 +521,8 @@ $\mathbf G_{AA}$ diag 0.5 / 0.4, $n=1500$:
 `define_genome_effects()` write every term they build under `GE_GENERATED_OWNER =
 "generated"`, the only entry in `GE_RESERVED_OWNERS`. After consolidation the owner has two
 jobs. It **protects** generated terms: the writer `define_genome_effect_terms()` refuses
-the reserved owner without `allow_reserved_owner = TRUE`, as today. And it is the
+the reserved owner with no exported override (Q23, 0.73.2; only the internal
+`.ge_write_terms()` engine can write it). And it is the
 **replacement boundary**: a generator re-run replaces `generated` terms and never touches
 `custom` or other user owners, which still sum, per v4.9. Which function wrote a model is
 not recorded. What the model *is* can be read from its terms (principle 6).
@@ -1165,7 +1166,10 @@ warning tells you what the other population sees. Each warning names which refer
 `define_founder_haplotypes()` → `define_*_effects()` → `add_founders()`, so there are
 usually no individuals yet. When `base_tbl` is `founder_haplotypes`, the comparison is the
 **pool expectation under random pairing** of haplotypes,
-$\mathbf M_{\text{pool}} = 2\,\mathrm{Cov}(\mathbf H)$, which keeps the pool's LD. It is
+$\mathbf M_{\text{pool}} = 2\,\mathrm{Cov}(\mathbf H)$, which keeps the pool's LD. The
+covariance uses the **population divisor** $n_h$: `add_founders()` draws each haplotype
+independently and with replacement, so a founder's two copies are iid draws from the
+empirical pool (0.73.2; the sample divisor $n_h - 1$ overstated it by $n_h/(n_h-1)$). It is
 **not** the covariance of the founders that `add_founders()` will draw. A finite sample,
 or a structured pairing, gives something else. Label it "pool expectation" in messages,
 never "founders". When `base_tbl` selects individuals, use their $\mathrm{Cov}(\mathbf X)$
@@ -1749,6 +1753,22 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - Paper tests 10 and 11 stay on the internals (dual anchor); test 12 uses
   `add_offspring()` (§1A).
 
+**Corrections, 0.73.2** (Codex review `_phase_2_codex_review.md`, findings 1–3, 5–9;
+response at the end of that file). Gates R1–R9 in
+`test-define_additive_effects-anchor.R`, plus `test-genome-effects-writer.R` (gate 44,
+`parent_origin`) and the union gap test in `test-define_additive_effects.R`.
+- Target rank and PSD are decided on the correlation scale (`.qtl_target_std()`); `B0`'s
+  columns are normalised to unit anchor variance before the congruence. "Exact" is a
+  verified claim: `.qtl_calibrate()` checks `B' M B` against the stored `G` at
+  `QTL_CALIBRATION_TOL = 1e-8` (correlation scale) and errors before any write.
+- A passed `G` is refused next to a stored non-additive target (same rule as `G = NULL`).
+- `"union"`: a positive-variance trait with no QTL is an error; "exact" is computed, so
+  overlapping sets with a zero target covariance warn "approximate".
+- Pool expectation divisor `n_h` (§7.4). Diagnostics computed before the commit, on the
+  un-projected filtered pool.
+- `parent_origin` validated before coercion. Anchor-rank check before `set.seed()`.
+- The mixed-`parent_origin` message states the real reason (one anchor per call).
+
 ### Step 3 — consolidation, P2 and Q18 (0.74.0)
 
 - Consolidation, as specified in §6.3 (tasks 1–7).
@@ -1771,6 +1791,12 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   - The `define_phenotype(prevalence = )` roxygen's 0.72.3 caveat is replaced by the
     owner rule.
   - `define_phenotype()` roxygen states that `mean` is an intercept.
+  - Q23 is closed (0.73.2): `allow_reserved_owner` is gone from the exported writer.
+    PH7 keeps a regression that the exported writer cannot write `generated`, not only
+    ordinary generator calls.
+  - A passed `G` next to a stored non-additive block stays refused, with the
+    store-then-`trait_var_comp_tbl` route (decided 2026-10-04: no new argument).
+    `define_genome_effects()` follows the same rule in step 5.
 - The `ind_tgv` half of §6B: `order1_*` → `additive` / `dominance` / `indicator`.
 - The §6.2 breeding-value roxygen sentence on `add_tgv()`, `define_genome_effect_terms()` and `ad_terms()`.
 - Q18: `formula_tbv` → `formula_tgv` (argument, `phenotype_meta` column, internals); the
@@ -1780,6 +1806,13 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   skills drop `add_tbv()` / `ind_tbv`.
 
 ### Step 4 — Part B (0.75.0)
+
+- Report the reference population and interpretation of every estimate in the output
+  (Codex review, item 3): `anchor = "genic"` on a selected cohort is a projection at
+  `base_tbl` frequencies, `"realised"` measures that cohort, and `base_tbl = NULL` drifts
+  with the cohort (not a check of the generation target). Label case 2 "evaluated
+  additive variance". Add a worked target-vs-measured example filtering
+  `trait_var_comp` by `line_name`.
 
 - `extract_genetic_variance()` (§8), with `between_components` (Q16).
 - The NOIA conversion pair `.noia_to_stored()` / `.stored_to_functional()` (Q13), which
@@ -1797,6 +1830,14 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
 - Gate C19.
 - One short vignette with the four paths of the Codex review's "recommended first-release
   contract" (writer, additive generator, genome generator, extractor).
+- Apply 0.73.2's target rules to `G_A`, `G_D`, `G_AA` and the additive floor
+  (`.qtl_target_std()` + `.qtl_calibrate()` verification), and test non-additive values
+  in **phenotypes**, not only `ind_tgv`.
+- The vignette states the scope promise (Codex review, "Changes to the remaining plan"
+  item 5 and its table "What 'target this G in that population' means"): exact for a
+  feasible `G` under the named anchor and QTL set; a line call calibrates its own
+  variant only; `"union"` does not hit non-zero off-diagonals; one call has one
+  `parent_origin` scope; the extractor measures the population the user means.
 
 ---
 
@@ -2286,6 +2327,10 @@ Simulated fire rate of the ±25% default, 200 unlinked QTL (pure sampling LD):
 | 200 | 4% | 10% |
 | 500+ | 0% | 0% |
 
+*(0.73.2: the rates above were measured with the sample divisor `n_h − 1`, which
+overstates the pool expectation by `n_h/(n_h − 1)` — 5% at 20 haplotypes, 0.5% at 200.
+The divisor is now `n_h`. The decision does not depend on the exact rates; not re-run.)*
+
 **Decision (b).** The founder-pool comparison is always a `message()` giving the
 relative spectrum and the pool size; outside `warn_bounds` it adds the fix ("add the
 founders first and calibrate with `anchor = "realised"` on them", AlphaSimR's default
@@ -2293,6 +2338,32 @@ behaviour). The observed (`base_tbl` selects individuals) and genic-limit (reali
 anchor) comparisons keep the `warning()`: there the user chose the animals, and the fix
 is one argument. (c) stays possible later as a structure detector on top of (b). Step 5
 reuses the same rule.
+
+### Q23 — The reserved owner can still be written by hand *(decided 2026-10-04: (a); built 0.73.2)*
+
+Q21 (a) makes "every active term is `generated`" the proof that the stored target
+describes the model. Two public paths break that premise; one claimed path does not:
+
+- **Open:** `define_genome_effect_terms(effect_owner = "generated",
+  allow_reserved_owner = TRUE)` writes any coefficients under the reserved owner. The
+  flag exists for the "generator == writer" test.
+- **Open, already planned:** a target removed with `remove_rows()` and rewritten with
+  `define_effect_cov_matrix()` — closed by the step-3 refusal in Q21.
+- **Not a path:** removing a subset of generated *terms*. `remove_rows()` refuses all
+  three `genome_effect*` tables (pinned in `test-genome-effects-schema.R`).
+- **Not a prevalence issue:** `"union"` misses off-diagonals only; the threshold reads
+  a diagonal, which `"union"` delivers exactly (verified since 0.73.2).
+
+| Option | Effect |
+|---|---|
+| (a) Remove `allow_reserved_owner` from the exported writer; the test calls an internal entry point ← **recommended** | The owner becomes unforgeable through exported functions. Direct SQL remains possible, as for any table |
+| (b) Keep the flag, and at PLAN verify the active model's genic variance against the target | Q21 (b)'s problems: wrong under `anchor = "realised"`, needs step 4 for non-additive terms, needs a tolerance |
+| (c) Keep the flag, and document that it voids the prevalence guarantee | No code; relies on users reading it |
+
+**Decision (a).** `define_genome_effect_terms()` loses `allow_reserved_owner`; it calls the
+internal `.ge_write_terms()` with `FALSE`. The "generator == writer" test calls the
+engine directly. `replace_trait` still refuses to delete generated terms, now with no
+override: they are replaced only by re-running a generator.
 
 ## 13. Explicitly out of scope
 

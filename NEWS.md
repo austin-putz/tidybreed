@@ -1,3 +1,57 @@
+# tidybreed 0.73.2 (2026-10-03)
+
+Step 2 corrections from the Codex review
+(`plans/import_qtl_effect_methods_phase_2_codex_review.md`, response at its end).
+All concern `define_additive_effects()` and its target validation; seeded output
+changes for k >= 2 (pre-1.0, by design).
+
+* **"Exact" is now verified, not assumed.** The delivered `B' M B` is compared
+  with the stored `G`, entry by entry, to `1e-8` on the correlation scale; a
+  miss is an error before anything is written. Under `method = "union"` the
+  "exact" label used to be given whenever the target's off-diagonals were zero,
+  although overlapping QTL sets do not deliver a zero covariance; that case now
+  warns "approximate".
+* **Rank and PSD are judged on the correlation scale** (target validation in
+  `define_additive_effects()`, `define_effect_cov_matrix()` and the shared
+  `trait_var_comp` writer). An eigenvalue cut-off relative to `G`'s largest
+  eigenvalue depended on the traits' units: `G = diag(1, 1e-11)` was stored in
+  full but delivered `diag(1, 0)`. The architecture `B0` is normalised the same
+  way before the congruence. The PSD error now reports the smallest eigenvalue
+  of the correlation matrix.
+* **A passed `G` no longer bypasses a stored `dominance` / `additive_by_additive`
+  target** for the call's traits. It is refused, as the `G = NULL` path already
+  was; the error gives the explicit route (store `G` with
+  `define_effect_cov_matrix()`, then select it with `trait_var_comp_tbl`).
+* **`method = "union"` refuses a trait with a positive target variance and no
+  QTL in the call** (it used to warn, then store a target the model did not
+  deliver). A zero-variance trait without QTL is a message.
+* **Founder-pool diagnostic divisor**: the pool expectation is
+  `2 Cov(H)` with divisor `n_h`, not `n_h - 1`. `add_founders()` draws each
+  haplotype with replacement, so a founder's copies are iid draws from the
+  empirical pool. The old divisor overstated the expectation by `n_h/(n_h - 1)`
+  (a factor 2 for a two-haplotype pool).
+* **Diagnostics run before the commit** and are reported after it, reading the
+  pool's identity columns from the physical table: a `select()`ed
+  `founder_haplotypes` base, which `base_tbl` accepts, used to fail with a
+  binder error *after* the target and terms were committed.
+* **`parent_origin` is validated before coercion**: `1.9` used to become `1`
+  (a paternal-only effect). Non-integer, infinite, missing and empty values,
+  and duplicated or empty names, are errors.
+* **The anchor-rank refusal (`rank(G) > rank(M)`) happens before `seed` is
+  applied** and no longer touches the RNG. The `seed` documentation now says
+  which failures (architecture rank, failed verification) come after the draw.
+* **Breaking:** `define_genome_effect_terms()` loses `allow_reserved_owner`.
+  The reserved owner `generated` can no longer be written by any exported
+  function, so "every active term is `generated`" proves the terms were
+  calibrated to the stored target (Q23). `mode = "replace_trait"` still refuses
+  to delete generated terms, now without an override: re-run the generator.
+* `G =` next to a stored non-additive target keeps the two-step route (store
+  with `define_effect_cov_matrix()`, select with `trait_var_comp_tbl`); no new
+  argument (decided).
+* The mixed-`parent_origin` refusal states its actual reason (one call has one
+  anchor) instead of claiming every cross-scope covariance is zero: a
+  both-parents vs a paternal-only trait has covariance `pq` per locus.
+
 # tidybreed 0.73.1 (2026-10-03)
 
 * `define_additive_effects()`: the founder-pool comparison (§7.4) is now always

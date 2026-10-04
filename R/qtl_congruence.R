@@ -110,6 +110,135 @@
   c(.qtl_psd_eigen(G, name, rel_tol), list(G = G))
 }
 
+#' Tolerance a calibrated covariance is verified against, on the correlation
+#' scale: `|B' M B - G|_ij <= QTL_CALIBRATION_TOL * sqrt(G_ii G_jj)`.
+#' @noRd
+QTL_CALIBRATION_TOL <- 1e-8
+
+#' Validate a target covariance on its correlation scale
+#'
+#' Rank and positive semidefiniteness are decided on `R = D^{-1/2} G D^{-1/2}`
+#' (`D = diag(G)`), never on `G` itself. An eigenvalue cut-off relative to the
+#' largest eigenvalue of `G` depends on the traits' units: `diag(1, 1e-11)` --
+#' a trait recorded in units whose variance is tiny -- would lose its second
+#' trait entirely while the stored target kept it. On the correlation scale
+#' every positive-variance trait has unit diagonal, so the cut-off is
+#' numerical precision only. A trait with zero variance must have zero
+#' covariances (PSD) and contributes no direction.
+#' @return list(G = symmetrised G, d = diag(G), pos = logical, positive-variance
+#'   traits, eigen = `.qtl_target_eigen()` of the correlation block on `pos`
+#'   (NULL when no trait has variance), rank).
+#' @noRd
+.qtl_target_std <- function(G, name = "G", rel_tol = 1e-10) {
+  .qtl_validate_numeric_matrix(G, name)
+  if (nrow(G) != ncol(G)) stop("`", name, "` must be square.", call. = FALSE)
+  d <- diag(G)
+  if (any(d < 0))
+    stop("`", name, "` must be positive semi-definite; it has a negative ",
+         "variance (", format(min(d), digits = 5), ").", call. = FALSE)
+  s <- sqrt(d)
+  if (any(abs(G - t(G)) > rel_tol * outer(s, s)))
+    stop("`", name, "` must be symmetric within the relative tolerance.",
+         call. = FALSE)
+  G <- (G + t(G)) / 2
+  pos <- d > 0
+  zero_cov <- G[!pos, , drop = FALSE]
+  if (any(zero_cov != 0))
+    stop("`", name, "` must be positive semi-definite: a trait with zero ",
+         "variance must have zero covariances.", call. = FALSE)
+  if (!any(pos)) return(list(G = G, d = d, pos = pos, eigen = NULL, rank = 0L))
+  R <- G[pos, pos, drop = FALSE] / outer(s[pos], s[pos])
+  ev <- eigen((R + t(R)) / 2, symmetric = TRUE, only.values = TRUE)$values
+  if (min(ev) < -rel_tol * max(abs(ev)))
+    stop("`", name, "` must be positive semi-definite; the smallest ",
+         "eigenvalue of its correlation matrix is ", format(min(ev), digits = 5),
+         ".", call. = FALSE)
+  e <- .qtl_target_eigen(R, name, rel_tol)
+  list(G = G, d = d, pos = pos, eigen = e, rank = e$rank)
+}
+
+#' The rank error `.qtl_congruence()` raises when the anchor is too small
+#' @noRd
+.qtl_anchor_rank_check <- function(rank_M, q) {
+  if (rank_M < q) {
+    stop("The anchor cannot carry the target for any effects: rank(G) = ", q,
+         " but the reference covariance M has rank ", rank_M, " at the ",
+         "selected loci (too few independent segregating directions). Select ",
+         "more loci, or loci that segregate in the base population.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Calibrate an architecture to a target and verify it against the target
+#'
+#' Runs the congruence on the correlation scale (`.qtl_target_std()`), with
+#' each `B0` column normalised to unit variance under the anchor, then rescales:
+#' `B' M B = D^{1/2} R D^{1/2} = G`. Still of the form `B0 A`. A
+#' zero-variance trait gets zero effects. The result is checked against the
+#' **unmodified** `G` at `QTL_CALIBRATION_TOL` and is an error otherwise, so
+#' "exact" is never claimed for a covariance that was not delivered.
+#' @return list(B, delivered = B' M B, max_err = largest correlation-scale
+#'   deviation, rank = rank(G)).
+#' @noRd
+.qtl_calibrate <- function(B0, std, anchor, rel_tol = 1e-10) {
+  k <- ncol(B0)
+  B <- matrix(0, nrow(B0), k)
+  if (any(std$pos)) {
+    # Each B0 column is normalised to unit variance under the anchor (a
+    # draw from MVN(0, G) has column scale sqrt(G_ii)), or the architecture's
+    # own rank check would truncate a small-unit trait exactly as the
+    # target's used to. Any column scaling of B0 is absorbed by A, so B is
+    # still of the form B0 A. A column with no variance is left for the rank
+    # check to report.
+    B0p <- B0[, std$pos, drop = FALSE]
+    v0  <- diag(anchor$cov(B0p))
+    B0p <- sweep(B0p, 2L, ifelse(v0 > 0, sqrt(v0), 1), "/")
+    s   <- sqrt(std$d[std$pos])
+    cg  <- .qtl_congruence(B0p, std$eigen, anchor, rel_tol)
+    B[, std$pos] <- cg$B %*% diag(s, nrow = length(s))
+  }
+  delivered <- anchor$cov(B)
+  delivered <- (delivered + t(delivered)) / 2
+  err <- .qtl_target_error(delivered, std)
+  if (err > QTL_CALIBRATION_TOL) {
+    stop("The calibration did not reach the target: the delivered covariance ",
+         "differs from it by ", format(err, digits = 3), " on the correlation ",
+         "scale (tolerance ", QTL_CALIBRATION_TOL, "). The drawn architecture ",
+         "is numerically ill-conditioned against this anchor; select more ",
+         "segregating loci, or try another seed. Nothing was written.",
+         call. = FALSE)
+  }
+  list(B = B, delivered = delivered, max_err = err, rank = std$rank)
+}
+
+#' Largest deviation of a covariance from a target, on the correlation scale
+#'
+#' `max |C_ij - G_ij| / sqrt(G_ii G_jj)` over positive-variance traits; any
+#' non-zero entry in a zero-variance trait's row is `Inf`.
+#' @noRd
+.qtl_target_error <- function(C, std) {
+  pos <- std$pos
+  if (any(C[!pos, ] != 0) || any(C[, !pos] != 0)) return(Inf)
+  if (!any(pos)) return(0)
+  s <- sqrt(std$d[pos])
+  max(abs(C[pos, pos, drop = FALSE] - std$G[pos, pos, drop = FALSE]) /
+        outer(s, s))
+}
+
+#' Relative spectrum of a candidate against a `.qtl_target_std()` target
+#'
+#' The same eigenvalues as `.qtl_relative_spectrum()` (they are invariant to
+#' rescaling the traits), computed on the correlation scale so a trait in
+#' small units is not truncated away.
+#' @noRd
+.qtl_relative_spectrum_std <- function(std, candidate) {
+  if (std$rank == 0L) return(numeric())
+  s <- sqrt(std$d[std$pos])
+  .qtl_relative_spectrum(std$eigen,
+                         candidate[std$pos, std$pos, drop = FALSE] / outer(s, s))
+}
+
 #' Per-contrast spectrum of a candidate covariance relative to the target
 #'
 #' The eigenvalues of `G^{-1/2} candidate G^{-1/2}` on the target's range. All
@@ -202,13 +331,7 @@
                 rank_C = 0L, rank_M = NA_integer_))
   }
   rank_M <- anchor$rank(rel_tol)
-  if (rank_M < q) {
-    stop("The anchor cannot carry the target for any effects: rank(G) = ", q,
-         " but the reference covariance M has rank ", rank_M, " at the ",
-         "selected loci (too few independent segregating directions). Select ",
-         "more loci, or loci that segregate in the base population.",
-         call. = FALSE)
-  }
+  .qtl_anchor_rank_check(rank_M, q)
   C <- anchor$cov(B0)
   C <- (C + t(C)) / 2
   eC <- .qtl_psd_eigen(C, "B0' M B0", rel_tol)

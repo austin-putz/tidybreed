@@ -13,7 +13,8 @@
 The single write path for generation targets, shared by
 \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} and the generators' \verb{G =}. It
 \itemize{
-\item validates the block as finite, symmetric and positive semidefinite;
+\item validates the block as finite, symmetric and positive semidefinite, on
+the correlation scale so the check does not depend on the traits' units;
 \item refuses when \strong{any} row exists for \code{effect_name}, any of the block's
 traits and the same \code{line_name} (NULL-safe), checked on the whole table,
 even for an identical matrix;

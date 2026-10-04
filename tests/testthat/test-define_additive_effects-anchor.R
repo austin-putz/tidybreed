@@ -250,7 +250,7 @@ test_that("A11: targets are validated before any write; names never relabelled",
   gm <- get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30)
   bad <- matrix(c(1, 2, 2, 1), 2, 2)
   expect_error(define_additive_effects(gm, c("T1", "T2"), G = bad),
-               "positive semi-definite; smallest eigenvalue is -1")
+               "positive semi-definite; the smallest eigenvalue of its correlation matrix is -1")
   expect_error(define_effect_cov_matrix(pop, "additive", bad,
                                         trait_name = c("T1", "T2")),
                "positive semi-definite")
@@ -528,6 +528,154 @@ test_that("A22: no refusal touches the RNG, with or without seed =", {
                  "already stored")                                      # overwrite
     expect_error(define_additive_effects(gm, c("T1", "T2"), anchor = "realised",
                                          seed = s))                     # no base
+    expect_identical(.Random.seed, before)
+  }
+})
+
+# ── Step 2 corrections (Codex review, 0.73.2) ──────────────────────────────
+
+test_that("R1: a trait in small units keeps its variance; rank is unit-free", {
+  # Unit level: diag(1, 1e-11) is full rank on the correlation scale.
+  std <- .qtl_target_std(diag(c(1, 1e-11)))
+  expect_identical(std$rank, 2L)
+  cal <- .qtl_calibrate(diag(2), std, .qtl_anchor_diag(c(1, 1)))
+  expect_equal(diag(cal$delivered), c(1, 1e-11), tolerance = 1e-12)
+  # Rescaling the traits never changes the rank.
+  G <- matrix(c(1, 0.5, 0.5, 1), 2)
+  for (u in c(1e-12, 1, 1e12)) {
+    expect_identical(.qtl_target_std(G * c(1, u) %o% c(1, u))$rank, 2L)
+  }
+  # Through the generator: the stored target is what is delivered.
+  pop <- anchor_pop("r1")
+  on.exit(close_pop(pop))
+  Gs <- matrix(c(1, 0, 0, 1e-11), 2, dimnames = list(c("T1", "T2"), c("T1", "T2")))
+  quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 40) |>
+    define_additive_effects(c("T1", "T2"), G = Gs, seed = 2))
+  s <- stored_B(pop, c("T1", "T2"))
+  D <- crossprod(s$B * sqrt(2 * s$p * (1 - s$p)))
+  expect_equal(D[2, 2], 1e-11, tolerance = 1e-8)
+  expect_lt(abs(D[1, 2]) / sqrt(D[1, 1] * D[2, 2]), 1e-8)
+})
+
+test_that("R1: a calibration that misses the target errors before any write", {
+  pop <- anchor_pop("r1b")
+  on.exit(close_pop(pop))
+  before <- ge_rows(pop)
+  local_mocked_bindings(.qtl_congruence = function(B0, ...) list(B = B0))
+  expect_error(suppressMessages(get_table(pop, "genome_meta") |>
+    dplyr::filter(locus_id <= 30) |>
+    define_additive_effects(c("T1", "T2"), G = G2, seed = 1)),
+    "did not reach the target.*Nothing was written")
+  expect_equal(nrow(tvc_rows(pop)), 0L)
+  expect_identical(ge_rows(pop), before)
+})
+
+test_that("R2: the pool expectation uses the with-replacement divisor n_h", {
+  # Pool {0, 1} at one QTL. A founder's dosage is Binomial(2, 1/2), variance
+  # 1/2 = the genic target at p = 1/2, so the relative spectrum is exactly 1
+  # (the n_h - 1 divisor reported 2).
+  pop <- open_pop(pop_name = "r2", db_name = ":memory:") |>
+    define_genome(n_loci = 2, n_chr = 1, chr_len_Mb = 10) |>
+    define_founder_haplotypes(n_haplotypes = 2)
+  on.exit(close_pop(pop))
+  DBI::dbExecute(pop$db_conn, paste0(
+    "UPDATE founder_haplotypes SET allele = CASE WHEN haplotype_id = ",
+    "(SELECT MIN(haplotype_id) FROM founder_haplotypes) THEN 0 ELSE 1 END"))
+  quiet(define_trait(pop, "T1"))
+  msgs <- character()
+  withCallingHandlers(
+    get_table(pop, "genome_meta") |> dplyr::filter(locus_id == 1L) |>
+      define_additive_effects("T1", G = 0.5, seed = 1),
+    message = function(cnd) { msgs <<- c(msgs, conditionMessage(cnd))
+                               invokeRestart("muffleMessage") })
+  expect_match(grep("pool expectation", msgs, value = TRUE),
+               "relative spectrum \\[1, 1\\].*sampling LD of 2 haplotypes")
+  # Exact enumeration of the founder dosage distribution, effect b:
+  b <- stored_B(pop, "T1")$B[1, 1]
+  dos <- c(0, 1, 1, 2); expect_equal(mean((dos * b)^2) - mean(dos * b)^2, 0.5)
+})
+
+test_that("R3: a passed G never bypasses a stored non-additive target", {
+  for (e in c("dominance", "additive_by_additive")) {
+    pop <- anchor_pop("r3")
+    quiet(define_effect_cov_matrix(pop, e, 0.2, trait_name = "T1"))
+    before <- ge_rows(pop)
+    expect_error(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
+                   define_additive_effects("T1", G = 1, seed = 1),
+                 paste0("stored '", e, "' target exists for T1.*",
+                        "store `G` first and select it explicitly"))
+    expect_equal(nrow(tvc_rows(pop)), 1L)
+    expect_identical(ge_rows(pop), before)
+    # The route the error gives works.
+    quiet(define_effect_cov_matrix(pop, "additive", 1, trait_name = "T1"))
+    quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
+      define_additive_effects("T1", seed = 1,
+        trait_var_comp_tbl = get_table(pop, "trait_var_comp") |>
+          dplyr::filter(effect_name == "additive", is.na(line_name))))
+    expect_gt(nrow(ge_rows(pop)$terms), 0L)
+    close_pop(pop)
+  }
+})
+
+test_that("R5: union never calls a zero target covariance exact where QTL overlap", {
+  pop <- anchor_pop("r5")
+  on.exit(close_pop(pop))
+  quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
+    define_additive_effects("T1", scale_to_target = FALSE, seed = 1))
+  quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id >= 20, locus_id <= 50) |>
+    define_additive_effects("T2", scale_to_target = FALSE, seed = 2))
+  G0 <- diag(2); dimnames(G0) <- list(c("T1", "T2"), c("T1", "T2"))
+  expect_warning(suppressMessages(
+    get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 50) |>
+      define_additive_effects(c("T1", "T2"), G = G0, method = "union",
+                              warn_bounds = NULL, seed = 3)),
+    "union.*approximate")
+})
+
+test_that("R5: union with no QTL for a zero-variance trait says so and stores the target", {
+  pop <- anchor_pop("r5b")
+  on.exit(close_pop(pop))
+  quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
+    define_additive_effects("T1", scale_to_target = FALSE, seed = 1))
+  Gz <- matrix(c(1, 0, 0, 0), 2, dimnames = list(c("T1", "T2"), c("T1", "T2")))
+  expect_message(
+    get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 50) |>
+      define_additive_effects(c("T1", "T2"), G = Gz, method = "union",
+                              warn_bounds = NULL, seed = 3),
+    "Trait 'T2' has no QTL in this call; its target variance is 0")
+  expect_equal(nrow(tvc_rows(pop)), 4L)
+})
+
+test_that("R7: a projected founder selection works; a diagnostic failure writes nothing", {
+  pop <- anchor_pop("r7")
+  on.exit(close_pop(pop))
+  proj <- get_table(pop, "founder_haplotypes") |> dplyr::select(locus_name, allele)
+  expect_message(
+    get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
+      define_additive_effects("T1", G = 1, base_tbl = proj, seed = 1),
+    "pool expectation")
+  expect_equal(nrow(tvc_rows(pop)), 1L)
+
+  pop2 <- anchor_pop("r7b")
+  on.exit(close_pop(pop2), add = TRUE)
+  before <- ge_rows(pop2)
+  local_mocked_bindings(.dae_diagnostics = function(...) stop("diag boom"))
+  expect_error(suppressMessages(get_table(pop2, "genome_meta") |>
+    dplyr::filter(locus_id <= 30) |> define_additive_effects("T1", G = 1)),
+    "diag boom")
+  expect_equal(nrow(tvc_rows(pop2)), 0L)
+  expect_identical(ge_rows(pop2), before)
+})
+
+test_that("R9: an anchor-rank refusal does not touch the RNG; seed or not", {
+  pop <- anchor_pop("r9")
+  on.exit(close_pop(pop))
+  gm <- get_table(pop, "genome_meta") |> dplyr::filter(locus_id == 1L)
+  set.seed(99)
+  for (s in list(NULL, 5)) {
+    before <- .Random.seed
+    expect_error(define_additive_effects(gm, c("T1", "T2"), G = G2, seed = s),
+                 "anchor cannot carry the target")
     expect_identical(.Random.seed, before)
   }
 })
