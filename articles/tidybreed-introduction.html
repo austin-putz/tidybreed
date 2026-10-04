@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -160,7 +160,7 @@ on:</p>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">sex</span> <span class="op">==</span> <span class="st">"F"</span><span class="op">)</span> <span class="op">|&gt;</span>          <span class="co"># which rows</span></span>
 <span>  <span class="fu"><a href="../reference/add_phenotype.html">add_phenotype</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span>           <span class="co"># what to do</span></span></code></pre></div>
 <p><code><a href="../reference/add_founders.html">add_founders()</a></code>, <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code>,
-<code><a href="../reference/add_tbv.html">add_tbv()</a></code>, <code><a href="../reference/add_index.html">add_index()</a></code>,
+<code><a href="../reference/add_tgv.html">add_tgv()</a></code>, <code><a href="../reference/add_index.html">add_index()</a></code>,
 <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="../reference/define_chip.html">define_chip()</a></code>,
 <code><a href="../reference/add_genotypes.html">add_genotypes()</a></code>, <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code>, and
 <code><a href="../reference/mutate_table.html">mutate_table()</a></code> all work this way. Most of them return a
@@ -232,7 +232,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmplwxEVr/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpboqnHd/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -346,7 +346,7 @@ mitochondrial chromosome.</p>
 <code>schema(pop)</code> lists every table:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/schema.html">schema</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span>
-<span><span class="co">#&gt; ── Schema: demo ─────────────────────────────── 28 tables · 3.1 MiB in memory ──</span></span>
+<span><span class="co">#&gt; ── Schema: demo ─────────────────────────────── 27 tables · 3.1 MiB in memory ──</span></span>
 <span><span class="co">#&gt;   Use describe_table(pop, "name") for column-level details.</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;   Genome</span></span>
@@ -372,8 +372,8 @@ mitochondrial chromosome.</p>
 <span><span class="co">#&gt;     + 1 empty: index_meta</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;   Results</span></span>
-<span><span class="co">#&gt;     + 7 empty: ind_tbv, ind_tgv, ind_tgv_total, ind_phenotype, ind_ebv, </span></span>
-<span><span class="co">#&gt;                ind_index, ind_true_index</span></span></code></pre></div>
+<span><span class="co">#&gt;     + 6 empty: ind_tgv, ind_tgv_total, ind_phenotype, ind_ebv, ind_index, </span></span>
+<span><span class="co">#&gt;                ind_true_index</span></span></code></pre></div>
 <p><code><a href="../reference/describe_table.html">describe_table()</a></code> explains one table’s columns:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/describe_table.html">describe_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span></span>
@@ -567,8 +567,8 @@ database instead of in parallel R objects.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 3</span></span></span>
 <span><span class="co">#&gt;   sex   farm        n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> M     AI_Stud   250</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> F     Iowa      250</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> F     Iowa      250</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> M     AI_Stud   250</span></span></code></pre></div>
 <p>The warning above is deliberate: <code><a href="../reference/mutate_table.html">mutate_table()</a></code> tells
 you whenever it overwrites values that were already there, so you notice
 an accidental clobber instead of discovering it three generations
@@ -681,30 +681,34 @@ effect such as pen or litter.</p>
 <div class="section level2">
 <h2 id="compute-breeding-values-and-phenotypes">Compute breeding values and phenotypes<a class="anchor" aria-label="anchor" href="#compute-breeding-values-and-phenotypes"></a>
 </h2>
-<p><code><a href="../reference/add_tbv.html">add_tbv()</a></code> computes true breeding values — the
+<p><code><a href="../reference/add_tgv.html">add_tgv()</a></code> computes true genetic values — the
 simulation’s ground truth, which you would never know in a real
-population.</p>
+population. It writes <code>ind_tgv</code>, one row per individual,
+trait and <strong>component</strong>; the breeding value is the
+<code>additive</code> component (the only one in this purely additive
+model). The total over every component is the <code>ind_tgv_total</code>
+view.</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tbv.html">add_tbv</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Computed TBV for 500 individuals on trait 'ADG'.</span></span>
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tgv.html">add_tgv</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Computed TGV for 500 individuals on trait 'ADG' (additive).</span></span>
 <span></span>
-<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 4</span></span></span>
-<span><span class="co">#&gt;   id_tbv id_ind trait_name tbv_value</span></span>
-<span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>     10 A_107  ADG          -<span style="color: #BB0000;">0.353</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>     11 A_108  ADG          -<span style="color: #BB0000;">0.329</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>     12 A_109  ADG          -<span style="color: #BB0000;">0.178</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>     15 A_111  ADG           0.377 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>     28 A_123  ADG           0.067<span style="text-decoration: underline;">0</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>     35 A_13   ADG          -<span style="color: #BB0000;">0.929</span></span></span></code></pre></div>
+<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
+<span><span class="co">#&gt;   id_tgv id_ind trait_name component_name tgv_value</span></span>
+<span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      1 A_153  ADG        additive         -<span style="color: #BB0000;">0.915</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      2 A_231  ADG        additive          0.064<span style="text-decoration: underline;">2</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      3 A_365  ADG        additive          0.642 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      4 A_37   ADG        additive          0.298 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      5 A_72   ADG        additive          0.409 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>      6 A_320  ADG        additive          0.015<span style="text-decoration: underline;">5</span></span></span></code></pre></div>
 <p><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> builds the observed record: intercept,
-plus fixed and random effects, plus the breeding value, plus a sampled
-residual. It calls <code><a href="../reference/add_tbv.html">add_tbv()</a></code> internally, so you can go
-straight to it.</p>
+plus fixed and random effects, plus the total genetic value, plus a
+sampled residual. It calls <code><a href="../reference/add_tgv.html">add_tgv()</a></code> internally, so you can
+go straight to it.</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_phenotype.html">add_phenotype</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Computed TBV for 500 individuals on trait 'ADG'.</span></span>
+<span><span class="co">#&gt; Computed TGV for 500 individuals on trait 'ADG' (additive).</span></span>
 <span><span class="co">#&gt; Wrote 500 phenotype records for 'ADG'.</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -798,15 +802,16 @@ variants at other scopes (<code>line_name</code>,
 the replaced terms.</p>
 </blockquote>
 <div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tbv.html">add_tbv</a></span><span class="op">(</span><span class="op">)</span>   <span class="co"># no trait_name = all traits</span></span>
-<span><span class="co">#&gt; Computed TBV for 500 individuals on trait 'ADG'.</span></span>
-<span><span class="co">#&gt; Computed TBV for 500 individuals on trait 'BF'.</span></span>
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tgv.html">add_tgv</a></span><span class="op">(</span><span class="op">)</span>   <span class="co"># no trait_name = all traits</span></span>
+<span><span class="co">#&gt; Computed TGV for 500 individuals on trait 'ADG' (additive).</span></span>
+<span><span class="co">#&gt; Computed TGV for 500 individuals on trait 'BF' (additive).</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">component_name</span> <span class="op">==</span> <span class="st">"additive"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">trait_name</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span>, mean_tbv <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">tbv_value</span><span class="op">)</span>, var_tbv <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">var</a></span><span class="op">(</span><span class="va">tbv_value</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span>, mean_tbv <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">tgv_value</span><span class="op">)</span>, var_tbv <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">var</a></span><span class="op">(</span><span class="va">tgv_value</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 4</span></span></span>
 <span><span class="co">#&gt;   trait_name     n mean_tbv var_tbv</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
@@ -887,7 +892,7 @@ package needing a special argument for each.</p>
 <span><span class="co">#&gt;   Individuals  520</span></span>
 <span><span class="co">#&gt;     by sex     260 F · 260 M</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;   Records    phenotypes 500 · TBV 1,000</span></span>
+<span><span class="co">#&gt;   Records    phenotypes 500 · TGV 1,000</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;   schema(pop) · describe_table(pop, "name")</span></span>
 <span><span class="co">#&gt; ────────────────────────────────────────────────────────────────────────────────</span></span></code></pre></div>
@@ -907,8 +912,8 @@ package needing a special argument for each.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   is_50K     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> TRUE     300</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> FALSE    200</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE    200</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE     300</span></span></code></pre></div>
 <p><code><a href="../reference/add_genotypes.html">add_genotypes()</a></code> records <em>which animals were
 genotyped</em> — here, only the offspring:</p>
 <div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
@@ -922,8 +927,8 @@ genotyped</em> — here, only the offspring:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   has_50K     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> TRUE       20</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> FALSE     500</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE     500</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE       20</span></span></code></pre></div>
 <p><code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> returns the familiar wide 0/1/2
 dosage matrix, ready for GBLUP or export:</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
@@ -970,29 +975,30 @@ every trait; the <code>terminal</code> rows are our index.</p>
 <strong>true</strong> index — useful for measuring how well selection
 actually worked:</p>
 <div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tbv.html">add_tbv</a></span><span class="op">(</span>index_names <span class="op">=</span> <span class="st">"terminal"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Computed TBV for 520 individuals on trait 'ADG'.</span></span>
-<span><span class="co">#&gt; Computed TBV for 520 individuals on trait 'BF'.</span></span>
-<span><span class="co">#&gt; Computed true index 'terminal' (index) for 520 individuals.</span></span>
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/add_tgv.html">add_tgv</a></span><span class="op">(</span>index_names <span class="op">=</span> <span class="st">"terminal"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Computed TGV for 520 individuals on trait 'ADG' (additive).</span></span>
+<span><span class="co">#&gt; Computed TGV for 520 individuals on trait 'BF' (additive).</span></span>
+<span><span class="co">#&gt; Computed true index 'terminal' (index, additive) for 520 individuals.</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_true_index"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
-<span><span class="co">#&gt;   id_true_index id_ind index_name weight_type true_index_value</span></span>
-<span><span class="co">#&gt;           <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index                 -<span style="color: #BB0000;">0.587</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index                 -<span style="color: #BB0000;">0.639</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index                  0.449</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index                 -<span style="color: #BB0000;">0.438</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index                 -<span style="color: #BB0000;">0.401</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index                  0.179</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 6</span></span></span>
+<span><span class="co">#&gt;   id_true_index id_ind index_name weight_type component_name true_index_value</span></span>
+<span><span class="co">#&gt;           <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                     <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index       additive                 -<span style="color: #BB0000;">0.587</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index       additive                 -<span style="color: #BB0000;">0.639</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index       additive                  0.449</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index       additive                 -<span style="color: #BB0000;">0.438</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index       additive                 -<span style="color: #BB0000;">0.401</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index       additive                  0.179</span></span></code></pre></div>
 <p><code><a href="../reference/add_index.html">add_index()</a></code> does the same arithmetic on any table of
 values. In a real program you would run it on <code>ind_ebv</code> after
-a BLUP evaluation; here we use the TBVs. <strong>Filter first</strong>
-so there is exactly one value per individual per trait:</p>
+a BLUP evaluation; here we use the true breeding values. <strong>Filter
+first</strong> so there is exactly one value per individual per trait
+(<code>ind_tgv</code> has a row per component):</p>
 <div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">trait_name</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">component_name</span> <span class="op">==</span> <span class="st">"additive"</span>, <span class="va">trait_name</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/add_index.html">add_index</a></span><span class="op">(</span><span class="st">"terminal"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Computing index 'terminal': ADG (wt=1.2), BF (wt=-0.8)</span></span>
 <span><span class="co">#&gt; Added index 'terminal' (run #1) for 520 individuals</span></span>

@@ -102,8 +102,6 @@ residual variance, sex expression, and any fixed or random effects.
 Compute and store true breeding values, phenotype records, and estimated
 breeding values from an external evaluation.
 
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  : Compute and store true breeding values without writing phenotypes
 - [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
   : Compute and store true genetic values
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)

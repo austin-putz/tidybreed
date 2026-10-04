@@ -4,7 +4,7 @@ Called by
 [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md),
 [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md),
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
 and
 [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
 to process the `...` (extra field) arguments before they are attached to

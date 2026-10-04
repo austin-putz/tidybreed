@@ -3,23 +3,25 @@
 itself, its dam or sire, or its group-mates — becomes a per-individual
 value. Both .assemble_composite_tbv() (phenotype_components) and
 .build_tbv_env() (formula_tbv) read through these helpers, and
-.ap_materialize_tbvs() uses the same group lookup to decide whose TBVs
-to compute first. Individual ids never appear in SQL text: every lookup
-joins a registered view.
+.ap_materialize_tbvs() uses the same group lookup to decide whose genetic
+values to compute first. Every lookup reads ind_tgv: the total
+(ind_tgv_total) by default, or the listed components. Individual ids
+never appear in SQL text: every lookup joins a registered view.
 Group semantics (SGE / Bijma): a focal's group-mates are the other
 individuals with the same value of group_column in group_table; the
-aggregate is over the mates that have a TBV; a focal with no mates gets
+aggregate is over the mates that have a genetic value; a focal with no mates gets
 0; a focal whose group value is NULL gets NA (a missing component).
 group_table must have exactly one row per focal individual."><meta property="og:description" content="The one place a contributor of a composite phenotype — the individual
 itself, its dam or sire, or its group-mates — becomes a per-individual
 value. Both .assemble_composite_tbv() (phenotype_components) and
 .build_tbv_env() (formula_tbv) read through these helpers, and
-.ap_materialize_tbvs() uses the same group lookup to decide whose TBVs
-to compute first. Individual ids never appear in SQL text: every lookup
-joins a registered view.
+.ap_materialize_tbvs() uses the same group lookup to decide whose genetic
+values to compute first. Every lookup reads ind_tgv: the total
+(ind_tgv_total) by default, or the listed components. Individual ids
+never appear in SQL text: every lookup joins a registered view.
 Group semantics (SGE / Bijma): a focal's group-mates are the other
 individuals with the same value of group_column in group_table; the
-aggregate is over the mates that have a TBV; a focal with no mates gets
+aggregate is over the mates that have a genetic value; a focal with no mates gets
 0; a focal whose group value is NULL gets NA (a missing component).
 group_table must have exactly one row per focal individual."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -29,7 +31,7 @@ group_table must have exactly one row per focal individual."><meta property="og:
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,12 +64,13 @@ group_table must have exactly one row per focal individual."><meta property="og:
 itself, its dam or sire, or its group-mates — becomes a per-individual
 value. Both <code><a href="dot-assemble_composite_tbv.html">.assemble_composite_tbv()</a></code> (<code>phenotype_components</code>) and
 <code><a href="dot-build_tbv_env.html">.build_tbv_env()</a></code> (<code>formula_tbv</code>) read through these helpers, and
-<code><a href="dot-ap_materialize_tbvs.html">.ap_materialize_tbvs()</a></code> uses the same group lookup to decide whose TBVs
-to compute first. Individual ids never appear in SQL text: every lookup
-joins a registered view.</p>
+<code><a href="dot-ap_materialize_tbvs.html">.ap_materialize_tbvs()</a></code> uses the same group lookup to decide whose genetic
+values to compute first. Every lookup reads <code>ind_tgv</code>: the total
+(<code>ind_tgv_total</code>) by default, or the listed components. Individual ids
+never appear in SQL text: every lookup joins a registered view.</p>
 <p>Group semantics (SGE / Bijma): a focal's group-mates are the <em>other</em>
 individuals with the same value of <code>group_column</code> in <code>group_table</code>; the
-aggregate is over the mates that have a TBV; a focal with no mates gets
+aggregate is over the mates that have a genetic value; a focal with no mates gets
 <code>0</code>; a focal whose group value is <code>NULL</code> gets <code>NA</code> (a missing component).
 <code>group_table</code> must have exactly one row per focal individual.</p>
     </div>

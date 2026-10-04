@@ -85,7 +85,7 @@ pop <- pop |>
 
 [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md),
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md),
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
 [`define_chip()`](https://austin-putz.github.io/tidybreed/reference/define_chip.md),
@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmplwxEVr/duckdb
+#> ℹ /tmp/RtmpboqnHd/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -256,7 +256,7 @@ Two helpers exist so you never have to guess what is in the database.
 ``` r
 
 schema(pop)
-#> ── Schema: demo ─────────────────────────────── 28 tables · 3.1 MiB in memory ──
+#> ── Schema: demo ─────────────────────────────── 27 tables · 3.1 MiB in memory ──
 #>   Use describe_table(pop, "name") for column-level details.
 #> 
 #>   Genome
@@ -282,8 +282,8 @@ schema(pop)
 #>     + 1 empty: index_meta
 #> 
 #>   Results
-#>     + 7 empty: ind_tbv, ind_tgv, ind_tgv_total, ind_phenotype, ind_ebv, 
-#>                ind_index, ind_true_index
+#>     + 6 empty: ind_tgv, ind_tgv_total, ind_phenotype, ind_ebv, ind_index, 
+#>                ind_true_index
 ```
 
 [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md)
@@ -463,8 +463,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 M     AI_Stud   250
-#> 2 F     Iowa      250
+#> 1 F     Iowa      250
+#> 2 M     AI_Stud   250
 ```
 
 The warning above is deliberate:
@@ -593,37 +593,40 @@ adds a named random effect such as pen or litter.
 
 ## Compute breeding values and phenotypes
 
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-computes true breeding values — the simulation’s ground truth, which you
-would never know in a real population.
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+computes true genetic values — the simulation’s ground truth, which you
+would never know in a real population. It writes `ind_tgv`, one row per
+individual, trait and **component**; the breeding value is the
+`additive` component (the only one in this purely additive model). The
+total over every component is the `ind_tgv_total` view.
 
 ``` r
 
-pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
-#> Computed TBV for 500 individuals on trait 'ADG'.
+pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
+#> Computed TGV for 500 individuals on trait 'ADG' (additive).
 
-pop |> get_table("ind_tbv") |> collect() |> head()
-#> # A tibble: 6 × 4
-#>   id_tbv id_ind trait_name tbv_value
-#>    <int> <chr>  <chr>          <dbl>
-#> 1     10 A_107  ADG          -0.353 
-#> 2     11 A_108  ADG          -0.329 
-#> 3     12 A_109  ADG          -0.178 
-#> 4     15 A_111  ADG           0.377 
-#> 5     28 A_123  ADG           0.0670
-#> 6     35 A_13   ADG          -0.929
+pop |> get_table("ind_tgv") |> collect() |> head()
+#> # A tibble: 6 × 5
+#>   id_tgv id_ind trait_name component_name tgv_value
+#>    <int> <chr>  <chr>      <chr>              <dbl>
+#> 1      1 A_153  ADG        additive         -0.915 
+#> 2      2 A_231  ADG        additive          0.0642
+#> 3      3 A_365  ADG        additive          0.642 
+#> 4      4 A_37   ADG        additive          0.298 
+#> 5      5 A_72   ADG        additive          0.409 
+#> 6      6 A_320  ADG        additive          0.0155
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
 builds the observed record: intercept, plus fixed and random effects,
-plus the breeding value, plus a sampled residual. It calls
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+plus the total genetic value, plus a sampled residual. It calls
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
 internally, so you can go straight to it.
 
 ``` r
 
 pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
-#> Computed TBV for 500 individuals on trait 'ADG'.
+#> Computed TGV for 500 individuals on trait 'ADG' (additive).
 #> Wrote 500 phenotype records for 'ADG'.
 
 pop |> get_table("ind_phenotype") |> collect() |> head()
@@ -729,15 +732,16 @@ pop <- pop |>
 
 ``` r
 
-pop <- pop |> get_table("ind_meta") |> add_tbv()   # no trait_name = all traits
-#> Computed TBV for 500 individuals on trait 'ADG'.
-#> Computed TBV for 500 individuals on trait 'BF'.
+pop <- pop |> get_table("ind_meta") |> add_tgv()   # no trait_name = all traits
+#> Computed TGV for 500 individuals on trait 'ADG' (additive).
+#> Computed TGV for 500 individuals on trait 'BF' (additive).
 
 pop |>
-  get_table("ind_tbv") |>
+  get_table("ind_tgv") |>
+  filter(component_name == "additive") |>
   collect() |>
   group_by(trait_name) |>
-  summarise(n = n(), mean_tbv = mean(tbv_value), var_tbv = var(tbv_value))
+  summarise(n = n(), mean_tbv = mean(tgv_value), var_tbv = var(tgv_value))
 #> # A tibble: 2 × 4
 #>   trait_name     n mean_tbv var_tbv
 #>   <chr>      <int>    <dbl>   <dbl>
@@ -828,7 +832,7 @@ pop
 #>   Individuals  520
 #>     by sex     260 F · 260 M
 #> 
-#>   Records    phenotypes 500 · TBV 1,000
+#>   Records    phenotypes 500 · TGV 1,000
 #> 
 #>   schema(pop) · describe_table(pop, "name")
 #> ────────────────────────────────────────────────────────────────────────────────
@@ -850,8 +854,8 @@ pop |> get_table("genome_meta") |> count(is_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   is_50K     n
 #>   <lgl>  <dbl>
-#> 1 TRUE     300
-#> 2 FALSE    200
+#> 1 FALSE    200
+#> 2 TRUE     300
 ```
 
 [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)
@@ -869,8 +873,8 @@ pop |> get_table("ind_meta") |> count(has_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   has_50K     n
 #>   <lgl>   <dbl>
-#> 1 TRUE       20
-#> 2 FALSE     500
+#> 1 FALSE     500
+#> 2 TRUE       20
 ```
 
 [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
@@ -931,33 +935,34 @@ index — useful for measuring how well selection actually worked:
 
 ``` r
 
-pop <- pop |> get_table("ind_meta") |> add_tbv(index_names = "terminal")
-#> Computed TBV for 520 individuals on trait 'ADG'.
-#> Computed TBV for 520 individuals on trait 'BF'.
-#> Computed true index 'terminal' (index) for 520 individuals.
+pop <- pop |> get_table("ind_meta") |> add_tgv(index_names = "terminal")
+#> Computed TGV for 520 individuals on trait 'ADG' (additive).
+#> Computed TGV for 520 individuals on trait 'BF' (additive).
+#> Computed true index 'terminal' (index, additive) for 520 individuals.
 
 pop |> get_table("ind_true_index") |> collect() |> head()
-#> # A tibble: 6 × 5
-#>   id_true_index id_ind index_name weight_type true_index_value
-#>           <int> <chr>  <chr>      <chr>                  <dbl>
-#> 1             1 A_1    terminal   index                 -0.587
-#> 2             2 A_10   terminal   index                 -0.639
-#> 3             3 A_100  terminal   index                  0.449
-#> 4             4 A_101  terminal   index                 -0.438
-#> 5             5 A_102  terminal   index                 -0.401
-#> 6             6 A_103  terminal   index                  0.179
+#> # A tibble: 6 × 6
+#>   id_true_index id_ind index_name weight_type component_name true_index_value
+#>           <int> <chr>  <chr>      <chr>       <chr>                     <dbl>
+#> 1             1 A_1    terminal   index       additive                 -0.587
+#> 2             2 A_10   terminal   index       additive                 -0.639
+#> 3             3 A_100  terminal   index       additive                  0.449
+#> 4             4 A_101  terminal   index       additive                 -0.438
+#> 5             5 A_102  terminal   index       additive                 -0.401
+#> 6             6 A_103  terminal   index       additive                  0.179
 ```
 
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
 does the same arithmetic on any table of values. In a real program you
-would run it on `ind_ebv` after a BLUP evaluation; here we use the TBVs.
-**Filter first** so there is exactly one value per individual per trait:
+would run it on `ind_ebv` after a BLUP evaluation; here we use the true
+breeding values. **Filter first** so there is exactly one value per
+individual per trait (`ind_tgv` has a row per component):
 
 ``` r
 
 pop <- pop |>
-  get_table("ind_tbv") |>
-  filter(trait_name %in% c("ADG", "BF")) |>
+  get_table("ind_tgv") |>
+  filter(component_name == "additive", trait_name %in% c("ADG", "BF")) |>
   add_index("terminal")
 #> Computing index 'terminal': ADG (wt=1.2), BF (wt=-0.8)
 #> Added index 'terminal' (run #1) for 520 individuals

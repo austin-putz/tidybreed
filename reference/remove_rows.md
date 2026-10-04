@@ -69,8 +69,8 @@ via `confirm_all = TRUE`.
 **Single-table mode** (`tables = NULL`): uses the composite row key from
 the internal `TABLE_ROW_KEYS` registry to delete exactly the rows
 matched by the filter — no more, no less. For example, filtering
-`ind_tbv` by `trait_name == "ADG"` deletes only the ADG rows, not all
-TBV rows for those animals. Key columns are matched with
+`ind_tgv` by `trait_name == "ADG"` deletes only the ADG rows, not all
+genetic-value rows for those animals. Key columns are matched with
 `IS NOT DISTINCT FROM`, so rows whose key is `NULL` — the default
 `chr_inheritance` / `chr_recombination` rows seeded by
 [`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md),
@@ -113,7 +113,7 @@ pop |>
 pop |>
   get_table("ind_meta") |>
   dplyr::filter(id_ind %in% culled_ids) |>
-  remove_rows(tables = c("ind_phenotype", "ind_tbv"))
+  remove_rows(tables = c("ind_phenotype", "ind_tgv"))
 
 # Preview before deleting
 pop |>

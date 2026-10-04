@@ -1,7 +1,7 @@
 # tidybreed — Package Summary
 
-**Version:** 0.68.4 · **Snapshot date:** 2026-09-16 · **Branch:**
-`feat/genome-effects-v49` (`a190bf4`)
+**Version:** 0.74.0 · **Snapshot date:** 2026-10-04 · **Branch:** `main`
+(`be43687`)
 
 A database-first (DuckDB) breeding-program simulator in R. All genomic
 and individual data lives in a file-based DuckDB database rather than R
@@ -12,13 +12,13 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 |  |  |
 |----|----|
-| Exported functions | 43 (+17 S3 methods; 275 functions total incl. internals) |
-| R source | 59 files, ~20,700 lines (~5,600 of which are roxygen docs) |
+| Exported functions | 43 (+17 S3 methods; 356 functions total incl. internals) |
+| R source | 62 files, ~23,600 lines (~6,900 of which are roxygen docs) |
 | C++ (Rcpp) | 2 files, ~220 lines (gamete/recombination kernel) |
-| Documentation | 180 man pages, 1 vignette, 1,150-line README |
-| Tests | 55 testthat files, ~17,300 lines, 794 tests, ~1,860 assertions |
-| Test : source ratio | 0.83 : 1 |
-| History | 199 commits, 129 released versions in NEWS.md |
+| Documentation | 213 man pages, 1 vignette, 1,160-line README |
+| Tests | 70 testthat files, ~23,300 lines, 1021 tests, ~2,780 assertions |
+| Test : source ratio | 0.99 : 1 |
+| History | 232 commits, 145 released versions in NEWS.md |
 | Dependencies | duckdb, DBI, dbplyr, cli, dplyr, tibble, rlang, dqrng, MASS, Rcpp |
 
 ## Detailed Counts
@@ -27,32 +27,32 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 |----|---:|
 | Exported functions (`NAMESPACE`) | 43 |
 | S3 methods registered | 17 |
-| Total R function definitions | 275 |
-| R source files (`R/`) | 59 |
-| R lines of code | 20,671 |
-| Roxygen doc lines (`#'`) in `R/` | 5,631 |
+| Total R function definitions | 356 |
+| R source files (`R/`) | 62 |
+| R lines of code | 23,627 |
+| Roxygen doc lines (`#'`) in `R/` | 6,867 |
 | C++ source files (`src/`) | 2 |
 | C++ lines of code | 217 |
-| Man pages (`man/*.Rd`) | 180 |
-| testthat test files | 55 |
-| testthat lines of code | 17,260 (+ 4 helper files, 999 lines) |
-| `test_that()` blocks | 794 |
-| `expect_*()` assertions | 1,864 |
-| Vignettes | 1 (`tidybreed-introduction.Rmd`, 649 lines) |
-| `NEWS.md` | 3,607 lines, 129 version headings |
-| `README.md` | 1,149 lines |
-| Design docs (`plans/`) | 53 files, 22,798 lines |
-| Git commits | 199 |
+| Man pages (`man/*.Rd`) | 213 |
+| testthat test files | 70 |
+| testthat lines of code | 23,321 (+ 5 helper files, 1,059 lines) |
+| `test_that()` blocks | 1021 |
+| `expect_*()` assertions | 2,782 |
+| Vignettes | 1 (`tidybreed-introduction.Rmd`, 672 lines) |
+| `NEWS.md` | 4,330 lines, 145 version headings |
+| `README.md` | 1,161 lines |
+| Design docs (`plans/`) | 74 files, 31,296 lines |
+| Git commits | 232 |
 
 ## Exported API (43 functions)
 
 | Prefix | Functions |
 |----|----|
 | `open_` / `restore_` / `close_` | `open_pop`, `restore_pop`, `close_pop` |
-| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description` |
-| `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tbv`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
+| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description`, `define_condition_change_action` |
+| `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
 | `mutate_` | `mutate_table`, `mutate_derived`, `mutate_group_seq`, `mutate_group_named`, `mutate_group_concatenate` |
-| `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `archive_replicate` |
+| `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `archive_replicate`, `extract_allele_freq` |
 | Term builders | `ad_terms`, `genotype_terms` |
 | Inspection | `get_table`, `schema`, `describe_table` |
 
@@ -60,35 +60,35 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 | File | LOC | Purpose |
 |----|---:|----|
-| `schema.R` | 1,520 | Table registry, descriptions, [`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md) / [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md) |
-| `add_phenotype.R` | 1,146 | Phenotype simulation (composite, SGE, fixed/random effects, residuals) |
-| `define_genome_effect_terms.R` | 917 | General genome-effect writer: terms, members, origins, replace modes |
-| `define_additive_effects.R` | 912 | QTL effect sampling, exact calibration by congruence (`anchor =`), §6C target resolution, line/parent-origin scope |
-| `genome_effects_eval.R` | 874 | The one evaluator behind [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md) / [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md) |
+| `schema.R` | 1,516 | Table registry, descriptions, [`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md) / [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md) |
+| `add_phenotype_stages.R` | 1,357 | The three stages of [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md) |
+| `define_additive_effects.R` | 1,343 | QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope |
+| `define_genome_effect_terms.R` | 1,007 | General genome-effect writer: terms, members, origins, replace modes |
+| `genome_effects_eval.R` | 830 | The one evaluator behind [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md) |
 | `add_offspring.R` | 823 | Mating, gamete formation, offspring haplotype writes |
 
 ## Largest Test Files
 
-| Test file                          | LOC |
-|------------------------------------|----:|
-| `test-genome-effects-writer.R`     | 991 |
-| `test-genome-effects-eval.R`       | 861 |
-| `test-define_founder_haplotypes.R` | 803 |
-| `test-mutate_group.R`              | 763 |
-| `test-genome-effects-schema.R`     | 674 |
-| `test-define_index.R`              | 644 |
+| Test file                               |   LOC |
+|-----------------------------------------|------:|
+| `test-genome-effects-writer.R`          | 1,215 |
+| `test-define_founder_haplotypes.R`      |   803 |
+| `test-genome-effects-eval.R`            |   783 |
+| `test-mutate_group.R`                   |   763 |
+| `test-define_additive_effects-anchor.R` |   725 |
+| `test-add_phenotype_residuals.R`        |   681 |
 
 ## Database Tables
 
-27 tables and 3 views in 8 groups, 201 columns in total, 201 of them
+26 tables and 3 views in 8 groups, 201 columns in total, 201 of them
 described in `_schema_meta`
 ([`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md),
 [`describe_table()`](https://austin-putz.github.io/tidybreed/reference/describe_table.md)).
 
-Column types: VARCHAR ×111, INTEGER ×40, DOUBLE ×32, UTINYINT ×11,
+Column types: VARCHAR ×112, INTEGER ×39, DOUBLE ×32, UTINYINT ×11,
 BIGINT ×3, BOOLEAN ×3, DATE ×1.
 
-Keys: 22 tables declare a SQL `PRIMARY KEY`; 5 use a logical key
+Keys: 21 tables declare a SQL `PRIMARY KEY`; 5 use a logical key
 enforced in R (`TABLE_ROW_KEYS`), by design where a DuckDB constraint
 would block bulk inserts or transactional replacement. `Archive` is how
 [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)
@@ -129,17 +129,17 @@ treats the table: copied and stamped *per replicate*, copied *once*,
 | Table | Kind | Cols | Key | Created by | Archive | Description |
 |----|----|---:|----|----|----|----|
 | `trait_meta` | table | 4 | `id_trait` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | once | Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait(). |
-| `trait_var_comp` | table | 6 | `id_trait_var_comp` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Generation targets. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored; a block is written once, at full precision, never overwritten (0.73.0). Reserved effect_name values: ‘additive’, plus ‘dominance’ and ‘additive_by_additive’, which no generator writes yet. |
+| `trait_var_comp` | table | 6 | `id_trait_var_comp` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Generation targets: the genetic covariances the effect generators calibrate to. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. A block is written once, at full precision, and never overwritten. Reserved effect_name values: ‘additive’, plus ‘dominance’ and ‘additive_by_additive’, which no generator writes yet. |
 
 ### Observation model (5)
 
 | Table | Kind | Cols | Key | Created by | Archive | Description |
 |----|----|---:|----|----|----|----|
-| `phenotype_meta` | table | 16 | `id_phenotype_meta` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Observed phenotype definitions. One row per phenotype. Manages the observation layer: type, mean, sex expression, and distributional parameters. Populated by define_phenotype(). |
-| `phenotype_components` | table | 17 | `id_phenotype_comp` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Component definitions for composite phenotypes. One row per phenotype x component. Enables maternal effects, social genetic effects, and multi-contributor phenotypes. Populated by define_phenotype(…, components = …). |
+| `phenotype_meta` | table | 17 | `id_phenotype_meta` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Observed phenotype definitions. One row per phenotype. Manages the observation layer: type, mean, sex expression, and distributional parameters. Populated by define_phenotype(). |
+| `phenotype_components` | table | 15 | `id_phenotype_comp` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Component definitions for composite phenotypes. One row per phenotype x component. Enables maternal effects, social genetic effects, and multi-contributor phenotypes. Populated by define_phenotype(…, components = …). |
 | `phenotype_var_comp` | table | 10 | `id_phenotype_var_comp` | [`open_pop()`](https://austin-putz.github.io/tidybreed/reference/open_pop.md) | once | Phenotype-level variance component storage. One row per (effect_name, phenotype pair, optional condition). Stores residual covariances (effect_name = ‘residual’) and named random effects (hys, litter, pen, etc.). Populated by define_phenotype(), define_residual_cov(), and define_effect_random(). |
 | `phenotype_effects` | table | 12 | `phenotype_name`, `effect_name` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | once | Fixed and random effect configurations for phenotype models. One row per phenotype x effect. Populated by define_effect_fixed_class(), define_effect_fixed_cov(), define_effect_random(). |
-| `phenotype_random_effects` | table | 5 | `phenotype_name`, `effect_name`, `level` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency. |
+| `phenotype_random_effects` | table | 5 | `phenotype_name`, `effect_name`, `level` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Sampled random effect levels. One row per phenotype x effect x level. Written by add_phenotype() the first time a record touches the level; every later record with that level reuses it. In a covariance block a level’s draw for one phenotype is conditional on those it has stored for the block’s other phenotypes |
 
 ### Selection (1)
 
@@ -147,17 +147,16 @@ treats the table: copied and stamped *per replicate*, copied *once*,
 |----|----|---:|----|----|----|----|
 | `index_meta` | table | 5 | `id_index_name` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | once | Selection index definitions. One row per index x trait. A special row with index_name = NULL holds the global economic weight per trait written by define_trait(). Named indices hold selection weights from define_index(). |
 
-### Results (7)
+### Results (6)
 
 | Table | Kind | Cols | Key | Created by | Archive | Description |
 |----|----|---:|----|----|----|----|
-| `ind_tbv` | table | 4 | `id_tbv` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects. |
-| `ind_tgv` | table | 5 | `id_tgv` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | True genetic values (simulation ground truth): the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv(). The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count. |
-| `ind_tgv_total` | view | 3 | — | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | kept | View: the total genetic value per individual x trait, summing every component of ind_tgv. Derived rather than stored so it can never disagree with its parts. |
-| `ind_phenotype` | table | 5 | `id_phenotype` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Phenotype records in long format. One row per individual x phenotype x record number. Populated by add_phenotype(). User-defined columns can be added via the … argument of add_phenotype(). |
+| `ind_tgv` | table | 5 | `id_tgv` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | True genetic values (simulation ground truth), the one table of genetic values: the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv() (and add_phenotype(), which calls it). The breeding value is component ‘additive’ for generated effects. The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count. |
+| `ind_tgv_total` | view | 3 | — | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | kept | View: the total genetic value per individual x trait, summing every component of ind_tgv exactly (DECIMAL accumulation, so the result does not depend on the thread count). Derived rather than stored so it can never disagree with its parts. Phenotypes read this by default. |
+| `ind_phenotype` | table | 9 | `id_phenotype` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Phenotype records in long format. One row per individual x phenotype x record number. Populated by add_phenotype(). User-defined columns can be added via the … argument of add_phenotype(). |
 | `ind_ebv` | table | 8 | `id_ebv` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Estimated breeding values from external BLUP or GBLUP analyses. One row per individual x trait x model x evaluation number. Populated by add_ebv(). |
 | `ind_index` | table | 5 | `id_index` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | Computed selection index values. One row per individual x index x run. Multiple runs are distinguished by index_number. Populated by add_index(). |
-| `ind_true_index` | table | 5 | `id_true_index` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | True selection index values computed from TBVs. One row per individual x index x weight type. Populated by add_tbv() when index_names is supplied. |
+| `ind_true_index` | table | 6 | `id_true_index` | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | per replicate | True selection index values computed from ind_tgv. One row per individual x index x weight type x component. Populated by add_tgv() when index_names is supplied. |
 
 ### System (1)
 

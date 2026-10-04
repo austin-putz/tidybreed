@@ -5,12 +5,12 @@ architecture, **calibrates** it to the stored additive target, and
 writes one order-one `additive` term per locus and trait through the
 same engine as
 [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
-under the reserved effect owner `"generated"`.
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-reads order-one `additive` variants from that owner and nothing else, so
-effects written here and effects a user writes with
+under the reserved effect owner `"generated"`. Only generators write
+that owner, so effects written here and effects a user writes with
 [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 can never be confused for one another.
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+evaluates both; its `additive` component is the breeding value.
 
 ## Usage
 

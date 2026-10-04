@@ -1,13 +1,14 @@
 # Generate phenotype records for a subset of individuals
 
 Simulates phenotype values for one or more phenotypes and writes them to
-`ind_phenotype`. Also computes and stores the underlying true breeding
-value (TBV) per individual per trait in `ind_tbv`.
+`ind_phenotype`. Also computes and stores the underlying true genetic
+values per individual per trait in `ind_tgv` (through
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)).
 
 **Model** (per phenotype, on the liability / continuous scale):
 
 
-      y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+      y_i = mean + sum(fixed_shifts) + sum(random_shifts) + G_i + e_i
 
 - `mean` comes from `phenotype_meta.mean`.
 
@@ -31,21 +32,24 @@ value (TBV) per individual per trait in `ind_tbv`.
   covariance, whichever came first. A record whose level is `NULL` gets
   no draw and a shift of `0`.
 
-- For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is
-  the standard additive TBV from `genome_effects` (computed via
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
-  which this function calls internally for every source trait it needs).
+- For **simple** phenotypes (`phenotype_name == trait_name`), `G_i` is
+  the trait's **total** genetic value (`ind_tgv_total`: additive,
+  dominance and every other component of the model), computed via
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
+  which this function calls internally for every source trait it needs.
 
 - For **composite** phenotypes (rows in `phenotype_components`, written
-  by `define_phenotype(..., components = ...)`), `TBV_i` is the weighted
-  sum of contributor TBVs (self, dam, sire, or group) — see
+  by `define_phenotype(..., components = ...)`), `G_i` is the weighted
+  sum of contributor genetic values (self, dam, sire, or group): the
+  total by default, or the components each row lists in
+  `component_names` — see
   [`.assemble_composite_tbv()`](https://austin-putz.github.io/tidybreed/reference/dot-assemble_composite_tbv.md).
 
 - For **`formula_tbv`** composite phenotypes
   (`phenotype_meta.formula_tbv` set, written by
-  `define_phenotype(..., formula_tbv = ...)`), `TBV_i` is evaluated from
-  a small DSL expression referencing self/dam/sire/group TBVs instead of
-  a `phenotype_components` data frame.
+  `define_phenotype(..., formula_tbv = ...)`), `G_i` is evaluated from a
+  small DSL expression referencing self/dam/sire/group total genetic
+  values instead of a `phenotype_components` data frame.
 
 - `e_i` is the residual, drawn from the phenotype's residual covariance
   block in `phenotype_var_comp` (see
@@ -110,8 +114,9 @@ rolled back with the rows it was added for. The random-number stream is
 the error, as after any other failed R call, so re-running the call
 draws different values. Pass `seed` (or call
 [`set.seed()`](https://rdrr.io/r/base/Random.html)) again if the retry
-must reproduce the failed call. The TBVs the call materialized through
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+must reproduce the failed call. The genetic values the call materialized
+through
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
 remain; they do not depend on the RNG, and the retry rewrites them.
 
 **Escape hatches**:
@@ -179,10 +184,10 @@ add_phenotype(
 
   Optional override for the full phenotype value — skips the model
   entirely (mean, covariates, and residual are not evaluated), though
-  TBVs are still computed and stored in `ind_tbv`. For a single
-  `phenotype_name`: a plain numeric vector matching the planned records
-  by position (sorted `id_ind` order, after sex expression and the
-  repeatable guard), or a named numeric vector (e.g.
+  genetic values are still computed and stored in `ind_tgv`. For a
+  single `phenotype_name`: a plain numeric vector matching the planned
+  records by position (sorted `id_ind` order, after sex expression and
+  the repeatable guard), or a named numeric vector (e.g.
   `c(id_1 = 555, id_2 = 560)`) to match by `id_ind` regardless of order
   — every name must be an individual in that planned set, each once, and
   only the named individuals receive a record. For multiple phenotypes:
@@ -214,7 +219,7 @@ The modified `tidybreed_pop` (invisibly).
 [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md),
 [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md),
 [`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md),
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
 
 ## Examples
 

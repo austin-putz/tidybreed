@@ -32,7 +32,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -866,19 +866,20 @@ tidybreed
 <div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># All animals in ind_meta</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>    <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span>      <span class="co"># pass table with no filter, so "select all" </span></span>
-<span>  <span class="fu"><a href="reference/add_tbv.html">add_tbv</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"ADG"</span><span class="op">)</span>     <span class="co"># calculate TBV for all individuals (notice we use "traitn_name" here)</span></span></code></pre></div>
+<span>    <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span>      <span class="co"># pass table with no filter, so "select all"</span></span>
+<span>  <span class="fu"><a href="reference/add_tgv.html">add_tgv</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"ADG"</span><span class="op">)</span>     <span class="co"># true genetic values for all individuals; the TBV is component "additive"</span></span></code></pre></div>
 <p>Then the real great part of the package is to simply extract any table, and utilize the functions you already know to verify it worked (or didn’t…).</p>
 <div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check means by trait</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">component_name</span> <span class="op">==</span> <span class="st">"additive"</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># the breeding values</span></span>
 <span>  <span class="fu">collect</span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>                              <span class="co"># pull into R memory</span></span>
 <span>  <span class="fu">group_by</span><span class="op">(</span><span class="va">trait_name</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu">summarise</span><span class="op">(</span>MeanTBV <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">tbv_value</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  <span class="fu">summarise</span><span class="op">(</span>MeanTBV <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">tgv_value</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Define a selection index first, then compute true index values from TBVs (ground truth for monitoring genetic trend):</p>
 <div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Define the index weights (must exist before add_tbv uses index_names)</span></span>
+<code class="sourceCode R"><span><span class="co"># Define the index weights (must exist before add_tgv uses index_names)</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_index.html">define_index</a></span><span class="op">(</span></span>
 <span>    index_name   <span class="op">=</span> <span class="st">"maternal"</span>,</span>
@@ -890,7 +891,7 @@ tidybreed
 <span><span class="co"># Compute true index values from TBVs and write to ind_true_index</span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="reference/add_tbv.html">add_tbv</a></span><span class="op">(</span>index_names <span class="op">=</span> <span class="st">"maternal"</span><span class="op">)</span>       <span class="co"># will save the true breeding value index in 'ind_true_index' table)</span></span>
+<span>  <span class="fu"><a href="reference/add_tgv.html">add_tgv</a></span><span class="op">(</span>index_names <span class="op">=</span> <span class="st">"maternal"</span><span class="op">)</span>       <span class="co"># will save the true breeding value index in 'ind_true_index' table)</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> </span>
 <span>  <span class="fu"><a href="reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_true_index"</span><span class="op">)</span> <span class="op">|&gt;</span> </span>
@@ -1155,7 +1156,7 @@ tidybreed
 <tr>
 <td><code>ind_tgv</code></td>
 <td>1 per (individual × trait × component)</td>
-<td>True genetic values by declared model structure; total via the <code>ind_tgv_total</code> view</td>
+<td>True genetic values (simulation ground truth); the breeding value is component <code>additive</code>; total via the <code>ind_tgv_total</code> view</td>
 </tr>
 <tr>
 <td><code>ind_meta</code></td>
@@ -1169,14 +1170,10 @@ tidybreed
 <td>Long-format phenotype records</td>
 </tr>
 <tr>
-<td><code>ind_tbv</code></td>
-<td>1 per (individual × trait)</td>
-<td>True breeding values (simulation ground truth)</td>
-</tr>
-<tr>
 <td><code>ind_true_index</code></td>
-<td>1 per (individual × index × weight type)</td>
-<td>True index values from TBVs</td>
+<td>1 per (individual × index × weight type × component)</td>
+<td>True index values from <code>ind_tgv</code>
+</td>
 </tr>
 <tr>
 <td><code>ind_ebv</code></td>
@@ -1442,9 +1439,8 @@ tidybreed
 </tr></thead>
 <tbody>
 <tr>
-<td><code><a href="reference/add_tbv.html">add_tbv()</a></code></td>
-<td>Compute and store true breeding values in <code>ind_tbv</code>
-</td>
+<td><code><a href="reference/add_tgv.html">add_tgv()</a></code></td>
+<td>Compute and store true genetic values in <code>ind_tgv</code> (and true index values)</td>
 </tr>
 <tr>
 <td><code><a href="reference/add_phenotype.html">add_phenotype()</a></code></td>

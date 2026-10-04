@@ -16,7 +16,7 @@ Pipe a `tidybreed_table` (from
 and optionally
 [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html))
 as the first argument to select individuals. As with
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
 the **distinct** `id_ind` values in the collected table form the
 candidate set, so a table with multiple rows per individual (e.g.
 `ind_phenotype`) does not multiply work.

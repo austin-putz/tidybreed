@@ -3,59 +3,103 @@
 and writes the result to ind_tgv, one row per
 (individual x trait x component). The total is the derived view
 ind_tgv_total, never a stored row — a stored total would make every
-SUM(tgv_value) double-count.
-Unlike add_tbv(), this evaluates every term of the trait: additive,
-dominance, hand-entered genotype surfaces and multi-locus interactions, under
-every effect owner. component_name records how each term was declared:
+SUM(tgv_value) double-count. This is the one table of true genetic values:
+add_phenotype() calls this function for every trait a phenotype reads, and
+reads the total (or the components phenotype_components.component_names
+lists) from it.
+Every term of the trait is evaluated: additive, dominance, hand-entered
+genotype surfaces and multi-locus interactions, under every effect owner.
+component_name records how each term was declared:
 component_nameTerms it collects
-&quot;order1_additive&quot;single-member terms whose contrast is additive
-&quot;order1_dominance&quot;single-member dominance terms
-&quot;order1_other&quot;single-member indicator terms (a hand-entered surface)
-&quot;interaction&quot;any term with two or more members
+&quot;additive&quot;one-locus terms whose contrast is additive
+&quot;dominance&quot;one-locus dominance terms
+&quot;indicator&quot;one-locus indicator terms (a hand-entered genotype surface)
+&quot;interaction&quot;any term over two or more loci
 
 
 
 
-These are model-structure components, not variance components. A
-functional A x A term contributes to \(V_A\), \(V_D\) and \(V_I\) in
-the statistical sense; the names carry the declared order precisely so they
-cannot be read as an orthogonal decomposition.
+The breeding value is component_name = &quot;additive&quot; for effects written
+in statistical coding at a single base allele frequency per locus, which is
+what the generators (define_additive_effects()) write. For hand-written
+functional terms (ad_terms() with coding = &quot;functional&quot;, or an
+indicator surface) additive is the functional additive effect, not the
+breeding value: under functional coding the average effect is
+\(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
+and on LD.
 ind_tgv stores the raw sum of the stored terms — no mean is added. A
 pure Cockerham model yields centered deviations; a raw indicator surface
 yields absolute genotypic values with a non-zero mean by construction, and is
 not silently re-centered. See ad_terms(), which reports the implied genetic
 mean and writes it nowhere.
-Writes are idempotent: an individual's rows for a trait are replaced, so
-re-evaluating after changing the effect model never leaves stale components
-behind."><meta property="og:description" content="Evaluates the stored effect model for each individual in the current subset
+Each allele copy takes the most specific variant whose origin predicate
+matches its (line_origin, parent_origin) label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbred genetic
+values correct — e.g. a Duroc x Landrace F1 is centered against each parent
+line's own effects and base allele frequency. Imprinting is a property of
+the effect, not of the trait: a term scoped to one parent_origin reads
+only that parent's allele copies.
+Re-evaluating replaces an individual's rows for a trait: a component the
+model no longer has is deleted, so no stale component survives, and a
+component that is still there is updated in place, keeping any custom
+columns added to it.
+Optionally computes true selection index values by multiplying per-trait
+genetic values (component_name, default the breeding value) by weights
+from named indices defined with define_index(), and writes them to
+ind_true_index.
+Every individual in the subset receives a value for every requested trait —
+unlike add_phenotype(), no sex-expression rule is applied here
+(expressed_sex is a property of phenotype_meta, not of a genetic trait)."><meta property="og:description" content="Evaluates the stored effect model for each individual in the current subset
 and writes the result to ind_tgv, one row per
 (individual x trait x component). The total is the derived view
 ind_tgv_total, never a stored row — a stored total would make every
-SUM(tgv_value) double-count.
-Unlike add_tbv(), this evaluates every term of the trait: additive,
-dominance, hand-entered genotype surfaces and multi-locus interactions, under
-every effect owner. component_name records how each term was declared:
+SUM(tgv_value) double-count. This is the one table of true genetic values:
+add_phenotype() calls this function for every trait a phenotype reads, and
+reads the total (or the components phenotype_components.component_names
+lists) from it.
+Every term of the trait is evaluated: additive, dominance, hand-entered
+genotype surfaces and multi-locus interactions, under every effect owner.
+component_name records how each term was declared:
 component_nameTerms it collects
-&quot;order1_additive&quot;single-member terms whose contrast is additive
-&quot;order1_dominance&quot;single-member dominance terms
-&quot;order1_other&quot;single-member indicator terms (a hand-entered surface)
-&quot;interaction&quot;any term with two or more members
+&quot;additive&quot;one-locus terms whose contrast is additive
+&quot;dominance&quot;one-locus dominance terms
+&quot;indicator&quot;one-locus indicator terms (a hand-entered genotype surface)
+&quot;interaction&quot;any term over two or more loci
 
 
 
 
-These are model-structure components, not variance components. A
-functional A x A term contributes to \(V_A\), \(V_D\) and \(V_I\) in
-the statistical sense; the names carry the declared order precisely so they
-cannot be read as an orthogonal decomposition.
+The breeding value is component_name = &quot;additive&quot; for effects written
+in statistical coding at a single base allele frequency per locus, which is
+what the generators (define_additive_effects()) write. For hand-written
+functional terms (ad_terms() with coding = &quot;functional&quot;, or an
+indicator surface) additive is the functional additive effect, not the
+breeding value: under functional coding the average effect is
+\(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
+and on LD.
 ind_tgv stores the raw sum of the stored terms — no mean is added. A
 pure Cockerham model yields centered deviations; a raw indicator surface
 yields absolute genotypic values with a non-zero mean by construction, and is
 not silently re-centered. See ad_terms(), which reports the implied genetic
 mean and writes it nowhere.
-Writes are idempotent: an individual's rows for a trait are replaced, so
-re-evaluating after changing the effect model never leaves stale components
-behind."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+Each allele copy takes the most specific variant whose origin predicate
+matches its (line_origin, parent_origin) label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbred genetic
+values correct — e.g. a Duroc x Landrace F1 is centered against each parent
+line's own effects and base allele frequency. Imprinting is a property of
+the effect, not of the trait: a term scoped to one parent_origin reads
+only that parent's allele copies.
+Re-evaluating replaces an individual's rows for a trait: a component the
+model no longer has is deleted, so no stale component survives, and a
+component that is still there is updated in place, keeping any custom
+columns added to it.
+Optionally computes true selection index values by multiplying per-trait
+genetic values (component_name, default the breeding value) by weights
+from named indices defined with define_index(), and writes them to
+ind_true_index.
+Every individual in the subset receives a value for every requested trait —
+unlike add_phenotype(), no sex-expression rule is applied here
+(expressed_sex is a property of phenotype_meta, not of a genetic trait)."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -63,7 +107,7 @@ behind."><meta property="og:image" content="https://austin-putz.github.io/tidybr
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,26 +140,56 @@ behind."><meta property="og:image" content="https://austin-putz.github.io/tidybr
 and writes the result to <code>ind_tgv</code>, one row per
 (individual x trait x <strong>component</strong>). The total is the derived view
 <code>ind_tgv_total</code>, never a stored row — a stored total would make every
-<code>SUM(tgv_value)</code> double-count.</p>
-<p>Unlike <code><a href="add_tbv.html">add_tbv()</a></code>, this evaluates <strong>every</strong> term of the trait: additive,
-dominance, hand-entered genotype surfaces and multi-locus interactions, under
-every effect owner. <code>component_name</code> records how each term was <em>declared</em>:</p><table class="table table"><tr><td><code>component_name</code></td><td>Terms it collects</td></tr><tr><td><code>"order1_additive"</code></td><td>single-member terms whose contrast is <code>additive</code></td></tr><tr><td><code>"order1_dominance"</code></td><td>single-member <code>dominance</code> terms</td></tr><tr><td><code>"order1_other"</code></td><td>single-member <code>indicator</code> terms (a hand-entered surface)</td></tr><tr><td><code>"interaction"</code></td><td>any term with two or more members</td></tr></table><p>These are <strong>model-structure components, not variance components.</strong> A
-functional A x A term contributes to \(V_A\), \(V_D\) <em>and</em> \(V_I\) in
-the statistical sense; the names carry the declared order precisely so they
-cannot be read as an orthogonal decomposition.</p>
+<code>SUM(tgv_value)</code> double-count. This is the one table of true genetic values:
+<code><a href="add_phenotype.html">add_phenotype()</a></code> calls this function for every trait a phenotype reads, and
+reads the total (or the components <code>phenotype_components.component_names</code>
+lists) from it.</p>
+<p>Every term of the trait is evaluated: additive, dominance, hand-entered
+genotype surfaces and multi-locus interactions, under every effect owner.
+<code>component_name</code> records how each term was declared:</p><table class="table table"><tr><td><code>component_name</code></td><td>Terms it collects</td></tr><tr><td><code>"additive"</code></td><td>one-locus terms whose contrast is <code>additive</code></td></tr><tr><td><code>"dominance"</code></td><td>one-locus <code>dominance</code> terms</td></tr><tr><td><code>"indicator"</code></td><td>one-locus <code>indicator</code> terms (a hand-entered genotype surface)</td></tr><tr><td><code>"interaction"</code></td><td>any term over two or more loci</td></tr></table><p><strong>The breeding value is <code>component_name = "additive"</code></strong> for effects written
+in statistical coding at a single base allele frequency per locus, which is
+what the generators (<code><a href="define_additive_effects.html">define_additive_effects()</a></code>) write. For hand-written
+functional terms (<code><a href="ad_terms.html">ad_terms()</a></code> with <code>coding = "functional"</code>, or an
+<code>indicator</code> surface) <code>additive</code> is the functional additive effect, not the
+breeding value: under functional coding the average effect is
+\(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
+and on LD.</p>
 <p><code>ind_tgv</code> stores the <strong>raw sum of the stored terms — no mean is added.</strong> A
 pure Cockerham model yields centered deviations; a raw <code>indicator</code> surface
 yields absolute genotypic values with a non-zero mean by construction, and is
 not silently re-centered. See <code><a href="ad_terms.html">ad_terms()</a></code>, which reports the implied genetic
 mean and writes it nowhere.</p>
-<p>Writes are idempotent: an individual's rows for a trait are replaced, so
-re-evaluating after changing the effect model never leaves stale components
-behind.</p>
+<p>Each allele copy takes the <strong>most specific</strong> variant whose origin predicate
+matches its <code>(line_origin, parent_origin)</code> label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbred genetic
+values correct — e.g. a Duroc x Landrace F1 is centered against each parent
+line's own effects and base allele frequency. <strong>Imprinting</strong> is a property of
+the effect, not of the trait: a term scoped to one <code>parent_origin</code> reads
+only that parent's allele copies.</p>
+<p>Re-evaluating replaces an individual's rows for a trait: a component the
+model no longer has is deleted, so no stale component survives, and a
+component that is still there is updated in place, keeping any custom
+columns added to it.</p>
+<p>Optionally computes true selection index values by multiplying per-trait
+genetic values (<code>component_name</code>, default the breeding value) by weights
+from named indices defined with <code><a href="define_index.html">define_index()</a></code>, and writes them to
+<code>ind_true_index</code>.</p>
+<p>Every individual in the subset receives a value for every requested trait —
+unlike <code><a href="add_phenotype.html">add_phenotype()</a></code>, no sex-expression rule is applied here
+(<code>expressed_sex</code> is a property of <code>phenotype_meta</code>, not of a genetic trait).</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">add_tgv</span><span class="op">(</span><span class="va">tbl</span>, trait_name <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">add_tgv</span><span class="op">(</span></span>
+<span>  <span class="va">tbl</span>,</span>
+<span>  trait_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  index_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  weight_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"index"</span>, <span class="st">"economic"</span>, <span class="st">"both"</span><span class="op">)</span>,</span>
+<span>  component_name <span class="op">=</span> <span class="st">"additive"</span>,</span>
+<span>  overwrite_index <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -134,6 +208,42 @@ individuals that have rows there. A table without <code>id_ind</code> is an erro
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
 <dd><p>Character vector of trait name(s). When <code>NULL</code> (default),
 all traits in <code>trait_meta</code> are used (in <code>id_trait</code> order).</p></dd>
+
+
+<dt id="arg-index-names">index_names<a class="anchor" aria-label="anchor" href="#arg-index-names"></a></dt>
+<dd><p>Character vector of named index(es) from <code>index_meta</code> for
+which true index values are computed and written to <code>ind_true_index</code>. When
+<code>NULL</code> (default), no true index is computed. Every index trait must have an
+<code>ind_tgv</code> row for every individual of the subset (computed by this call or
+an earlier one).</p></dd>
+
+
+<dt id="arg-weight-type">weight_type<a class="anchor" aria-label="anchor" href="#arg-weight-type"></a></dt>
+<dd><p>Which weight column from <code>index_meta</code> to use: <code>"index"</code>
+uses <code>index_weight</code>, <code>"economic"</code> uses <code>economic_weight</code>, <code>"both"</code> computes
+and stores both (distinguished by <code>ind_true_index.weight_type</code>). Defaults to
+<code>"index"</code>.</p></dd>
+
+
+<dt id="arg-component-name">component_name<a class="anchor" aria-label="anchor" href="#arg-component-name"></a></dt>
+<dd><p>Which genetic value the true index weights: one of
+<code>"additive"</code> (default — selection indices are on breeding values),
+<code>"dominance"</code>, <code>"indicator"</code>, <code>"interaction"</code>, or <code>"total"</code> (the
+<code>ind_tgv_total</code> view). A component the trait's model has no terms for
+contributes 0. Stored in <code>ind_true_index.component_name</code>.</p></dd>
+
+
+<dt id="arg-overwrite-index">overwrite_index<a class="anchor" aria-label="anchor" href="#arg-overwrite-index"></a></dt>
+<dd><p>Logical. When <code>FALSE</code> (default), individuals that
+already have a true index value for the given
+<code>(index_name, weight_type, component_name)</code> are skipped. When <code>TRUE</code>,
+existing rows are deleted and recomputed (use when index weights have
+changed).</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Optional extra columns written to <code>ind_tgv</code> (scalars only;
+broadcast to every row written).</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -154,8 +264,9 @@ scoped term fails loudly instead of appearing to hang.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="add_tbv.html">add_tbv()</a></code> for the breeding value, <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> and
-<code><a href="define_additive_effects.html">define_additive_effects()</a></code> for writing the terms this evaluates.</p></div>
+    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> and <code><a href="define_additive_effects.html">define_additive_effects()</a></code> for
+writing the terms this evaluates, <code><a href="add_phenotype.html">add_phenotype()</a></code>, <code><a href="define_index.html">define_index()</a></code>,
+<code><a href="add_index.html">add_index()</a></code>.</p></div>
     </div>
 
     <div class="section level2">
@@ -167,9 +278,17 @@ scoped term fails loudly instead of appearing to hang.</p>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">2L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">add_tgv</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># The components, and the derived total</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># The breeding values, and the derived total</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">component_name</span> <span class="op">==</span> <span class="st">"additive"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv_total"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Genetic values + true index values (index and economic weights) on the</span></span></span>
+<span class="r-in"><span><span class="co"># breeding values, written to ind_true_index</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">2L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">add_tgv</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span><span class="op">)</span>, index_names <span class="op">=</span> <span class="st">"terminal"</span>, weight_type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

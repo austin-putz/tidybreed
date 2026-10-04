@@ -3,15 +3,17 @@
 architecture, calibrates it to the stored additive target, and writes
 one order-one additive term per locus and trait through the same engine as
 define_genome_effect_terms(), under the reserved effect owner
-"generated". add_tbv() reads order-one additive variants from that
-owner and nothing else, so effects written here and effects a user writes
-with define_genome_effect_terms() can never be confused for one another.'><meta property="og:description" content='Selects QTL from a filtered genome_meta table, samples an effect
+"generated". Only generators write that owner, so effects written here
+and effects a user writes with define_genome_effect_terms() can never be
+confused for one another. add_tgv() evaluates both; its additive
+component is the breeding value.'><meta property="og:description" content='Selects QTL from a filtered genome_meta table, samples an effect
 architecture, calibrates it to the stored additive target, and writes
 one order-one additive term per locus and trait through the same engine as
 define_genome_effect_terms(), under the reserved effect owner
-"generated". add_tbv() reads order-one additive variants from that
-owner and nothing else, so effects written here and effects a user writes
-with define_genome_effect_terms() can never be confused for one another.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+"generated". Only generators write that owner, so effects written here
+and effects a user writes with define_genome_effect_terms() can never be
+confused for one another. add_tgv() evaluates both; its additive
+component is the breeding value.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -19,7 +21,7 @@ with define_genome_effect_terms() can never be confused for one another.'><meta 
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,9 +54,10 @@ with define_genome_effect_terms() can never be confused for one another.'><meta 
 architecture, <strong>calibrates</strong> it to the stored additive target, and writes
 one order-one <code>additive</code> term per locus and trait through the same engine as
 <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, under the reserved effect owner
-<code>"generated"</code>. <code><a href="add_tbv.html">add_tbv()</a></code> reads order-one <code>additive</code> variants from that
-owner and nothing else, so effects written here and effects a user writes
-with <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> can never be confused for one another.</p>
+<code>"generated"</code>. Only generators write that owner, so effects written here
+and effects a user writes with <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> can never be
+confused for one another. <code><a href="add_tgv.html">add_tgv()</a></code> evaluates both; its <code>additive</code>
+component is the breeding value.</p>
     </div>
 
     <div class="section level2">

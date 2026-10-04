@@ -29,7 +29,7 @@ call
 
 `NULL` when no individual matched (a warning is issued), otherwise a
 list with `pop` (after
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)),
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)),
 `phenos` (in evaluation order), `pheno_meta` (rows in that order) and
 `entries`: one list per phenotype, in the same order, each with
 

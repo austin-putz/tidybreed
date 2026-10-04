@@ -7,7 +7,7 @@ evaluation and missing_component_action, path classification,
 pheno_number assignment, the residual condition value of every record,
 and the random-effect level every record touches. No random number is
 drawn and nothing is written (the one prerequisite write is
-add_tbv(), which materializes the TBVs the plan reads and is
+add_tgv(), which materializes the genetic values the plan reads and is
 RNG-neutral).
 Stage 2 — RESOLVE (.ap_resolve()): every random draw of the call,
 in a fixed order, and the liability / type conversion — all in memory.
@@ -46,7 +46,7 @@ added by ALTER TABLE earlier in the same transaction goes with it.
 .Random.seed is left advanced
 by exactly the draws made before the error; nothing in the package
 restores it, so a retry draws different values unless the caller
-re-seeds. (The add_tbv() upsert of Stage 1 is the one write that
+re-seeds. (The add_tgv() write of Stage 1 is the one write that
 remains; it does not depend on the RNG and the retry rewrites it.)
 See plans/sample_correlated_effects.md §5.5 and D7."><meta property="og:description" content="add_phenotype() runs in three stages with a strict boundary between them:
 Stage 1 — PLAN (.ap_plan()): decide the final record list for every
@@ -56,7 +56,7 @@ evaluation and missing_component_action, path classification,
 pheno_number assignment, the residual condition value of every record,
 and the random-effect level every record touches. No random number is
 drawn and nothing is written (the one prerequisite write is
-add_tbv(), which materializes the TBVs the plan reads and is
+add_tgv(), which materializes the genetic values the plan reads and is
 RNG-neutral).
 Stage 2 — RESOLVE (.ap_resolve()): every random draw of the call,
 in a fixed order, and the liability / type conversion — all in memory.
@@ -95,7 +95,7 @@ added by ALTER TABLE earlier in the same transaction goes with it.
 .Random.seed is left advanced
 by exactly the draws made before the error; nothing in the package
 restores it, so a retry draws different values unless the caller
-re-seeds. (The add_tbv() upsert of Stage 1 is the one write that
+re-seeds. (The add_tgv() write of Stage 1 is the one write that
 remains; it does not depend on the RNG and the retry rewrites it.)
 See plans/sample_correlated_effects.md §5.5 and D7."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -105,7 +105,7 @@ See plans/sample_correlated_effects.md §5.5 and D7."><meta property="og:image" 
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -141,7 +141,7 @@ evaluation and <code>missing_component_action</code>, path classification,
 <code>pheno_number</code> assignment, the residual condition value of every record,
 and the random-effect level every record touches. <strong>No random number is
 drawn and nothing is written</strong> (the one prerequisite write is
-<code><a href="add_tbv.html">add_tbv()</a></code>, which materializes the TBVs the plan reads and is
+<code><a href="add_tgv.html">add_tgv()</a></code>, which materializes the genetic values the plan reads and is
 RNG-neutral).</p></li>
 <li><p><strong>Stage 2 — RESOLVE</strong> (<code><a href="dot-ap_resolve.html">.ap_resolve()</a></code>): every random draw of the call,
 in a fixed order, and the liability / type conversion — all in memory.
@@ -178,7 +178,7 @@ added by <code>ALTER TABLE</code> earlier in the same transaction goes with it.
 <code>.Random.seed</code> is left advanced
 by exactly the draws made before the error; nothing in the package
 restores it, so a retry draws different values unless the caller
-re-seeds. (The <code><a href="add_tbv.html">add_tbv()</a></code> upsert of Stage 1 is the one write that
+re-seeds. (The <code><a href="add_tgv.html">add_tgv()</a></code> write of Stage 1 is the one write that
 remains; it does not depend on the RNG and the retry rewrites it.)</p>
 <p>See <code>plans/sample_correlated_effects.md</code> §5.5 and D7.</p>
     </div>

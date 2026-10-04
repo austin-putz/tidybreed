@@ -6,7 +6,7 @@ add_founders() or add_offspring() — call add_dosage() explicitly when
 you need dosage values for marker-assisted selection, allele-frequency
 queries, or other downstream analysis.
 Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as the
-first argument to select individuals. As with add_tbv(), the distinct
+first argument to select individuals. As with add_tgv(), the distinct
 id_ind values in the collected table form the candidate set, so a table with
 multiple rows per individual (e.g. ind_phenotype) does not multiply work."><meta property="og:description" content="Computes 0/1/2 genotype dosages (sum of alleles across an individual's
 haplotype strands) from the long ind_haplotype table and writes them to the
@@ -15,7 +15,7 @@ add_founders() or add_offspring() — call add_dosage() explicitly when
 you need dosage values for marker-assisted selection, allele-frequency
 queries, or other downstream analysis.
 Pipe a tidybreed_table (from get_table() and optionally dplyr::filter()) as the
-first argument to select individuals. As with add_tbv(), the distinct
+first argument to select individuals. As with add_tgv(), the distinct
 id_ind values in the collected table form the candidate set, so a table with
 multiple rows per individual (e.g. ind_phenotype) does not multiply work."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -25,7 +25,7 @@ multiple rows per individual (e.g. ind_phenotype) does not multiply work."><meta
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +61,7 @@ on-demand <code>ind_genotype</code> cache. <code>ind_genotype</code> is <strong>
 you need dosage values for marker-assisted selection, allele-frequency
 queries, or other downstream analysis.</p>
 <p>Pipe a <code>tidybreed_table</code> (from <code><a href="get_table.html">get_table()</a></code> and optionally <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>) as the
-first argument to select individuals. As with <code><a href="add_tbv.html">add_tbv()</a></code>, the <strong>distinct</strong>
+first argument to select individuals. As with <code><a href="add_tgv.html">add_tgv()</a></code>, the <strong>distinct</strong>
 <code>id_ind</code> values in the collected table form the candidate set, so a table with
 multiple rows per individual (e.g. <code>ind_phenotype</code>) does not multiply work.</p>
     </div>

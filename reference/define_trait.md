@@ -1,9 +1,9 @@
 # Define a genetic component trait
 
 Creates one row in `trait_meta` describing a **genetic component
-trait**: a quantity with QTL effects in `genome_effects`, TBVs in
-`ind_tbv`, and additive genetic variance in `trait_var_comp`. Contains
-no phenotype-level information.
+trait**: a quantity with QTL effects in `genome_effects`, genetic values
+in `ind_tgv`, and additive genetic variance in `trait_var_comp`.
+Contains no phenotype-level information.
 
 To register the **observed phenotype** that individuals receive records
 for, call

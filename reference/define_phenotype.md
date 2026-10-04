@@ -86,15 +86,23 @@ define_phenotype(
 
   Numeric between 0 and 1. For categorical traits with one threshold
   (two categories), the fraction expected above the threshold. Mutually
-  exclusive with `thresholds`. The threshold is placed on the liability
-  scale from `mean`, the unconditional residual variance and the trait's
-  stored additive target (`trait_var_comp`, `effect_name = "additive"`),
-  so
+  exclusive with `thresholds`. The liability carries the trait's total
+  genetic value, so the threshold is placed from `mean`, the
+  unconditional residual variance and the trait's stored genetic targets
+  (`trait_var_comp`, population-wide rows): the sum of the `additive`,
+  `dominance` and `additive_by_additive` diagonals, each counted only if
+  the trait's model has terms of that kind.
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-  errors when no target is stored. The target is taken as given: if the
-  trait's effects were written without being calibrated to it (manual
-  `effects`, or `scale_to_target = FALSE` in
-  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)),
+  errors when a kind of term the model has has no stored target, or when
+  the model has terms outside those three kinds (an `indicator` surface,
+  other interactions). The threshold uses the *target* at the reference
+  population, so the realised prevalence of a selected or line-specific
+  population differs. The target is taken as given: if the trait's
+  effects were written without being calibrated to it (manual `effects`,
+  or `scale_to_target = FALSE` in
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
+  or terms from
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)),
   the threshold describes a variance the model does not deliver and the
   realised prevalence is wrong, with no error. Give `thresholds` for
   such a trait. Not valid for composite phenotypes (`components` or
@@ -165,8 +173,15 @@ define_phenotype(
   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling
     bounds.
 
-  - `component_names` (optional, default `"order1_additive"`): reserved;
-    see `phenotype_components.component_names`.
+  - `component_names` (optional, default `"total"`): which genetic value
+    of the contributor this row reads from `ind_tgv`. `"total"` is the
+    total genetic value (the `ind_tgv_total` view: additive, dominance
+    and every other component). A comma-separated list of
+    `ind_tgv.component_name` values (`"additive"`, `"dominance"`,
+    `"indicator"`, `"interaction"`, e.g. `"additive"` or
+    `"additive,dominance"`) reads their sum; a listed component the
+    trait's model has no terms for contributes 0. Anything else,
+    `"total"` mixed with other names, or a duplicate is an error.
 
   - `group_column` (optional): column defining group membership.
 
@@ -181,14 +196,15 @@ define_phenotype(
 
 - formula_tbv:
 
-  Character. DSL shorthand for assembling a composite TBV from component
-  traits already in `trait_meta`. A bare trait symbol (e.g. `"WWD"`)
-  means the individual's own (`"self"`) TBV; contributor roles can also
-  be given explicitly as function calls: `self(trait)`, `dam(trait)`,
-  `sire(trait)`, `group_sum(trait, col)`, and `group_mean(trait, col)`
-  (`col` = grouping column in `ind_meta`, e.g. pen or litter). These are
-  combined with the arithmetic operators `+`, `-`, `*`, `/`, and
-  parentheses (e.g. `"WWD + dam(WWM)"`,
+  Character. DSL shorthand for assembling a composite genetic value from
+  component traits already in `trait_meta`. Every reference reads the
+  contributor's **total** genetic value (`ind_tgv_total`). A bare trait
+  symbol (e.g. `"WWD"`) means the individual's own (`"self"`) value;
+  contributor roles can also be given explicitly as function calls:
+  `self(trait)`, `dam(trait)`, `sire(trait)`, `group_sum(trait, col)`,
+  and `group_mean(trait, col)` (`col` = grouping column in `ind_meta`,
+  e.g. pen or litter). These are combined with the arithmetic operators
+  `+`, `-`, `*`, `/`, and parentheses (e.g. `"WWD + dam(WWM)"`,
   `"ADG_direct + group_sum(ADG_social, pen_id)"`). Mutually exclusive
   with `components`. Not valid with `type = "derived_formula"`.
 
@@ -212,12 +228,12 @@ define_phenotype(
 - missing_component_action:
 
   Character. What to do when an individual is missing one or more
-  required composite-TBV components (e.g. no group assignment for a
-  `"group"` contributor, or a missing dam/sire TBV). `"skip"` (default)
-  excludes the individual from `ind_phenotype` and emits a warning with
-  a count. `"error"` stops with an informative message listing affected
-  individuals. Stored in `phenotype_meta` so the behaviour is consistent
-  across all
+  required composite components (e.g. no group assignment for a
+  `"group"` contributor, or a missing dam/sire genetic value). `"skip"`
+  (default) excludes the individual from `ind_phenotype` and emits a
+  warning with a count. `"error"` stops with an informative message
+  listing affected individuals. Stored in `phenotype_meta` so the
+  behaviour is consistent across all
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   calls for this phenotype. Note: this is unrelated to
   `null_class_action` (set via

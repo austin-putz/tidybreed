@@ -1,12 +1,14 @@
 # Assemble the composite TBV of one phenotype from `phenotype_components`
 
-Sums `weight * contributor TBV` over the phenotype's component rows, one
-contributor lookup per row (see
+Sums `weight * contributor genetic value` over the phenotype's component
+rows, one contributor lookup per row (see
 [`?contributor_tbv`](https://austin-putz.github.io/tidybreed/reference/contributor_tbv.md)).
-`ind_tbv` must already hold the source traits for every contributor
+Each row reads its `component_names` (`"total"` by default) from
+`ind_tgv`, which must already hold the source traits for every
+contributor
 ([`.ap_materialize_tbvs()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_materialize_tbvs.md)).
-A missing piece — a `NULL` dam or sire, a contributor with no TBV, a
-`NULL` group value, a `NULL` covariate — makes the individual's
+A missing piece — a `NULL` dam or sire, a contributor with no `ind_tgv`
+row, a `NULL` group value, a `NULL` covariate — makes the individual's
 composite `NA`.
 
 ## Usage

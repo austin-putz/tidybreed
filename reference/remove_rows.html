@@ -11,7 +11,7 @@ the population invisibly — consistent with all other action functions."><meta 
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -99,8 +99,8 @@ prior <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="e
 full-table deletion via <code>confirm_all = TRUE</code>.</p>
 <p><strong>Single-table mode</strong> (<code>tables = NULL</code>): uses the composite row key from
 the internal <code>TABLE_ROW_KEYS</code> registry to delete exactly the rows matched
-by the filter — no more, no less. For example, filtering <code>ind_tbv</code> by
-<code>trait_name == "ADG"</code> deletes only the ADG rows, not all TBV rows for those
+by the filter — no more, no less. For example, filtering <code>ind_tgv</code> by
+<code>trait_name == "ADG"</code> deletes only the ADG rows, not all genetic-value rows for those
 animals. Key columns are matched with <code>IS NOT DISTINCT FROM</code>, so rows whose
 key is <code>NULL</code> — the default <code>chr_inheritance</code> / <code>chr_recombination</code> rows
 seeded by <code><a href="define_genome.html">define_genome()</a></code>, or the shared (<code>line_name IS NULL</code>)
@@ -137,7 +137,7 @@ and to handle large ID sets efficiently.</p>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">id_ind</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">culled_ids</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">remove_rows</span><span class="op">(</span>tables <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span>, <span class="st">"ind_tbv"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">remove_rows</span><span class="op">(</span>tables <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ind_phenotype"</span>, <span class="st">"ind_tgv"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Preview before deleting</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>

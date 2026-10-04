@@ -1,5 +1,70 @@
 # Changelog
 
+## tidybreed 0.74.0 (2026-10-04)
+
+Step 3a of `plans/import_qtl_effect_methods.md` (consolidation and P2;
+plan in `plans/import_qtl_effect_methods_phase_3_plan.md`).
+**Breaking.** Databases written by earlier versions are not readable:
+[`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+refuses a file with an `ind_tbv` table, an `ind_true_index` without
+`component_name`, or `order1_*` component names (pre-1.0, no migration).
+
+- **`ind_tbv` and `add_tbv()` are removed.** `ind_tgv` is the one table
+  of true genetic values. The breeding value is its
+  `component_name = "additive"` row (for generated effects: statistical
+  coding at one base allele frequency).
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  takes over `add_tbv()`’s arguments: `index_names`, `weight_type` (was
+  `type`), `overwrite_index` and `...` custom columns, plus a new
+  `component_name` (default `"additive"`; `"total"` allowed) choosing
+  which value a true index weights. The old filter that kept
+  custom-owner additive terms out of the breeding value, and its
+  warning, are gone: every one-locus additive term is part of the
+  `additive` component.
+- **`ind_true_index` gains `component_name`**; its row key is
+  `(id_ind, index_name, weight_type, component_name)`, so an index on
+  the breeding values and one on the total coexist.
+- **Value components renamed** (§6B): `order1_additive` → `additive`,
+  `order1_dominance` → `dominance`, `order1_other` → `indicator`;
+  `interaction` unchanged. The closed set is `TGV_COMPONENT_NAMES`.
+- **Phenotypes read the total genetic value** (precondition P2): simple
+  phenotypes, every composite contributor (self, dam, sire, group) and
+  the `formula_tbv` DSL read `ind_tgv_total` instead of the additive
+  breeding value. Under an additive-only model nothing changes (the
+  total is the breeding value, bit for bit); dominance, A x A and
+  indicator terms now reach phenotypes.
+  `phenotype_components.component_names` defaults to `"total"` and is no
+  longer reserved: a comma-separated list of components
+  (e.g. `"additive"`) reads their sum, and a component the model has no
+  terms for contributes 0. Bad values are refused by
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md).
+- **`ind_tgv_total` is deterministic at any thread count**: the view
+  adds the components in `component_name` order. A one-component total
+  equals that row bit for bit.
+- **Prevalence thresholds use the active model’s genetic variance**: the
+  sum of the stored population-wide `additive`, `dominance` and
+  `additive_by_additive` targets, each only if the trait’s model has
+  terms of that kind. A model with terms outside those kinds (an
+  indicator surface, other interactions), or a kind of term with no
+  stored target, is an error naming `define_phenotype(thresholds = )`.
+- A simple phenotype needs its trait to have at least one term, of any
+  kind and any owner (it used to need a generated additive term), so a
+  model written only with
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  records phenotypes.
+- [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  re-evaluation upserts surviving components instead of deleting and
+  re-inserting them, so custom columns on `ind_tgv` rows survive.
+- [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
+  auto-detects `tgv_value` on `ind_tgv`; filter to one `component_name`,
+  or its duplicate-row error fires (values are never summed).
+- **Bug fix:**
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
+  validated `components` after writing the `phenotype_meta` row (and,
+  with `overwrite = TRUE`, after deleting the old definition), so a
+  refused call left a half-defined or missing phenotype. All component
+  checks now run before anything is written.
+
 ## tidybreed 0.73.2 (2026-10-03)
 
 Step 2 corrections from the Codex review
@@ -220,10 +285,8 @@ Response to the Codex review of steps 0b and 1
   reserved owner `'generated_additive_tbv'`. It used to restore
   successfully, and then the old rows were invisible:
   [`get_trait_var()`](https://austin-putz.github.io/tidybreed/reference/get_trait_var.md)
-  returned `NA`,
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  found no generated terms, and new targets were written next to the old
-  ones.
+  returned `NA`, `add_tbv()` found no generated terms, and new targets
+  were written next to the old ones.
 
 ### Documentation
 
@@ -406,9 +469,7 @@ decision D1–D8 in that plan is implemented and tested.
   [`.ap_covariate_terms()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_covariate_terms.md)
   (fixed effects only, random levels collected);
   `write_user_phenotype_values()` removed; `sample_residuals()` reduced
-  to `(n, R)`;
-  [`upsert_ind_tbv()`](https://austin-putz.github.io/tidybreed/reference/upsert_ind_tbv.md)
-  moved to `add_tbv.R`.
+  to `(n, R)`; `upsert_ind_tbv()` moved to `add_tbv.R`.
 
 - **Phase 5 — residuals are correlated across phenotypes and sequential
   in time.** Every record’s residual is now drawn from its residual
@@ -523,11 +584,10 @@ decision D1–D8 in that plan is implemented and tested.
   and after. “Unchanged” includes the schema: a new column named in
   `...` that was added by `ALTER TABLE` earlier in the failing
   transaction is rolled back with it. The one write a failed call does
-  leave is the deterministic Stage-1
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  upsert, now stated in the docs. Also added: the physical-row-order
-  reproducibility test the plan asks for (same seed, `ind_meta` rebuilt
-  in reverse order, identical records and draws).
+  leave is the deterministic Stage-1 `add_tbv()` upsert, now stated in
+  the docs. Also added: the physical-row-order reproducibility test the
+  plan asks for (same seed, `ind_meta` rebuilt in reverse order,
+  identical records and draws).
 
 - **Phase 8 — seeded runs are now bit-identical (D8).** The RNG stream
   always was; the genetic values were not. The genome-effect evaluator
@@ -694,7 +754,7 @@ decision D1–D8 in that plan is implemented and tested.
 - **The `tbl` argument of every action function now means “the
   individuals present in this (filtered) table”.**
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+  `add_tbv()`,
   [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
   [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md),
   [`add_dosage()`](https://austin-putz.github.io/tidybreed/reference/add_dosage.md),
@@ -802,10 +862,9 @@ decision D1–D8 in that plan is implemented and tested.
   missing centre stays an error.
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   is now provably sugar over `define_genome_effects()`: a test
-  reproduces its three effect tables and
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  output exactly through the general writer with the reserved owner,
-  `replace_scope`, and the same `base_tbl`.
+  reproduces its three effect tables and `add_tbv()` output exactly
+  through the general writer with the reserved owner, `replace_scope`,
+  and the same `base_tbl`.
 
 ### Changed
 
@@ -1027,16 +1086,13 @@ the package.**
 
 Phase D of `plans/update_genome_effects_v4.md`: **the evaluator**. The
 migration started in 0.64.0 is now numerically complete — a stored
-effect model of any shape can be evaluated, and
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-works again.
+effect model of any shape can be evaluated, and `add_tbv()` works again.
 
 One evaluator serves every consumer.
 [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
-writes all of its components;
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-is the same evaluator filtered to the reserved owner and to order-one
-`additive` terms, not a second implementation of the effect math.
+writes all of its components; `add_tbv()` is the same evaluator filtered
+to the reserved owner and to order-one `additive` terms, not a second
+implementation of the effect math.
 
 ### New
 
@@ -1062,33 +1118,30 @@ is the same evaluator filtered to the reserved owner and to order-one
 
 ### Changed
 
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  is rebuilt on the evaluator.** Same meaning, same oracle: the
-  Falconer-centred sum over allele copies, each copy taking the most
-  specific variant whose origin predicate matches its
+- **`add_tbv()` is rebuilt on the evaluator.** Same meaning, same
+  oracle: the Falconer-centred sum over allele copies, each copy taking
+  the most specific variant whose origin predicate matches its
   `(line_origin, parent_origin)` label. It now reads `center_value` from
   the member and resolves scope by predicate containment rather than by
   a `NOT EXISTS` line subquery, so imprinting and line fallback compose
   per copy instead of competing.
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  ignores non-additive terms, additive members inside interactions, and
-  every non-reserved effect owner. Under functional (a, d) input the
-  stored coefficient is `a` while the breeding-value coefficient is
-  `alpha = a + d(q - p)`, so custom terms move `ind_tgv` and never
-  silently redefine `ind_tbv`.
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
-  “no effects” error now says *order-one additive* and names the effect
-  owner, because that is the actual filter.
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  warns once per trait when its coefficients have stopped being average
-  effects** (plan Q1, decided): a non-reserved order-one `additive` term
-  (part of A, and skipped), an `indicator` surface (raw functional
-  coding, so the stored `a` is no longer `alpha = a + d(q - p)`), or an
-  interaction (whose additive projection depends on other loci and on
-  LD). An order-one `dominance` term centred where the additive term is
-  centred is the **exception and stays silent** — Cockerham coding is
-  HWE-orthogonal, so `tbv_value` is still exact, and warning there would
-  cry wolf on the common case. The warning never changes the number.
+- `add_tbv()` ignores non-additive terms, additive members inside
+  interactions, and every non-reserved effect owner. Under functional
+  (a, d) input the stored coefficient is `a` while the breeding-value
+  coefficient is `alpha = a + d(q - p)`, so custom terms move `ind_tgv`
+  and never silently redefine `ind_tbv`.
+- `add_tbv()`’s “no effects” error now says *order-one additive* and
+  names the effect owner, because that is the actual filter.
+- **`add_tbv()` warns once per trait when its coefficients have stopped
+  being average effects** (plan Q1, decided): a non-reserved order-one
+  `additive` term (part of A, and skipped), an `indicator` surface (raw
+  functional coding, so the stored `a` is no longer
+  `alpha = a + d(q - p)`), or an interaction (whose additive projection
+  depends on other loci and on LD). An order-one `dominance` term
+  centred where the additive term is centred is the **exception and
+  stays silent** — Cockerham coding is HWE-orthogonal, so `tbv_value` is
+  still exact, and warning there would cry wolf on the common case. The
+  warning never changes the number.
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)’s
   genome-effect precondition no longer requires a population-wide term.
   A purebred design whose only terms are line-specific evaluates
@@ -1117,9 +1170,8 @@ Phase C of `plans/update_genome_effects_v4.md`: the writers. Adds
 `define_genome_effects()` and its two `terms` builders, rebuilds
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 on top of it, and deletes `trait_meta.expressed_parent`. **Still
-deliberately mid-migration**:
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-(Phase D) reads the old column shape and does not work in this version.
+deliberately mid-migration**: `add_tbv()` (Phase D) reads the old column
+shape and does not work in this version.
 
 ### New
 
@@ -1226,10 +1278,8 @@ and adds `ind_tgv`. **Breaking, and the package is deliberately
 mid-migration**: this is Phase B of `plans/update_genome_effects_v4.md`,
 which commits the schema.
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-(Phase C) and
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-(Phase D) still read the old column shape and do not work in this
-version. Pre-1.0, no shim.
+(Phase C) and `add_tbv()` (Phase D) still read the old column shape and
+do not work in this version. Pre-1.0, no shim.
 
 ### Breaking schema changes
 
@@ -1572,10 +1622,8 @@ prevents the same class of drift from returning silently.
 
 ## tidybreed 0.63.0 (2026-08-19)
 
-Coverage for
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
-true-index feature, one real bug fix found while writing those tests,
-and removal of two pieces of stale text.
+Coverage for `add_tbv()`’s true-index feature, one real bug fix found
+while writing those tests, and removal of two pieces of stale text.
 
 ### Fixed
 
@@ -1595,11 +1643,10 @@ and removal of two pieces of stale text.
 
 ### Removed
 
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md):
-  the unreachable `if (length(ids_t) == 0) next` guard deleted.** The
-  function returns early when the subset is empty, and `ids_t` is
-  loop-invariant, so `length(ids_t) >= 1` always held at that point.
-  Same class as the nine guards removed in 0.62.0.
+- **`add_tbv()`: the unreachable `if (length(ids_t) == 0) next` guard
+  deleted.** The function returns early when the subset is empty, and
+  `ids_t` is loop-invariant, so `length(ids_t) >= 1` always held at that
+  point. Same class as the nine guards removed in 0.62.0.
 - **`upsert_ind_true_index()`: the `nrow(df) == 0` early return
   deleted.** It was the last line in `add_tbv.R` that no test could
   reach, and the fix above is why: with the missing-TBV guard in place,
@@ -1610,25 +1657,21 @@ and removal of two pieces of stale text.
 
 ### Documentation
 
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
-  “no haplotype rows” error message rewritten.** It blamed *“missing
-  ind_haplotype rows (v1 storage is fully dense …)”*, describing a
-  storage model the package no longer uses. Under long-format
-  `ind_haplotype` plus `chr_inheritance`, zero rows at a locus is a
-  supported, documented state (an absent chromosome — Y in females). The
-  old text sent readers hunting for a storage bug that does not exist.
-  The guard itself is correct and unchanged; the message now names the
-  two real causes (QTL on a chromosome the individual does not inherit,
-  or an imprinted trait restricting to an absent `parent_origin`) and
-  points at
+- **`add_tbv()`’s “no haplotype rows” error message rewritten.** It
+  blamed *“missing ind_haplotype rows (v1 storage is fully dense …)”*,
+  describing a storage model the package no longer uses. Under
+  long-format `ind_haplotype` plus `chr_inheritance`, zero rows at a
+  locus is a supported, documented state (an absent chromosome — Y in
+  females). The old text sent readers hunting for a storage bug that
+  does not exist. The guard itself is correct and unchanged; the message
+  now names the two real causes (QTL on a chromosome the individual does
+  not inherit, or an imprinted trait restricting to an absent
+  `parent_origin`) and points at
   [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md).
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)’s
-  stale `expressed_sex` claim removed.** The roxygen said the
-  `expressed_sex` rule “from `trait_meta`” is applied on top.
+- **`add_tbv()`’s stale `expressed_sex` claim removed.** The roxygen
+  said the `expressed_sex` rule “from `trait_meta`” is applied on top.
   `trait_meta` has had no such column since 0.31.0 moved it to
-  `phenotype_meta`, and
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  applies no sex filter at all — only
+  `phenotype_meta`, and `add_tbv()` applies no sex filter at all — only
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   does.
 
@@ -1764,13 +1807,12 @@ Fixes both issues recorded in `plans/two_errors.md`.
   existing calls that combine `line_name` with the default
   `base = "founder_haplotypes"`.
 
-  No change was needed in
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md):
-  `base_allele_freq` travels on the same `genome_effects` row as its
-  `genome_value`, and the line-precedence fallback is correlated on
-  `line_origin` per haplotype row, so a crossbred animal’s line-A
-  alleles were always going to be centered with line A’s frequency. The
-  consumption layer was already per-line; only the producer was pooled.
+  No change was needed in `add_tbv()`: `base_allele_freq` travels on the
+  same `genome_effects` row as its `genome_value`, and the
+  line-precedence fallback is correlated on `line_origin` per haplotype
+  row, so a crossbred animal’s line-A alleles were always going to be
+  centered with line A’s frequency. The consumption layer was already
+  per-line; only the producer was pooled.
 
 - **The mosaic `n_templates` default rose** from
   `max(2, ceiling(sqrt(n_haplotypes)))` to
@@ -2582,9 +2624,7 @@ Full pass over every `man/` page’s roxygen source: verified
 `@param`/`@return` against actual function signatures, executed every
 runnable `@examples` block against a live in-memory pop, and added
 examples for previously-undemonstrated key arguments (e.g. crossbreeding
-TBV and `index_names`/`type = "both"` in
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
-`economic_wts` in
+TBV and `index_names`/`type = "both"` in `add_tbv()`, `economic_wts` in
 [`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
 sex-chromosome/organelle usage in `define_chr()`, composite/SGE
 phenotype scenarios in
@@ -2657,9 +2697,8 @@ version.
   underlying `SUM(allele)` SQL was already correct for any row count per
   locus, so sex-linked/organelle chromosomes now work with no SQL
   changes, only the guard needed relaxing.
-- **[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)**
-  required no changes — its centered SQL already sums over however many
-  haplotype rows exist per individual per locus.
+- **`add_tbv()`** required no changes — its centered SQL already sums
+  over however many haplotype rows exist per individual per locus.
 - **`define_additive_effects(scale_to_target = TRUE)`** now errors
   clearly if any selected QTL locus is on a non-`"full"`-copy_mode
   chromosome, since the Falconer variance formula (`2*p*(1-p)*a^2`)
@@ -2700,8 +2739,7 @@ two gaps found when reviewing them against the Stage 3 exit criteria in
   non-diploid chromosome, rather than silently computing wrong dosage —
   forward defense ahead of Stage 4 (`define_chr()`).
 - Added test coverage for: cache-vs-direct extraction parity, partial
-  `ind_genotype` cache population never affecting
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)/
+  `ind_genotype` cache population never affecting `add_tbv()`/
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   results, `extract_genotypes(loci_tbl = ...)`, the above hardening, and
   the new diploid guard.
@@ -2710,9 +2748,8 @@ two gaps found when reviewing them against the Stage 3 exit criteria in
 
 ### New features — line-origin TBV (Stage 2)
 
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-now uses `line_origin` (populated on every allele since Stage 1) to
-compute correct crossbreeding additive TBV.
+`add_tbv()` now uses `line_origin` (populated on every allele since
+Stage 1) to compute correct crossbreeding additive TBV.
 
 - Additive effects are matched to each haplotype allele by `line_origin`
   first; a population-wide effect (`genome_effects.line_name IS NULL`)
@@ -2737,8 +2774,7 @@ compute correct crossbreeding additive TBV.
   scale benchmark for the long-format haplotype storage (insert
   throughput for
   [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)/[`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  for both population-wide and line-specific effects, and
+  `add_tbv()` for both population-wide and line-specific effects, and
   [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
   PIVOT export). Not run as part of `R CMD check`/`testthat`; see the
   script header for usage. This was the benchmark deferred from Stage 1
@@ -3556,9 +3592,8 @@ tidybreed conventions.
   column name. Same rename applies to `trait_effects.phenotype_name` and
   `trait_random_effects.phenotype_name`.
 
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  no longer applies `expressed_sex` filtering (that column was removed
-  from `trait_meta`). Sex filtering is now handled by
+- `add_tbv()` no longer applies `expressed_sex` filtering (that column
+  was removed from `trait_meta`). Sex filtering is now handled by
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   via `phenotype_meta.expressed_sex`.
 
@@ -3722,9 +3757,8 @@ specs, effect definitions, variance matrices).
 
 ### New features
 
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  gains three new arguments for computing true selection index values
-  from TBVs:
+- `add_tbv()` gains three new arguments for computing true selection
+  index values from TBVs:
   - `index_names`: character vector of named indices (from
     [`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md))
     for which a true index value should be computed. When `NULL`
@@ -3834,8 +3868,7 @@ specs, effect definitions, variance matrices).
 ### Improvements
 
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-  no longer duplicates TBV computation. It now calls
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+  no longer duplicates TBV computation. It now calls `add_tbv()`
   internally and reads TBVs from `ind_tbv` for the phenotype model.
 - `genome_effects` table supports a `line_name` column for future
   line-specific QTL effects (`NULL` = population-wide, the default).
@@ -4118,10 +4151,8 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
   `genome_haplotype` / `genome_genotype` after initialization (e.g. for
   novel mutations, gene editing, or adding newly discovered QTL).
   [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
-  and
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  will automatically pick up the updated locus set without any metadata
-  refresh step.
+  and `add_tbv()` will automatically pick up the updated locus set
+  without any metadata refresh step.
 
 - [`build_chr_info()`](https://austin-putz.github.io/tidybreed/reference/build_chr_info.md)
   no longer takes a `chr_len_Mb` argument. Chromosome length for
@@ -4415,9 +4446,8 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 ### Breaking changes
 
 - `ind_tbv` no longer has a `date_calc` column. The column was removed
-  from the schema, the
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  function signature (`date_calc` parameter dropped), and the internal
+  from the schema, the `add_tbv()` function signature (`date_calc`
+  parameter dropped), and the internal
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   TBV write path. Users who need a date can add a custom column via
   [`mutate_table()`](https://austin-putz.github.io/tidybreed/reference/mutate_table.md).
@@ -4461,31 +4491,26 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 
 ### Bug fixes
 
-- [`upsert_ind_tbv()`](https://austin-putz.github.io/tidybreed/reference/upsert_ind_tbv.md)
-  / `upsert_ind_ebv()`: replaced the DELETE + `dbWriteTable` pattern
-  with a DuckDB-native `INSERT … ON CONFLICT DO UPDATE SET` UPSERT.
-  Previously, calling
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  (or
+- `upsert_ind_tbv()` / `upsert_ind_ebv()`: replaced the DELETE +
+  `dbWriteTable` pattern with a DuckDB-native
+  `INSERT … ON CONFLICT DO UPDATE SET` UPSERT. Previously, calling
+  `add_tbv()` (or
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md))
-  after a prior
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  that had written user-defined extra columns (e.g. `rep`) would
-  silently reset those columns to `NULL` in existing rows for other
-  traits or on re-runs without the extra-column argument. The new UPSERT
-  only updates columns that are explicitly present in the incoming data
-  frame, leaving all other columns in existing rows untouched.
+  after a prior `add_tbv()` that had written user-defined extra columns
+  (e.g. `rep`) would silently reset those columns to `NULL` in existing
+  rows for other traits or on re-runs without the extra-column argument.
+  The new UPSERT only updates columns that are explicitly present in the
+  incoming data frame, leaving all other columns in existing rows
+  untouched.
 
 ## tidybreed 0.9.5 (2026-05-01)
 
 ### Bug fixes
 
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md):
-  removed the `existing_ids` skip guard that prevented re-computing TBVs
-  for individuals already in `ind_tbv`. The guard was redundant with the
-  DELETE + INSERT logic inside
-  [`upsert_ind_tbv()`](https://austin-putz.github.io/tidybreed/reference/upsert_ind_tbv.md)
-  and blocked custom column updates (e.g. `rep`) when looping over
+- `add_tbv()`: removed the `existing_ids` skip guard that prevented
+  re-computing TBVs for individuals already in `ind_tbv`. The guard was
+  redundant with the DELETE + INSERT logic inside `upsert_ind_tbv()` and
+  blocked custom column updates (e.g. `rep`) when looping over
   replicates.
 
 ## tidybreed 0.9.4 (2026-04-29)
@@ -4536,8 +4561,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 - **Custom field forwarding in `add_*` functions**:
   [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md),
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
-  and
+  `add_tbv()`, and
   [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
   now accept `...` for custom column values that are written atomically
   with the new rows. Column types are inferred from the R type (`0L` →
@@ -4651,8 +4675,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
   [`filter()`](https://dplyr.tidyverse.org/reference/filter.html)) as
   its first argument, following the same calling convention as
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-  and
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md).
+  and `add_tbv()`.
 
 ------------------------------------------------------------------------
 
@@ -4684,10 +4707,9 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 
 ### Bug Fixes
 
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  now checks for existing TBV records before computing. Individuals that
-  already have a TBV for a requested trait are skipped with an
-  informative message rather than silently overwritten.
+- `add_tbv()` now checks for existing TBV records before computing.
+  Individuals that already have a TBV for a requested trait are skipped
+  with an informative message rather than silently overwritten.
 
 ## tidybreed 0.7.0 (2026-04-24)
 
@@ -4827,9 +4849,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 
 - `set_qtl_effects()` writes a `base_allele_freq_{trait}` column to
   `genome_meta` recording which allele frequencies were used. This
-  column is read by
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  and
+  column is read by `add_tbv()` and
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   to center TBVs: `TBV_i = (G_i − 2·p_base) · α`, ensuring `E[TBV] ≈ 0`
   for the base population.
@@ -4847,7 +4867,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
 
 - Action functions
   ([`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+  `add_tbv()`,
   [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md),
   [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md))
   fully migrated to the `tidybreed_table`-first calling convention
@@ -4905,7 +4925,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
   first to identify which table to filter. This applies to
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+  `add_tbv()`,
   [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md),
   and
   [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md).
@@ -4923,7 +4943,7 @@ name/label columns end in `_name`. 4. All ID columns start with `id_`.
   ```
 
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
+  `add_tbv()`,
   [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md),
   and
   [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
@@ -5087,8 +5107,8 @@ imprinting support, and storage of true and estimated breeding values.
   one or more traits and writes rows to `ind_phenotype`. Also computes
   and stores the underlying TBV in `ind_tbv`. Joint MVN residual draws
   when multiple traits share the subset and `R` is stored.
-- [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-  — compute and store TBV without generating phenotype records.
+- `add_tbv()` — compute and store TBV without generating phenotype
+  records.
 - [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
   — ingest externally computed estimated breeding values into `ind_ebv`,
   tagged with a user-supplied model label.
@@ -5100,9 +5120,7 @@ imprinting support, and storage of true and estimated breeding values.
 New S3 method `filter.tidybreed_pop()` stashes dplyr predicates on the
 population object. The next
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-/
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-call applies and clears them. Multiple
+/ `add_tbv()` call applies and clears them. Multiple
 [`filter()`](https://dplyr.tidyverse.org/reference/filter.html) calls
 stack with AND semantics.
 

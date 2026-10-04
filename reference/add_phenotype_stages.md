@@ -12,8 +12,9 @@ runs in three stages with a strict boundary between them:
   assignment, the residual condition value of every record, and the
   random-effect level every record touches. **No random number is drawn
   and nothing is written** (the one prerequisite write is
-  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
-  which materializes the TBVs the plan reads and is RNG-neutral).
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
+  which materializes the genetic values the plan reads and is
+  RNG-neutral).
 
 - **Stage 2 — RESOLVE**
   ([`.ap_resolve()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_resolve.md)):
@@ -61,8 +62,8 @@ added by `ALTER TABLE` earlier in the same transaction goes with it.
 `.Random.seed` is left advanced by exactly the draws made before the
 error; nothing in the package restores it, so a retry draws different
 values unless the caller re-seeds. (The
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-upsert of Stage 1 is the one write that remains; it does not depend on
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+write of Stage 1 is the one write that remains; it does not depend on
 the RNG and the retry rewrites it.)
 
 See `plans/sample_correlated_effects.md` §5.5 and D7.

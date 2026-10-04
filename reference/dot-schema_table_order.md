@@ -4,7 +4,7 @@ Option A from `plans/update_schema_print.md`: a hard-coded vector rather
 than a name-prefix rule or a `_schema_meta` column. A table added later
 and not registered here degrades *visibly* — it appears under **User
 tables** — rather than being silently misfiled by a lexical rule that
-cannot tell `ind_haplotype` (raw genome data) from `ind_tbv` (simulation
+cannot tell `ind_haplotype` (raw genome data) from `ind_tgv` (simulation
 output).
 
 ## Usage

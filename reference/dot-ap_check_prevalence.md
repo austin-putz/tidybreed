@@ -1,10 +1,11 @@
 # Refuse a prevalence threshold that has no genetic variance to use
 
-A categorical phenotype defined by `prevalence` gets its liability
-threshold from the stored additive target of its trait. A composite
-phenotype has no such target, and neither does a simple trait whose
-effects were never calibrated to one; both used to fall back silently to
-zero genetic variance.
+Runs
+[`.ap_prevalence_genetic_var()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_prevalence_genetic_var.md)
+for every categorical phenotype placed by `prevalence`, in Stage 1,
+before any `ind_tgv` write or draw. A composite phenotype is refused
+outright: its liability combines several traits and contributors, which
+no stored diagonal describes.
 
 ## Usage
 

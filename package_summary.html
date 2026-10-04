@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,24 +36,24 @@
 
 <div id="tidybreed--package-summary" class="section level1">
 
-<p><strong>Version:</strong> 0.68.4 · <strong>Snapshot date:</strong> 2026-09-16 · <strong>Branch:</strong> <code>feat/genome-effects-v49</code> (<code>a190bf4</code>)</p>
+<p><strong>Version:</strong> 0.74.0 · <strong>Snapshot date:</strong> 2026-10-04 · <strong>Branch:</strong> <code>main</code> (<code>be43687</code>)</p>
 <p>A database-first (DuckDB) breeding-program simulator in R. All genomic and individual data lives in a file-based DuckDB database rather than R memory, enabling simulations larger than RAM, resumable runs, and replicate archiving. A small Rcpp kernel handles meiosis/recombination.</p>
 <div class="section level2">
 <h2 id="highlights">Highlights<a class="anchor" aria-label="anchor" href="#highlights"></a></h2>
 <table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><tbody><tr><td>Exported functions</td>
-<td>43 (+17 S3 methods; 275 functions total incl. internals)</td>
+<td>43 (+17 S3 methods; 356 functions total incl. internals)</td>
 </tr><tr><td>R source</td>
-<td>59 files, ~20,700 lines (~5,600 of which are roxygen docs)</td>
+<td>62 files, ~23,600 lines (~6,900 of which are roxygen docs)</td>
 </tr><tr><td>C++ (Rcpp)</td>
 <td>2 files, ~220 lines (gamete/recombination kernel)</td>
 </tr><tr><td>Documentation</td>
-<td>180 man pages, 1 vignette, 1,150-line README</td>
+<td>213 man pages, 1 vignette, 1,160-line README</td>
 </tr><tr><td>Tests</td>
-<td>55 testthat files, ~17,300 lines, 794 tests, ~1,860 assertions</td>
+<td>70 testthat files, ~23,300 lines, 1021 tests, ~2,780 assertions</td>
 </tr><tr><td>Test : source ratio</td>
-<td>0.83 : 1</td>
+<td>0.99 : 1</td>
 </tr><tr><td>History</td>
-<td>199 commits, 129 released versions in NEWS.md</td>
+<td>232 commits, 145 released versions in NEWS.md</td>
 </tr><tr><td>Dependencies</td>
 <td>duckdb, DBI, dbplyr, cli, dplyr, tibble, rlang, dqrng, MASS, Rcpp</td>
 </tr></tbody></table></div>
@@ -66,40 +66,40 @@
 </tr><tr><td>S3 methods registered</td>
 <td align="right">17</td>
 </tr><tr><td>Total R function definitions</td>
-<td align="right">275</td>
+<td align="right">356</td>
 </tr><tr><td>R source files (<code>R/</code>)</td>
-<td align="right">59</td>
+<td align="right">62</td>
 </tr><tr><td>R lines of code</td>
-<td align="right">20,671</td>
+<td align="right">23,627</td>
 </tr><tr><td>Roxygen doc lines (<code>#'</code>) in <code>R/</code>
 </td>
-<td align="right">5,631</td>
+<td align="right">6,867</td>
 </tr><tr><td>C++ source files (<code>src/</code>)</td>
 <td align="right">2</td>
 </tr><tr><td>C++ lines of code</td>
 <td align="right">217</td>
 </tr><tr><td>Man pages (<code>man/*.Rd</code>)</td>
-<td align="right">180</td>
+<td align="right">213</td>
 </tr><tr><td>testthat test files</td>
-<td align="right">55</td>
+<td align="right">70</td>
 </tr><tr><td>testthat lines of code</td>
-<td align="right">17,260 (+ 4 helper files, 999 lines)</td>
+<td align="right">23,321 (+ 5 helper files, 1,059 lines)</td>
 </tr><tr><td>
 <code>test_that()</code> blocks</td>
-<td align="right">794</td>
+<td align="right">1021</td>
 </tr><tr><td>
 <code>expect_*()</code> assertions</td>
-<td align="right">1,864</td>
+<td align="right">2,782</td>
 </tr><tr><td>Vignettes</td>
-<td align="right">1 (<code>tidybreed-introduction.Rmd</code>, 649 lines)</td>
+<td align="right">1 (<code>tidybreed-introduction.Rmd</code>, 672 lines)</td>
 </tr><tr><td><code>NEWS.md</code></td>
-<td align="right">3,607 lines, 129 version headings</td>
+<td align="right">4,330 lines, 145 version headings</td>
 </tr><tr><td><code>README.md</code></td>
-<td align="right">1,149 lines</td>
+<td align="right">1,161 lines</td>
 </tr><tr><td>Design docs (<code>plans/</code>)</td>
-<td align="right">53 files, 22,798 lines</td>
+<td align="right">74 files, 31,296 lines</td>
 </tr><tr><td>Git commits</td>
-<td align="right">199</td>
+<td align="right">232</td>
 </tr></tbody></table></div>
 <div class="section level2">
 <h2 id="exported-api-43-functions">Exported API (43 functions)<a class="anchor" aria-label="anchor" href="#exported-api-43-functions"></a></h2>
@@ -113,11 +113,11 @@
 </td>
 </tr><tr><td><code>define_</code></td>
 <td>
-<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_additive_effects</code>, <code>define_genome_effect_terms</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>
+<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_additive_effects</code>, <code>define_genome_effect_terms</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>, <code>define_condition_change_action</code>
 </td>
 </tr><tr><td><code>add_</code></td>
 <td>
-<code>add_founders</code>, <code>add_offspring</code>, <code>add_phenotype</code>, <code>add_tbv</code>, <code>add_tgv</code>, <code>add_ebv</code>, <code>add_index</code>, <code>add_dosage</code>, <code>add_genotypes</code>
+<code>add_founders</code>, <code>add_offspring</code>, <code>add_phenotype</code>, <code>add_tgv</code>, <code>add_ebv</code>, <code>add_index</code>, <code>add_dosage</code>, <code>add_genotypes</code>
 </td>
 </tr><tr><td><code>mutate_</code></td>
 <td>
@@ -127,7 +127,7 @@
 <code>extract_</code> / <code>remove_</code> / <code>archive_</code>
 </td>
 <td>
-<code>extract_genotypes</code>, <code>remove_rows</code>, <code>archive_replicate</code>
+<code>extract_genotypes</code>, <code>remove_rows</code>, <code>archive_replicate</code>, <code>extract_allele_freq</code>
 </td>
 </tr><tr><td>Term builders</td>
 <td>
@@ -144,21 +144,22 @@
 <th align="right">LOC</th>
 <th>Purpose</th>
 </tr></thead><tbody><tr><td><code>schema.R</code></td>
-<td align="right">1,520</td>
+<td align="right">1,516</td>
 <td>Table registry, descriptions, <code><a href="reference/schema.html">schema()</a></code> / <code><a href="reference/describe_table.html">describe_table()</a></code>
 </td>
-</tr><tr><td><code>add_phenotype.R</code></td>
-<td align="right">1,146</td>
-<td>Phenotype simulation (composite, SGE, fixed/random effects, residuals)</td>
-</tr><tr><td><code>define_genome_effect_terms.R</code></td>
-<td align="right">917</td>
-<td>General genome-effect writer: terms, members, origins, replace modes</td>
+</tr><tr><td><code>add_phenotype_stages.R</code></td>
+<td align="right">1,357</td>
+<td>The three stages of <code><a href="reference/add_phenotype.html">add_phenotype()</a></code>
+</td>
 </tr><tr><td><code>define_additive_effects.R</code></td>
-<td align="right">912</td>
-<td>QTL effect sampling, exact calibration by congruence (<code>anchor =</code>), §6C target resolution, line/parent-origin scope</td>
+<td align="right">1,343</td>
+<td>QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope</td>
+</tr><tr><td><code>define_genome_effect_terms.R</code></td>
+<td align="right">1,007</td>
+<td>General genome-effect writer: terms, members, origins, replace modes</td>
 </tr><tr><td><code>genome_effects_eval.R</code></td>
-<td align="right">874</td>
-<td>The one evaluator behind <code><a href="reference/add_tbv.html">add_tbv()</a></code> / <code><a href="reference/add_tgv.html">add_tgv()</a></code>
+<td align="right">830</td>
+<td>The one evaluator behind <code><a href="reference/add_tgv.html">add_tgv()</a></code>
 </td>
 </tr><tr><td><code>add_offspring.R</code></td>
 <td align="right">823</td>
@@ -169,23 +170,23 @@
 <table class="table"><thead><tr><th>Test file</th>
 <th align="right">LOC</th>
 </tr></thead><tbody><tr><td><code>test-genome-effects-writer.R</code></td>
-<td align="right">991</td>
-</tr><tr><td><code>test-genome-effects-eval.R</code></td>
-<td align="right">861</td>
+<td align="right">1,215</td>
 </tr><tr><td><code>test-define_founder_haplotypes.R</code></td>
 <td align="right">803</td>
+</tr><tr><td><code>test-genome-effects-eval.R</code></td>
+<td align="right">783</td>
 </tr><tr><td><code>test-mutate_group.R</code></td>
 <td align="right">763</td>
-</tr><tr><td><code>test-genome-effects-schema.R</code></td>
-<td align="right">674</td>
-</tr><tr><td><code>test-define_index.R</code></td>
-<td align="right">644</td>
+</tr><tr><td><code>test-define_additive_effects-anchor.R</code></td>
+<td align="right">725</td>
+</tr><tr><td><code>test-add_phenotype_residuals.R</code></td>
+<td align="right">681</td>
 </tr></tbody></table></div>
 <div class="section level2">
 <h2 id="database-tables">Database Tables<a class="anchor" aria-label="anchor" href="#database-tables"></a></h2>
-<p>27 tables and 3 views in 8 groups, 201 columns in total, 201 of them described in <code>_schema_meta</code> (<code><a href="reference/schema.html">schema()</a></code>, <code><a href="reference/describe_table.html">describe_table()</a></code>).</p>
-<p>Column types: VARCHAR ×111, INTEGER ×40, DOUBLE ×32, UTINYINT ×11, BIGINT ×3, BOOLEAN ×3, DATE ×1.</p>
-<p>Keys: 22 tables declare a SQL <code>PRIMARY KEY</code>; 5 use a logical key enforced in R (<code>TABLE_ROW_KEYS</code>), by design where a DuckDB constraint would block bulk inserts or transactional replacement. <code>Archive</code> is how <code><a href="reference/archive_replicate.html">archive_replicate()</a></code> treats the table: copied and stamped <em>per replicate</em>, copied <em>once</em>, <em>reset only</em>, or <em>kept</em> in the working database.</p>
+<p>26 tables and 3 views in 8 groups, 201 columns in total, 201 of them described in <code>_schema_meta</code> (<code><a href="reference/schema.html">schema()</a></code>, <code><a href="reference/describe_table.html">describe_table()</a></code>).</p>
+<p>Column types: VARCHAR ×112, INTEGER ×39, DOUBLE ×32, UTINYINT ×11, BIGINT ×3, BOOLEAN ×3, DATE ×1.</p>
+<p>Keys: 21 tables declare a SQL <code>PRIMARY KEY</code>; 5 use a logical key enforced in R (<code>TABLE_ROW_KEYS</code>), by design where a DuckDB constraint would block bulk inserts or transactional replacement. <code>Archive</code> is how <code><a href="reference/archive_replicate.html">archive_replicate()</a></code> treats the table: copied and stamped <em>per replicate</em>, copied <em>once</em>, <em>reset only</em>, or <em>kept</em> in the working database.</p>
 <div class="section level3">
 <h3 id="genome-9">Genome (9)<a class="anchor" aria-label="anchor" href="#genome-9"></a></h3>
 <table style="width:100%;" class="table"><colgroup><col width="13%"><col width="13%"><col width="18%"><col width="13%"><col width="13%"><col width="13%"><col width="13%"></colgroup><thead><tr><th>Table</th>
@@ -347,7 +348,7 @@
 <td><code>id_trait_var_comp</code></td>
 <td><code><a href="reference/open_pop.html">open_pop()</a></code></td>
 <td>once</td>
-<td>Generation targets. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored; a block is written once, at full precision, never overwritten (0.73.0). Reserved effect_name values: ‘additive’, plus ‘dominance’ and ‘additive_by_additive’, which no generator writes yet.</td>
+<td>Generation targets: the genetic covariances the effect generators calibrate to. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. A block is written once, at full precision, and never overwritten. Reserved effect_name values: ‘additive’, plus ‘dominance’ and ‘additive_by_additive’, which no generator writes yet.</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="observation-model-5">Observation model (5)<a class="anchor" aria-label="anchor" href="#observation-model-5"></a></h3>
@@ -360,14 +361,14 @@
 <th>Description</th>
 </tr></thead><tbody><tr><td><code>phenotype_meta</code></td>
 <td>table</td>
-<td align="right">16</td>
+<td align="right">17</td>
 <td><code>id_phenotype_meta</code></td>
 <td><code><a href="reference/open_pop.html">open_pop()</a></code></td>
 <td>once</td>
 <td>Observed phenotype definitions. One row per phenotype. Manages the observation layer: type, mean, sex expression, and distributional parameters. Populated by define_phenotype().</td>
 </tr><tr><td><code>phenotype_components</code></td>
 <td>table</td>
-<td align="right">17</td>
+<td align="right">15</td>
 <td><code>id_phenotype_comp</code></td>
 <td><code><a href="reference/open_pop.html">open_pop()</a></code></td>
 <td>once</td>
@@ -396,7 +397,7 @@
 </td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>per replicate</td>
-<td>Sampled random effect levels. One row per phenotype x effect x level. Populated by add_phenotype() on first use; subsequent calls reuse the stored value for consistency.</td>
+<td>Sampled random effect levels. One row per phenotype x effect x level. Written by add_phenotype() the first time a record touches the level; every later record with that level reuses it. In a covariance block a level’s draw for one phenotype is conditional on those it has stored for the block’s other phenotypes</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="selection-1">Selection (1)<a class="anchor" aria-label="anchor" href="#selection-1"></a></h3>
@@ -416,7 +417,7 @@
 <td>Selection index definitions. One row per index x trait. A special row with index_name = NULL holds the global economic weight per trait written by define_trait(). Named indices hold selection weights from define_index().</td>
 </tr></tbody></table></div>
 <div class="section level3">
-<h3 id="results-7">Results (7)<a class="anchor" aria-label="anchor" href="#results-7"></a></h3>
+<h3 id="results-6">Results (6)<a class="anchor" aria-label="anchor" href="#results-6"></a></h3>
 <table style="width:100%;" class="table"><colgroup><col width="13%"><col width="13%"><col width="18%"><col width="13%"><col width="13%"><col width="13%"><col width="13%"></colgroup><thead><tr><th>Table</th>
 <th>Kind</th>
 <th align="right">Cols</th>
@@ -424,30 +425,23 @@
 <th>Created by</th>
 <th>Archive</th>
 <th>Description</th>
-</tr></thead><tbody><tr><td><code>ind_tbv</code></td>
-<td>table</td>
-<td align="right">4</td>
-<td><code>id_tbv</code></td>
-<td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
-<td>per replicate</td>
-<td>True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects.</td>
-</tr><tr><td><code>ind_tgv</code></td>
+</tr></thead><tbody><tr><td><code>ind_tgv</code></td>
 <td>table</td>
 <td align="right">5</td>
 <td><code>id_tgv</code></td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>per replicate</td>
-<td>True genetic values (simulation ground truth): the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv(). The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count.</td>
+<td>True genetic values (simulation ground truth), the one table of genetic values: the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv() (and add_phenotype(), which calls it). The breeding value is component ‘additive’ for generated effects. The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count.</td>
 </tr><tr><td><code>ind_tgv_total</code></td>
 <td>view</td>
 <td align="right">3</td>
 <td>—</td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>kept</td>
-<td>View: the total genetic value per individual x trait, summing every component of ind_tgv. Derived rather than stored so it can never disagree with its parts.</td>
+<td>View: the total genetic value per individual x trait, summing every component of ind_tgv exactly (DECIMAL accumulation, so the result does not depend on the thread count). Derived rather than stored so it can never disagree with its parts. Phenotypes read this by default.</td>
 </tr><tr><td><code>ind_phenotype</code></td>
 <td>table</td>
-<td align="right">5</td>
+<td align="right">9</td>
 <td><code>id_phenotype</code></td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>per replicate</td>
@@ -468,11 +462,11 @@
 <td>Computed selection index values. One row per individual x index x run. Multiple runs are distinguished by index_number. Populated by add_index().</td>
 </tr><tr><td><code>ind_true_index</code></td>
 <td>table</td>
-<td align="right">5</td>
+<td align="right">6</td>
 <td><code>id_true_index</code></td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>per replicate</td>
-<td>True selection index values computed from TBVs. One row per individual x index x weight type. Populated by add_tbv() when index_names is supplied.</td>
+<td>True selection index values computed from ind_tgv. One row per individual x index x weight type x component. Populated by add_tgv() when index_names is supplied.</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="system-1">System (1)<a class="anchor" aria-label="anchor" href="#system-1"></a></h3>

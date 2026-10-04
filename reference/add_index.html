@@ -7,16 +7,18 @@ The first argument must be a tidybreed_table obtained from get_table()
 (optionally filtered). The table must contain id_ind, a trait/phenotype
 name column, and a numeric value column (value_col). For ind_phenotype
 the name column is phenotype_name; for every other table (ind_ebv,
-ind_tbv, or a user-defined table) it is trait_name — this is detected
+ind_tgv, or a user-defined table) it is trait_name — this is detected
 automatically from the table's columns. Works with ind_ebv (EBVs),
-ind_phenotype (phenotypes), ind_tbv (TBVs), or any user-defined table
-with the same structure.
+ind_phenotype (phenotypes), ind_tgv (true genetic values; filter it to
+one component_name, e.g. &quot;additive&quot; for breeding values), or any
+user-defined table with the same structure.
 Uniqueness requirement
 
 
 There must be exactly one row per (id_ind, trait_name) after any filter is
 applied. If duplicates remain, an error is thrown — filter the table down to
-a single model, evaluation, or phenotype record before calling add_index().
+a single model, evaluation, phenotype record, or ind_tgv component before
+calling add_index(). Values are never summed across rows.
 
 
 
@@ -35,16 +37,18 @@ The first argument must be a tidybreed_table obtained from get_table()
 (optionally filtered). The table must contain id_ind, a trait/phenotype
 name column, and a numeric value column (value_col). For ind_phenotype
 the name column is phenotype_name; for every other table (ind_ebv,
-ind_tbv, or a user-defined table) it is trait_name — this is detected
+ind_tgv, or a user-defined table) it is trait_name — this is detected
 automatically from the table's columns. Works with ind_ebv (EBVs),
-ind_phenotype (phenotypes), ind_tbv (TBVs), or any user-defined table
-with the same structure.
+ind_phenotype (phenotypes), ind_tgv (true genetic values; filter it to
+one component_name, e.g. &quot;additive&quot; for breeding values), or any
+user-defined table with the same structure.
 Uniqueness requirement
 
 
 There must be exactly one row per (id_ind, trait_name) after any filter is
 applied. If duplicates remain, an error is thrown — filter the table down to
-a single model, evaluation, or phenotype record before calling add_index().
+a single model, evaluation, phenotype record, or ind_tgv component before
+calling add_index(). Values are never summed across rows.
 
 
 
@@ -63,7 +67,7 @@ before any rows are written.
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,16 +104,18 @@ Results are appended to the <code>ind_index</code> table with an auto-incrementi
 (optionally filtered). The table must contain <code>id_ind</code>, a trait/phenotype
 name column, and a numeric value column (<code>value_col</code>). For <code>ind_phenotype</code>
 the name column is <code>phenotype_name</code>; for every other table (<code>ind_ebv</code>,
-<code>ind_tbv</code>, or a user-defined table) it is <code>trait_name</code> — this is detected
+<code>ind_tgv</code>, or a user-defined table) it is <code>trait_name</code> — this is detected
 automatically from the table's columns. Works with <code>ind_ebv</code> (EBVs),
-<code>ind_phenotype</code> (phenotypes), <code>ind_tbv</code> (TBVs), or any user-defined table
-with the same structure.</p><div class="section">
+<code>ind_phenotype</code> (phenotypes), <code>ind_tgv</code> (true genetic values; filter it to
+one <code>component_name</code>, e.g. <code>"additive"</code> for breeding values), or any
+user-defined table with the same structure.</p><div class="section">
 <h3 id="uniqueness-requirement">Uniqueness requirement<a class="anchor" aria-label="anchor" href="#uniqueness-requirement"></a></h3>
 
 
 <p>There must be exactly one row per <code>(id_ind, trait_name)</code> after any filter is
 applied. If duplicates remain, an error is thrown — filter the table down to
-a single model, evaluation, or phenotype record before calling <code>add_index()</code>.</p>
+a single model, evaluation, phenotype record, or <code>ind_tgv</code> component before
+calling <code>add_index()</code>. Values are never summed across rows.</p>
 </div>
 
 <div class="section">
@@ -143,7 +149,7 @@ before any rows are written.</p>
 <dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code> (optionally filtered).
 Must contain <code>id_ind</code>, a name column (<code>trait_name</code>, or <code>phenotype_name</code>
 for <code>ind_phenotype</code>), and the column specified by <code>value_col</code>. Any table
-with this structure is accepted: <code>ind_ebv</code>, <code>ind_phenotype</code>, <code>ind_tbv</code>,
+with this structure is accepted: <code>ind_ebv</code>, <code>ind_phenotype</code>, <code>ind_tgv</code>,
 or a custom table.</p></dd>
 
 
@@ -156,7 +162,7 @@ already exist in <code>index_meta</code> (created via <code><a href="define_inde
 <dd><p>Character scalar or <code>NULL</code>. The column in <code>tbl</code> that holds
 the numeric value to weight. When <code>NULL</code> (default), auto-detected from the
 table name: <code>ind_ebv</code> → <code>"ebv_value"</code>, <code>ind_phenotype</code> → <code>"pheno_value"</code>,
-<code>ind_tbv</code> → <code>"tbv_value"</code>. An error is thrown for unknown tables if
+<code>ind_tgv</code> → <code>"tgv_value"</code>. An error is thrown for unknown tables if
 <code>value_col</code> is not supplied.</p></dd>
 
 
@@ -185,7 +191,7 @@ over <code>overwrite_index</code>. Default <code>FALSE</code>.</p></dd>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="define_index.html">define_index()</a></code>, <code><a href="get_table.html">get_table()</a></code>, <code><a href="add_ebv.html">add_ebv()</a></code>, <code><a href="add_phenotype.html">add_phenotype()</a></code>,
-<code><a href="add_tbv.html">add_tbv()</a></code></p></div>
+<code><a href="add_tgv.html">add_tgv()</a></code></p></div>
     </div>
 
     <div class="section level2">
@@ -203,9 +209,11 @@ over <code>overwrite_index</code>. Default <code>FALSE</code>.</p></dd>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">pheno_number</span> <span class="op">==</span> <span class="fl">1L</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">add_index</span><span class="op">(</span><span class="st">"terminal"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Compute true-value index from TBVs (value_col auto-detected)</span></span></span>
+<span class="r-in"><span><span class="co"># Compute a true-value index from breeding values (value_col auto-detected);</span></span></span>
+<span class="r-in"><span><span class="co"># ind_tgv has one row per component, so filter to one</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tbv"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_tgv"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">component_name</span> <span class="op">==</span> <span class="st">"additive"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">add_index</span><span class="op">(</span><span class="st">"terminal"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Explicit value_col for a user-defined table</span></span></span>

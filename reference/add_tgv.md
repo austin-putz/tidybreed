@@ -4,26 +4,34 @@ Evaluates the stored effect model for each individual in the current
 subset and writes the result to `ind_tgv`, one row per (individual x
 trait x **component**). The total is the derived view `ind_tgv_total`,
 never a stored row — a stored total would make every `SUM(tgv_value)`
-double-count.
+double-count. This is the one table of true genetic values:
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+calls this function for every trait a phenotype reads, and reads the
+total (or the components `phenotype_components.component_names` lists)
+from it.
 
-Unlike
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md),
-this evaluates **every** term of the trait: additive, dominance,
-hand-entered genotype surfaces and multi-locus interactions, under every
-effect owner. `component_name` records how each term was *declared*:
+Every term of the trait is evaluated: additive, dominance, hand-entered
+genotype surfaces and multi-locus interactions, under every effect
+owner. `component_name` records how each term was declared:
 
 |  |  |
 |----|----|
 | `component_name` | Terms it collects |
-| `"order1_additive"` | single-member terms whose contrast is `additive` |
-| `"order1_dominance"` | single-member `dominance` terms |
-| `"order1_other"` | single-member `indicator` terms (a hand-entered surface) |
-| `"interaction"` | any term with two or more members |
+| `"additive"` | one-locus terms whose contrast is `additive` |
+| `"dominance"` | one-locus `dominance` terms |
+| `"indicator"` | one-locus `indicator` terms (a hand-entered genotype surface) |
+| `"interaction"` | any term over two or more loci |
 
-These are **model-structure components, not variance components.** A
-functional A x A term contributes to \\V_A\\, \\V_D\\ *and* \\V_I\\ in
-the statistical sense; the names carry the declared order precisely so
-they cannot be read as an orthogonal decomposition.
+**The breeding value is `component_name = "additive"`** for effects
+written in statistical coding at a single base allele frequency per
+locus, which is what the generators
+([`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md))
+write. For hand-written functional terms
+([`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
+with `coding = "functional"`, or an `indicator` surface) `additive` is
+the functional additive effect, not the breeding value: under functional
+coding the average effect is \\\alpha = a + d(q - p)\\, and under
+epistasis it depends on other loci and on LD.
 
 `ind_tgv` stores the **raw sum of the stored terms — no mean is added.**
 A pure Cockerham model yields centered deviations; a raw `indicator`
@@ -32,14 +40,44 @@ construction, and is not silently re-centered. See
 [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md),
 which reports the implied genetic mean and writes it nowhere.
 
-Writes are idempotent: an individual's rows for a trait are replaced, so
-re-evaluating after changing the effect model never leaves stale
-components behind.
+Each allele copy takes the **most specific** variant whose origin
+predicate matches its `(line_origin, parent_origin)` label, falling back
+per copy to the common variant. This per-copy fallback is what makes
+crossbred genetic values correct — e.g. a Duroc x Landrace F1 is
+centered against each parent line's own effects and base allele
+frequency. **Imprinting** is a property of the effect, not of the trait:
+a term scoped to one `parent_origin` reads only that parent's allele
+copies.
+
+Re-evaluating replaces an individual's rows for a trait: a component the
+model no longer has is deleted, so no stale component survives, and a
+component that is still there is updated in place, keeping any custom
+columns added to it.
+
+Optionally computes true selection index values by multiplying per-trait
+genetic values (`component_name`, default the breeding value) by weights
+from named indices defined with
+[`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
+and writes them to `ind_true_index`.
+
+Every individual in the subset receives a value for every requested
+trait — unlike
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+no sex-expression rule is applied here (`expressed_sex` is a property of
+`phenotype_meta`, not of a genetic trait).
 
 ## Usage
 
 ``` r
-add_tgv(tbl, trait_name = NULL)
+add_tgv(
+  tbl,
+  trait_name = NULL,
+  index_names = NULL,
+  weight_type = c("index", "economic", "both"),
+  component_name = "additive",
+  overwrite_index = FALSE,
+  ...
+)
 ```
 
 ## Arguments
@@ -62,6 +100,41 @@ add_tgv(tbl, trait_name = NULL)
   Character vector of trait name(s). When `NULL` (default), all traits
   in `trait_meta` are used (in `id_trait` order).
 
+- index_names:
+
+  Character vector of named index(es) from `index_meta` for which true
+  index values are computed and written to `ind_true_index`. When `NULL`
+  (default), no true index is computed. Every index trait must have an
+  `ind_tgv` row for every individual of the subset (computed by this
+  call or an earlier one).
+
+- weight_type:
+
+  Which weight column from `index_meta` to use: `"index"` uses
+  `index_weight`, `"economic"` uses `economic_weight`, `"both"` computes
+  and stores both (distinguished by `ind_true_index.weight_type`).
+  Defaults to `"index"`.
+
+- component_name:
+
+  Which genetic value the true index weights: one of `"additive"`
+  (default — selection indices are on breeding values), `"dominance"`,
+  `"indicator"`, `"interaction"`, or `"total"` (the `ind_tgv_total`
+  view). A component the trait's model has no terms for contributes 0.
+  Stored in `ind_true_index.component_name`.
+
+- overwrite_index:
+
+  Logical. When `FALSE` (default), individuals that already have a true
+  index value for the given `(index_name, weight_type, component_name)`
+  are skipped. When `TRUE`, existing rows are deleted and recomputed
+  (use when index weights have changed).
+
+- ...:
+
+  Optional extra columns written to `ind_tgv` (scalars only; broadcast
+  to every row written).
+
 ## Value
 
 The modified `tidybreed_pop` (invisibly).
@@ -79,12 +152,13 @@ high-order scoped term fails loudly instead of appearing to hang.
 
 ## See also
 
-[`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
-for the breeding value,
 [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 and
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-for writing the terms this evaluates.
+for writing the terms this evaluates,
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+[`define_index()`](https://austin-putz.github.io/tidybreed/reference/define_index.md),
+[`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md).
 
 ## Examples
 
@@ -96,8 +170,16 @@ pop <- pop |>
   dplyr::filter(gen == 2L) |>
   add_tgv("ADG")
 
-# The components, and the derived total
-pop |> get_table("ind_tgv") |> dplyr::collect()
+# The breeding values, and the derived total
+pop |> get_table("ind_tgv") |>
+  dplyr::filter(component_name == "additive") |> dplyr::collect()
 pop |> get_table("ind_tgv_total") |> dplyr::collect()
+
+# Genetic values + true index values (index and economic weights) on the
+# breeding values, written to ind_true_index
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen == 2L) |>
+  add_tgv(c("ADG", "BW"), index_names = "terminal", weight_type = "both")
 } # }
 ```
