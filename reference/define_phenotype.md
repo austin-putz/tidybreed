@@ -86,7 +86,21 @@ define_phenotype(
 
   Numeric between 0 and 1. For categorical traits with one threshold
   (two categories), the fraction expected above the threshold. Mutually
-  exclusive with `thresholds`.
+  exclusive with `thresholds`. The threshold is placed on the liability
+  scale from `mean`, the unconditional residual variance and the trait's
+  stored additive target (`trait_var_comp`, `effect_name = "additive"`),
+  so
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  errors when no target is stored. The target is taken as given: if the
+  trait's effects were written without being calibrated to it (manual
+  `effects`, or `scale_to_target = FALSE` in
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)),
+  the threshold describes a variance the model does not deliver and the
+  realised prevalence is wrong, with no error. Give `thresholds` for
+  such a trait. Not valid for composite phenotypes (`components` or
+  `formula_tbv`): their genetic liability combines several traits and
+  contributors, which no stored variance describes. Give `thresholds`
+  instead.
 
 - thresholds:
 
@@ -247,8 +261,7 @@ The modified `tidybreed_pop` (invisibly).
 
 [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md),
 [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md),
-[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
-[`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
+[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
 
 ## Examples
 
@@ -256,9 +269,9 @@ The modified `tidybreed_pop` (invisibly).
 if (FALSE) { # \dontrun{
 # ── Simple continuous trait ──────────────────────────────────────────────
 pop <- pop |>
-  define_trait("ADG", target_add_var = 100) |>
+  define_trait("ADG") |>
   get_table("genome_meta") |>
-  define_additive_effects("ADG") |>
+  define_additive_effects("ADG", G = 100) |>
   define_phenotype("ADG",
     type         = "continuous",
     mean         = 850,
@@ -266,9 +279,9 @@ pop <- pop |>
 
 # ── Count trait with clipping bounds ────────────────────────────────────
 pop <- pop |>
-  define_trait("NW", target_add_var = 2) |>
+  define_trait("NW") |>
   get_table("genome_meta") |>
-  define_additive_effects("NW") |>
+  define_additive_effects("NW", G = 2) |>
   define_phenotype("NW",
     type         = "count",
     mean         = 10,
@@ -278,9 +291,9 @@ pop <- pop |>
 
 # ── Categorical trait (binary via prevalence) ────────────────────────────
 pop <- pop |>
-  define_trait("mort", target_add_var = 0.05) |>
+  define_trait("mort") |>
   get_table("genome_meta") |>
-  define_additive_effects("mort") |>
+  define_additive_effects("mort", G = 0.05) |>
   define_phenotype("mort",
     type       = "categorical",
     prevalence = 0.05,

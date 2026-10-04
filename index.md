@@ -578,7 +578,8 @@ holding the per-locus frequency of the pool **written most recently**.
 > [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md);
 > `base = "founder_haplotypes"` recomputes the base frequency by pooling
 > **all** lines together (which overstates within-line heterozygosity —
-> Wahlund — and under-scales `target_add_var`).
+> Wahlund — and under-scales the effects against the stored additive
+> target).
 
 ### 4. Add founder individuals
 
@@ -722,7 +723,7 @@ what is going on.
 ### 7. Define variance components
 
 Use a single entry point for all variance/covariance matrices.
-`effect_name = "gen_add"` routes to `trait_var_comp`; `"residual"` and
+`effect_name = "additive"` routes to `trait_var_comp`; `"residual"` and
 named random effects (e.g. `"pen"`) route to `phenotype_var_comp`.
 
 ``` r
@@ -736,9 +737,11 @@ vars.mat.add <- matrix(c(
   dimnames = list(c("ADG", "WWD", "WWM"),
                   c("ADG", "WWD", "WWM")))
 
-# store matrix in a table called 'trait_var_comp'
+# store matrix in a table called 'trait_var_comp' (written once: a stored
+# genetic block is never overwritten; define_additive_effects(G = ) can write
+# it together with the effects instead)
 pop <- pop |>
-  define_effect_cov_matrix(effect_name = "gen_add", cov_matrix = vars.mat.add)
+  define_effect_cov_matrix(effect_name = "additive", cov_matrix = vars.mat.add)
 
 # Residual (co)variance — 2 phenotypes (ADG, WW)
 vars.mat.res <- matrix(c(
@@ -773,7 +776,6 @@ pop <- pop |>
     trait_name      = "ADG",
     description     = "Average Daily Gain",
     units           = "kg/d",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   )
 ```
@@ -811,14 +813,12 @@ pop <- pop |>
     trait_name      = "WWD",
     description     = "Weaning Weight - Direct",
     units           = "kg",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   ) |>
   define_trait(
     trait_name      = "WWM",
     description     = "Weaning Weight - Maternal",
     units           = "kg",
-    target_add_mean = 0,      # TBV mean in base population
     overwrite       = TRUE
   )
 
@@ -1259,7 +1259,6 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | Function | Purpose |
 |----|----|
 | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | Register a genetic-layer trait in `trait_meta` |
-| [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md) | Convenience wrapper: [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) + [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) |
 | [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | Register an observed phenotype in `phenotype_meta` |
 | [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) | Assign QTL effects to filtered loci (single or correlated multi-trait) |
 | [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md) | Load a (co)variance matrix into `trait_var_comp` or `phenotype_var_comp` |

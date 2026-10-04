@@ -5,14 +5,14 @@ concrete — an arbitrary function of a finite set of genotype states is a
 sum of indicator terms, so a hand-entered surface needs no second
 representation, only rows.
 A cell you leave out is a term you did not write, contributing zero. Ask for
-the opposite with define_genome_effects(require_complete = TRUE), which
+the opposite with define_genome_effect_terms(require_complete = TRUE), which
 then demands every reachable (copy_count, dosage) state."><meta property="og:description" content="Turns a genotype-by-value table into indicator terms: one term per row of
 genotypes, one member per locus column. This is indicator completeness made
 concrete — an arbitrary function of a finite set of genotype states is a
 sum of indicator terms, so a hand-entered surface needs no second
 representation, only rows.
 A cell you leave out is a term you did not write, contributing zero. Ask for
-the opposite with define_genome_effects(require_complete = TRUE), which
+the opposite with define_genome_effect_terms(require_complete = TRUE), which
 then demands every reachable (copy_count, dosage) state."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
@@ -21,7 +21,7 @@ then demands every reachable (copy_count, dosage) state."><meta property="og:ima
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,7 @@ concrete — an arbitrary function of a finite set of genotype states <em>is</em
 sum of indicator terms, so a hand-entered surface needs no second
 representation, only rows.</p>
 <p>A cell you leave out is a term you did not write, contributing zero. Ask for
-the opposite with <code>define_genome_effects(require_complete = TRUE)</code>, which
+the opposite with <code>define_genome_effect_terms(require_complete = TRUE)</code>, which
 then demands every reachable <code>(copy_count, dosage)</code> state.</p>
     </div>
 
@@ -108,7 +108,7 @@ contribute nothing. Default <code>TRUE</code>.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_genome_effects.html">define_genome_effects()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>.</p></div>
     </div>
 
     <div class="section level2">
@@ -116,7 +116,7 @@ contribute nothing. Default <code>TRUE</code>.</p></dd>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="va">cells</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Locus_10 <span class="op">=</span> <span class="fl">0</span><span class="op">:</span><span class="fl">2</span>, Locus_44 <span class="op">=</span> <span class="fl">0</span><span class="op">:</span><span class="fl">2</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">vals</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>,  <span class="fl">0</span>, <span class="fl">1.4</span>, <span class="fl">2.1</span>,  <span class="fl">0</span>, <span class="fl">2.1</span>, <span class="fl">3.6</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_genome_effects.html">define_genome_effects</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_genome_effect_terms.html">define_genome_effect_terms</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"ADG"</span>, <span class="fu">genotype_terms</span><span class="op">(</span><span class="va">cells</span>, <span class="va">vals</span><span class="op">)</span>, effect_owner <span class="op">=</span> <span class="st">"epistasis_AxA"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

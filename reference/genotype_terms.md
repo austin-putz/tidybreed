@@ -7,8 +7,9 @@ genotype states *is* a sum of indicator terms, so a hand-entered surface
 needs no second representation, only rows.
 
 A cell you leave out is a term you did not write, contributing zero. Ask
-for the opposite with `define_genome_effects(require_complete = TRUE)`,
-which then demands every reachable `(copy_count, dosage)` state.
+for the opposite with
+`define_genome_effect_terms(require_complete = TRUE)`, which then
+demands every reachable `(copy_count, dosage)` state.
 
 ## Usage
 
@@ -57,7 +58,7 @@ A `terms` data frame with `nrow(genotypes) * ncol(genotypes)` rows
 
 ## See also
 
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md),
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
 [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md).
 
 ## Examples
@@ -66,7 +67,7 @@ A `terms` data frame with `nrow(genotypes) * ncol(genotypes)` rows
 if (FALSE) { # \dontrun{
 cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
 vals  <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-pop <- pop |> define_genome_effects(
+pop <- pop |> define_genome_effect_terms(
   "ADG", genotype_terms(cells, vals), effect_owner = "epistasis_AxA")
 } # }
 ```

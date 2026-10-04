@@ -17,7 +17,7 @@ id_ind table the frequency depends only on which individuals are selected,
 never on how many rows each has — ind_phenotype with five records per
 animal gives the same answer as ind_meta for the same animals.
 This is the single place tidybreed turns a population selection into p.
-define_additive_effects() and define_genome_effects() both call it for
+define_additive_effects() and define_genome_effect_terms() both call it for
 their base_tbl, so a base selection means the same population in either.
 Users call it to obtain p for ad_terms()."><meta property="og:description" content="Computes the frequency of allele 1 at every locus in genome_meta from the
 allele copies a filtered tidybreed_table selects. The table's identity
@@ -37,7 +37,7 @@ id_ind table the frequency depends only on which individuals are selected,
 never on how many rows each has — ind_phenotype with five records per
 animal gives the same answer as ind_meta for the same animals.
 This is the single place tidybreed turns a population selection into p.
-define_additive_effects() and define_genome_effects() both call it for
+define_additive_effects() and define_genome_effect_terms() both call it for
 their base_tbl, so a base selection means the same population in either.
 Users call it to obtain p for ad_terms()."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -47,7 +47,7 @@ Users call it to obtain p for ad_terms()."><meta property="og:image" content="ht
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,7 +85,7 @@ a subquery; nothing but the per-locus result is collected into R. For an
 never on how many rows each has — <code>ind_phenotype</code> with five records per
 animal gives the same answer as <code>ind_meta</code> for the same animals.</p>
 <p>This is the single place tidybreed turns a population selection into <code>p</code>.
-<code><a href="define_additive_effects.html">define_additive_effects()</a></code> and <code><a href="define_genome_effects.html">define_genome_effects()</a></code> both call it for
+<code><a href="define_additive_effects.html">define_additive_effects()</a></code> and <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> both call it for
 their <code>base_tbl</code>, so a base selection means the same population in either.
 Users call it to obtain <code>p</code> for <code><a href="ad_terms.html">ad_terms()</a></code>.</p>
     </div>
@@ -127,7 +127,7 @@ Duroc copies wherever they sit, at any cross depth.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="define_genome_effects.html">define_genome_effects()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>.</p></div>
     </div>
 
     <div class="section level2">

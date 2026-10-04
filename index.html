@@ -32,7 +32,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,7 +75,7 @@ tidybreed
 <strong>Breeding program simulation, backed by DuckDB, driven by <code>dplyr</code>.</strong>
 </p>
 <p align="left">
-<a href="https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&amp;style=for-the-badge&amp;label=R-CMD-check&amp;logo=githubactions&amp;logoColor=white" alt="R-CMD-check"></a> <a href="https://austin-putz.github.io/tidybreed/"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&amp;style=for-the-badge&amp;label=pkgdown&amp;logo=githubactions&amp;logoColor=white" alt="pkgdown"></a> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge" alt="Lifecycle: experimental"></a> <a href="https://github.com/austin-putz/tidybreed/releases" class="external-link"><img src="https://img.shields.io/badge/version-0.71.0-4ecdc4.svg?style=for-the-badge" alt="Version"></a> <a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge" alt="License: MIT"></a>
+<a href="https://github.com/austin-putz/tidybreed/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/R-CMD-check.yaml?branch=main&amp;style=for-the-badge&amp;label=R-CMD-check&amp;logo=githubactions&amp;logoColor=white" alt="R-CMD-check"></a> <a href="https://austin-putz.github.io/tidybreed/"><img src="https://img.shields.io/github/actions/workflow/status/austin-putz/tidybreed/pkgdown.yaml?branch=main&amp;style=for-the-badge&amp;label=pkgdown&amp;logo=githubactions&amp;logoColor=white" alt="pkgdown"></a> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-f5a623.svg?style=for-the-badge" alt="Lifecycle: experimental"></a> <a href="https://github.com/austin-putz/tidybreed/releases" class="external-link"><img src="https://img.shields.io/badge/version-0.71.1-4ecdc4.svg?style=for-the-badge" alt="Version"></a> <a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge" alt="License: MIT"></a>
 </p>
 <p align="left">
 <a href="https://www.r-project.org" class="external-link"><img src="https://img.shields.io/badge/R-%3E%3D%204.1-276DC3.svg?style=for-the-badge&amp;logo=r&amp;logoColor=white" alt="R"></a> <a href="https://duckdb.org" class="external-link"><img src="https://img.shields.io/badge/database-DuckDB-FFF000.svg?style=for-the-badge&amp;logo=duckdb&amp;logoColor=black" alt="DuckDB"></a> <a href="https://isocpp.org" class="external-link"><img src="https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=for-the-badge&amp;logo=cplusplus&amp;logoColor=white" alt="C++17"></a> <a href="https://www.tidyverse.org" class="external-link"><img src="https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&amp;logo=tidyverse&amp;logoColor=white" alt="tidyverse"></a> <a href="https://testthat.r-lib.org" class="external-link"><img src="https://img.shields.io/badge/testing-testthat-1f9c5a.svg?style=for-the-badge" alt="Testing: testthat"></a>
@@ -592,7 +592,7 @@ tidybreed
 <p>Calling with <code>line_name = NULL</code> (the default) stores one shared pool that <code><a href="reference/add_founders.html">add_founders()</a></code> falls back to when no named pool exists for the line it is building. Calling again with a <code>line_name</code> that already has a pool — or again with <code>NULL</code> once a <code>NULL</code>-line pool exists — is an error.</p>
 <p>Every call also writes a <code>founder_allele_freq</code> column to <code>genome_meta</code> holding the per-locus frequency of the pool <strong>written most recently</strong>.</p>
 <blockquote>
-<p>[!NOTE] <code>founder_allele_freq</code> is informational only — no other tidybreed function reads it, and each call rewrites it for every locus, so in a multi-line setup it describes only the last pool written. For per-line Falconer centering use <code>base = "current_pop"</code> with a line-filtered <code>base_tbl</code> in <code><a href="reference/define_additive_effects.html">define_additive_effects()</a></code>; <code>base = "founder_haplotypes"</code> recomputes the base frequency by pooling <strong>all</strong> lines together (which overstates within-line heterozygosity — Wahlund — and under-scales <code>target_add_var</code>).</p>
+<p>[!NOTE] <code>founder_allele_freq</code> is informational only — no other tidybreed function reads it, and each call rewrites it for every locus, so in a multi-line setup it describes only the last pool written. For per-line Falconer centering use <code>base = "current_pop"</code> with a line-filtered <code>base_tbl</code> in <code><a href="reference/define_additive_effects.html">define_additive_effects()</a></code>; <code>base = "founder_haplotypes"</code> recomputes the base frequency by pooling <strong>all</strong> lines together (which overstates within-line heterozygosity — Wahlund — and under-scales the effects against the stored additive target).</p>
 </blockquote>
 </div>
 <div class="section level3">
@@ -728,7 +728,7 @@ tidybreed
 <div class="section level3">
 <h3 id="id_7-define-variance-components">7. Define variance components<a class="anchor" aria-label="anchor" href="#id_7-define-variance-components"></a>
 </h3>
-<p>Use a single entry point for all variance/covariance matrices. <code>effect_name = "gen_add"</code> routes to <code>trait_var_comp</code>; <code>"residual"</code> and named random effects (e.g. <code>"pen"</code>) route to <code>phenotype_var_comp</code>.</p>
+<p>Use a single entry point for all variance/covariance matrices. <code>effect_name = "additive"</code> routes to <code>trait_var_comp</code>; <code>"residual"</code> and named random effects (e.g. <code>"pen"</code>) route to <code>phenotype_var_comp</code>.</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Additive genetic (co)variance — 3 traits (ADG, WWD, WWM)</span></span>
 <span><span class="va">vars.mat.add</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -739,9 +739,11 @@ tidybreed
 <span>  dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"WWD"</span>, <span class="st">"WWM"</span><span class="op">)</span>,</span>
 <span>                  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"WWD"</span>, <span class="st">"WWM"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># store matrix in a table called 'trait_var_comp'</span></span>
+<span><span class="co"># store matrix in a table called 'trait_var_comp' (written once: a stored</span></span>
+<span><span class="co"># genetic block is never overwritten; define_additive_effects(G = ) can write</span></span>
+<span><span class="co"># it together with the effects instead)</span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="reference/define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span>effect_name <span class="op">=</span> <span class="st">"gen_add"</span>, cov_matrix <span class="op">=</span> <span class="va">vars.mat.add</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="reference/define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span>effect_name <span class="op">=</span> <span class="st">"additive"</span>, cov_matrix <span class="op">=</span> <span class="va">vars.mat.add</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Residual (co)variance — 2 phenotypes (ADG, WW)</span></span>
 <span><span class="va">vars.mat.res</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -773,7 +775,6 @@ tidybreed
 <span>    trait_name      <span class="op">=</span> <span class="st">"ADG"</span>,</span>
 <span>    description     <span class="op">=</span> <span class="st">"Average Daily Gain"</span>,</span>
 <span>    units           <span class="op">=</span> <span class="st">"kg/d"</span>,</span>
-<span>    target_add_mean <span class="op">=</span> <span class="fl">0</span>,      <span class="co"># TBV mean in base population</span></span>
 <span>    overwrite       <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
 <p><strong>Observation layer</strong> (<code>define_phenotype</code>) — what animals actually receive records for:</p>
@@ -795,14 +796,12 @@ tidybreed
 <span>    trait_name      <span class="op">=</span> <span class="st">"WWD"</span>,</span>
 <span>    description     <span class="op">=</span> <span class="st">"Weaning Weight - Direct"</span>,</span>
 <span>    units           <span class="op">=</span> <span class="st">"kg"</span>,</span>
-<span>    target_add_mean <span class="op">=</span> <span class="fl">0</span>,      <span class="co"># TBV mean in base population</span></span>
 <span>    overwrite       <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/define_trait.html">define_trait</a></span><span class="op">(</span></span>
 <span>    trait_name      <span class="op">=</span> <span class="st">"WWM"</span>,</span>
 <span>    description     <span class="op">=</span> <span class="st">"Weaning Weight - Maternal"</span>,</span>
 <span>    units           <span class="op">=</span> <span class="st">"kg"</span>,</span>
-<span>    target_add_mean <span class="op">=</span> <span class="fl">0</span>,      <span class="co"># TBV mean in base population</span></span>
 <span>    overwrite       <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
@@ -1389,11 +1388,6 @@ tidybreed
 <tr>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>Register a genetic-layer trait in <code>trait_meta</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/define_trait_simple.html">define_trait_simple()</a></code></td>
-<td>Convenience wrapper: <code><a href="reference/define_trait.html">define_trait()</a></code> + <code><a href="reference/define_additive_effects.html">define_additive_effects()</a></code>
 </td>
 </tr>
 <tr>

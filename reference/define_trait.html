@@ -4,14 +4,22 @@ quantity with QTL effects in genome_effects, TBVs in ind_tbv, and
 additive genetic variance in trait_var_comp. Contains no
 phenotype-level information.
 To register the observed phenotype that individuals receive records for,
-call define_phenotype() after this function. For the common one-off case
-use define_trait_simple(), which chains both steps together."><meta property="og:description" content="Creates one row in trait_meta describing a genetic component trait: a
+call define_phenotype() after this function.
+The trait's genetic targets are not set here. Store them with
+define_effect_cov_matrix() (effect_name = &quot;additive&quot;), or pass G to
+define_additive_effects(), which writes the target together with the
+effects calibrated to it. The usual chain is define_trait() →
+define_additive_effects(G = ) → define_phenotype()."><meta property="og:description" content="Creates one row in trait_meta describing a genetic component trait: a
 quantity with QTL effects in genome_effects, TBVs in ind_tbv, and
 additive genetic variance in trait_var_comp. Contains no
 phenotype-level information.
 To register the observed phenotype that individuals receive records for,
-call define_phenotype() after this function. For the common one-off case
-use define_trait_simple(), which chains both steps together."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+call define_phenotype() after this function.
+The trait's genetic targets are not set here. Store them with
+define_effect_cov_matrix() (effect_name = &quot;additive&quot;), or pass G to
+define_additive_effects(), which writes the target together with the
+effects calibrated to it. The usual chain is define_trait() →
+define_additive_effects(G = ) → define_phenotype()."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -19,7 +27,7 @@ use define_trait_simple(), which chains both steps together."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,8 +61,12 @@ quantity with QTL effects in <code>genome_effects</code>, TBVs in <code>ind_tbv<
 additive genetic variance in <code>trait_var_comp</code>. Contains no
 phenotype-level information.</p>
 <p>To register the <strong>observed phenotype</strong> that individuals receive records for,
-call <code><a href="define_phenotype.html">define_phenotype()</a></code> after this function. For the common one-off case
-use <code><a href="define_trait_simple.html">define_trait_simple()</a></code>, which chains both steps together.</p>
+call <code><a href="define_phenotype.html">define_phenotype()</a></code> after this function.</p>
+<p>The trait's genetic <strong>targets</strong> are not set here. Store them with
+<code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> (<code>effect_name = "additive"</code>), or pass <code>G</code> to
+<code><a href="define_additive_effects.html">define_additive_effects()</a></code>, which writes the target together with the
+effects calibrated to it. The usual chain is <code>define_trait()</code> →
+<code>define_additive_effects(G = )</code> → <code><a href="define_phenotype.html">define_phenotype()</a></code>.</p>
     </div>
 
     <div class="section level2">
@@ -62,8 +74,6 @@ use <code><a href="define_trait_simple.html">define_trait_simple()</a></code>, w
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">define_trait</span><span class="op">(</span></span>
 <span>  <span class="va">pop</span>,</span>
 <span>  <span class="va">trait_name</span>,</span>
-<span>  target_add_var <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  target_add_mean <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  description <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  units <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
@@ -81,20 +91,6 @@ use <code><a href="define_trait_simple.html">define_trait_simple()</a></code>, w
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
 <dd><p>Character. Unique identifier for this genetic component
 trait. Must be a valid SQL identifier.</p></dd>
-
-
-<dt id="arg-target-add-var">target_add_var<a class="anchor" aria-label="anchor" href="#arg-target-add-var"></a></dt>
-<dd><p>Numeric. Target additive genetic variance. Written to
-<code>trait_var_comp</code> as a diagonal entry under <code>effect_name = "gen_add"</code>.
-Used by <code><a href="define_additive_effects.html">define_additive_effects()</a></code> to rescale effects. If already set via
-<code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, leave <code>NULL</code>.</p></dd>
-
-
-<dt id="arg-target-add-mean">target_add_mean<a class="anchor" aria-label="anchor" href="#arg-target-add-mean"></a></dt>
-<dd><p>Numeric. TBV centering mean for the base population.
-Default <code>0</code>; <code>E[TBV] = 0</code> when TBVs are centered on base allele
-frequencies. The phenotypic population mean (intercept) is set separately
-in <code><a href="define_phenotype.html">define_phenotype()</a></code>.</p></dd>
 
 
 <dt id="arg-description">description<a class="anchor" aria-label="anchor" href="#arg-description"></a></dt>
@@ -119,20 +115,25 @@ rows. Default <code>FALSE</code> errors if the trait already exists.</p></dd>
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="define_phenotype.html">define_phenotype()</a></code>, <code><a href="define_additive_effects.html">define_additive_effects()</a></code>,
 <code><a href="define_effect_fixed_class.html">define_effect_fixed_class()</a></code>, <code><a href="define_effect_fixed_cov.html">define_effect_fixed_cov()</a></code>,
-<code><a href="define_effect_random.html">define_effect_random()</a></code>, <code><a href="add_phenotype.html">add_phenotype()</a></code>, <code><a href="define_trait_simple.html">define_trait_simple()</a></code></p></div>
+<code><a href="define_effect_random.html">define_effect_random()</a></code>, <code><a href="add_phenotype.html">add_phenotype()</a></code>, <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code></p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># Simple genetic component trait:</span></span></span>
+<span class="r-in"><span><span class="co"># Simple genetic component trait, its target and its effects:</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"ADG"</span>, target_add_var <span class="op">=</span> <span class="fl">100</span>, units <span class="op">=</span> <span class="st">"g/day"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"ADG"</span>, units <span class="op">=</span> <span class="st">"g/day"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="st">"ADG"</span>, G <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Maternal component traits (no define_phenotype call needed for WWD/WWM):</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"WWD"</span>, target_add_var <span class="op">=</span> <span class="fl">200</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"WWM"</span>, target_add_var <span class="op">=</span> <span class="fl">80</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"WWD"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_trait</span><span class="op">(</span><span class="st">"WWM"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WWD"</span>, <span class="st">"WWM"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    G <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">200</span>, <span class="op">-</span><span class="fl">40</span>, <span class="op">-</span><span class="fl">40</span>, <span class="fl">80</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Then define the observed composite phenotype:</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>

@@ -110,7 +110,8 @@ defined by two different functions:
 
 | You want to specify | Function | Examples |
 |----|----|----|
-| Genetic architecture | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | `target_add_var`, `target_add_mean`, `units` |
+| Genetic component | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | `description`, `units` |
+| Genetic target and QTL effects | [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) | `G`, `anchor`, `method`, `base_tbl` |
 | What gets observed | [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | `mean`, `type`, `residual_var`, `expressed_sex`, `repeatable` |
 
 For a simple trait the two share a name and you call both. The payoff
@@ -129,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpduT2xB/duckdb
+#> ℹ /tmp/RtmplwxEVr/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -462,8 +463,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 F     Iowa      250
-#> 2 M     AI_Stud   250
+#> 1 M     AI_Stud   250
+#> 2 F     Iowa      250
 ```
 
 The warning above is deliberate:
@@ -484,20 +485,20 @@ pop |> get_table("ind_ebv") |> mutate_table(model_version = NA_character_)
 
 ## Define a trait
 
-The genetic layer. `target_add_var` is the additive genetic variance the
-QTL effects will be scaled to hit.
+The genetic layer. A trait is just a name here; its additive genetic
+variance target comes with its QTL effects, below.
 
 ``` r
 
 pop <- pop |>
-  define_trait("ADG", target_add_var = 0.25, units = "kg/day")
+  define_trait("ADG", units = "kg/day")
 #> Added trait 'ADG'.
 
 pop |> get_table("trait_meta") |> collect()
-#> # A tibble: 1 × 5
-#>   id_trait trait_name description units  target_add_mean
-#>      <int> <chr>      <chr>       <chr>            <dbl>
-#> 1        1 ADG        NA          kg/day               0
+#> # A tibble: 1 × 4
+#>   id_trait trait_name description units 
+#>      <int> <chr>      <chr>       <chr> 
+#> 1        1 ADG        NA          kg/day
 ```
 
 Note what is *not* here: no mean, no residual variance, no trait type.
@@ -507,25 +508,29 @@ Those are observation-layer properties and come later.
 
 Which loci are QTL is decided by the filter you pipe in. Here
 chromosomes 4 and 5 carry the QTL, leaving 1–3 free for a SNP chip.
+`G = 0.25` is the additive genetic variance target: it is stored in
+`trait_var_comp`, and the sampled effects are calibrated so they deliver
+it exactly at the founder pool’s allele frequencies.
 
 ``` r
 
 pop <- pop |>
   get_table("genome_meta") |>
   filter(chr %in% c(4L, 5L)) |>
-  define_additive_effects("ADG")
-#> Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes; scope: all lines, both parents' copies).
+  define_additive_effects("ADG", G = 0.25)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [0.939, 0.939] of the target (sampling LD of 100 haplotypes).
+#> Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.25.
 
 pop |> get_table("genome_effect_terms") |> collect() |> head()
 #> # A tibble: 6 × 9
-#>   trait_name effect_owner           effect_name id_genome_effect effect_order
-#>   <chr>      <chr>                  <chr>                  <int>        <dbl>
-#> 1 ADG        generated_additive_tbv NA                         1            1
-#> 2 ADG        generated_additive_tbv NA                         2            1
-#> 3 ADG        generated_additive_tbv NA                         3            1
-#> 4 ADG        generated_additive_tbv NA                         4            1
-#> 5 ADG        generated_additive_tbv NA                         5            1
-#> 6 ADG        generated_additive_tbv NA                         6            1
+#>   trait_name effect_owner effect_name id_genome_effect effect_order
+#>   <chr>      <chr>        <chr>                  <int>        <dbl>
+#> 1 ADG        generated    NA                         1            1
+#> 2 ADG        generated    NA                         2            1
+#> 3 ADG        generated    NA                         3            1
+#> 4 ADG        generated    NA                         4            1
+#> 5 ADG        generated    NA                         5            1
+#> 6 ADG        generated    NA                         6            1
 #> # ℹ 4 more variables: contrast_signature <chr>, family_key <chr>,
 #> #   scope_description <chr>, genome_value <dbl>
 ```
@@ -539,7 +544,7 @@ frequency.
 
 ## Define the phenotype
 
-The observation layer. With `target_add_var = 0.25` and
+The observation layer. With an additive target of 0.25 and
 `residual_var = 0.75`, this trait has a heritability of 0.25.
 
 ``` r
@@ -659,11 +664,16 @@ pop |>
 ## A second, genetically correlated trait
 
 Real programs select on several traits at once. Define the second trait,
-then supply a genetic covariance matrix.
+then supply a genetic covariance matrix for both.
+
+ADG already has a stored 1 x 1 target. A stored target is never
+overwritten (not even by the same number), so the ADG-only block is
+removed first, then the 2 x 2 block is written together with the new
+effects:
 
 ``` r
 
-pop <- pop |> define_trait("BF", target_add_var = 0.30, units = "mm")
+pop <- pop |> define_trait("BF", units = "mm")
 #> Added trait 'BF'.
 
 G <- matrix(
@@ -673,29 +683,36 @@ G <- matrix(
   dimnames = list(c("ADG", "BF"), c("ADG", "BF"))
 )
 
-pop <- pop |> define_effect_cov_matrix("gen_add", G)
-#> Stored 'gen_add' covariance matrix for: ADG, BF.
-
-pop |> get_table("trait_var_comp") |> collect()
-#> # A tibble: 4 × 5
-#>   id_trait_var_comp effect_name trait_name_1 trait_name_2 cov_value
-#>               <int> <chr>       <chr>        <chr>            <dbl>
-#> 1                 1 gen_add     ADG          ADG               0.25
-#> 2                 2 gen_add     ADG          BF                0.08
-#> 3                 3 gen_add     BF           ADG               0.08
-#> 4                 4 gen_add     BF           BF                0.3
-```
-
-Covariance matrices are stored in the database, not passed around in R.
-Now one call draws correlated effects for both traits from `MVN(0, G)`:
-
-``` r
+pop <- pop |>
+  get_table("trait_var_comp") |>
+  filter(effect_name == "additive", trait_name_1 == "ADG") |>
+  remove_rows()
+#> Deleted 1 row from `trait_var_comp`
 
 pop <- pop |>
   get_table("genome_meta") |>
   filter(chr %in% c(4L, 5L)) |>
-  define_additive_effects(c("ADG", "BF"))
-#> Set correlated additive effects for traits: ADG, BF (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies)
+  define_additive_effects(c("ADG", "BF"), G = G)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [0.836, 0.894] of the target (sampling LD of 100 haplotypes).
+#> Set correlated additive effects for traits: ADG, BF (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered [ADG,ADG = 0.25; ADG,BF = 0.08; BF,BF = 0.3].
+
+pop |> get_table("trait_var_comp") |> collect()
+#> # A tibble: 4 × 6
+#>   id_trait_var_comp effect_name line_name trait_name_1 trait_name_2 cov_value
+#>               <int> <chr>       <chr>     <chr>        <chr>            <dbl>
+#> 1                 1 additive    NA        ADG          ADG               0.25
+#> 2                 2 additive    NA        ADG          BF                0.08
+#> 3                 3 additive    NA        BF           ADG               0.08
+#> 4                 4 additive    NA        BF           BF                0.3
+```
+
+Covariance matrices are stored in the database, not passed around in R.
+The one call drew correlated effects for both traits from `MVN(0, G)`
+and then calibrated them, so variances **and** the genetic correlation
+are exactly those of `G` at the founder pool’s allele frequencies. BF
+then gets its observation layer:
+
+``` r
 
 pop <- pop |>
   define_phenotype("BF", type = "continuous", mean = 12, residual_var = 0.70)
@@ -724,17 +741,22 @@ pop |>
 #> # A tibble: 2 × 4
 #>   trait_name     n mean_tbv var_tbv
 #>   <chr>      <int>    <dbl>   <dbl>
-#> 1 ADG          500  -0.0115   0.202
-#> 2 BF           500   0.0181   0.254
+#> 1 ADG          500 -0.0280    0.211
+#> 2 BF           500 -0.00194   0.268
 ```
 
 The realised variances are in the neighbourhood of the 0.25 and 0.30 we
 asked for, but they are not exact — and that is worth understanding
-rather than glossing over. `target_add_var` scales the QTL effects so
-the additive variance comes out right **in the founder haplotype pool**.
-The animals you actually created are a finite sample from that pool, so
-their realised variance wobbles around the target. Larger founder
-populations wobble less.
+rather than glossing over. The calibration is exact for the *genic*
+anchor: the random-mating limit at the founder pool’s allele
+frequencies, which a population approaches over generations of random
+mating. The animals you actually created are a finite sample from that
+pool, with their own linkage disequilibrium, so their realised variance
+wobbles around the target, and
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+warns when the pool expectation is far off. Larger founder populations
+wobble less. For a single-generation study, `anchor = "realised"` makes
+the covariance exact in the named individuals themselves.
 
 ## Make some offspring
 
@@ -775,7 +797,7 @@ and `chr_recombination`.
 ``` r
 
 pop <- add_offspring(pop, matings)
-#> Added 20 offspring (base_seed = 27531936)
+#> Added 20 offspring (base_seed = 1026959721)
 
 pop |> get_table("ind_meta") |> filter(gen == 1L) |> collect() |> head()
 #> # A tibble: 6 × 8
@@ -847,8 +869,8 @@ pop |> get_table("ind_meta") |> count(has_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   has_50K     n
 #>   <lgl>   <dbl>
-#> 1 FALSE     500
-#> 2 TRUE       20
+#> 1 TRUE       20
+#> 2 FALSE     500
 ```
 
 [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
@@ -865,11 +887,11 @@ geno[1:5, 1:6]
 #> # A tibble: 5 × 6
 #>   id_ind locus_1 locus_2 locus_3 locus_4 locus_5
 #>   <chr>    <int>   <int>   <int>   <int>   <int>
-#> 1 A_501        2       1       2       1       2
-#> 2 A_502        1       0       2       0       2
+#> 1 A_501        0       0       1       1       1
+#> 2 A_502        0       0       2       0       2
 #> 3 A_503        0       1       2       0       2
-#> 4 A_504        1       0       2       1       2
-#> 5 A_505        0       2       2       0       2
+#> 4 A_504        2       0       2       1       2
+#> 5 A_505        1       2       2       0       2
 ```
 
 Haplotypes are the source of truth and dosages are derived on demand, so
@@ -918,12 +940,12 @@ pop |> get_table("ind_true_index") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_true_index id_ind index_name weight_type true_index_value
 #>           <int> <chr>  <chr>      <chr>                  <dbl>
-#> 1             1 A_1    terminal   index                  0.934
-#> 2             2 A_10   terminal   index                  0.396
-#> 3             3 A_100  terminal   index                 -0.609
-#> 4             4 A_101  terminal   index                 -0.202
-#> 5             5 A_102  terminal   index                  0.292
-#> 6             6 A_103  terminal   index                  0.439
+#> 1             1 A_1    terminal   index                 -0.587
+#> 2             2 A_10   terminal   index                 -0.639
+#> 3             3 A_100  terminal   index                  0.449
+#> 4             4 A_101  terminal   index                 -0.438
+#> 5             5 A_102  terminal   index                 -0.401
+#> 6             6 A_103  terminal   index                  0.179
 ```
 
 [`add_index()`](https://austin-putz.github.io/tidybreed/reference/add_index.md)
@@ -948,11 +970,11 @@ pop |>
 #> # A tibble: 5 × 5
 #>   id_index id_ind index_name index_number index_value
 #>      <int> <chr>  <chr>             <int>       <dbl>
-#> 1       97 A_186  terminal              1        1.86
-#> 2      264 A_336  terminal              1        1.64
-#> 3      441 A_496  terminal              1        1.64
-#> 4      289 A_359  terminal              1        1.46
-#> 5      223 A_3    terminal              1        1.39
+#> 1      252 A_325  terminal              1        1.66
+#> 2      443 A_498  terminal              1        1.57
+#> 3       50 A_143  terminal              1        1.53
+#> 4      300 A_369  terminal              1        1.38
+#> 5      327 A_393  terminal              1        1.37
 ```
 
 Those top animals are your selection candidates. Pull their IDs, build a
@@ -1005,7 +1027,6 @@ Functions not shown above, with a pointer to their help page:
 | [`?define_residual_cov`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md) | Correlated or heterogeneous residual (co)variances |
 | [`?define_effect_random`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md) | Named random effects such as pen, litter, or herd-year-season |
 | [`?define_effect_fixed_cov`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md) | Fixed regression on a covariate |
-| [`?define_trait_simple`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md) | Shortcut wrapper: [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) + [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) |
 | [`?archive_replicate`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md) | Collect many replicates into one archive database |
 | [`?remove_rows`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md) | Delete rows safely across related tables |
 | [`?mutate_group_seq`](https://austin-putz.github.io/tidybreed/reference/mutate_group_seq.md) | Litter and group utilities (`mutate_group_*`) |

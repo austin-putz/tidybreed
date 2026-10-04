@@ -81,7 +81,7 @@ high-order scoped term fails loudly instead of appearing to hang.
 
 [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
 for the breeding value,
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 and
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 for writing the terms this evaluates.

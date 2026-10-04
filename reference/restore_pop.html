@@ -25,7 +25,7 @@ to get the same tool dirs back automatically."><meta property="og:image" content
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -109,7 +109,8 @@ reconstruct in <code>pop$run_dirs</code>. Defaults to
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"cattle"</span>, db_name <span class="op">=</span> <span class="st">"cattle_sim.duckdb"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="define_genome.html">define_genome</a></span><span class="op">(</span>n_loci <span class="op">=</span> <span class="fl">50000</span>, n_chr <span class="op">=</span> <span class="fl">29</span>, chr_len_Mb <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>n_haplotypes <span class="op">=</span> <span class="fl">100</span>, line_name <span class="op">=</span> <span class="st">"A"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="va">pop</span>, trait_name <span class="op">=</span> <span class="st">"milk"</span>, target_add_var <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="va">pop</span>, trait_name <span class="op">=</span> <span class="st">"milk"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"additive"</span>, <span class="fl">10</span>, trait_name <span class="op">=</span> <span class="st">"milk"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">db_path</span> <span class="op">&lt;-</span> <span class="va">pop</span><span class="op">$</span><span class="va">db_path</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="close_pop.html">close_pop</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>

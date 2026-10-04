@@ -3,10 +3,11 @@
 Routes to trait_var_comp for genetic effects and to phenotype_var_comp for
 phenotype-level effects.
 Common effect_name values:
-"gen_add" — additive genetic (co)variances (G matrix). Written to
+"additive" — additive genetic (co)variances (G matrix). Written to
 trait_var_comp. Used by define_additive_effects() when rescaling to
 target variance and as the sampling distribution for multi-trait draws.
-"dominance", "epistasis" — future genetic effects. Written to
+"dominance", "additive_by_additive" — reserved genetic effects; no
+generator calibrates them yet. Written to
 trait_var_comp. Row/column names are trait names.
 "residual" — residual (co)variances (R matrix). Routed to
 phenotype_var_comp with effect_name = "residual". Row/column names are
@@ -35,14 +36,27 @@ call that clears them). In a block of two or more phenotypes every
 define_effect_random() row for the effect must use
 distribution = "normal" and read the same (source_column, source_table).
 See define_residual_cov() for the full rules. A rejected call changes
-nothing.'><meta property="og:description" content='Single entry point for storing all variance and covariance data in tidybreed.
+nothing.
+Genetic blocks are written once. A genetic block ("additive",
+"dominance", "additive_by_additive") is validated as positive
+semi-definite, stored at full double precision, and never overwritten: if
+any row already exists for that effect_name, any of the named traits and
+the same line_name, the call is an error, even when the matrix is
+identical. The error gives the remove_rows() call that clears the stored
+block. trait_var_comp is the single source of generation targets; the
+effect generators read it and never overwrite it either.
+"additive_by_dominance" and "dominance_by_dominance" are reserved for
+future generators and refused. "total", "unpartitioned" and
+"between_components" are output names of the variance extractor and
+refused as input.'><meta property="og:description" content='Single entry point for storing all variance and covariance data in tidybreed.
 Routes to trait_var_comp for genetic effects and to phenotype_var_comp for
 phenotype-level effects.
 Common effect_name values:
-"gen_add" — additive genetic (co)variances (G matrix). Written to
+"additive" — additive genetic (co)variances (G matrix). Written to
 trait_var_comp. Used by define_additive_effects() when rescaling to
 target variance and as the sampling distribution for multi-trait draws.
-"dominance", "epistasis" — future genetic effects. Written to
+"dominance", "additive_by_additive" — reserved genetic effects; no
+generator calibrates them yet. Written to
 trait_var_comp. Row/column names are trait names.
 "residual" — residual (co)variances (R matrix). Routed to
 phenotype_var_comp with effect_name = "residual". Row/column names are
@@ -71,7 +85,19 @@ call that clears them). In a block of two or more phenotypes every
 define_effect_random() row for the effect must use
 distribution = "normal" and read the same (source_column, source_table).
 See define_residual_cov() for the full rules. A rejected call changes
-nothing.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+nothing.
+Genetic blocks are written once. A genetic block ("additive",
+"dominance", "additive_by_additive") is validated as positive
+semi-definite, stored at full double precision, and never overwritten: if
+any row already exists for that effect_name, any of the named traits and
+the same line_name, the call is an error, even when the matrix is
+identical. The error gives the remove_rows() call that clears the stored
+block. trait_var_comp is the single source of generation targets; the
+effect generators read it and never overwrite it either.
+"additive_by_dominance" and "dominance_by_dominance" are reserved for
+future generators and refused. "total", "unpartitioned" and
+"between_components" are output names of the variance extractor and
+refused as input.'><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -79,7 +105,7 @@ nothing.'><meta property="og:image" content="https://austin-putz.github.io/tidyb
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -111,10 +137,11 @@ nothing.'><meta property="og:image" content="https://austin-putz.github.io/tidyb
     <p>Single entry point for storing all variance and covariance data in tidybreed.
 Routes to <code>trait_var_comp</code> for genetic effects and to <code>phenotype_var_comp</code> for
 phenotype-level effects.</p>
-<p>Common <code>effect_name</code> values:</p><ul><li><p><code>"gen_add"</code> — additive genetic (co)variances (G matrix). Written to
+<p>Common <code>effect_name</code> values:</p><ul><li><p><code>"additive"</code> — additive genetic (co)variances (G matrix). Written to
 <code>trait_var_comp</code>. Used by <code><a href="define_additive_effects.html">define_additive_effects()</a></code> when rescaling to
 target variance and as the sampling distribution for multi-trait draws.</p></li>
-<li><p><code>"dominance"</code>, <code>"epistasis"</code> — future genetic effects. Written to
+<li><p><code>"dominance"</code>, <code>"additive_by_additive"</code> — reserved genetic effects; no
+generator calibrates them yet. Written to
 <code>trait_var_comp</code>. Row/column names are trait names.</p></li>
 <li><p><code>"residual"</code> — residual (co)variances (R matrix). Routed to
 <code>phenotype_var_comp</code> with <code>effect_name = "residual"</code>. Row/column names are
@@ -142,6 +169,18 @@ call that clears them). In a block of two or more phenotypes every
 <code>distribution = "normal"</code> and read the same <code>(source_column, source_table)</code>.
 See <code><a href="define_residual_cov.html">define_residual_cov()</a></code> for the full rules. A rejected call changes
 nothing.</p>
+<p><strong>Genetic blocks are written once.</strong> A genetic block (<code>"additive"</code>,
+<code>"dominance"</code>, <code>"additive_by_additive"</code>) is validated as positive
+semi-definite, stored at full double precision, and never overwritten: if
+any row already exists for that <code>effect_name</code>, any of the named traits and
+the same <code>line_name</code>, the call is an error, even when the matrix is
+identical. The error gives the <code><a href="remove_rows.html">remove_rows()</a></code> call that clears the stored
+block. <code>trait_var_comp</code> is the single source of generation targets; the
+effect generators read it and never overwrite it either.</p>
+<p><code>"additive_by_dominance"</code> and <code>"dominance_by_dominance"</code> are reserved for
+future generators and refused. <code>"total"</code>, <code>"unpartitioned"</code> and
+<code>"between_components"</code> are output names of the variance extractor and
+refused as input.</p>
     </div>
 
     <div class="section level2">
@@ -150,7 +189,8 @@ nothing.</p>
 <span>  <span class="va">pop</span>,</span>
 <span>  <span class="va">effect_name</span>,</span>
 <span>  <span class="va">cov_matrix</span>,</span>
-<span>  trait_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  trait_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  line_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-09</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -165,18 +205,25 @@ nothing.</p>
 
 <dt id="arg-effect-name">effect_name<a class="anchor" aria-label="anchor" href="#arg-effect-name"></a></dt>
 <dd><p>Character. Label for the variance component, e.g.
-<code>"gen_add"</code>, <code>"residual"</code>, <code>"hys"</code>.</p></dd>
+<code>"additive"</code>, <code>"residual"</code>, <code>"hys"</code>.</p></dd>
 
 
 <dt id="arg-cov-matrix">cov_matrix<a class="anchor" aria-label="anchor" href="#arg-cov-matrix"></a></dt>
-<dd><p>A numeric square matrix. Must be symmetric within <code>tol</code>.
-Row and column names are used as trait/phenotype names when <code>trait_names</code>
-is not supplied.</p></dd>
+<dd><p>A numeric square matrix, or a single number when one
+trait/phenotype is named. Must be symmetric within <code>tol</code>. A named matrix
+must carry the same names as <code>trait_name</code>, in the same order (it is never
+relabelled); an unnamed one is taken in <code>trait_name</code> order.</p></dd>
 
 
-<dt id="arg-trait-names">trait_names<a class="anchor" aria-label="anchor" href="#arg-trait-names"></a></dt>
-<dd><p>Optional character vector of trait/phenotype names (length
-== <code>nrow(cov_matrix)</code>). Overrides the matrix's <code>rownames</code> / <code>colnames</code>.</p></dd>
+<dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
+<dd><p>Character vector of trait/phenotype names (length
+== <code>nrow(cov_matrix)</code>). Optional when the matrix has names.</p></dd>
+
+
+<dt id="arg-line-name">line_name<a class="anchor" aria-label="anchor" href="#arg-line-name"></a></dt>
+<dd><p>Character or <code>NULL</code> (default). Genetic effects only: the
+line whose generation target this is. <code>NULL</code> is the population-wide
+target, which a line without its own block falls back to.</p></dd>
 
 
 <dt id="arg-tol">tol<a class="anchor" aria-label="anchor" href="#arg-tol"></a></dt>
@@ -200,7 +247,11 @@ is not supplied.</p></dd>
 <span class="r-in"><span><span class="va">G</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">100</span>, <span class="op">-</span><span class="fl">20</span>, <span class="op">-</span><span class="fl">20</span>, <span class="fl">50</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span>,</span></span>
 <span class="r-in"><span>            dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_effect_cov_matrix</span><span class="op">(</span><span class="st">"gen_add"</span>, <span class="va">G</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_effect_cov_matrix</span><span class="op">(</span><span class="st">"additive"</span>, <span class="va">G</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># One trait: a number is a 1 x 1 matrix</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_effect_cov_matrix</span><span class="op">(</span><span class="st">"additive"</span>, <span class="fl">0.25</span>, trait_name <span class="op">=</span> <span class="st">"WW"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Residual → phenotype_var_comp (effect_name = "residual")</span></span></span>
 <span class="r-in"><span><span class="va">R</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">30</span>, <span class="fl">5</span>, <span class="fl">5</span>, <span class="fl">10</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span>,</span></span>

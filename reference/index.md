@@ -46,13 +46,10 @@ an observation.
 - [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
   : Define a genetic component trait
 
-- [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
-  : Define a trait with QTL and sampled effects in one call
-
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   : Define additive QTL effects for one or more traits
 
-- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+- [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
   : Define genome effects as terms over one or more loci
 
 - [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)

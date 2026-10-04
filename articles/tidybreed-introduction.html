@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -192,14 +192,21 @@ clipboard</strong> are defined by two different functions:</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td>Genetic architecture</td>
+<td>Genetic component</td>
 <td><code><a href="../reference/define_trait.html">define_trait()</a></code></td>
 <td>
-<code>target_add_var</code>, <code>target_add_mean</code>,
-<code>units</code>
+<code>description</code>, <code>units</code>
 </td>
 </tr>
 <tr class="even">
+<td>Genetic target and QTL effects</td>
+<td><code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code></td>
+<td>
+<code>G</code>, <code>anchor</code>, <code>method</code>,
+<code>base_tbl</code>
+</td>
+</tr>
+<tr class="odd">
 <td>What gets observed</td>
 <td><code><a href="../reference/define_phenotype.html">define_phenotype()</a></code></td>
 <td>
@@ -225,7 +232,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpduT2xB/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmplwxEVr/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -560,8 +567,8 @@ database instead of in parallel R objects.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 3</span></span></span>
 <span><span class="co">#&gt;   sex   farm        n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> F     Iowa      250</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> M     AI_Stud   250</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> M     AI_Stud   250</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> F     Iowa      250</span></span></code></pre></div>
 <p>The warning above is deliberate: <code><a href="../reference/mutate_table.html">mutate_table()</a></code> tells
 you whenever it overwrites values that were already there, so you notice
 an accidental clobber instead of discovering it three generations
@@ -575,18 +582,18 @@ data arrives:</p>
 <div class="section level2">
 <h2 id="define-a-trait">Define a trait<a class="anchor" aria-label="anchor" href="#define-a-trait"></a>
 </h2>
-<p>The genetic layer. <code>target_add_var</code> is the additive
-genetic variance the QTL effects will be scaled to hit.</p>
+<p>The genetic layer. A trait is just a name here; its additive genetic
+variance target comes with its QTL effects, below.</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"ADG"</span>, target_add_var <span class="op">=</span> <span class="fl">0.25</span>, units <span class="op">=</span> <span class="st">"kg/day"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"ADG"</span>, units <span class="op">=</span> <span class="st">"kg/day"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Added trait 'ADG'.</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"trait_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 5</span></span></span>
-<span><span class="co">#&gt;   id_trait trait_name description units  target_add_mean</span></span>
-<span><span class="co">#&gt;      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>        1 ADG        <span style="color: #BB0000;">NA</span>          kg/day               0</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 4</span></span></span>
+<span><span class="co">#&gt;   id_trait trait_name description units </span></span>
+<span><span class="co">#&gt;      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>        1 ADG        <span style="color: #BB0000;">NA</span>          kg/day</span></span></code></pre></div>
 <p>Note what is <em>not</em> here: no mean, no residual variance, no
 trait type. Those are observation-layer properties and come later.</p>
 </div>
@@ -594,24 +601,29 @@ trait type. Those are observation-layer properties and come later.</p>
 <h2 id="assign-qtl-effects">Assign QTL effects<a class="anchor" aria-label="anchor" href="#assign-qtl-effects"></a>
 </h2>
 <p>Which loci are QTL is decided by the filter you pipe in. Here
-chromosomes 4 and 5 carry the QTL, leaving 1–3 free for a SNP chip.</p>
+chromosomes 4 and 5 carry the QTL, leaving 1–3 free for a SNP chip.
+<code>G = 0.25</code> is the additive genetic variance target: it is
+stored in <code>trait_var_comp</code>, and the sampled effects are
+calibrated so they deliver it exactly at the founder pool’s allele
+frequencies.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4L</span>, <span class="fl">5L</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes; scope: all lines, both parents' copies).</span></span>
+<span>  <span class="fu"><a href="../reference/define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="st">"ADG"</span>, G <span class="op">=</span> <span class="fl">0.25</span><span class="op">)</span></span>
+<span><span class="co">#&gt; The founder pool (pool expectation under random pairing) sees relative spectrum [0.939, 0.939] of the target (sampling LD of 100 haplotypes).</span></span>
+<span><span class="co">#&gt; Set additive effects for 200 QTL on trait 'ADG' (base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.25.</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_effect_terms"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 9</span></span></span>
-<span><span class="co">#&gt;   trait_name effect_owner           effect_name id_genome_effect effect_order</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         1            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         2            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         3            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         4            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         5            1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> ADG        generated_additive_tbv <span style="color: #BB0000;">NA</span>                         6            1</span></span>
+<span><span class="co">#&gt;   trait_name effect_owner effect_name id_genome_effect effect_order</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         1            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         2            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         3            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         4            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         5            1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> ADG        generated    <span style="color: #BB0000;">NA</span>                         6            1</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># ℹ 4 more variables: contrast_signature &lt;chr&gt;, family_key &lt;chr&gt;,</span></span></span>
 <span><span class="co">#&gt; <span style="color: #949494;">#   scope_description &lt;chr&gt;, genome_value &lt;dbl&gt;</span></span></span></code></pre></div>
 <p>Causal-locus membership is <strong>implicit</strong>: a locus is
@@ -625,7 +637,7 @@ frequency.</p>
 <div class="section level2">
 <h2 id="define-the-phenotype">Define the phenotype<a class="anchor" aria-label="anchor" href="#define-the-phenotype"></a>
 </h2>
-<p>The observation layer. With <code>target_add_var = 0.25</code> and
+<p>The observation layer. With an additive target of 0.25 and
 <code>residual_var = 0.75</code>, this trait has a heritability of
 0.25.</p>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
@@ -729,9 +741,13 @@ between the group means:</p>
 <h2 id="a-second-genetically-correlated-trait">A second, genetically correlated trait<a class="anchor" aria-label="anchor" href="#a-second-genetically-correlated-trait"></a>
 </h2>
 <p>Real programs select on several traits at once. Define the second
-trait, then supply a genetic covariance matrix.</p>
+trait, then supply a genetic covariance matrix for both.</p>
+<p>ADG already has a stored 1 x 1 target. A stored target is never
+overwritten (not even by the same number), so the ADG-only block is
+removed first, then the 2 x 2 block is written together with the new
+effects:</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"BF"</span>, target_add_var <span class="op">=</span> <span class="fl">0.30</span>, units <span class="op">=</span> <span class="st">"mm"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"BF"</span>, units <span class="op">=</span> <span class="st">"mm"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Added trait 'BF'.</span></span>
 <span></span>
 <span><span class="va">G</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span></span>
@@ -741,28 +757,35 @@ trait, then supply a genetic covariance matrix.</p>
 <span>  dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"gen_add"</span>, <span class="va">G</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Stored 'gen_add' covariance matrix for: ADG, BF.</span></span>
-<span></span>
-<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"trait_var_comp"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 5</span></span></span>
-<span><span class="co">#&gt;   id_trait_var_comp effect_name trait_name_1 trait_name_2 cov_value</span></span>
-<span><span class="co">#&gt;               <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>                 1 gen_add     ADG          ADG               0.25</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>                 2 gen_add     ADG          BF                0.08</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>                 3 gen_add     BF           ADG               0.08</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>                 4 gen_add     BF           BF                0.3</span></span></code></pre></div>
-<p>Covariance matrices are stored in the database, not passed around in
-R. Now one call draws correlated effects for both traits from
-<code>MVN(0, G)</code>:</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4L</span>, <span class="fl">5L</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Set correlated additive effects for traits: ADG, BF (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies)</span></span>
+<span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"trait_var_comp"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">effect_name</span> <span class="op">==</span> <span class="st">"additive"</span>, <span class="va">trait_name_1</span> <span class="op">==</span> <span class="st">"ADG"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/remove_rows.html">remove_rows</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Deleted 1 row from `trait_var_comp`</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4L</span>, <span class="fl">5L</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/define_additive_effects.html">define_additive_effects</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span><span class="op">)</span>, G <span class="op">=</span> <span class="va">G</span><span class="op">)</span></span>
+<span><span class="co">#&gt; The founder pool (pool expectation under random pairing) sees relative spectrum [0.836, 0.894] of the target (sampling LD of 100 haplotypes).</span></span>
+<span><span class="co">#&gt; Set correlated additive effects for traits: ADG, BF (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered [ADG,ADG = 0.25; ADG,BF = 0.08; BF,BF = 0.3].</span></span>
+<span></span>
+<span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"trait_var_comp"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 6</span></span></span>
+<span><span class="co">#&gt;   id_trait_var_comp effect_name line_name trait_name_1 trait_name_2 cov_value</span></span>
+<span><span class="co">#&gt;               <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>                 1 additive    <span style="color: #BB0000;">NA</span>        ADG          ADG               0.25</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>                 2 additive    <span style="color: #BB0000;">NA</span>        ADG          BF                0.08</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>                 3 additive    <span style="color: #BB0000;">NA</span>        BF           ADG               0.08</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>                 4 additive    <span style="color: #BB0000;">NA</span>        BF           BF                0.3</span></span></code></pre></div>
+<p>Covariance matrices are stored in the database, not passed around in
+R. The one call drew correlated effects for both traits from
+<code>MVN(0, G)</code> and then calibrated them, so variances
+<strong>and</strong> the genetic correlation are exactly those of
+<code>G</code> at the founder pool’s allele frequencies. BF then gets
+its observation layer:</p>
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/define_phenotype.html">define_phenotype</a></span><span class="op">(</span><span class="st">"BF"</span>, type <span class="op">=</span> <span class="st">"continuous"</span>, mean <span class="op">=</span> <span class="fl">12</span>, residual_var <span class="op">=</span> <span class="fl">0.70</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Added phenotype 'BF' (type: continuous).</span></span></code></pre></div>
 <blockquote>
@@ -787,15 +810,20 @@ the replaced terms.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 4</span></span></span>
 <span><span class="co">#&gt;   trait_name     n mean_tbv var_tbv</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG          500  -<span style="color: #BB0000;">0.011</span><span style="color: #BB0000; text-decoration: underline;">5</span>   0.202</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> BF           500   0.018<span style="text-decoration: underline;">1</span>   0.254</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> ADG          500 -<span style="color: #BB0000;">0.028</span><span style="color: #BB0000; text-decoration: underline;">0</span>    0.211</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> BF           500 -<span style="color: #BB0000;">0.001</span><span style="color: #BB0000; text-decoration: underline;">94</span>   0.268</span></span></code></pre></div>
 <p>The realised variances are in the neighbourhood of the 0.25 and 0.30
 we asked for, but they are not exact — and that is worth understanding
-rather than glossing over. <code>target_add_var</code> scales the QTL
-effects so the additive variance comes out right <strong>in the founder
-haplotype pool</strong>. The animals you actually created are a finite
-sample from that pool, so their realised variance wobbles around the
-target. Larger founder populations wobble less.</p>
+rather than glossing over. The calibration is exact for the
+<em>genic</em> anchor: the random-mating limit at the founder pool’s
+allele frequencies, which a population approaches over generations of
+random mating. The animals you actually created are a finite sample from
+that pool, with their own linkage disequilibrium, so their realised
+variance wobbles around the target, and
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> warns when the pool expectation
+is far off. Larger founder populations wobble less. For a
+single-generation study, <code>anchor = "realised"</code> makes the
+covariance exact in the named individuals themselves.</p>
 </div>
 <div class="section level2">
 <h2 id="make-some-offspring">Make some offspring<a class="anchor" aria-label="anchor" href="#make-some-offspring"></a>
@@ -832,7 +860,7 @@ per-chromosome rules in <code>chr_inheritance</code> and
 <code>chr_recombination</code>.</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_offspring.html">add_offspring</a></span><span class="op">(</span><span class="va">pop</span>, <span class="va">matings</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Added 20 offspring (base_seed = 27531936)</span></span>
+<span><span class="co">#&gt; Added 20 offspring (base_seed = 1026959721)</span></span>
 <span></span>
 <span><span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">1L</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 8</span></span></span>
@@ -894,8 +922,8 @@ genotyped</em> — here, only the offspring:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   has_50K     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE     500</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE       20</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> TRUE       20</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> FALSE     500</span></span></code></pre></div>
 <p><code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> returns the familiar wide 0/1/2
 dosage matrix, ready for GBLUP or export:</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
@@ -907,11 +935,11 @@ dosage matrix, ready for GBLUP or export:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 6</span></span></span>
 <span><span class="co">#&gt;   id_ind locus_1 locus_2 locus_3 locus_4 locus_5</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> A_501        2       1       2       1       2</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> A_502        1       0       2       0       2</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> A_501        0       0       1       1       1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> A_502        0       0       2       0       2</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> A_503        0       1       2       0       2</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> A_504        1       0       2       1       2</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> A_505        0       2       2       0       2</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> A_504        2       0       2       1       2</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> A_505        1       2       2       0       2</span></span></code></pre></div>
 <p>Haplotypes are the source of truth and dosages are derived on demand,
 so nothing is stored twice. If you need dosages repeatedly,
 <code><a href="../reference/add_dosage.html">add_dosage()</a></code> caches them in <code>ind_genotype</code>.</p>
@@ -951,12 +979,12 @@ actually worked:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
 <span><span class="co">#&gt;   id_true_index id_ind index_name weight_type true_index_value</span></span>
 <span><span class="co">#&gt;           <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index                  0.934</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index                  0.396</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index                 -<span style="color: #BB0000;">0.609</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index                 -<span style="color: #BB0000;">0.202</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index                  0.292</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index                  0.439</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>             1 A_1    terminal   index                 -<span style="color: #BB0000;">0.587</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>             2 A_10   terminal   index                 -<span style="color: #BB0000;">0.639</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>             3 A_100  terminal   index                  0.449</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>             4 A_101  terminal   index                 -<span style="color: #BB0000;">0.438</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>             5 A_102  terminal   index                 -<span style="color: #BB0000;">0.401</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>             6 A_103  terminal   index                  0.179</span></span></code></pre></div>
 <p><code><a href="../reference/add_index.html">add_index()</a></code> does the same arithmetic on any table of
 values. In a real program you would run it on <code>ind_ebv</code> after
 a BLUP evaluation; here we use the TBVs. <strong>Filter first</strong>
@@ -977,11 +1005,11 @@ so there is exactly one value per individual per trait:</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 5</span></span></span>
 <span><span class="co">#&gt;   id_index id_ind index_name index_number index_value</span></span>
 <span><span class="co">#&gt;      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>             <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>       97 A_186  terminal              1        1.86</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      264 A_336  terminal              1        1.64</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      441 A_496  terminal              1        1.64</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      289 A_359  terminal              1        1.46</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      223 A_3    terminal              1        1.39</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      252 A_325  terminal              1        1.66</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      443 A_498  terminal              1        1.57</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>       50 A_143  terminal              1        1.53</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      300 A_369  terminal              1        1.38</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      327 A_393  terminal              1        1.37</span></span></code></pre></div>
 <p>Those top animals are your selection candidates. Pull their IDs,
 build a new mating plan, call <code><a href="../reference/add_offspring.html">add_offspring()</a></code>, and you have
 closed the loop on a breeding cycle.</p>
@@ -1086,24 +1114,18 @@ values</td>
 <td>Fixed regression on a covariate</td>
 </tr>
 <tr class="odd">
-<td><code><a href="../reference/define_trait_simple.html">?define_trait_simple</a></code></td>
-<td>Shortcut wrapper: <code><a href="../reference/define_trait.html">define_trait()</a></code> +
-<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>
-</td>
-</tr>
-<tr class="even">
 <td><code><a href="../reference/archive_replicate.html">?archive_replicate</a></code></td>
 <td>Collect many replicates into one archive database</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code><a href="../reference/remove_rows.html">?remove_rows</a></code></td>
 <td>Delete rows safely across related tables</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code><a href="../reference/mutate_group_seq.html">?mutate_group_seq</a></code></td>
 <td>Litter and group utilities (<code>mutate_group_*</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code><a href="../reference/define_table.html">?define_table</a></code></td>
 <td>Create your own tables inside the population</td>
 </tr>

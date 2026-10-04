@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,7 +41,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">load_trait_cov</span><span class="op">(</span><span class="va">pop</span>, <span class="va">effect_name</span>, <span class="va">trait_names</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">load_trait_cov</span><span class="op">(</span><span class="va">pop</span>, <span class="va">effect_name</span>, <span class="va">trait_names</span>, line_name <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -58,6 +58,12 @@
 
 <dt id="arg-trait-names">trait_names<a class="anchor" aria-label="anchor" href="#arg-trait-names"></a></dt>
 <dd><p>Character vector of trait names.</p></dd>
+
+
+<dt id="arg-line-name">line_name<a class="anchor" aria-label="anchor" href="#arg-line-name"></a></dt>
+<dd><p><code>NULL</code> (population-wide rows) or a line, which falls back
+to the population-wide rows when it has none of its own. Lines are never
+mixed.</p></dd>
 
 </dl></div>
     <div class="section level2">

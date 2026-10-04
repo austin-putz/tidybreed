@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,176 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.73.2" id="tidybreed-0732-2026-10-03">tidybreed 0.73.2 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0732-2026-10-03"></a></h2>
+<p>Step 2 corrections from the Codex review (<code>plans/import_qtl_effect_methods_phase_2_codex_review.md</code>, response at its end). All concern <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> and its target validation; seeded output changes for k &gt;= 2 (pre-1.0, by design).</p>
+<ul><li>
+<strong>“Exact” is now verified, not assumed.</strong> The delivered <code>B' M B</code> is compared with the stored <code>G</code>, entry by entry, to <code>1e-8</code> on the correlation scale; a miss is an error before anything is written. Under <code>method = "union"</code> the “exact” label used to be given whenever the target’s off-diagonals were zero, although overlapping QTL sets do not deliver a zero covariance; that case now warns “approximate”.</li>
+<li>
+<strong>Rank and PSD are judged on the correlation scale</strong> (target validation in <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> and the shared <code>trait_var_comp</code> writer). An eigenvalue cut-off relative to <code>G</code>‘s largest eigenvalue depended on the traits’ units: <code>G = diag(1, 1e-11)</code> was stored in full but delivered <code>diag(1, 0)</code>. The architecture <code>B0</code> is normalised the same way before the congruence. The PSD error now reports the smallest eigenvalue of the correlation matrix.</li>
+<li>
+<strong>A passed <code>G</code> no longer bypasses a stored <code>dominance</code> / <code>additive_by_additive</code> target</strong> for the call’s traits. It is refused, as the <code>G = NULL</code> path already was; the error gives the explicit route (store <code>G</code> with <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, then select it with <code>trait_var_comp_tbl</code>).</li>
+<li>
+<strong><code>method = "union"</code> refuses a trait with a positive target variance and no QTL in the call</strong> (it used to warn, then store a target the model did not deliver). A zero-variance trait without QTL is a message.</li>
+<li>
+<strong>Founder-pool diagnostic divisor</strong>: the pool expectation is <code>2 Cov(H)</code> with divisor <code>n_h</code>, not <code>n_h - 1</code>. <code><a href="../reference/add_founders.html">add_founders()</a></code> draws each haplotype with replacement, so a founder’s copies are iid draws from the empirical pool. The old divisor overstated the expectation by <code>n_h/(n_h - 1)</code> (a factor 2 for a two-haplotype pool).</li>
+<li>
+<strong>Diagnostics run before the commit</strong> and are reported after it, reading the pool’s identity columns from the physical table: a <code><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select()</a></code>ed <code>founder_haplotypes</code> base, which <code>base_tbl</code> accepts, used to fail with a binder error <em>after</em> the target and terms were committed.</li>
+<li>
+<strong><code>parent_origin</code> is validated before coercion</strong>: <code>1.9</code> used to become <code>1</code> (a paternal-only effect). Non-integer, infinite, missing and empty values, and duplicated or empty names, are errors.</li>
+<li>
+<strong>The anchor-rank refusal (<code>rank(G) &gt; rank(M)</code>) happens before <code>seed</code> is applied</strong> and no longer touches the RNG. The <code>seed</code> documentation now says which failures (architecture rank, failed verification) come after the draw.</li>
+<li>
+<strong>Breaking:</strong> <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code> loses <code>allow_reserved_owner</code>. The reserved owner <code>generated</code> can no longer be written by any exported function, so “every active term is <code>generated</code>” proves the terms were calibrated to the stored target (Q23). <code>mode = "replace_trait"</code> still refuses to delete generated terms, now without an override: re-run the generator.</li>
+<li>
+<code>G =</code> next to a stored non-additive target keeps the two-step route (store with <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, select with <code>trait_var_comp_tbl</code>); no new argument (decided).</li>
+<li>The mixed-<code>parent_origin</code> refusal states its actual reason (one call has one anchor) instead of claiming every cross-scope covariance is zero: a both-parents vs a paternal-only trait has covariance <code>pq</code> per locus.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.73.1" id="tidybreed-0731-2026-10-03">tidybreed 0.73.1 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0731-2026-10-03"></a></h2>
+<ul><li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>: the founder-pool comparison (§7.4) is now always a <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code>, never a warning. A small pool’s departure from the target is its sampling LD, not a mistake in the call (with 200 QTL the ±25% default fired on ~45% of 100-haplotype two-trait pools). Outside <code>warn_bounds</code> the message adds the fix: add the founders first and calibrate with <code>anchor = "realised"</code> on them. Observed base individuals and the realised anchor’s genic limit still warn. Decision Q22 (b) in <code>plans/import_qtl_effect_methods.md</code>.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.73.0" id="tidybreed-0730-2026-10-03">tidybreed 0.73.0 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0730-2026-10-03"></a></h2>
+<p>Step 2 of <code>plans/import_qtl_effect_methods.md</code>: Part A (exact multi-trait calibration, <code>anchor =</code>) and the §6C generation-target rules. Summary in <code>plans/import_qtl_effect_methods_phase_2.md</code>.</p>
+<p><strong>Databases written by earlier versions are not readable</strong> (pre-1.0, no migration): <code>trait_var_comp</code> gained <code>line_name</code> and <code>trait_meta</code> lost <code>target_add_mean</code>. <code><a href="../reference/restore_pop.html">restore_pop()</a></code> refuses such a file and says to rebuild.</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-73-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-73-0"></a></h3>
+<ul><li>
+<code><a href="../reference/define_trait.html">define_trait()</a></code> loses <code>target_add_var</code> and <code>target_add_mean</code>, and <code>trait_meta</code> loses the <code>target_add_mean</code> column (it was written and never read). Targets enter <strong>only</strong> through <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> or a generator’s <code>G =</code>.</li>
+<li>
+<code>define_trait_simple()</code> is removed. Chain <code><a href="../reference/define_trait.html">define_trait()</a></code> → <code>define_additive_effects(G = )</code> → <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code>.</li>
+<li>
+<code>trait_var_comp</code> is the single source of generation targets, and a stored genetic block is <strong>never overwritten</strong>: <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> and <code>define_additive_effects(G = )</code> refuse when any row exists for that <code>effect_name</code>, any of the traits and the same <code>line_name</code>, even for an identical matrix. The error gives the <code><a href="../reference/remove_rows.html">remove_rows()</a></code> call that clears it.</li>
+<li>Genetic blocks are validated positive semidefinite, and a named matrix must match <code>trait_name</code> in order (it used to be relabelled silently, so a <code>c("BF", "ADG")</code> matrix passed with <code>trait_name = c("ADG", "BF")</code> was stored the wrong way round).</li>
+<li>For k &gt;= 2, <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> values change for the same seed, by design: the draw <code>B0</code> is unchanged, but it is now calibrated exactly instead of rescaled per trait. For k = 1 the values are the same rescale (to rounding).</li>
+<li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> refuses <code>G</code> together with manual <code>effects</code> or <code>scale_to_target = FALSE</code> (nothing would be calibrated to it), and refuses a stored target it cannot use whole: a block pairing a call trait with a trait outside the call, or a stored <code>dominance</code> / <code>additive_by_additive</code> block.</li>
+<li>
+<code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> refuses <code>additive_by_dominance</code> and <code>dominance_by_dominance</code> (“not yet supported”) and the derived names <code>total</code>, <code>unpartitioned</code>, <code>between_components</code>. Phenotype-level random and fixed effects may not use any genetic or derived name (<code>additive</code>, …).</li>
+<li>Error messages no longer suggest <code>define_trait(target_add_var = )</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-73-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-73-0"></a></h3>
+<ul><li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> calibrates by the exact congruence of the source method (<code>R/qtl_congruence.R</code>): <code>B = B0 A</code> with <code>B' M B = G</code> to machine precision, correlations included. At 200 QTL and a target genetic correlation of 0.4 the old per-trait rescale delivered anything from about 0.18 to 0.60.</li>
+<li>
+<code>anchor = c("genic", "realised")</code>: exact at the random-mating limit of the base frequencies (default), or in the <code>Cov(X)</code> of the base individuals, LD included (single-generation / clonal studies; an in-memory size limit applies).</li>
+<li>
+<code>G =</code> accepts a single number for one trait, and is written to <code>trait_var_comp</code> in the <strong>same transaction</strong> as the effects (a failed call used to keep the new target with the old effects).</li>
+<li>
+<code>trait_var_comp_tbl =</code> chooses the stored rows to calibrate to.</li>
+<li>
+<code>trait_var_comp.line_name</code>: per-line targets with fallback to the population-wide block; <code>define_effect_cov_matrix(line_name = )</code>.</li>
+<li>Two distinct rank errors: the anchor cannot carry the target, or the drawn architecture cannot.</li>
+<li>
+<code>warn_bounds =</code>: after calibration, a warning when another population (the founder pool’s expectation, the observed base individuals, or the genic limit) sees a covariance outside the bounds. Nothing is stored.</li>
+<li>
+<code>method = "union"</code> warns “approximate” for a non-zero target covariance, with the delivered covariance and correlation.</li>
+<li>The closing message says “exact” / “approximate” and gives the delivered covariance. A line-scoped call explains that line effects add no difference between line means.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-73-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-73-0"></a></h3>
+<ul><li>Targets are stored at full double precision (<code>%.17g</code>); they were truncated to 7 significant digits.</li>
+<li>
+<code>define_additive_effects(seed = )</code> applies the seed after every check, so a refused call no longer changes <code>.Random.seed</code>.</li>
+<li>A calibrated QTL set with no segregating locus in the base now errors (the anchor cannot carry the target) instead of warning “Falconer V_A is zero” and writing the draw unscaled.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.5" id="tidybreed-0725-2026-10-03">tidybreed 0.72.5 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0725-2026-10-03"></a></h2>
+<div class="section level3">
+<h3 id="documentation-0-72-5">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-72-5"></a></h3>
+<ul><li>Plan only: a full re-read of <code>plans/import_qtl_effect_methods.md</code> after the Q21 decision, to clear what was left before step 2:
+<ul><li>one internal target insert, so the step-3 refusal never blocks <code>G =</code>;</li>
+<li>
+<code>trait_var_comp.line_name</code> goes in the base DDL, and <code><a href="../reference/restore_pop.html">restore_pop()</a></code> keys on it;</li>
+<li>
+<code>seed</code> is applied after validation;</li>
+<li>target resolution on the surviving manual-effects paths is specified;</li>
+<li>the step-3 refusal is scoped by line;</li>
+<li>small step-2 items (<code>_pkgdown.yml</code>, the roxygen example, stale error strings).</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.4" id="tidybreed-0724-2026-10-03">tidybreed 0.72.4 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0724-2026-10-03"></a></h2>
+<div class="section level3">
+<h3 id="documentation-0-72-4">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-72-4"></a></h3>
+<ul><li>Plan only: Q21 in <code>plans/import_qtl_effect_methods.md</code> is decided. In step 3, <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> loses <code>effects</code> and <code>scale_to_target</code> and always calibrates. Exact coefficients go through <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>. The <code>prevalence</code> threshold then trusts a stored target only when every active term is <code>generated</code>. The planned named-table <code>effects</code> is withdrawn.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.3" id="tidybreed-0723-2026-10-03">tidybreed 0.72.3 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0723-2026-10-03"></a></h2>
+<p>Response to the Codex review of steps 0b and 1 (<code>plans/import_qtl_effect_methods_phase_0b_1_review.md</code>).</p>
+<div class="section level3">
+<h3 id="bug-fixes-0-72-3">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-72-3"></a></h3>
+<ul><li>
+<code><a href="../reference/restore_pop.html">restore_pop()</a></code> refuses a database written before 0.72.0. Such a file still holds <code>trait_var_comp.effect_name</code> <code>'gen_add'</code> / <code>'epistasis'</code> or the reserved owner <code>'generated_additive_tbv'</code>. It used to restore successfully, and then the old rows were invisible: <code><a href="../reference/get_trait_var.html">get_trait_var()</a></code> returned <code>NA</code>, <code><a href="../reference/add_tbv.html">add_tbv()</a></code> found no generated terms, and new targets were written next to the old ones.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-72-3">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-72-3"></a></h3>
+<ul><li>
+<code>define_phenotype(prevalence = )</code> states what 0.71.2 did and did not fix. A missing target and a composite phenotype are refused. A stored target is still taken as given, so effects written without calibrating to it (manual <code>effects</code>, <code>scale_to_target = FALSE</code>) give a wrong threshold with no error. Use <code>thresholds =</code> for such a trait. The design fix is open as Q21 in <code>plans/import_qtl_effect_methods.md</code>, to be decided before step 3.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="tests-0-72-3">Tests<a class="anchor" aria-label="anchor" href="#tests-0-72-3"></a></h3>
+<ul><li>
+<code>test-group-contributor-determinism.R</code> covers the <code>phenotype_components</code> route to the exact group sum, as well as the formula route. The new test fails on the pre-0.71.2 floating <code>SUM()</code>.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.2" id="tidybreed-0722-2026-10-03">tidybreed 0.72.2 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0722-2026-10-03"></a></h2>
+<div class="section level3">
+<h3 id="documentation-0-72-2">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-72-2"></a></h3>
+<ul><li>The step-1 names (<code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code>"additive"</code>, <code>"additive_by_additive"</code>, the <code>"generated"</code> owner, <code>define_effect_cov_matrix(trait_name =)</code>) now appear in every remaining file: the older plans in <code>plans/</code> and the legacy Quarto pages in <code>tools/quarto/legacy/</code>. The old names remain only where they record the rename itself (past <code>NEWS.md</code> entries, the step-1 plan text and summary).</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.1" id="tidybreed-0721-2026-10-03">tidybreed 0.72.1 (2026-10-03)<a class="anchor" aria-label="anchor" href="#tidybreed-0721-2026-10-03"></a></h2>
+<p>Review of step 1 (<code>plans/import_qtl_effect_methods_phase_1.md</code>, “Review pass”). No behaviour change.</p>
+<div class="section level3">
+<h3 id="documentation-0-72-1">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-72-1"></a></h3>
+<ul><li>The <code>trait_var_comp</code> description (<code><a href="../reference/schema.html">schema()</a></code>) no longer reads “Reserved … reserved”.</li>
+<li>Code and examples that call <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code> are realigned after the rename.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.72.0" id="tidybreed-0720-2026-10-02">tidybreed 0.72.0 (2026-10-02)<a class="anchor" aria-label="anchor" href="#tidybreed-0720-2026-10-02"></a></h2>
+<p>Step 1 of <code>plans/import_qtl_effect_methods.md</code>: a rename-only release that frees the names the later steps need. Nothing else changes: the test suite passes with only renamed calls and strings. Summary in <code>plans/import_qtl_effect_methods_phase_1.md</code>.</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-72-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-72-0"></a></h3>
+<ul><li>
+<strong><code>define_genome_effects()</code> is now <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>.</strong> Same arguments, same behaviour; the file is <code>R/define_genome_effect_terms.R</code>. There is no alias. The old name is kept free for the effect generator planned for Part C.</li>
+<li>
+<strong>Genetic <code>effect_name</code> values use full words.</strong> <code>"gen_add"</code> is now <code>"additive"</code>, and the reserved <code>"epistasis"</code> is now <code>"additive_by_additive"</code>. This applies to <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, <code><a href="../reference/get_trait_var.html">get_trait_var()</a></code> and the rows of <code>trait_var_comp</code>.</li>
+<li>
+<strong>The reserved effect owner is <code>"generated"</code></strong> (was <code>"generated_additive_tbv"</code>); the internal constant is <code>GE_GENERATED_OWNER</code>.</li>
+<li>
+<strong><code>define_effect_cov_matrix(trait_names =)</code> is now <code>trait_name =</code></strong>, matching the <code>trait_name_1</code> / <code>trait_name_2</code> columns it fills.</li>
+<li>Databases written by earlier versions are not readable by this one: their stored <code>gen_add</code> and owner strings no longer match. There is no migration (pre-1.0).</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.71.2" id="tidybreed-0712-2026-10-02">tidybreed 0.71.2 (2026-10-02)<a class="anchor" aria-label="anchor" href="#tidybreed-0712-2026-10-02"></a></h2>
+<p>Step 0b of <code>plans/import_qtl_effect_methods.md</code>: two bugs found while reviewing that plan, fixed ahead of it. Summary in <code>plans/import_qtl_effect_methods_phase_0b.md</code>.</p>
+<div class="section level3">
+<h3 id="bug-fixes-0-71-2">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-71-2"></a></h3>
+<ul><li>
+<strong>Group contributors are now bit-identical across DuckDB thread counts (B-1).</strong> The group-mate sum behind <code>group_sum()</code> / <code>group_mean()</code> (and <code>contributor_type = "group"</code> components) was a plain floating <code>SUM()</code>, so a large pen could give phenotypes that differed in the last bits between thread counts. It now accumulates exactly through <code>GEV_ACC_TYPE</code>, as the genome-effect evaluator does. New test <code>tests/testthat/test-group-contributor-determinism.R</code>.</li>
+<li>
+<strong><code>prevalence</code> no longer silently assumes zero genetic variance (B-2).</strong> The threshold looked up the additive target under the <em>phenotype</em> name, so a composite phenotype, or a trait whose effects were written without a stored target, got <code>Va = 0</code> and the wrong prevalence with no message. Behaviour change: <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code> now refuses <code>prevalence</code> together with <code>components</code> or <code>formula_tbv</code> (use <code>thresholds</code>), and <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> errors before any write or draw when a simple trait has no stored <code>gen_add</code> target.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.71.1" id="tidybreed-0711-2026-09-23">tidybreed 0.71.1 (2026-09-23)<a class="anchor" aria-label="anchor" href="#tidybreed-0711-2026-09-23"></a></h2>
+<div class="section level3">
+<h3 id="developer-documentation-0-71-1">Developer documentation<a class="anchor" aria-label="anchor" href="#developer-documentation-0-71-1"></a></h3>
+<ul><li>
+<code>CLAUDE.md</code> slimmed from ~98k to ~20k characters. The per-table schema and per-function reference moved verbatim into two project skills, <code>.claude/skills/tidybreed-schema/</code> and <code>.claude/skills/tidybreed-api/</code>, loaded on demand. Every prohibition and failure contract from those sections stays in <code>CLAUDE.md</code> under a new <strong>Hard Rules</strong> section. <code>.gitignore</code> now tracks <code>.claude/skills/</code>. No package code changed.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.71.0" id="tidybreed-0710">tidybreed 0.71.0<a class="anchor" aria-label="anchor" href="#tidybreed-0710"></a></h2>
 <p>Correlated random effects sampled across simulation stages — see <code>plans/sample_correlated_effects.md</code>. Shipped across Phases 0–8; every decision D1–D8 in that plan is implemented and tested.</p>
@@ -109,7 +279,7 @@
 <li>
 <code>define_genome_effects(base_tbl = )</code> fills Cockerham <code>center_value</code> on any <code>additive</code> or <code>dominance</code> member that has none (column omitted or <code>NA</code>). Explicit centres win, indicators are untouched, the base is queried only if a centre is actually missing, and without <code>base_tbl</code> a missing centre stays an error.</li>
 <li>
-<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> is now provably sugar over <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code>: a test reproduces its three effect tables and <code><a href="../reference/add_tbv.html">add_tbv()</a></code> output exactly through the general writer with the reserved owner, <code>replace_scope</code>, and the same <code>base_tbl</code>.</li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> is now provably sugar over <code>define_genome_effects()</code>: a test reproduces its three effect tables and <code><a href="../reference/add_tbv.html">add_tbv()</a></code> output exactly through the general writer with the reserved owner, <code>replace_scope</code>, and the same <code>base_tbl</code>.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="changed-0-69-0">Changed<a class="anchor" aria-label="anchor" href="#changed-0-69-0"></a></h3>
@@ -247,7 +417,7 @@
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.66.0" id="tidybreed-0660-2026-09-10">tidybreed 0.66.0 (2026-09-10)<a class="anchor" aria-label="anchor" href="#tidybreed-0660-2026-09-10"></a></h2>
-<p>Phase C of <code>plans/update_genome_effects_v4.md</code>: the writers. Adds <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> and its two <code>terms</code> builders, rebuilds <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> on top of it, and deletes <code>trait_meta.expressed_parent</code>. <strong>Still deliberately mid-migration</strong>: <code><a href="../reference/add_tbv.html">add_tbv()</a></code> (Phase D) reads the old column shape and does not work in this version.</p>
+<p>Phase C of <code>plans/update_genome_effects_v4.md</code>: the writers. Adds <code>define_genome_effects()</code> and its two <code>terms</code> builders, rebuilds <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> on top of it, and deletes <code>trait_meta.expressed_parent</code>. <strong>Still deliberately mid-migration</strong>: <code><a href="../reference/add_tbv.html">add_tbv()</a></code> (Phase D) reads the old column shape and does not work in this version.</p>
 <div class="section level3">
 <h3 id="new-0-66-0">New<a class="anchor" aria-label="anchor" href="#new-0-66-0"></a></h3>
 <ul><li><p><strong><code>define_genome_effects(pop, trait_name, terms, ...)</code></strong> — the general writer for arbitrary genome effects. <code>terms</code> is a <strong>long data frame, one row per (term x locus)</strong>, with scope in a separate <code>origin</code> argument (<code>NULL</code> for the common scope, a named scalar list, or a data frame keyed by <code>locus_name</code>). No nesting, no S3 constructor, no <code>member_slot</code> arithmetic: the same shape as every table <code><a href="../reference/get_table.html">get_table()</a></code> returns. Four replacement modes — <code>append</code>, <code>replace_scope</code>, <code>replace_owner</code>, <code>replace_trait</code> — and a whole write is one transaction that validates the entire table set before <code>COMMIT</code>. Every message about malformed input names the <code>term_id</code> <strong>the user typed</strong>, never an <code>id_genome_effect</code> they have not seen.</p></li>
@@ -257,7 +427,7 @@
 </ul></div>
 <div class="section level3">
 <h3 id="breaking-0-66-0">Breaking<a class="anchor" aria-label="anchor" href="#breaking-0-66-0"></a></h3>
-<ul><li><p><strong><code>trait_meta.expressed_parent</code> is deleted</strong> — argument, column, description and documentation. Imprinting is a property of an <strong>effect</strong>, not of a trait: it is one origin row on a member, so it can now differ per locus, per line and per effect owner, none of which a trait-wide flag could express. Use <code>define_additive_effects(parent_origin = 1)</code> for the whole-genome case that flag covered, or <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> for anything finer.</p></li>
+<ul><li><p><strong><code>trait_meta.expressed_parent</code> is deleted</strong> — argument, column, description and documentation. Imprinting is a property of an <strong>effect</strong>, not of a trait: it is one origin row on a member, so it can now differ per locus, per line and per effect owner, none of which a trait-wide flag could express. Use <code>define_additive_effects(parent_origin = 1)</code> for the whole-genome case that flag covered, or <code>define_genome_effects()</code> for anything finer.</p></li>
 <li><p><strong><code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> writes terms.</strong> Same call, new storage: one order-one <code>additive</code> term per locus under the reserved owner <code>generated_additive_tbv</code>, with the base allele frequency as the member’s <code>center_value</code>. New <code>parent_origin</code> argument, <strong>per trait</strong> (scalar recycled, positional vector, or named by trait). A call mixing origins across traits while supplying <code>G</code> is now rejected: under random mating a locus’s paternal and maternal copies are independent, so the genetic covariance between a paternal-only and a maternal-only trait is exactly zero and the requested off-diagonal is unobtainable, not merely approximate.</p></li>
 <li><p><strong>Re-running <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> replaces only the variant at the same scope</strong>, not the whole trait. Successive common / line-A / line-B calls each keep the others — the per-copy fallback that makes crossbred breeding values correct needs all of them standing. One consequence is worth knowing: changing <code>parent_origin</code> on a re-run <strong>adds</strong> a variant rather than replacing one. That is a legal containment pair and rarely what was intended, so the function warns on exactly that case and names both variants.</p></li>
 <li><p><strong>The foreign keys <em>inside</em> the effect set are gone</strong> (<code>members</code> -&gt; <code>effects</code>, <code>origins</code> -&gt; <code>members</code>). DuckDB 1.5.5 refuses to delete a parent row inside an explicit transaction whose children were deleted earlier in that same transaction — single-column and composite keys alike, either delete order, filtered or whole-table — and succeeds only in autocommit. That made every replace mode impossible to write atomically, and a half-replaced effect model is a <em>different</em> genetic model rather than a weaker one. The same integrity is enforced by <code>validate_genome_effects()</code> before every <code>COMMIT</code>, and the DuckDB behaviour is pinned by a test so a version that fixes it gets noticed. The <code>locus_id</code> -&gt; <code>genome_meta</code> key stays; <code>genome_meta</code> rows are never deleted.</p></li>
@@ -997,7 +1167,7 @@
 </tr><tr><td><code>load_effect_cov()</code></td>
 <td><code><a href="../reference/load_trait_cov.html">load_trait_cov()</a></code></td>
 </tr><tr><td><code>write_effect_cov_diagonal()</code></td>
-<td><code><a href="../reference/write_trait_var_diag.html">write_trait_var_diag()</a></code></td>
+<td><code>write_trait_var_diag()</code></td>
 </tr><tr><td><code>ensure_effect_cov_table()</code></td>
 <td><code>ensure_trait_var_comp()</code></td>
 </tr></tbody></table><p>New helpers added: <code><a href="../reference/get_phenotype_var.html">get_phenotype_var()</a></code>, <code>load_phenotype_cov()</code>, <code>write_phenotype_var_diag()</code>, <code>ensure_phenotype_var_comp()</code>.</p>
@@ -1243,7 +1413,7 @@
 <div class="section level3">
 <h3 id="improvements-0-34-1">Improvements<a class="anchor" aria-label="anchor" href="#improvements-0-34-1"></a></h3>
 <ul><li><p><code><a href="../reference/define_phenotype.html">define_phenotype()</a></code> man page now fully documents <code>formula_tbv</code>, <code>formula</code>, and <code>type = "derived_formula"</code>, with examples for continuous, count, categorical, maternal composite (both <code>components</code> data frame and <code>formula_tbv</code> shorthand), SGE, and derived-formula patterns.</p></li>
-<li><p><code><a href="../reference/define_trait_simple.html">define_trait_simple()</a></code> argument <code>trait_type</code> likewise renamed to <code>type</code>.</p></li>
+<li><p><code>define_trait_simple()</code> argument <code>trait_type</code> likewise renamed to <code>type</code>.</p></li>
 <li><p><code>sql_utils.R</code>: removed stale observation-layer columns (<code>trait_type</code>, <code>repeatable</code>, etc.) from <code>trait_meta</code> reserved cols (they moved to <code>phenotype_meta</code> in v0.31.0); added <code>phenotype_meta</code> reserved cols entry.</p></li>
 </ul></div>
 </div>
@@ -1347,7 +1517,7 @@
 <ul><li>
 <code>define_effect_cov_matrix(pop, "residual", R)</code> now routes to <code>phenotype_residual_cov</code> via <code>add_residual_cov()</code>.</li>
 <li>
-<code><a href="../reference/define_trait_simple.html">define_trait_simple()</a></code> chains through <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code> automatically.</li>
+<code>define_trait_simple()</code> chains through <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code> automatically.</li>
 <li>
 <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> reads all phenotype metadata from <code>phenotype_meta</code> and assembles composite TBVs from <code>phenotype_components</code> when present.</li>
 <li>
@@ -1400,7 +1570,7 @@
 <code>add_additive_effects()</code> → <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>
 </li>
 <li>
-<code>add_trait_simple()</code> → <code><a href="../reference/define_trait_simple.html">define_trait_simple()</a></code>
+<code>add_trait_simple()</code> → <code>define_trait_simple()</code>
 </li>
 <li>
 <code>add_effect_fixed_class()</code> → <code><a href="../reference/define_effect_fixed_class.html">define_effect_fixed_class()</a></code>

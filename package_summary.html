@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -113,7 +113,7 @@
 </td>
 </tr><tr><td><code>define_</code></td>
 <td>
-<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_trait_simple</code>, <code>define_additive_effects</code>, <code>define_genome_effects</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>
+<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_additive_effects</code>, <code>define_genome_effect_terms</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>
 </td>
 </tr><tr><td><code>add_</code></td>
 <td>
@@ -150,12 +150,12 @@
 </tr><tr><td><code>add_phenotype.R</code></td>
 <td align="right">1,146</td>
 <td>Phenotype simulation (composite, SGE, fixed/random effects, residuals)</td>
-</tr><tr><td><code>define_genome_effects.R</code></td>
+</tr><tr><td><code>define_genome_effect_terms.R</code></td>
 <td align="right">917</td>
 <td>General genome-effect writer: terms, members, origins, replace modes</td>
 </tr><tr><td><code>define_additive_effects.R</code></td>
 <td align="right">912</td>
-<td>QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope</td>
+<td>QTL effect sampling, exact calibration by congruence (<code>anchor =</code>), §6C target resolution, line/parent-origin scope</td>
 </tr><tr><td><code>genome_effects_eval.R</code></td>
 <td align="right">874</td>
 <td>The one evaluator behind <code><a href="reference/add_tbv.html">add_tbv()</a></code> / <code><a href="reference/add_tgv.html">add_tgv()</a></code>
@@ -336,18 +336,18 @@
 <th>Description</th>
 </tr></thead><tbody><tr><td><code>trait_meta</code></td>
 <td>table</td>
-<td align="right">5</td>
+<td align="right">4</td>
 <td><code>id_trait</code></td>
 <td><code><a href="reference/define_trait.html">define_trait()</a></code></td>
 <td>once</td>
 <td>Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait().</td>
 </tr><tr><td><code>trait_var_comp</code></td>
 <td>table</td>
-<td align="right">5</td>
+<td align="right">6</td>
 <td><code>id_trait_var_comp</code></td>
 <td><code><a href="reference/open_pop.html">open_pop()</a></code></td>
 <td>once</td>
-<td>Genetic variance component storage. One row per (effect_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored. Reserved effect_name values: ‘gen_add’, ‘dominance’ (future), ‘epistasis’ (future).</td>
+<td>Generation targets. One row per (effect_name, line_name, trait_name_1, trait_name_2); both (i,j) and (j,i) stored; a block is written once, at full precision, never overwritten (0.73.0). Reserved effect_name values: ‘additive’, plus ‘dominance’ and ‘additive_by_additive’, which no generator writes yet.</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="observation-model-5">Observation model (5)<a class="anchor" aria-label="anchor" href="#observation-model-5"></a></h3>

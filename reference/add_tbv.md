@@ -15,8 +15,7 @@ per allele copy, not genotype dosage) for the individual, of:
       TBV_i = sum over allele copies of (allele - center_value) * genome_value
 
 `genome_value` and `center_value` come from the **order-one `additive`
-terms** under the reserved effect owner `generated_additive_tbv`, the
-terms
+terms** under the reserved effect owner `generated`, the terms
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 writes. `center_value` is that variant's base allele frequency.
 
@@ -31,7 +30,7 @@ The filter is deliberate and not merely conservative. Under functional
 breeding-value coefficient in a diploid HWE base is \\\alpha = a + d(q -
 p)\\; under epistasis, average effects depend on other loci and on LD.
 So arbitrary terms written through
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 contribute to `ind_tgv` but **never silently redefine the breeding
 value**, additive members appearing inside interactions are ignored, and
 `ind_tbv` keeps its exact meaning. Deriving average effects from a

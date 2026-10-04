@@ -24,7 +24,7 @@ This is the single place tidybreed turns a population selection into
 `p`.
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 and
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 both call it for their `base_tbl`, so a base selection means the same
 population in either. Users call it to obtain `p` for
 [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md).
@@ -70,7 +70,7 @@ counts Duroc copies wherever they sit, at any cross depth.
 ## See also
 
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md),
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
 [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md).
 
 ## Examples

@@ -8,6 +8,9 @@
 <url><loc>https://austin-putz.github.io/tidybreed/index.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/news/index.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/package_summary.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/DERIVED_EFFECT_NAMES.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/GENETIC_EFFECT_NAMES.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/GENETIC_EFFECT_NAMES_FUTURE.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/IND_TABLE_ID_IND_COLS.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/SQL_IDENTIFIER_RE.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/SQL_KEYWORDS.html</loc></url>
@@ -52,17 +55,17 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_effect_random.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_genome.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/define_genome_effects.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_index.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_phenotype.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_residual_cov.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_schema_description.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_table.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/define_trait.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/define_trait_simple.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/describe_table.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/detect_available_memory.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-all_schema_descriptions.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_check_prevalence.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_commit.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_condition_values.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_covariate_terms.html</loc></url>
@@ -83,6 +86,8 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-blupf90_residual_cov.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-build_tbv_env.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-check_condition_change_agreement.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-check_cov_dimnames.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-check_effect_name_input.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-check_phenotype_exists.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-chr_info_from_arrays.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-create_core_tables.html</loc></url>
@@ -107,6 +112,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-list_archive_tables.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-observation_model_descriptions.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-pivot_pheno_wide.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-prevalence_composite_msg.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-pvc_block_members.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-pvc_write_block.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-read_one_per_id.html</loc></url>
@@ -128,6 +134,11 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-system_descriptions.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tbv_by_id.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-topo_sort_phenotypes.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tvc_block_traits.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tvc_line_sql.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tvc_removal_call.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tvc_resolve_line.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-tvc_write_block.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-validate_derived_formula.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-validate_formula_tbv.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-walk_formula_tbv_ast.html</loc></url>
@@ -211,6 +222,5 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/write_meta_file.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/write_phenotype_cov_block.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/write_renum_par.html</loc></url>
-<url><loc>https://austin-putz.github.io/tidybreed/reference/write_trait_var_diag.html</loc></url>
 </urlset>
 

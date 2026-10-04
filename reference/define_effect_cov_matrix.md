@@ -6,14 +6,15 @@ tidybreed. Routes to `trait_var_comp` for genetic effects and to
 
 Common `effect_name` values:
 
-- `"gen_add"` — additive genetic (co)variances (G matrix). Written to
+- `"additive"` — additive genetic (co)variances (G matrix). Written to
   `trait_var_comp`. Used by
   [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   when rescaling to target variance and as the sampling distribution for
   multi-trait draws.
 
-- `"dominance"`, `"epistasis"` — future genetic effects. Written to
-  `trait_var_comp`. Row/column names are trait names.
+- `"dominance"`, `"additive_by_additive"` — reserved genetic effects; no
+  generator calibrates them yet. Written to `trait_var_comp`. Row/column
+  names are trait names.
 
 - `"residual"` — residual (co)variances (R matrix). Routed to
   `phenotype_var_comp` with `effect_name = "residual"`. Row/column names
@@ -56,6 +57,22 @@ row for the effect must use `distribution = "normal"` and read the same
 [`define_residual_cov()`](https://austin-putz.github.io/tidybreed/reference/define_residual_cov.md)
 for the full rules. A rejected call changes nothing.
 
+**Genetic blocks are written once.** A genetic block (`"additive"`,
+`"dominance"`, `"additive_by_additive"`) is validated as positive
+semi-definite, stored at full double precision, and never overwritten:
+if any row already exists for that `effect_name`, any of the named
+traits and the same `line_name`, the call is an error, even when the
+matrix is identical. The error gives the
+[`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+call that clears the stored block. `trait_var_comp` is the single source
+of generation targets; the effect generators read it and never overwrite
+it either.
+
+`"additive_by_dominance"` and `"dominance_by_dominance"` are reserved
+for future generators and refused. `"total"`, `"unpartitioned"` and
+`"between_components"` are output names of the variance extractor and
+refused as input.
+
 ## Usage
 
 ``` r
@@ -63,7 +80,8 @@ define_effect_cov_matrix(
   pop,
   effect_name,
   cov_matrix,
-  trait_names = NULL,
+  trait_name = NULL,
+  line_name = NULL,
   tol = 1e-09
 )
 ```
@@ -76,19 +94,26 @@ define_effect_cov_matrix(
 
 - effect_name:
 
-  Character. Label for the variance component, e.g. `"gen_add"`,
+  Character. Label for the variance component, e.g. `"additive"`,
   `"residual"`, `"hys"`.
 
 - cov_matrix:
 
-  A numeric square matrix. Must be symmetric within `tol`. Row and
-  column names are used as trait/phenotype names when `trait_names` is
-  not supplied.
+  A numeric square matrix, or a single number when one trait/phenotype
+  is named. Must be symmetric within `tol`. A named matrix must carry
+  the same names as `trait_name`, in the same order (it is never
+  relabelled); an unnamed one is taken in `trait_name` order.
 
-- trait_names:
+- trait_name:
 
-  Optional character vector of trait/phenotype names (length ==
-  `nrow(cov_matrix)`). Overrides the matrix's `rownames` / `colnames`.
+  Character vector of trait/phenotype names (length ==
+  `nrow(cov_matrix)`). Optional when the matrix has names.
+
+- line_name:
+
+  Character or `NULL` (default). Genetic effects only: the line whose
+  generation target this is. `NULL` is the population-wide target, which
+  a line without its own block falls back to.
 
 - tol:
 
@@ -113,7 +138,11 @@ if (FALSE) { # \dontrun{
 G <- matrix(c(100, -20, -20, 50), 2, 2,
             dimnames = list(c("ADG", "BF"), c("ADG", "BF")))
 pop <- pop |>
-  define_effect_cov_matrix("gen_add", G)
+  define_effect_cov_matrix("additive", G)
+
+# One trait: a number is a 1 x 1 matrix
+pop <- pop |>
+  define_effect_cov_matrix("additive", 0.25, trait_name = "WW")
 
 # Residual → phenotype_var_comp (effect_name = "residual")
 R <- matrix(c(30, 5, 5, 10), 2, 2,

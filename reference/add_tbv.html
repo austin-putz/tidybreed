@@ -11,7 +11,7 @@ allele copy, not genotype dosage) for the individual, of:
 
 
 genome_value and center_value come from the order-one additive
-terms under the reserved effect owner generated_additive_tbv, the terms
+terms under the reserved effect owner generated, the terms
 define_additive_effects() writes. center_value is that variant's base
 allele frequency.
 This is one filtered call into the same evaluator add_tgv() uses, not a
@@ -21,7 +21,7 @@ The filter is deliberate and not merely conservative. Under functional
 \((a, d)\) input the stored coefficient is \(a\), while the
 breeding-value coefficient in a diploid HWE base is
 \(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
-loci and on LD. So arbitrary terms written through define_genome_effects()
+loci and on LD. So arbitrary terms written through define_genome_effect_terms()
 contribute to ind_tgv but never silently redefine the breeding value,
 additive members appearing inside interactions are ignored, and ind_tbv
 keeps its exact meaning. Deriving average effects from a general
@@ -37,7 +37,7 @@ allele copy, not genotype dosage) for the individual, of:
 
 
 genome_value and center_value come from the order-one additive
-terms under the reserved effect owner generated_additive_tbv, the terms
+terms under the reserved effect owner generated, the terms
 define_additive_effects() writes. center_value is that variant's base
 allele frequency.
 This is one filtered call into the same evaluator add_tgv() uses, not a
@@ -47,7 +47,7 @@ The filter is deliberate and not merely conservative. Under functional
 \((a, d)\) input the stored coefficient is \(a\), while the
 breeding-value coefficient in a diploid HWE base is
 \(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
-loci and on LD. So arbitrary terms written through define_genome_effects()
+loci and on LD. So arbitrary terms written through define_genome_effect_terms()
 contribute to ind_tgv but never silently redefine the breeding value,
 additive members appearing inside interactions are ignored, and ind_tbv
 keeps its exact meaning. Deriving average effects from a general
@@ -59,7 +59,7 @@ non-additive model is a separate calculation."><meta property="og:image" content
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.71.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,7 +100,7 @@ allele copy, not genotype dosage) for the individual, of:</p>
 </code></pre></div>
 
 <p><code>genome_value</code> and <code>center_value</code> come from the <strong>order-one <code>additive</code>
-terms</strong> under the reserved effect owner <code>generated_additive_tbv</code>, the terms
+terms</strong> under the reserved effect owner <code>generated</code>, the terms
 <code><a href="define_additive_effects.html">define_additive_effects()</a></code> writes. <code>center_value</code> is that variant's base
 allele frequency.</p>
 <p><strong>This is one filtered call into the same evaluator <code><a href="add_tgv.html">add_tgv()</a></code> uses</strong>, not a
@@ -110,7 +110,7 @@ owner and to single-member additive terms.</p>
 \((a, d)\) input the stored coefficient is \(a\), while the
 breeding-value coefficient in a diploid HWE base is
 \(\alpha = a + d(q - p)\); under epistasis, average effects depend on other
-loci and on LD. So arbitrary terms written through <code><a href="define_genome_effects.html">define_genome_effects()</a></code>
+loci and on LD. So arbitrary terms written through <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>
 contribute to <code>ind_tgv</code> but <strong>never silently redefine the breeding value</strong>,
 additive members appearing inside interactions are ignored, and <code>ind_tbv</code>
 keeps its exact meaning. Deriving average effects from a general

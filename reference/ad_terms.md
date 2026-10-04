@@ -2,7 +2,7 @@
 
 Expands one locus's additive and dominance coefficients into the two
 member rows
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
 takes. There is no third table and no separate storage mode — functional
 coding is `additive` with `center_value = 0.5` plus an `indicator` on
 the heterozygous state, Cockerham coding is `additive` plus `dominance`,
@@ -80,7 +80,7 @@ expectation depends on joint genotype frequencies and LD.
 
 ## See also
 
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md),
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
 [`genotype_terms()`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md).
 
 ## Examples
@@ -88,6 +88,6 @@ expectation depends on joint genotype frequencies and LD.
 ``` r
 if (FALSE) { # \dontrun{
 tt <- ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)
-pop <- pop |> define_genome_effects("ADG", tt, effect_owner = "functional")
+pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
 } # }
 ```

@@ -1,5 +1,341 @@
 # Changelog
 
+## tidybreed 0.73.2 (2026-10-03)
+
+Step 2 corrections from the Codex review
+(`plans/import_qtl_effect_methods_phase_2_codex_review.md`, response at
+its end). All concern
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+and its target validation; seeded output changes for k \>= 2 (pre-1.0,
+by design).
+
+- **“Exact” is now verified, not assumed.** The delivered `B' M B` is
+  compared with the stored `G`, entry by entry, to `1e-8` on the
+  correlation scale; a miss is an error before anything is written.
+  Under `method = "union"` the “exact” label used to be given whenever
+  the target’s off-diagonals were zero, although overlapping QTL sets do
+  not deliver a zero covariance; that case now warns “approximate”.
+- **Rank and PSD are judged on the correlation scale** (target
+  validation in
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  and the shared `trait_var_comp` writer). An eigenvalue cut-off
+  relative to `G`‘s largest eigenvalue depended on the traits’ units:
+  `G = diag(1, 1e-11)` was stored in full but delivered `diag(1, 0)`.
+  The architecture `B0` is normalised the same way before the
+  congruence. The PSD error now reports the smallest eigenvalue of the
+  correlation matrix.
+- **A passed `G` no longer bypasses a stored `dominance` /
+  `additive_by_additive` target** for the call’s traits. It is refused,
+  as the `G = NULL` path already was; the error gives the explicit route
+  (store `G` with
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md),
+  then select it with `trait_var_comp_tbl`).
+- **`method = "union"` refuses a trait with a positive target variance
+  and no QTL in the call** (it used to warn, then store a target the
+  model did not deliver). A zero-variance trait without QTL is a
+  message.
+- **Founder-pool diagnostic divisor**: the pool expectation is
+  `2 Cov(H)` with divisor `n_h`, not `n_h - 1`.
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  draws each haplotype with replacement, so a founder’s copies are iid
+  draws from the empirical pool. The old divisor overstated the
+  expectation by `n_h/(n_h - 1)` (a factor 2 for a two-haplotype pool).
+- **Diagnostics run before the commit** and are reported after it,
+  reading the pool’s identity columns from the physical table: a
+  [`select()`](https://dplyr.tidyverse.org/reference/select.html)ed
+  `founder_haplotypes` base, which `base_tbl` accepts, used to fail with
+  a binder error *after* the target and terms were committed.
+- **`parent_origin` is validated before coercion**: `1.9` used to become
+  `1` (a paternal-only effect). Non-integer, infinite, missing and empty
+  values, and duplicated or empty names, are errors.
+- **The anchor-rank refusal (`rank(G) > rank(M)`) happens before `seed`
+  is applied** and no longer touches the RNG. The `seed` documentation
+  now says which failures (architecture rank, failed verification) come
+  after the draw.
+- **Breaking:**
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  loses `allow_reserved_owner`. The reserved owner `generated` can no
+  longer be written by any exported function, so “every active term is
+  `generated`” proves the terms were calibrated to the stored target
+  (Q23). `mode = "replace_trait"` still refuses to delete generated
+  terms, now without an override: re-run the generator.
+- `G =` next to a stored non-additive target keeps the two-step route
+  (store with
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md),
+  select with `trait_var_comp_tbl`); no new argument (decided).
+- The mixed-`parent_origin` refusal states its actual reason (one call
+  has one anchor) instead of claiming every cross-scope covariance is
+  zero: a both-parents vs a paternal-only trait has covariance `pq` per
+  locus.
+
+## tidybreed 0.73.1 (2026-10-03)
+
+- [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md):
+  the founder-pool comparison (§7.4) is now always a
+  [`message()`](https://rdrr.io/r/base/message.html), never a warning. A
+  small pool’s departure from the target is its sampling LD, not a
+  mistake in the call (with 200 QTL the ±25% default fired on ~45% of
+  100-haplotype two-trait pools). Outside `warn_bounds` the message adds
+  the fix: add the founders first and calibrate with
+  `anchor = "realised"` on them. Observed base individuals and the
+  realised anchor’s genic limit still warn. Decision Q22 (b) in
+  `plans/import_qtl_effect_methods.md`.
+
+## tidybreed 0.73.0 (2026-10-03)
+
+Step 2 of `plans/import_qtl_effect_methods.md`: Part A (exact
+multi-trait calibration, `anchor =`) and the §6C generation-target
+rules. Summary in `plans/import_qtl_effect_methods_phase_2.md`.
+
+**Databases written by earlier versions are not readable** (pre-1.0, no
+migration): `trait_var_comp` gained `line_name` and `trait_meta` lost
+`target_add_mean`.
+[`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+refuses such a file and says to rebuild.
+
+### Breaking changes
+
+- [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
+  loses `target_add_var` and `target_add_mean`, and `trait_meta` loses
+  the `target_add_mean` column (it was written and never read). Targets
+  enter **only** through
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  or a generator’s `G =`.
+- `define_trait_simple()` is removed. Chain
+  [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
+  → `define_additive_effects(G = )` →
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md).
+- `trait_var_comp` is the single source of generation targets, and a
+  stored genetic block is **never overwritten**:
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  and `define_additive_effects(G = )` refuse when any row exists for
+  that `effect_name`, any of the traits and the same `line_name`, even
+  for an identical matrix. The error gives the
+  [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  call that clears it.
+- Genetic blocks are validated positive semidefinite, and a named matrix
+  must match `trait_name` in order (it used to be relabelled silently,
+  so a `c("BF", "ADG")` matrix passed with `trait_name = c("ADG", "BF")`
+  was stored the wrong way round).
+- For k \>= 2,
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  values change for the same seed, by design: the draw `B0` is
+  unchanged, but it is now calibrated exactly instead of rescaled per
+  trait. For k = 1 the values are the same rescale (to rounding).
+- [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  refuses `G` together with manual `effects` or
+  `scale_to_target = FALSE` (nothing would be calibrated to it), and
+  refuses a stored target it cannot use whole: a block pairing a call
+  trait with a trait outside the call, or a stored `dominance` /
+  `additive_by_additive` block.
+- [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  refuses `additive_by_dominance` and `dominance_by_dominance` (“not yet
+  supported”) and the derived names `total`, `unpartitioned`,
+  `between_components`. Phenotype-level random and fixed effects may not
+  use any genetic or derived name (`additive`, …).
+- Error messages no longer suggest `define_trait(target_add_var = )`.
+
+### New features
+
+- [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  calibrates by the exact congruence of the source method
+  (`R/qtl_congruence.R`): `B = B0 A` with `B' M B = G` to machine
+  precision, correlations included. At 200 QTL and a target genetic
+  correlation of 0.4 the old per-trait rescale delivered anything from
+  about 0.18 to 0.60.
+- `anchor = c("genic", "realised")`: exact at the random-mating limit of
+  the base frequencies (default), or in the `Cov(X)` of the base
+  individuals, LD included (single-generation / clonal studies; an
+  in-memory size limit applies).
+- `G =` accepts a single number for one trait, and is written to
+  `trait_var_comp` in the **same transaction** as the effects (a failed
+  call used to keep the new target with the old effects).
+- `trait_var_comp_tbl =` chooses the stored rows to calibrate to.
+- `trait_var_comp.line_name`: per-line targets with fallback to the
+  population-wide block; `define_effect_cov_matrix(line_name = )`.
+- Two distinct rank errors: the anchor cannot carry the target, or the
+  drawn architecture cannot.
+- `warn_bounds =`: after calibration, a warning when another population
+  (the founder pool’s expectation, the observed base individuals, or the
+  genic limit) sees a covariance outside the bounds. Nothing is stored.
+- `method = "union"` warns “approximate” for a non-zero target
+  covariance, with the delivered covariance and correlation.
+- The closing message says “exact” / “approximate” and gives the
+  delivered covariance. A line-scoped call explains that line effects
+  add no difference between line means.
+
+### Bug fixes
+
+- Targets are stored at full double precision (`%.17g`); they were
+  truncated to 7 significant digits.
+- `define_additive_effects(seed = )` applies the seed after every check,
+  so a refused call no longer changes `.Random.seed`.
+- A calibrated QTL set with no segregating locus in the base now errors
+  (the anchor cannot carry the target) instead of warning “Falconer V_A
+  is zero” and writing the draw unscaled.
+
+## tidybreed 0.72.5 (2026-10-03)
+
+### Documentation
+
+- Plan only: a full re-read of `plans/import_qtl_effect_methods.md`
+  after the Q21 decision, to clear what was left before step 2:
+  - one internal target insert, so the step-3 refusal never blocks
+    `G =`;
+  - `trait_var_comp.line_name` goes in the base DDL, and
+    [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+    keys on it;
+  - `seed` is applied after validation;
+  - target resolution on the surviving manual-effects paths is
+    specified;
+  - the step-3 refusal is scoped by line;
+  - small step-2 items (`_pkgdown.yml`, the roxygen example, stale error
+    strings).
+
+## tidybreed 0.72.4 (2026-10-03)
+
+### Documentation
+
+- Plan only: Q21 in `plans/import_qtl_effect_methods.md` is decided. In
+  step 3,
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  loses `effects` and `scale_to_target` and always calibrates. Exact
+  coefficients go through
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md).
+  The `prevalence` threshold then trusts a stored target only when every
+  active term is `generated`. The planned named-table `effects` is
+  withdrawn.
+
+## tidybreed 0.72.3 (2026-10-03)
+
+Response to the Codex review of steps 0b and 1
+(`plans/import_qtl_effect_methods_phase_0b_1_review.md`).
+
+### Bug fixes
+
+- [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  refuses a database written before 0.72.0. Such a file still holds
+  `trait_var_comp.effect_name` `'gen_add'` / `'epistasis'` or the
+  reserved owner `'generated_additive_tbv'`. It used to restore
+  successfully, and then the old rows were invisible:
+  [`get_trait_var()`](https://austin-putz.github.io/tidybreed/reference/get_trait_var.md)
+  returned `NA`,
+  [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
+  found no generated terms, and new targets were written next to the old
+  ones.
+
+### Documentation
+
+- `define_phenotype(prevalence = )` states what 0.71.2 did and did not
+  fix. A missing target and a composite phenotype are refused. A stored
+  target is still taken as given, so effects written without calibrating
+  to it (manual `effects`, `scale_to_target = FALSE`) give a wrong
+  threshold with no error. Use `thresholds =` for such a trait. The
+  design fix is open as Q21 in `plans/import_qtl_effect_methods.md`, to
+  be decided before step 3.
+
+### Tests
+
+- `test-group-contributor-determinism.R` covers the
+  `phenotype_components` route to the exact group sum, as well as the
+  formula route. The new test fails on the pre-0.71.2 floating `SUM()`.
+
+## tidybreed 0.72.2 (2026-10-03)
+
+### Documentation
+
+- The step-1 names
+  ([`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+  `"additive"`, `"additive_by_additive"`, the `"generated"` owner,
+  `define_effect_cov_matrix(trait_name =)`) now appear in every
+  remaining file: the older plans in `plans/` and the legacy Quarto
+  pages in `tools/quarto/legacy/`. The old names remain only where they
+  record the rename itself (past `NEWS.md` entries, the step-1 plan text
+  and summary).
+
+## tidybreed 0.72.1 (2026-10-03)
+
+Review of step 1 (`plans/import_qtl_effect_methods_phase_1.md`, “Review
+pass”). No behaviour change.
+
+### Documentation
+
+- The `trait_var_comp` description
+  ([`schema()`](https://austin-putz.github.io/tidybreed/reference/schema.md))
+  no longer reads “Reserved … reserved”.
+- Code and examples that call
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  are realigned after the rename.
+
+## tidybreed 0.72.0 (2026-10-02)
+
+Step 1 of `plans/import_qtl_effect_methods.md`: a rename-only release
+that frees the names the later steps need. Nothing else changes: the
+test suite passes with only renamed calls and strings. Summary in
+`plans/import_qtl_effect_methods_phase_1.md`.
+
+### Breaking changes
+
+- **`define_genome_effects()` is now
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md).**
+  Same arguments, same behaviour; the file is
+  `R/define_genome_effect_terms.R`. There is no alias. The old name is
+  kept free for the effect generator planned for Part C.
+- **Genetic `effect_name` values use full words.** `"gen_add"` is now
+  `"additive"`, and the reserved `"epistasis"` is now
+  `"additive_by_additive"`. This applies to
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md),
+  [`get_trait_var()`](https://austin-putz.github.io/tidybreed/reference/get_trait_var.md)
+  and the rows of `trait_var_comp`.
+- **The reserved effect owner is `"generated"`** (was
+  `"generated_additive_tbv"`); the internal constant is
+  `GE_GENERATED_OWNER`.
+- **`define_effect_cov_matrix(trait_names =)` is now `trait_name =`**,
+  matching the `trait_name_1` / `trait_name_2` columns it fills.
+- Databases written by earlier versions are not readable by this one:
+  their stored `gen_add` and owner strings no longer match. There is no
+  migration (pre-1.0).
+
+## tidybreed 0.71.2 (2026-10-02)
+
+Step 0b of `plans/import_qtl_effect_methods.md`: two bugs found while
+reviewing that plan, fixed ahead of it. Summary in
+`plans/import_qtl_effect_methods_phase_0b.md`.
+
+### Bug fixes
+
+- **Group contributors are now bit-identical across DuckDB thread counts
+  (B-1).** The group-mate sum behind `group_sum()` / `group_mean()` (and
+  `contributor_type = "group"` components) was a plain floating `SUM()`,
+  so a large pen could give phenotypes that differed in the last bits
+  between thread counts. It now accumulates exactly through
+  `GEV_ACC_TYPE`, as the genome-effect evaluator does. New test
+  `tests/testthat/test-group-contributor-determinism.R`.
+- **`prevalence` no longer silently assumes zero genetic variance
+  (B-2).** The threshold looked up the additive target under the
+  *phenotype* name, so a composite phenotype, or a trait whose effects
+  were written without a stored target, got `Va = 0` and the wrong
+  prevalence with no message. Behaviour change:
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
+  now refuses `prevalence` together with `components` or `formula_tbv`
+  (use `thresholds`), and
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  errors before any write or draw when a simple trait has no stored
+  `gen_add` target.
+
+## tidybreed 0.71.1 (2026-09-23)
+
+### Developer documentation
+
+- `CLAUDE.md` slimmed from ~98k to ~20k characters. The per-table schema
+  and per-function reference moved verbatim into two project skills,
+  `.claude/skills/tidybreed-schema/` and
+  `.claude/skills/tidybreed-api/`, loaded on demand. Every prohibition
+  and failure contract from those sections stays in `CLAUDE.md` under a
+  new **Hard Rules** section. `.gitignore` now tracks `.claude/skills/`.
+  No package code changed.
+
 ## tidybreed 0.71.0
 
 Correlated random effects sampled across simulation stages — see
@@ -465,9 +801,8 @@ decision D1–D8 in that plan is implemented and tested.
   queried only if a centre is actually missing, and without `base_tbl` a
   missing centre stays an error.
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-  is now provably sugar over
-  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md):
-  a test reproduces its three effect tables and
+  is now provably sugar over `define_genome_effects()`: a test
+  reproduces its three effect tables and
   [`add_tbv()`](https://austin-putz.github.io/tidybreed/reference/add_tbv.md)
   output exactly through the general writer with the reserved owner,
   `replace_scope`, and the same `base_tbl`.
@@ -779,8 +1114,7 @@ is the same evaluator filtered to the reserved owner and to order-one
 ## tidybreed 0.66.0 (2026-09-10)
 
 Phase C of `plans/update_genome_effects_v4.md`: the writers. Adds
-[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
-and its two `terms` builders, rebuilds
+`define_genome_effects()` and its two `terms` builders, rebuilds
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 on top of it, and deletes `trait_meta.expressed_parent`. **Still
 deliberately mid-migration**:
@@ -829,9 +1163,7 @@ deliberately mid-migration**:
   can now differ per locus, per line and per effect owner, none of which
   a trait-wide flag could express. Use
   `define_additive_effects(parent_origin = 1)` for the whole-genome case
-  that flag covered, or
-  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
-  for anything finer.
+  that flag covered, or `define_genome_effects()` for anything finer.
 
 - **[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   writes terms.** Same call, new storage: one order-one `additive` term
@@ -2661,7 +2993,7 @@ tidybreed conventions.
   |----|----|
   | `get_effect_var()` | [`get_trait_var()`](https://austin-putz.github.io/tidybreed/reference/get_trait_var.md) |
   | `load_effect_cov()` | [`load_trait_cov()`](https://austin-putz.github.io/tidybreed/reference/load_trait_cov.md) |
-  | `write_effect_cov_diagonal()` | [`write_trait_var_diag()`](https://austin-putz.github.io/tidybreed/reference/write_trait_var_diag.md) |
+  | `write_effect_cov_diagonal()` | `write_trait_var_diag()` |
   | `ensure_effect_cov_table()` | `ensure_trait_var_comp()` |
 
   New helpers added:
@@ -3069,8 +3401,8 @@ tidybreed conventions.
   categorical, maternal composite (both `components` data frame and
   `formula_tbv` shorthand), SGE, and derived-formula patterns.
 
-- [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
-  argument `trait_type` likewise renamed to `type`.
+- `define_trait_simple()` argument `trait_type` likewise renamed to
+  `type`.
 
 - `sql_utils.R`: removed stale observation-layer columns (`trait_type`,
   `repeatable`, etc.) from `trait_meta` reserved cols (they moved to
@@ -3258,8 +3590,7 @@ tidybreed conventions.
 
 - `define_effect_cov_matrix(pop, "residual", R)` now routes to
   `phenotype_residual_cov` via `add_residual_cov()`.
-- [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
-  chains through
+- `define_trait_simple()` chains through
   [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
   automatically.
 - [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -3322,8 +3653,7 @@ metadata/configuration semantics (pre-v1 API cleanup):
   [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)
 - `add_additive_effects()` →
   [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-- `add_trait_simple()` →
-  [`define_trait_simple()`](https://austin-putz.github.io/tidybreed/reference/define_trait_simple.md)
+- `add_trait_simple()` → `define_trait_simple()`
 - `add_effect_fixed_class()` →
   [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md)
 - `add_effect_fixed_cov()` →
