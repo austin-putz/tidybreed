@@ -10,7 +10,7 @@
 #'   `pheno_number` assignment, the residual condition value of every record,
 #'   and the random-effect level every record touches. **No random number is
 #'   drawn and nothing is written** (the one prerequisite write is
-#'   [add_tbv()], which materializes the TBVs the plan reads and is
+#'   [add_tgv()], which materializes the genetic values the plan reads and is
 #'   RNG-neutral).
 #' * **Stage 2 — RESOLVE** (`.ap_resolve()`): every random draw of the call,
 #'   in a fixed order, and the liability / type conversion — all in memory.
@@ -49,7 +49,7 @@
 #' `.Random.seed` is left advanced
 #' by exactly the draws made before the error; nothing in the package
 #' restores it, so a retry draws different values unless the caller
-#' re-seeds. (The [add_tbv()] upsert of Stage 1 is the one write that
+#' re-seeds. (The [add_tgv()] write of Stage 1 is the one write that
 #' remains; it does not depend on the RNG and the retry rewrites it.)
 #'
 #' See `plans/sample_correlated_effects.md` §5.5 and D7.
@@ -67,7 +67,7 @@ NULL
 #' @param phenos Character vector of validated phenotype names.
 #' @param user_values The `user_values` argument, or `NULL`.
 #' @return `NULL` when no individual matched (a warning is issued), otherwise
-#'   a list with `pop` (after `add_tbv()`), `phenos` (in evaluation order),
+#'   a list with `pop` (after `add_tgv()`), `phenos` (in evaluation order),
 #'   `pheno_meta` (rows in that order) and `entries`: one list per phenotype,
 #'   in the same order, each with
 #'   \describe{
@@ -145,26 +145,27 @@ NULL
   has_formula_tbv <- !is.na(formula_tbv_str)
   has_formula     <- !is.na(formula_str)
 
-  # Simple phenotypes need a term add_tbv() can read: order one, contrast
-  # 'additive', under the reserved owner. A line-specific-only model
-  # qualifies.
+  # A simple phenotype reads its trait's total genetic value, so the trait
+  # needs at least one term, of any kind and any owner. A line-specific-only
+  # model qualifies.
   for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
-    n_eff <- nrow(.gev_reserved_additive(
-      .gev_read_model(conn, t, GE_GENERATED_OWNER))$terms)
+    n_eff <- nrow(.gev_read_model(conn, t)$terms)
     if (n_eff == 0L) {
       stop(
-        "No additive effects found for phenotype '", t, "' in genome_effects. ",
-        "For simple phenotypes call define_additive_effects() first. ",
-        "For composite phenotypes supply 'components' or 'formula_tbv' in define_phenotype(). ",
-        "For derived phenotypes (no genetic architecture) ",
-        "use type = 'derived_formula'.",
+        "No genome effects found for phenotype '", t, "'. ",
+        "A simple phenotype reads the genetic value of the trait of the same ",
+        "name: write its effects with define_additive_effects() or ",
+        "define_genome_effect_terms() first. ",
+        "A phenotype assembled from other traits needs 'components' in ",
+        "define_phenotype(); one with no genetic architecture needs ",
+        "type = 'derived_formula'.",
         call. = FALSE
       )
     }
   }
 
   # A prevalence threshold needs a stored genetic variance (see
-  # .ap_liability_records()). Checked here, before any TBV write or draw.
+  # .ap_liability_records()). Checked here, before any ind_tgv write or draw.
   # user_values bypass the model, so no threshold is ever placed for them.
   if (is.null(user_values)) {
     .ap_check_prevalence(pop, pheno_meta, has_components | has_formula_tbv)
@@ -295,12 +296,12 @@ NULL
 
   # Simple: phenotype_name == trait_name in trait_meta
   if (length(simple_phenos) > 0) {
-    pop <- add_tbv(tbl, trait_name = simple_phenos)
+    pop <- add_tgv(tbl, trait_name = simple_phenos)
   }
 
   parent_ids <- function(x) { x <- as.character(x); x[!is.na(x)] }
 
-  # Composite — gather all contributor IDs + source traits, then add_tbv once
+  # Composite — gather all contributor IDs + source traits, then add_tgv once
   if (length(composite_phenos) > 0) {
     all_source_traits   <- character(0)
     all_contributor_ids <- character(0)
@@ -329,7 +330,7 @@ NULL
     if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
       contrib_tbl <- get_table(pop, "ind_meta") |>
         dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tbv(contrib_tbl, trait_name = all_source_traits)
+      pop <- add_tgv(contrib_tbl, trait_name = all_source_traits)
     }
   }
 
@@ -357,7 +358,7 @@ NULL
     if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
       contrib_tbl <- get_table(pop, "ind_meta") |>
         dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tbv(contrib_tbl, trait_name = all_source_traits)
+      pop <- add_tgv(contrib_tbl, trait_name = all_source_traits)
     }
   }
 
@@ -480,10 +481,8 @@ NULL
       }
     }
   } else {
-    tbv_rows <- .ap_read_by_id(conn, "ind_tbv", ids_t, "tbv_value",
-                               where = paste0("t.trait_name = ",
-                                              DBI::dbQuoteLiteral(conn, t)))
-    tbv <- unname(stats::setNames(tbv_rows$tbv_value, tbv_rows$id_ind)[ids_t])
+    tgv <- .tgv_by_id(conn, t, ids_t, "total")
+    tbv <- unname(tgv)
   }
 
   empty$id_ind       <- ids_t
@@ -1138,12 +1137,70 @@ NULL
 }
 
 
+#' The genetic variance a prevalence threshold uses (the active-block rule)
+#'
+#' The liability carries the trait's total genetic value, so the threshold uses
+#' the variance of the **active** model (plans/import_qtl_effect_methods.md
+#' §6A): the population-wide (`line_name IS NULL`) stored diagonal of
+#' `additive`, `dominance` and `additive_by_additive`, each counted only if the
+#' trait's model has terms of that kind (any scope, any owner). A stored target
+#' for a kind the model lacks — one a generator was told to leave out — does not
+#' enter. Errors, naming `define_phenotype(thresholds = )`, when the model has
+#' terms outside the three blocks (an `indicator` surface, any interaction other
+#' than additive-by-additive) or terms of a kind with no stored target.
+#'
+#' The result is the *target* at the reference population, an approximation
+#' for a selected or line-scoped population, as the roxygen of
+#' [define_phenotype()] says.
+#'
+#' @return The summed variance (a number).
+#' @keywords internal
+.ap_prevalence_genetic_var <- function(pop, t) {
+  conn  <- pop$db_conn
+  model <- .gev_read_model(conn, t)
+  terms <- model$terms
+  fix <- " Give explicit liability cutpoints with define_phenotype(thresholds = )."
+  if (nrow(terms) == 0L) {
+    stop("Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
+         "genetic variance, but the trait has no genome effects.", fix,
+         call. = FALSE)
+  }
+  kind <- vapply(seq_len(nrow(terms)), function(i) {
+    contr <- model$members$contrast_name[
+      model$members$id_genome_effect == terms$id_genome_effect[i]]
+    if (length(contr) == 1L && contr %in% c("additive", "dominance")) return(contr)
+    if (length(contr) == 2L && all(contr == "additive")) {
+      return("additive_by_additive")
+    }
+    NA_character_
+  }, character(1))
+  if (anyNA(kind)) {
+    stop("Phenotype '", t, "': the `prevalence` threshold is computed from ",
+         "the stored targets of the trait's additive, dominance and ",
+         "additive-by-additive terms, but the model also has ",
+         sum(is.na(kind)), " term(s) of another kind (",
+         paste(sort(unique(terms$component_name[is.na(kind)])), collapse = ", "),
+         "), whose variance no stored target describes.", fix, call. = FALSE)
+  }
+  present <- intersect(GENETIC_EFFECT_NAMES, kind)
+  v <- vapply(present, function(k) get_trait_var(pop, k, t), numeric(1))
+  if (anyNA(v)) {
+    stop("Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
+         "stored target for every kind of term its model has, but ",
+         "trait_var_comp has no population-wide row for ",
+         paste0("'", present[is.na(v)], "'", collapse = ", "), ".", fix,
+         call. = FALSE)
+  }
+  sum(v)
+}
+
+
 #' Refuse a prevalence threshold that has no genetic variance to use
 #'
-#' A categorical phenotype defined by `prevalence` gets its liability threshold
-#' from the stored additive target of its trait. A composite phenotype has no
-#' such target, and neither does a simple trait whose effects were never
-#' calibrated to one; both used to fall back silently to zero genetic variance.
+#' Runs `.ap_prevalence_genetic_var()` for every categorical phenotype placed
+#' by `prevalence`, in Stage 1, before any `ind_tgv` write or draw. A
+#' composite phenotype is refused outright: its liability combines several
+#' traits and contributors, which no stored diagonal describes.
 #'
 #' @param pheno_meta The call's `phenotype_meta` rows.
 #' @param composite Logical, per row: has `phenotype_components` or
@@ -1156,15 +1213,7 @@ NULL
     if (!is.na(m$thresholds) && nzchar(m$thresholds)) next
     t <- m$phenotype_name
     if (composite[[i]]) stop(.prevalence_composite_msg(t), call. = FALSE)
-    if (is.na(get_trait_var(pop, "additive", t))) {
-      stop(
-        "Phenotype '", t, "': the `prevalence` threshold needs the trait's ",
-        "additive target, but trait_var_comp has no 'additive' row for '", t,
-        "' (its effects were written without one, e.g. manual `effects` or ",
-        "scale_to_target = FALSE). Give explicit cutpoints with ",
-        "define_phenotype(thresholds = ).",
-        call. = FALSE)
-    }
+    .ap_prevalence_genetic_var(pop, t)
   }
   invisible(NULL)
 }
@@ -1184,8 +1233,9 @@ NULL
     if (has_thresh) {
       thresh_vec <- as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]])
     } else {
-      # Prevalence threshold on the liability scale: mean + z * sqrt(Va + Ve),
-      # with Ve the unconditional (marginal) residual variance.
+      # Prevalence threshold on the liability scale: mean + z * sqrt(Vg + Ve),
+      # with Vg the active model's stored genetic variance and Ve the
+      # unconditional (marginal) residual variance.
       if (is.na(r$var_unconditional)) {
         stop("Phenotype '", t, "': the prevalence threshold needs an ",
              "unconditional residual variance, but none is stored for it ",
@@ -1196,14 +1246,9 @@ NULL
              call. = FALSE)
       }
       pheno_mean <- if (is.na(m$mean)) 0 else m$mean
-      va <- get_trait_var(pop, "additive", t)
-      if (is.na(va)) {
-        stop("Internal error: phenotype '", t, "' reached the prevalence ",
-             "threshold without a stored additive target; ",
-             ".ap_check_prevalence() should have refused it.", call. = FALSE)
-      }
+      vg <- .ap_prevalence_genetic_var(pop, t)
       thresh_vec <- pheno_mean +
-        stats::qnorm(1 - m$prevalence) * sqrt(va + r$var_unconditional)
+        stats::qnorm(1 - m$prevalence) * sqrt(vg + r$var_unconditional)
     }
     cat_idx <- liability_to_categorical(liability, thresh_vec)
     has_cv  <- !is.na(m$cat_values) && nzchar(m$cat_values)

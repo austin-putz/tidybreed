@@ -14,7 +14,6 @@
 DEFERRED_COLS <- list(
   ind_meta       = "replicate",
   ind_phenotype  = "replicate",
-  ind_tbv        = "replicate",
   ind_tgv        = "replicate",
   ind_ebv        = "replicate",
   ind_index      = "replicate",

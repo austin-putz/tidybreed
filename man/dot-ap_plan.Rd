@@ -15,7 +15,7 @@
 }
 \value{
 \code{NULL} when no individual matched (a warning is issued), otherwise
-a list with \code{pop} (after \code{add_tbv()}), \code{phenos} (in evaluation order),
+a list with \code{pop} (after \code{add_tgv()}), \code{phenos} (in evaluation order),
 \code{pheno_meta} (rows in that order) and \code{entries}: one list per phenotype,
 in the same order, each with
 \describe{

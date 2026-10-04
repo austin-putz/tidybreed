@@ -90,7 +90,7 @@ pop <- pop |>
   add_phenotype("ADG")           # what to do
 ```
 
-`add_founders()`, `add_phenotype()`, `add_tbv()`, `add_index()`,
+`add_founders()`, `add_phenotype()`, `add_tgv()`, `add_index()`,
 `define_additive_effects()`, `define_chip()`, `add_genotypes()`,
 `extract_genotypes()`, and `mutate_table()` all work this way. Most of them return
 a `tidybreed_pop`, so the chain continues; the `extract_*` family is the exception
@@ -389,18 +389,21 @@ pop <- pop |>
 
 ## Compute breeding values and phenotypes
 
-`add_tbv()` computes true breeding values — the simulation's ground truth, which
-you would never know in a real population.
+`add_tgv()` computes true genetic values — the simulation's ground truth, which
+you would never know in a real population. It writes `ind_tgv`, one row per
+individual, trait and **component**; the breeding value is the `additive`
+component (the only one in this purely additive model). The total over every
+component is the `ind_tgv_total` view.
 
 ```{r tbv}
-pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
 
-pop |> get_table("ind_tbv") |> collect() |> head()
+pop |> get_table("ind_tgv") |> collect() |> head()
 ```
 
 `add_phenotype()` builds the observed record: intercept, plus fixed and random
-effects, plus the breeding value, plus a sampled residual. It calls `add_tbv()`
-internally, so you can go straight to it.
+effects, plus the total genetic value, plus a sampled residual. It calls
+`add_tgv()` internally, so you can go straight to it.
 
 ```{r pheno}
 pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
@@ -473,13 +476,14 @@ pop <- pop |>
 > replaced terms.
 
 ```{r tbv2}
-pop <- pop |> get_table("ind_meta") |> add_tbv()   # no trait_name = all traits
+pop <- pop |> get_table("ind_meta") |> add_tgv()   # no trait_name = all traits
 
 pop |>
-  get_table("ind_tbv") |>
+  get_table("ind_tgv") |>
+  filter(component_name == "additive") |>
   collect() |>
   group_by(trait_name) |>
-  summarise(n = n(), mean_tbv = mean(tbv_value), var_tbv = var(tbv_value))
+  summarise(n = n(), mean_tbv = mean(tgv_value), var_tbv = var(tgv_value))
 ```
 
 The realised variances are in the neighbourhood of the 0.25 and 0.30 we asked
@@ -592,19 +596,20 @@ Because we know the true breeding values, we can compute the **true** index —
 useful for measuring how well selection actually worked:
 
 ```{r true_index}
-pop <- pop |> get_table("ind_meta") |> add_tbv(index_names = "terminal")
+pop <- pop |> get_table("ind_meta") |> add_tgv(index_names = "terminal")
 
 pop |> get_table("ind_true_index") |> collect() |> head()
 ```
 
 `add_index()` does the same arithmetic on any table of values. In a real program
-you would run it on `ind_ebv` after a BLUP evaluation; here we use the TBVs.
-**Filter first** so there is exactly one value per individual per trait:
+you would run it on `ind_ebv` after a BLUP evaluation; here we use the true
+breeding values. **Filter first** so there is exactly one value per individual
+per trait (`ind_tgv` has a row per component):
 
 ```{r add_index}
 pop <- pop |>
-  get_table("ind_tbv") |>
-  filter(trait_name %in% c("ADG", "BF")) |>
+  get_table("ind_tgv") |>
+  filter(component_name == "additive", trait_name %in% c("ADG", "BF")) |>
   add_index("terminal")
 
 pop |>

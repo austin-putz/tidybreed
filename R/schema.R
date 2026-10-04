@@ -319,7 +319,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("trait_meta", "id_trait",
             "Auto-incrementing primary key"),
     .sm_col("trait_meta", "trait_name",
-            "Unique identifier used across genome_effects, ind_tbv, and trait_var_comp"),
+            "Unique identifier used across genome_effects, ind_tgv, and trait_var_comp"),
     .sm_col("trait_meta", "description",
             "Free-text description of the biological trait"),
     .sm_col("trait_meta", "units",
@@ -420,7 +420,7 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("phenotype_components", "poly_scale_max",
             "Upper bound for Legendre polynomial scaling"),
     .sm_col("phenotype_components", "component_names",
-            "Comma-separated ind_tgv.component_name values this component draws from; default 'order1_additive'. Reserved: add_phenotype() reads only the additive breeding value today"),
+            "Which genetic value of the source trait this component reads: 'total' (default; the ind_tgv_total view, every component), or a comma-separated list of ind_tgv.component_name values ('additive', 'dominance', 'indicator', 'interaction'), summed. A listed component the model has no terms for contributes 0"),
     # phenotype_var_comp
     .sm_tbl("phenotype_var_comp",
             "Phenotype-level variance component storage. One row per (effect_name, phenotype pair, optional condition). Stores residual covariances (effect_name = 'residual') and named random effects (hys, litter, pen, etc.). Populated by define_phenotype(), define_residual_cov(), and define_effect_random()."),
@@ -521,20 +521,9 @@ register_schema_meta <- function(conn, entries) {
 #' @keywords internal
 .results_descriptions <- function() {
   rbind(
-    # ind_tbv
-    .sm_tbl("ind_tbv",
-            "True breeding values (simulation ground truth). One row per individual x trait. Populated by add_phenotype() and add_tbv(). Values computed from genome effects in genome_effects."),
-    .sm_col("ind_tbv", "id_tbv",
-            "Auto-incrementing primary key"),
-    .sm_col("ind_tbv", "id_ind",
-            "Individual identifier; FK to ind_meta.id_ind"),
-    .sm_col("ind_tbv", "trait_name",
-            "Genetic component trait name; FK to trait_meta.trait_name"),
-    .sm_col("ind_tbv", "tbv_value",
-            "True breeding value for this individual and trait"),
     # ind_tgv
     .sm_tbl("ind_tgv",
-            "True genetic values (simulation ground truth): the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv(). The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count."),
+            "True genetic values (simulation ground truth), the one table of genetic values: the total genotypic value, split by declared model structure. One row per individual x trait x component. Populated by add_tgv() (and add_phenotype(), which calls it). The breeding value is component 'additive' for generated effects. The total is the derived view ind_tgv_total, never a stored row, so SUM(tgv_value) cannot double-count."),
     .sm_col("ind_tgv", "id_tgv",
             "Integer primary key assigned via next_int_id()"),
     .sm_col("ind_tgv", "id_ind",
@@ -542,12 +531,12 @@ register_schema_meta <- function(conn, entries) {
     .sm_col("ind_tgv", "trait_name",
             "Genetic component trait name; FK to trait_meta.trait_name"),
     .sm_col("ind_tgv", "component_name",
-            "How the contributing terms were declared, NOT a variance component: 'order1_additive', 'order1_dominance', 'order1_other' (a hand-entered order-1 indicator surface), or 'interaction' (any term with 2 or more members). Never read these as V_A / V_D / V_I"),
+            "How the contributing terms were declared: 'additive', 'dominance' or 'indicator' (the contrast of a one-locus term; 'indicator' is a hand-entered genotype surface), or 'interaction' (any term over 2 or more loci). For generated effects (statistical coding at one base p) 'additive' is the breeding value; for hand-written functional terms it is the functional additive effect"),
     .sm_col("ind_tgv", "tgv_value",
             "Sum of the contributing terms for this individual, trait and component. Raw: no mean is added"),
     # ind_tgv_total (view)
     .sm_tbl("ind_tgv_total",
-            "View: the total genetic value per individual x trait, summing every component of ind_tgv. Derived rather than stored so it can never disagree with its parts."),
+            "View: the total genetic value per individual x trait, summing every component of ind_tgv exactly (DECIMAL accumulation, so the result does not depend on the thread count). Derived rather than stored so it can never disagree with its parts. Phenotypes read this by default."),
     .sm_col("ind_tgv_total", "id_ind",
             "Individual identifier; from ind_tgv"),
     .sm_col("ind_tgv_total", "trait_name",
@@ -609,7 +598,7 @@ register_schema_meta <- function(conn, entries) {
             "Computed selection index value (weighted sum of EBVs or phenotypes)"),
     # ind_true_index
     .sm_tbl("ind_true_index",
-            "True selection index values computed from TBVs. One row per individual x index x weight type. Populated by add_tbv() when index_names is supplied."),
+            "True selection index values computed from ind_tgv. One row per individual x index x weight type x component. Populated by add_tgv() when index_names is supplied."),
     .sm_col("ind_true_index", "id_true_index",
             "Auto-incrementing primary key"),
     .sm_col("ind_true_index", "id_ind",
@@ -618,8 +607,10 @@ register_schema_meta <- function(conn, entries) {
             "Named selection index; FK to index_meta.index_name"),
     .sm_col("ind_true_index", "weight_type",
             "Which weights were used: 'index' (uses index_weight) or 'economic' (uses economic_weight)"),
+    .sm_col("ind_true_index", "component_name",
+            "Which genetic value was weighted: an ind_tgv.component_name ('additive', the breeding value, by default) or 'total'"),
     .sm_col("ind_true_index", "true_index_value",
-            "True index value: weighted sum of TBVs across all index traits")
+            "True index value: weighted sum of the chosen genetic values across all index traits")
   )
 }
 
@@ -752,7 +743,7 @@ register_schema_meta <- function(conn, entries) {
 #' a name-prefix rule or a `_schema_meta` column. A table added later and not
 #' registered here degrades *visibly* — it appears under **User tables** — rather
 #' than being silently misfiled by a lexical rule that cannot tell
-#' `ind_haplotype` (raw genome data) from `ind_tbv` (simulation output).
+#' `ind_haplotype` (raw genome data) from `ind_tgv` (simulation output).
 #'
 #' In-group order is workflow order, not alphabetical. `"User tables"` is an
 #' intentionally empty slot: unrecognized tables land there, sorted by name, and
@@ -777,7 +768,7 @@ register_schema_meta <- function(conn, entries) {
                             "phenotype_var_comp", "phenotype_effects",
                             "phenotype_random_effects"),
     "Selection"         = c("index_meta"),
-    "Results"           = c("ind_tbv", "ind_tgv", "ind_tgv_total",
+    "Results"           = c("ind_tgv", "ind_tgv_total",
                             "ind_phenotype", "ind_ebv", "ind_index",
                             "ind_true_index"),
     "User tables"       = character(0),

@@ -1177,7 +1177,7 @@ test_that("generator == writer: define_additive_effects() is sugar over define_g
         "FROM genome_effect_member_origins o JOIN genome_effects e USING (id_genome_effect) ",
         "ORDER BY e.genome_value, o.member_slot, o.origin_slot")),
       tbv     = DBI::dbGetQuery(pop$db_conn,
-        "SELECT id_ind, trait_name, tbv_value FROM ind_tbv ORDER BY id_ind, trait_name"))
+        "SELECT id_ind, trait_name, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind, trait_name"))
   }
   check <- function(line_name, parent_origin, origin) {
     pop <- gew_base_pop(n_loci = 8)
@@ -1188,7 +1188,7 @@ test_that("generator == writer: define_additive_effects() is sugar over define_g
       define_additive_effects("ADG", distribution = "normal", seed = 77,
                               line_name = line_name, parent_origin = parent_origin,
                               base_tbl = base)
-    pop  <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+    pop  <- pop |> get_table("ind_meta") |> add_tgv("ADG")
     gen  <- snapshot(pop)
     expect_equal(nrow(gen$terms), 8L)
 
@@ -1201,7 +1201,7 @@ test_that("generator == writer: define_additive_effects() is sugar over define_g
                          contrast_name = "additive", genome_value = coef$genome_value),
       origin = origin, effect_owner = "generated",
       mode = "replace_scope", allow_reserved_owner = TRUE, base_tbl = base)
-    pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+    pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
     wri <- snapshot(pop)
 
     expect_equal(wri$terms,   gen$terms)

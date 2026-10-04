@@ -105,9 +105,10 @@ Selects QTL from a filtered \code{genome_meta} table, samples an effect
 architecture, \strong{calibrates} it to the stored additive target, and writes
 one order-one \code{additive} term per locus and trait through the same engine as
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, under the reserved effect owner
-\code{"generated"}. \code{\link[=add_tbv]{add_tbv()}} reads order-one \code{additive} variants from that
-owner and nothing else, so effects written here and effects a user writes
-with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} can never be confused for one another.
+\code{"generated"}. Only generators write that owner, so effects written here
+and effects a user writes with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} can never be
+confused for one another. \code{\link[=add_tgv]{add_tgv()}} evaluates both; its \code{additive}
+component is the breeding value.
 }
 \details{
 \strong{When the result is exact.} The requested covariance \code{G} is delivered

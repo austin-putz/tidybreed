@@ -110,7 +110,6 @@ TABLE_RESERVED_COLS <- list(
   ind_phenotype    = c("id_phenotype", "id_ind", "phenotype_name", "pheno_value", "pheno_number",
                        "liability_value", "cat_name", "residual_value",
                        "residual_condition_level", "replicate"),
-  ind_tbv          = c("id_tbv", "id_ind", "trait_name", "tbv_value", "replicate"),
   ind_tgv          = c("id_tgv", "id_ind", "trait_name", "component_name",
                        "tgv_value", "replicate"),
   ind_tgv_total    = c("id_ind", "trait_name", "tgv_total"),
@@ -138,7 +137,7 @@ TABLE_RESERVED_COLS <- list(
                          "condition_table", "condition_level", "weight_type", "poly_order"),
   index_meta       = c("id_index_name", "index_name", "trait_name", "index_weight", "economic_weight"),
   ind_index        = c("id_index", "id_ind", "index_name", "index_number", "index_value", "replicate"),
-  ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "true_index_value", "replicate")
+  ind_true_index   = c("id_true_index", "id_ind", "index_name", "weight_type", "component_name", "true_index_value", "replicate")
 )
 
 
@@ -152,7 +151,6 @@ TABLE_PRIMARY_KEYS <- list(
   ind_crossover    = "id_crossover",
   genome_effects   = "id_genome_effect",
   ind_phenotype    = "id_phenotype",
-  ind_tbv          = "id_tbv",
   ind_tgv          = "id_tgv",
   ind_ebv          = "id_ebv",
   trait_meta       = "id_trait",
@@ -179,11 +177,10 @@ TABLE_ROW_KEYS <- list(
   genome_map       = "id_genome_map",
   ind_phenotype    = "id_phenotype",
   trait_meta       = "id_trait",
-  ind_tbv          = c("id_ind", "trait_name"),
   ind_tgv          = c("id_ind", "trait_name", "component_name"),
   ind_ebv          = c("id_ind", "trait_name", "model", "eval_number"),
   ind_index        = c("id_ind", "index_name", "index_number"),
-  ind_true_index   = c("id_ind", "index_name", "weight_type"),
+  ind_true_index   = c("id_ind", "index_name", "weight_type", "component_name"),
   ind_haplotype    = c("id_ind", "parent_origin", "strand", "locus_id"),
   ind_genotype     = c("id_ind", "locus_id"),
   ind_crossover    = "id_crossover",
@@ -296,7 +293,7 @@ SYSTEM_TABLES <- c(
   "ind_haplotype", "ind_genotype", "ind_crossover",
   "chr_inheritance", "chr_recombination",
   "founder_haplotypes",
-  "ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv", "ind_tgv_total", "ind_ebv",
+  "ind_meta", "ind_phenotype", "ind_tgv", "ind_tgv_total", "ind_ebv",
   "trait_meta", "phenotype_effects", "trait_var_comp", "phenotype_random_effects",
   "phenotype_meta", "phenotype_components", "phenotype_var_comp",
   "index_meta", "ind_index", "ind_true_index"
@@ -307,7 +304,7 @@ SYSTEM_TABLES <- c(
 #'
 #' @keywords internal
 IND_TABLE_ID_IND_COLS <- c(
-  "ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv", "ind_ebv",
+  "ind_meta", "ind_phenotype", "ind_tgv", "ind_ebv",
   "ind_index", "ind_true_index",
   "ind_haplotype", "ind_genotype", "ind_crossover"
 )
@@ -359,7 +356,7 @@ infer_duckdb_type <- function(value) {
 #' Validate, type-infer, and expand extra user columns for pre-insert attachment
 #'
 #' Called by `add_founders()`, `add_offspring()`, `add_phenotype()`,
-#' `add_tbv()`, and `add_ebv()` to process the `...` (extra field) arguments
+#' `add_tgv()`, and `add_ebv()` to process the `...` (extra field) arguments
 #' before they are attached to an insertion data frame.
 #'
 #' Scalars are broadcast to `n_rows`. Vectors must already have length `n_rows`.
@@ -470,7 +467,7 @@ sql_in_list <- function(values, what = "value") {
 #' Individuals selected by a `tidybreed_table`
 #'
 #' The single place a `tidybreed_table` becomes a set of `id_ind` values for
-#' the action functions (`add_phenotype()`, `add_tbv()`, `add_tgv()`,
+#' the action functions (`add_phenotype()`, `add_tgv()`,
 #' `add_ebv()`, `add_dosage()`, `add_genotypes()`, `extract_genotypes()`).
 #' The meaning is always "the individuals present in the (filtered) table":
 #' any table with an `id_ind` column is accepted, an unfiltered `ind_meta`

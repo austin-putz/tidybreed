@@ -57,8 +57,8 @@ test_that("the updated intercept is what add_phenotype() applies", {
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
 
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
-  ph$tbv <- tb$tbv_value[match(ph$id_ind, tb$id_ind)]
+  tb <- tgv_additive(pop)
+  ph$tbv <- tb$tgv_value[match(ph$id_ind, tb$id_ind)]
 
   # residual_var = 0, no other effects -> pheno == mean + tbv exactly
   expect_equal(ph$pheno_value, 500 + ph$tbv)
@@ -78,8 +78,8 @@ test_that("define_effect_intercept() overrides the define_phenotype() mean", {
 
   pop <- pop |> get_table("ind_meta") |> add_phenotype("ADG")
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
-  ph$tbv <- tb$tbv_value[match(ph$id_ind, tb$id_ind)]
+  tb <- tgv_additive(pop)
+  ph$tbv <- tb$tgv_value[match(ph$id_ind, tb$id_ind)]
   expect_equal(ph$pheno_value, -25 + ph$tbv)
 
   close_pop(pop)

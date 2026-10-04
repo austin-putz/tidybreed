@@ -129,8 +129,8 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' @details
 #' **Single-table mode** (`tables = NULL`): uses the composite row key from
 #' the internal `TABLE_ROW_KEYS` registry to delete exactly the rows matched
-#' by the filter — no more, no less. For example, filtering `ind_tbv` by
-#' `trait_name == "ADG"` deletes only the ADG rows, not all TBV rows for those
+#' by the filter — no more, no less. For example, filtering `ind_tgv` by
+#' `trait_name == "ADG"` deletes only the ADG rows, not all genetic-value rows for those
 #' animals. Key columns are matched with `IS NOT DISTINCT FROM`, so rows whose
 #' key is `NULL` — the default `chr_inheritance` / `chr_recombination` rows
 #' seeded by [define_genome()], or the shared (`line_name IS NULL`)
@@ -168,7 +168,7 @@ delete_by_id_ind <- function(conn, table_name, id_ind_vals,
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(id_ind %in% culled_ids) |>
-#'   remove_rows(tables = c("ind_phenotype", "ind_tbv"))
+#'   remove_rows(tables = c("ind_phenotype", "ind_tgv"))
 #'
 #' # Preview before deleting
 #' pop |>

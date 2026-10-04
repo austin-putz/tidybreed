@@ -20,7 +20,7 @@ Named list of expanded value vectors, one per field.
 }
 \description{
 Called by \code{add_founders()}, \code{add_offspring()}, \code{add_phenotype()},
-\code{add_tbv()}, and \code{add_ebv()} to process the \code{...} (extra field) arguments
+\code{add_tgv()}, and \code{add_ebv()} to process the \code{...} (extra field) arguments
 before they are attached to an insertion data frame.
 }
 \details{

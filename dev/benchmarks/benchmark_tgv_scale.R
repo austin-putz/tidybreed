@@ -8,7 +8,7 @@
 # execution and catches a per-individual loop even on an 8-individual
 # fixture. This script is the wall-clock half, which is too slow for CI.
 #
-# It times order-one additive TBV through the term/member evaluator at
+# It times add_tgv() through the term/member evaluator at
 # increasing population size and reports the per-individual cost. The claim
 # under test is that the cost per individual is flat: the resolved variant
 # map is built once from the effect model and the label alphabet, so growing
@@ -75,7 +75,7 @@ build_pop <- function(n_ind, shape) {
   pop
 }
 
-cat("tidybreed TGV/TBV evaluation scale benchmark\n")
+cat("tidybreed TGV evaluation scale benchmark\n")
 cat("loci:", n_loci, " QTL:", n_qtl, " sizes:", paste(sizes, collapse = ", "), "\n\n")
 
 for (shape in c("common", "lines", "dominance")) {
@@ -84,11 +84,9 @@ for (shape in c("common", "lines", "dominance")) {
     pop <- suppressMessages(build_pop(n_ind, shape))
     ids <- get_table(pop, "ind_meta")
 
-    tbv <- timed(suppressMessages(add_tbv(ids, "ADG")))
     tgv <- timed(suppressMessages(add_tgv(ids, "ADG")))
-    cat(sprintf("  n = %6d   add_tbv %7.3fs (%6.2f ms/ind)   add_tgv %7.3fs (%6.2f ms/ind)\n",
-                n_ind, tbv$elapsed, 1000 * tbv$elapsed / n_ind,
-                tgv$elapsed, 1000 * tgv$elapsed / n_ind))
+    cat(sprintf("  n = %6d   add_tgv %7.3fs (%6.2f ms/ind)\n",
+                n_ind, tgv$elapsed, 1000 * tgv$elapsed / n_ind))
     close_pop(pop)
   }
   cat("\n")

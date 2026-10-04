@@ -199,7 +199,7 @@ print.tidybreed_pop <- function(x, ...) {
   # ── Records ─────────────────────────────────────────────────────────────────
   rec_parts <- c(
     .tb_rec(conn, tables, "ind_phenotype", "phenotypes", fmt),
-    .tb_rec(conn, tables, "ind_tbv",       "TBV",        fmt),
+    .tb_rec(conn, tables, "ind_tgv",       "TGV",        fmt),
     .tb_rec(conn, tables, "ind_ebv",       "EBV",        fmt),
     .tb_rec(conn, tables, "ind_index",     "index",      fmt)
   )

@@ -15,8 +15,8 @@
 # member, levels sorted) before residuals (blocks by first member).
 
 # Twelve founders A_1..A_12; one continuous repeatable phenotype per trait,
-# residual variance declared by the test through `...`. TBVs are written up
-# front so the `add_tbv()` upsert inside `.ap_plan()` rewrites the same values
+# residual variance declared by the test through `...`. Genetic values are
+# written up front so the `add_tgv()` write inside `.ap_plan()` rewrites the same values
 # and a whole database snapshot can be compared before and after a failed call.
 make_d7_pop <- function(pop_name, traits = "A", seed = 11, ...) {
   set.seed(seed)
@@ -29,7 +29,7 @@ make_d7_pop <- function(pop_name, traits = "A", seed = 11, ...) {
     pop <- suppressMessages(define_phenotype(
       pop, t, type = "continuous", mean = 10, repeatable = TRUE, ...))
   }
-  suppressMessages(pop |> get_table("ind_meta") |> add_tbv(trait_name = traits))
+  suppressMessages(pop |> get_table("ind_meta") |> add_tgv(trait_name = traits))
 }
 
 set_col <- function(pop, col, value, ids = NULL) {
@@ -55,10 +55,10 @@ db_snapshot <- function(pop) {
     tbls)
 }
 
-# `ind_tbv` is the one table a failed call still touches: `.ap_plan()` runs
-# the add_tbv() upsert, which rewrites the same values. Those values are
+# `ind_tgv` is the one table a failed call still touches: `.ap_plan()` runs
+# add_tgv(), which rewrites the same values. Those values are
 # bit-identical, so this compares every table the same way -- row for row,
-# `expect_identical()`. (Phase 7 had to give `ind_tbv` a tolerance, because
+# `expect_identical()`. (Phase 7 had to give the TBV table a tolerance, because
 # the evaluator's parallel `SUM()` re-ordered the summation; Phase 8's exact
 # accumulator removed the reason. See test-genome-effects-determinism.R.)
 expect_db_unchanged <- function(pop, before) {
@@ -196,17 +196,17 @@ test_that("D7 — a Stage-2 error in the residual adapter (D2) discards every ea
 })
 
 
-test_that("D7 — the Stage-1 add_tbv() upsert is the one write a failed call leaves behind", {
+test_that("D7 — the Stage-1 add_tgv() write is the one write a failed call leaves behind", {
   # The contract is "no phenotype record and no draw", not "no write at all":
-  # Stage 1 materializes the TBVs the plan reads, and they stay. They cost no
+  # Stage 1 materializes the genetic values the plan reads, and they stay. They cost no
   # RNG and the retry rewrites them, so nothing stochastic survives.
   pop <- make_d7_pop("d7_tbv", residual_var = 1)
   on.exit(close_pop(pop))
-  DBI::dbExecute(pop$db_conn, "DELETE FROM ind_tbv")
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+  DBI::dbExecute(pop$db_conn, "DELETE FROM ind_tgv")
+  expect_equal(nrow(tgv_additive(pop)), 0L)
 
   expect_error(add_ph(pop, "A", pheno_value = 1), "reserved")
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 12L)
+  expect_equal(nrow(tgv_additive(pop)), 12L)
   expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0L)
   expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_random_effects"))), 0L)
 })

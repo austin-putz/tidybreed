@@ -44,7 +44,8 @@ for a zero-variance phenotype) is an error. Named (per-\code{id_ind}) vectors ar
 
 \item{user_values}{Optional override for the full phenotype value —
 skips the model entirely (mean, covariates, and residual are not
-evaluated), though TBVs are still computed and stored in \code{ind_tbv}. For a
+evaluated), though genetic values are still computed and stored in
+\code{ind_tgv}. For a
 single \code{phenotype_name}: a plain numeric vector matching the planned
 records by position (sorted \code{id_ind} order, after sex expression and the
 repeatable guard), or a named numeric vector (e.g.
@@ -65,12 +66,12 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Simulates phenotype values for one or more phenotypes and writes them to
-\code{ind_phenotype}. Also computes and stores the underlying true breeding
-value (TBV) per individual per trait in \code{ind_tbv}.
+\code{ind_phenotype}. Also computes and stores the underlying true genetic
+values per individual per trait in \code{ind_tgv} (through \code{\link[=add_tgv]{add_tgv()}}).
 
 \strong{Model} (per phenotype, on the liability / continuous scale):
 \preformatted{
-  y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+  y_i = mean + sum(fixed_shifts) + sum(random_shifts) + G_i + e_i
 }
 \itemize{
 \item \code{mean} comes from \code{phenotype_meta.mean}.
@@ -89,17 +90,19 @@ the block's other phenotypes — \code{add_phenotype("ADG")} today and
 \code{add_phenotype("BF")} next season gives pen \code{P1} a \verb{(ADG, BF)} pair with
 the declared covariance, whichever came first. A record whose level is
 \code{NULL} gets no draw and a shift of \code{0}.
-\item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{TBV_i} is the
-standard additive TBV from \code{genome_effects} (computed via \code{\link[=add_tbv]{add_tbv()}},
-which this function calls internally for every source trait it needs).
+\item For \strong{simple} phenotypes (\code{phenotype_name == trait_name}), \code{G_i} is the
+trait's \strong{total} genetic value (\code{ind_tgv_total}: additive, dominance and
+every other component of the model), computed via \code{\link[=add_tgv]{add_tgv()}}, which this
+function calls internally for every source trait it needs.
 \item For \strong{composite} phenotypes (rows in \code{phenotype_components}, written by
-\code{define_phenotype(..., components = ...)}), \code{TBV_i} is the weighted sum
-of contributor TBVs (self, dam, sire, or group) — see
+\code{define_phenotype(..., components = ...)}), \code{G_i} is the weighted sum of
+contributor genetic values (self, dam, sire, or group): the total by
+default, or the components each row lists in \code{component_names} — see
 \code{.assemble_composite_tbv()}.
 \item For \strong{\code{formula_tbv}} composite phenotypes (\code{phenotype_meta.formula_tbv}
-set, written by \code{define_phenotype(..., formula_tbv = ...)}), \code{TBV_i} is
+set, written by \code{define_phenotype(..., formula_tbv = ...)}), \code{G_i} is
 evaluated from a small DSL expression referencing self/dam/sire/group
-TBVs instead of a \code{phenotype_components} data frame.
+total genetic values instead of a \code{phenotype_components} data frame.
 \item \code{e_i} is the residual, drawn from the phenotype's residual covariance
 block in \code{phenotype_var_comp} (see \code{\link[=define_residual_cov]{define_residual_cov()}}). Within a
 block, residuals are \strong{correlated across phenotypes and sequential in
@@ -157,8 +160,8 @@ rolled back with the rows it was added for. The random-number stream is \strong{
 stays advanced by the draws made before the error, as after any other
 failed R call, so re-running the call draws different values. Pass \code{seed}
 (or call \code{set.seed()}) again if the retry must reproduce the failed call.
-The TBVs the call materialized through \code{\link[=add_tbv]{add_tbv()}} remain; they do not
-depend on the RNG, and the retry rewrites them.
+The genetic values the call materialized through \code{\link[=add_tgv]{add_tgv()}} remain; they
+do not depend on the RNG, and the retry rewrites them.
 
 \strong{Escape hatches}:
 \itemize{
@@ -257,5 +260,5 @@ pop <- pop |>
 \code{\link[=define_phenotype]{define_phenotype()}}, \code{\link[=define_trait]{define_trait()}}, \code{\link[=define_additive_effects]{define_additive_effects()}},
 \code{\link[=define_residual_cov]{define_residual_cov()}}, \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}},
 \code{\link[=define_effect_fixed_class]{define_effect_fixed_class()}}, \code{\link[=define_effect_fixed_cov]{define_effect_fixed_cov()}},
-\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tbv]{add_tbv()}}
+\code{\link[=define_effect_random]{define_effect_random()}}, \code{\link[=add_tgv]{add_tgv()}}
 }

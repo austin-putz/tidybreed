@@ -87,8 +87,8 @@ test_that("composite maternal phenotype assembles correctly", {
   expect_true(nrow(ph) > 0)
   expect_true(all(ph$phenotype_name == "WW"))
 
-  # "WW" must NOT appear in ind_tbv (only WWD and WWM should)
-  tbv_traits <- unique(dplyr::collect(get_table(pop, "ind_tbv"))$trait_name)
+  # "WW" must NOT appear in ind_tgv (only WWD and WWM should)
+  tbv_traits <- unique(tgv_additive(pop)$trait_name)
   expect_false("WW" %in% tbv_traits)
   expect_true("WWD" %in% tbv_traits)
   expect_true("WWM" %in% tbv_traits)
@@ -343,7 +343,7 @@ make_sge_pop <- function(pop_name = "sge", n_pens = 4, pen_size = 10,
 
 # ── 7. SGE pig ADG — basic end-to-end ─────────────────────────────────────────
 
-test_that("SGE pig ADG end-to-end: 40 phenotype rows, no 'ADG' in ind_tbv", {
+test_that("SGE pig ADG end-to-end: 40 phenotype rows, no 'ADG' in ind_tgv", {
   set.seed(701)
   pop <- make_sge_pop("sge_basic")
   on.exit(close_pop(pop))
@@ -354,7 +354,7 @@ test_that("SGE pig ADG end-to-end: 40 phenotype rows, no 'ADG' in ind_tbv", {
   expect_equal(nrow(ph), 40L)
   expect_true(all(ph$phenotype_name == "ADG"))
 
-  tbv_traits <- dplyr::collect(get_table(pop, "ind_tbv")) |>
+  tbv_traits <- tgv_additive(pop) |>
     dplyr::distinct(trait_name) |>
     dplyr::pull(trait_name)
   expect_true("ADG_direct" %in% tbv_traits)
@@ -585,11 +585,11 @@ test_that("SGE group contribution equals the hand-computed sum / mean of the pen
     add_phenotype("ADG", user_residual = rep(0, 12))
 
   ind <- dplyr::collect(get_table(pop, "ind_meta"))
-  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tbv <- tgv_additive(pop)
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  direct <- stats::setNames(tbv$tbv_value[tbv$trait_name == "ADG_direct"],
+  direct <- stats::setNames(tbv$tgv_value[tbv$trait_name == "ADG_direct"],
                             tbv$id_ind[tbv$trait_name == "ADG_direct"])
-  social <- stats::setNames(tbv$tbv_value[tbv$trait_name == "ADG_social"],
+  social <- stats::setNames(tbv$tgv_value[tbv$trait_name == "ADG_social"],
                             tbv$id_ind[tbv$trait_name == "ADG_social"])
   expected <- vapply(ph$id_ind, function(id) {
     mates <- ind$id_ind[ind$pen_id == ind$pen_id[ind$id_ind == id] & ind$id_ind != id]
@@ -633,10 +633,10 @@ test_that("weight_type = 'covariate' multiplies by the individual's covariate; a
     pop <- pop |> get_table("ind_meta") |> add_phenotype("P", user_residual = rep(0, 7)),
     paste0("1 individual\\(s\\) had one or more missing components.*", ids[[1L]]))
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
-  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tbv <- tgv_additive(pop)
   expect_setequal(ph$id_ind, ids[-1L])
   expect_equal(ph$pheno_value,
-               0.5 * (match(ph$id_ind, ids) - 1L) * 10 * tbv$tbv_value[match(ph$id_ind, tbv$id_ind)])
+               0.5 * (match(ph$id_ind, ids) - 1L) * 10 * tbv$tgv_value[match(ph$id_ind, tbv$id_ind)])
 
   DBI::dbExecute(pop$db_conn, "UPDATE phenotype_components SET weight_type = 'legendre' WHERE phenotype_name = 'P'")
   expect_error(pop |> get_table("ind_meta") |> add_phenotype("P"),

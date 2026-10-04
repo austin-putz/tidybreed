@@ -217,12 +217,12 @@ purposes <- c(
   "add_phenotype.R"           = "Phenotype simulation (composite, SGE, fixed/random effects, residuals)",
   "define_genome_effect_terms.R"   = "General genome-effect writer: terms, members, origins, replace modes",
   "define_additive_effects.R" = "QTL effect sampling, Falconer rescale, multi-trait MVN, line/parent-origin scope",
-  "genome_effects_eval.R"     = "The one evaluator behind `add_tbv()` / `add_tgv()`",
+  "genome_effects_eval.R"     = "The one evaluator behind `add_tgv()`",
   "add_offspring.R"           = "Mating, gamete formation, offspring haplotype writes",
   "mutate_table.R"            = "Generic typed column add/update on any table",
   "formula_helpers.R"         = "Formula-based derived phenotypes",
   "add_ebv.R"                 = "EBV import and BLUPF90 wrapper",
-  "add_tbv.R"                 = "True breeding values from the reserved additive terms",
+  "add_tgv.R"                 = "True genetic values (ind_tgv), true indices, the one value reader",
   "define_founder_haplotypes.R" = "Founder haplotype pools (no-LD and LD methods)",
   "genome_effects_helpers.R"  = "Validation and canonical forms for genome-effect rows"
 )
@@ -272,7 +272,7 @@ pipeline_order <- c(
   "define_phenotype", "define_residual_cov", "define_effect_cov_matrix", "define_effect_random",
   "define_effect_fixed_class", "define_effect_fixed_cov", "define_effect_intercept",
   "define_index", "define_table", "define_schema_description",
-  "add_founders", "add_offspring", "add_phenotype", "add_tbv", "add_tgv",
+  "add_founders", "add_offspring", "add_phenotype", "add_tgv",
   "add_ebv", "add_index", "add_dosage", "add_genotypes",
   "mutate_table", "mutate_derived", "mutate_group_seq", "mutate_group_named", "mutate_group_concatenate",
   "extract_genotypes", "remove_rows", "archive_replicate",

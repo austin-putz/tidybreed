@@ -13,9 +13,9 @@
 \code{formula_tbv}.}
 }
 \description{
-A categorical phenotype defined by \code{prevalence} gets its liability threshold
-from the stored additive target of its trait. A composite phenotype has no
-such target, and neither does a simple trait whose effects were never
-calibrated to one; both used to fall back silently to zero genetic variance.
+Runs \code{.ap_prevalence_genetic_var()} for every categorical phenotype placed
+by \code{prevalence}, in Stage 1, before any \code{ind_tgv} write or draw. A
+composite phenotype is refused outright: its liability combines several
+traits and contributors, which no stored diagonal describes.
 }
 \keyword{internal}

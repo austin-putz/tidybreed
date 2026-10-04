@@ -630,8 +630,10 @@ never `ind_tbv` or a phenotype. Two definitions of one quantity are technical de
 3. **What `add_tgv()` inherits from `add_tbv()`:**
    - `index_names`, and `type` renamed `weight_type` (naming rule 1);
    - `...` custom-field forwarding (`R/add_tbv.R:151`, `R/sql_utils.R:362`);
-   - **`ind_true_index`**, computed from a `component` argument that defaults to
-     `"additive"` (selection indices are on breeding values), with `"total"` allowed.
+   - **`ind_true_index`**, computed from a `component_name` argument (naming rule 1;
+     decided 2026-10-04) that defaults to `"additive"` (selection indices are on
+     breeding values), with `"total"` allowed. `ind_true_index` gains a
+     `component_name` column, so the two coexist.
 4. **`add_index()`.** Its table map (`R/add_index.R:117-121`) gains `ind_tgv` →
    `tgv_value`. Callers filter the component:
    `get_table(pop, "ind_tgv") |> filter(component_name == "additive") |> add_index("meat")`.
@@ -696,14 +698,17 @@ because they measure `ind_tgv`, and nobody would notice.
   `R/define_phenotype.R:538`. Listing specific components (e.g. `"additive"`) stays
   possible, and that is now the only thing the column does, so it stops being "reserved".
 - `add_phenotype()`'s prerequisite call becomes `add_tgv()` (it is `add_tbv()` today).
-- **`ind_tgv_total` sums exactly.** The view is a plain `SUM(tgv_value)` today
-  (`R/genome_effects_helpers.R:89`). Once phenotypes read it, its result must be
-  bit-identical whatever DuckDB's thread count (CLAUDE.md, "Identical means bit-identical").
-  With up to four components per individual × trait, a parallel `SUM()` is not
-  guaranteed to be. The view accumulates through `GEV_ACC_TYPE`, as the evaluator does:
-  `CAST(SUM(CAST(tgv_value AS DECIMAL(38, 18))) AS DOUBLE)`. It inherits the evaluator's
-  `GEV_ACC_MAX` bound (|value| < 1e20): an overflow is a DuckDB conversion error, never a
-  silent wrong value. Each `tgv_value` already passed that bound in the evaluator.
+- **`ind_tgv_total` sums deterministically.** The view was a plain `SUM(tgv_value)`.
+  Once phenotypes read it, its result must be bit-identical whatever DuckDB's thread
+  count (CLAUDE.md, "Identical means bit-identical"). With up to four components per
+  individual × trait, a parallel `SUM()` is not guaranteed to be. *As built (0.74.0):*
+  the view adds the components in a fixed order,
+  `list_sum(list(tgv_value ORDER BY component_name))`. The plan said `GEV_ACC_TYPE`,
+  but a `DOUBLE → DECIMAL(38, 18) → DOUBLE` round trip is not exact: it moved about
+  10% of one-component totals by one ulp, so an additive-only trait's total would not
+  have been its breeding value bit for bit (gate T3). The ordered sum returns a single
+  row unchanged and is still a function of the stored rows alone. Listed components
+  (`component_names`) are summed the same way.
 - **Group-contributor sums accumulate exactly too.** `group_sum()` / `group_mean()` run a
   second reduction over mates in `.group_mate_tbv()` (`R/contributor_tbv.R`). Since
   0.71.2 (step 0b, B-1) that sum goes through `GEV_ACC_TYPE`. When step 3 moves its
@@ -1571,7 +1576,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
 | 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
-| 3 | Consolidation + P2 + Q18 | 0.74.0 | 2 (the `line_name` readers, §6C) |
+| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 / 0.74.2 | 2 (the `line_name` readers, §6C); 3a **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
 | 5 | Part C | 0.76.0 | 2, 3, 4 |
 
@@ -1769,7 +1774,42 @@ response at the end of that file). Gates R1–R9 in
 - `parent_origin` validated before coercion. Anchor-rank check before `set.seed()`.
 - The mixed-`parent_origin` message states the real reason (one anchor per call).
 
-### Step 3 — consolidation, P2 and Q18 (0.74.0)
+### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.2) *(planned 2026-10-04, see `import_qtl_effect_methods_phase_3_plan.md`)*
+
+**Decided while planning (2026-10-04):**
+- `add_tgv()`'s true-index argument is `component_name` (naming rule 1), not `component`
+  as §6.3 task 3 said. The DSL keeps `component =` (Q18).
+- `ind_true_index` gains `component_name`; row key `(id_ind, index_name, weight_type,
+  component_name)`, so an additive and a total index can coexist.
+- Three commits, each with the full suite green and a review pause: **3a** (0.74.0)
+  consolidation + P2 readers + value names + the active-block prevalence rule; **3b**
+  (0.74.1) Q21 removal, owner rule, `define_effect_cov_matrix()` refusal; **3c** (0.74.2)
+  Q18. The results go in one `_phase_3.md`, a section per sub-step as it lands.
+
+**As built, 3a (0.74.0).** Gates T3–T9, PH1, PH3–PH6 and the step-3a part of PH7
+in `test-tgv-consolidation.R` and `test-phenotype-total-genetic-value.R`; PH5's
+group form in `test-group-contributor-determinism.R`.
+- **`ind_tgv_total` is an ordered floating sum, not `GEV_ACC_TYPE`** (§6A,
+  rewritten): the DECIMAL round trip moved ~10% of one-component totals by one ulp.
+  Group-mate sums keep `GEV_ACC_TYPE` (many summands, step 0b).
+- **`add_tgv()` re-evaluation upserts** surviving components and deletes only the
+  ones the model no longer produces. The old delete-then-insert would have wiped
+  custom columns on every `add_phenotype()` call, now that `ind_tgv` is the table
+  phenotypes materialise (the old breeding-value table upserted).
+- **Bug found:** `define_phenotype()` validated `components` after writing
+  `phenotype_meta` (and after deleting the old rows under `overwrite = TRUE`). All
+  component checks now run first; PH3 pins it.
+- `.gev_component()` asserts the closed set `TGV_COMPONENT_NAMES`.
+- The readers `.tbv_by_id()` / `.group_mate_tbv()` became `.tgv_by_id()` /
+  `.group_mate_tgv()` here (they changed body anyway); the rest of the Q18 internal
+  renames stay in 3c. One shared reader, `.tgv_read()` (`R/add_tgv.R`), serves
+  phenotypes and true indices.
+- Test files renamed: `test-add_tbv.R` → `test-add_tgv_breeding_value.R`,
+  `test-add_tbv_index.R` → `test-add_tgv_index.R`. The `.gev_warn_tbv_stale()`
+  tests were replaced by gate T5 (a custom additive term is in `additive`).
+- PH8's grep must except the refusal code and tests that name the removed table
+  (`restore_pop()`'s pre-0.74 check, T8, `test-open_pop.R`'s absence check).
+
 
 - Consolidation, as specified in §6.3 (tasks 1–7).
 - P2 (§6A):

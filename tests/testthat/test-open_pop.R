@@ -17,7 +17,8 @@ test_that("open_pop() creates all core tables before define_genome()", {
   expect_true(all(core_tables %in% pop$tables))
 
   # Result tables created with the trait/phenotype block are here too.
-  expect_true(all(c("ind_tbv", "ind_tgv", "ind_tgv_total") %in% pop$tables))
+  expect_true(all(c("ind_tgv", "ind_tgv_total", "ind_true_index") %in% pop$tables))
+  expect_false("ind_tbv" %in% pop$tables)
 
   # Genome tables are NOT present yet
   expect_false("genome_meta" %in% pop$tables)
@@ -181,6 +182,6 @@ test_that("ensure_trait_tables() tables are present after open_pop()", {
   on.exit(close_pop(pop))
 
   trait_tables <- c("trait_meta", "phenotype_effects", "ind_phenotype",
-                    "ind_tbv", "ind_ebv", "index_meta", "ind_index")
+                    "ind_tgv", "ind_ebv", "index_meta", "ind_index")
   expect_true(all(trait_tables %in% pop$tables))
 })

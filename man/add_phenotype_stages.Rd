@@ -13,7 +13,7 @@ evaluation and \code{missing_component_action}, path classification,
 \code{pheno_number} assignment, the residual condition value of every record,
 and the random-effect level every record touches. \strong{No random number is
 drawn and nothing is written} (the one prerequisite write is
-\code{\link[=add_tbv]{add_tbv()}}, which materializes the TBVs the plan reads and is
+\code{\link[=add_tgv]{add_tgv()}}, which materializes the genetic values the plan reads and is
 RNG-neutral).
 \item \strong{Stage 2 — RESOLVE} (\code{.ap_resolve()}): every random draw of the call,
 in a fixed order, and the liability / type conversion — all in memory.
@@ -53,7 +53,7 @@ added by \verb{ALTER TABLE} earlier in the same transaction goes with it.
 \code{.Random.seed} is left advanced
 by exactly the draws made before the error; nothing in the package
 restores it, so a retry draws different values unless the caller
-re-seeds. (The \code{\link[=add_tbv]{add_tbv()}} upsert of Stage 1 is the one write that
+re-seeds. (The \code{\link[=add_tgv]{add_tgv()}} write of Stage 1 is the one write that
 remains; it does not depend on the RNG and the retry rewrites it.)
 
 See \code{plans/sample_correlated_effects.md} §5.5 and D7.

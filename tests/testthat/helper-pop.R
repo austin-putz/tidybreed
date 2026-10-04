@@ -38,3 +38,18 @@ with_additive_target <- function(pop, trait_name, var, ...) {
   suppressMessages(
     define_effect_cov_matrix(pop, "additive", var, trait_name = trait_name))
 }
+
+#' The breeding values: `ind_tgv` rows of the `additive` component
+#'
+#' Test-only shorthand for
+#' `get_table(pop, "ind_tgv") |> filter(component_name == "additive")`,
+#' collected, with columns `id_ind`, `trait_name`, `tgv_value`. Since 0.74.0
+#' `ind_tgv` is the one table of genetic values (the old breeding-value table is gone);
+#' for generated effects its `additive` component is the breeding value.
+tgv_additive <- function(pop, trait_name = NULL) {
+  out <- dplyr::collect(get_table(pop, "ind_tgv"))
+  out <- out[out$component_name == "additive", , drop = FALSE]
+  if (!is.null(trait_name)) out <- out[out$trait_name %in% trait_name, , drop = FALSE]
+  out <- out[order(out$trait_name, out$id_ind), c("id_ind", "trait_name", "tgv_value")]
+  tibble::as_tibble(out)
+}

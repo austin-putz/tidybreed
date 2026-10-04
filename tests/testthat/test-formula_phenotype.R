@@ -213,7 +213,7 @@ test_that("derived_formula missing formula raises error", {
 
 # ── Group B: formula_tbv maternal model ───────────────────────────────────────
 
-test_that("formula_tbv maternal WW: correct record count and no WW in ind_tbv", {
+test_that("formula_tbv maternal WW: correct record count and no WW in ind_tgv", {
   set.seed(101)
   pop <- make_formula_pop("fB1")
   on.exit(close_pop(pop))
@@ -233,7 +233,7 @@ test_that("formula_tbv maternal WW: correct record count and no WW in ind_tbv", 
 
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 40L)
-  tbv_traits <- unique(dplyr::collect(get_table(pop, "ind_tbv"))$trait_name)
+  tbv_traits <- unique(tgv_additive(pop)$trait_name)
   expect_false("WW" %in% tbv_traits)
   expect_true("WWD" %in% tbv_traits)
   expect_true("WWM" %in% tbv_traits)
@@ -298,7 +298,7 @@ test_that("formula_tbv founders (no dam) are excluded with skip warning", {
 
 # ── Group C: formula_tbv SGE model ────────────────────────────────────────────
 
-test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tbv", {
+test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tgv", {
   set.seed(201)
   pop <- make_formula_pop("fC1")
   on.exit(close_pop(pop))
@@ -313,7 +313,7 @@ test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tbv"
   pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG_obs")
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 40L)
-  tbv_traits <- unique(dplyr::collect(get_table(pop, "ind_tbv"))$trait_name)
+  tbv_traits <- unique(tgv_additive(pop)$trait_name)
   expect_false("ADG_obs" %in% tbv_traits)
 })
 
@@ -435,7 +435,7 @@ setup_fcr_pop <- function(pop_name, n = 50, seed = 999) {
   pop
 }
 
-test_that("FCR derived_formula: correct record count and FCR not in ind_tbv", {
+test_that("FCR derived_formula: correct record count and FCR not in ind_tgv", {
   pop <- setup_fcr_pop("fD1")
   on.exit(close_pop(pop))
   pop <- define_phenotype(pop, "FCR", type = "derived_formula",
@@ -445,7 +445,7 @@ test_that("FCR derived_formula: correct record count and FCR not in ind_tbv", {
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   fcr <- ph[ph$phenotype_name == "FCR", ]
   expect_equal(nrow(fcr), 50L)
-  tbv_traits <- unique(dplyr::collect(get_table(pop, "ind_tbv"))$trait_name)
+  tbv_traits <- unique(tgv_additive(pop)$trait_name)
   expect_false("FCR" %in% tbv_traits)
   expect_true("ADFI" %in% tbv_traits)
 })

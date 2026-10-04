@@ -186,9 +186,9 @@ for (shape in shapes) {
   cat("== shape:", shape, "==\n")
   for (n_ind in sizes) {
     pop <- suppressMessages(suppressWarnings(build_pop(n_ind, shape)))
-    # TBVs first: add_phenotype() would otherwise materialize them inside
-    # Stage 1 and the evaluator's cost would be charged to planning.
-    suppressMessages(pop |> get_table("ind_meta") |> add_tbv(c("A", "B")))
+    # Genetic values first: add_phenotype() would otherwise materialize them
+    # inside Stage 1 and the evaluator's cost would be charged to planning.
+    suppressMessages(pop |> get_table("ind_meta") |> add_tgv(c("A", "B")))
 
     for (pass in 1:2) {
       t <- with_stage_timers(suppressMessages(suppressWarnings(

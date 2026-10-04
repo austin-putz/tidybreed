@@ -78,7 +78,6 @@ reference:
     Compute and store true breeding values, phenotype records, and estimated
     breeding values from an external evaluation.
   contents:
-  - add_tbv
   - add_tgv
   - add_phenotype
   - add_ebv

@@ -10,15 +10,17 @@
 #' (optionally filtered). The table must contain `id_ind`, a trait/phenotype
 #' name column, and a numeric value column (`value_col`). For `ind_phenotype`
 #' the name column is `phenotype_name`; for every other table (`ind_ebv`,
-#' `ind_tbv`, or a user-defined table) it is `trait_name` — this is detected
+#' `ind_tgv`, or a user-defined table) it is `trait_name` — this is detected
 #' automatically from the table's columns. Works with `ind_ebv` (EBVs),
-#' `ind_phenotype` (phenotypes), `ind_tbv` (TBVs), or any user-defined table
-#' with the same structure.
+#' `ind_phenotype` (phenotypes), `ind_tgv` (true genetic values; filter it to
+#' one `component_name`, e.g. `"additive"` for breeding values), or any
+#' user-defined table with the same structure.
 #'
 #' ## Uniqueness requirement
 #' There must be exactly one row per `(id_ind, trait_name)` after any filter is
 #' applied. If duplicates remain, an error is thrown — filter the table down to
-#' a single model, evaluation, or phenotype record before calling `add_index()`.
+#' a single model, evaluation, phenotype record, or `ind_tgv` component before
+#' calling `add_index()`. Values are never summed across rows.
 #'
 #' ## Completeness requirement
 #' Every individual must have a value for **every** trait in the index. If any
@@ -28,14 +30,14 @@
 #' @param tbl A `tidybreed_table` from `get_table()` (optionally filtered).
 #'   Must contain `id_ind`, a name column (`trait_name`, or `phenotype_name`
 #'   for `ind_phenotype`), and the column specified by `value_col`. Any table
-#'   with this structure is accepted: `ind_ebv`, `ind_phenotype`, `ind_tbv`,
+#'   with this structure is accepted: `ind_ebv`, `ind_phenotype`, `ind_tgv`,
 #'   or a custom table.
 #' @param index_name Character scalar. Name of the index to compute; must
 #'   already exist in `index_meta` (created via [define_index()]).
 #' @param value_col Character scalar or `NULL`. The column in `tbl` that holds
 #'   the numeric value to weight. When `NULL` (default), auto-detected from the
 #'   table name: `ind_ebv` → `"ebv_value"`, `ind_phenotype` → `"pheno_value"`,
-#'   `ind_tbv` → `"tbv_value"`. An error is thrown for unknown tables if
+#'   `ind_tgv` → `"tgv_value"`. An error is thrown for unknown tables if
 #'   `value_col` is not supplied.
 #' @param overwrite_index Logical. If `TRUE`, all existing `ind_index` rows for
 #'   this `index_name` are deleted before inserting; new rows receive
@@ -50,7 +52,7 @@
 #' @return The `tidybreed_pop` (invisibly). Assign the result back.
 #'
 #' @seealso [define_index()], [get_table()], [add_ebv()], [add_phenotype()],
-#'   [add_tbv()]
+#'   [add_tgv()]
 #'
 #' @examples
 #' \dontrun{
@@ -66,9 +68,11 @@
 #'   dplyr::filter(pheno_number == 1L) |>
 #'   add_index("terminal")
 #'
-#' # Compute true-value index from TBVs (value_col auto-detected)
+#' # Compute a true-value index from breeding values (value_col auto-detected);
+#' # ind_tgv has one row per component, so filter to one
 #' pop <- pop |>
-#'   get_table("ind_tbv") |>
+#'   get_table("ind_tgv") |>
+#'   dplyr::filter(component_name == "additive") |>
 #'   add_index("terminal")
 #'
 #' # Explicit value_col for a user-defined table
@@ -117,7 +121,7 @@ add_index <- function(tbl,
   known_value_cols <- c(
     ind_ebv       = "ebv_value",
     ind_phenotype = "pheno_value",
-    ind_tbv       = "tbv_value"
+    ind_tgv       = "tgv_value"
   )
 
   if (is.null(value_col)) {

@@ -2,12 +2,12 @@
 #'
 #' @description
 #' Simulates phenotype values for one or more phenotypes and writes them to
-#' `ind_phenotype`. Also computes and stores the underlying true breeding
-#' value (TBV) per individual per trait in `ind_tbv`.
+#' `ind_phenotype`. Also computes and stores the underlying true genetic
+#' values per individual per trait in `ind_tgv` (through [add_tgv()]).
 #'
 #' **Model** (per phenotype, on the liability / continuous scale):
 #' \preformatted{
-#'   y_i = mean + sum(fixed_shifts) + sum(random_shifts) + TBV_i + e_i
+#'   y_i = mean + sum(fixed_shifts) + sum(random_shifts) + G_i + e_i
 #' }
 #'
 #' * `mean` comes from `phenotype_meta.mean`.
@@ -26,17 +26,19 @@
 #'   `add_phenotype("BF")` next season gives pen `P1` a `(ADG, BF)` pair with
 #'   the declared covariance, whichever came first. A record whose level is
 #'   `NULL` gets no draw and a shift of `0`.
-#' * For **simple** phenotypes (`phenotype_name == trait_name`), `TBV_i` is the
-#'   standard additive TBV from `genome_effects` (computed via [add_tbv()],
-#'   which this function calls internally for every source trait it needs).
+#' * For **simple** phenotypes (`phenotype_name == trait_name`), `G_i` is the
+#'   trait's **total** genetic value (`ind_tgv_total`: additive, dominance and
+#'   every other component of the model), computed via [add_tgv()], which this
+#'   function calls internally for every source trait it needs.
 #' * For **composite** phenotypes (rows in `phenotype_components`, written by
-#'   `define_phenotype(..., components = ...)`), `TBV_i` is the weighted sum
-#'   of contributor TBVs (self, dam, sire, or group) — see
+#'   `define_phenotype(..., components = ...)`), `G_i` is the weighted sum of
+#'   contributor genetic values (self, dam, sire, or group): the total by
+#'   default, or the components each row lists in `component_names` — see
 #'   `.assemble_composite_tbv()`.
 #' * For **`formula_tbv`** composite phenotypes (`phenotype_meta.formula_tbv`
-#'   set, written by `define_phenotype(..., formula_tbv = ...)`), `TBV_i` is
+#'   set, written by `define_phenotype(..., formula_tbv = ...)`), `G_i` is
 #'   evaluated from a small DSL expression referencing self/dam/sire/group
-#'   TBVs instead of a `phenotype_components` data frame.
+#'   total genetic values instead of a `phenotype_components` data frame.
 #' * `e_i` is the residual, drawn from the phenotype's residual covariance
 #'   block in `phenotype_var_comp` (see [define_residual_cov()]). Within a
 #'   block, residuals are **correlated across phenotypes and sequential in
@@ -93,8 +95,8 @@
 #' stays advanced by the draws made before the error, as after any other
 #' failed R call, so re-running the call draws different values. Pass `seed`
 #' (or call `set.seed()`) again if the retry must reproduce the failed call.
-#' The TBVs the call materialized through [add_tbv()] remain; they do not
-#' depend on the RNG, and the retry rewrites them.
+#' The genetic values the call materialized through [add_tgv()] remain; they
+#' do not depend on the RNG, and the retry rewrites them.
 #'
 #' **Escape hatches**:
 #' * `user_values`: skip model computation and write these values as phenotype
@@ -129,7 +131,8 @@
 #'   **not** supported here; cannot be combined with `user_values`.
 #' @param user_values Optional override for the full phenotype value —
 #'   skips the model entirely (mean, covariates, and residual are not
-#'   evaluated), though TBVs are still computed and stored in `ind_tbv`. For a
+#'   evaluated), though genetic values are still computed and stored in
+#'   `ind_tgv`. For a
 #'   single `phenotype_name`: a plain numeric vector matching the planned
 #'   records by position (sorted `id_ind` order, after sex expression and the
 #'   repeatable guard), or a named numeric vector (e.g.
@@ -148,7 +151,7 @@
 #' @seealso [define_phenotype()], [define_trait()], [define_additive_effects()],
 #'   [define_residual_cov()], [define_effect_cov_matrix()],
 #'   [define_effect_fixed_class()], [define_effect_fixed_cov()],
-#'   [define_effect_random()], [add_tbv()]
+#'   [define_effect_random()], [add_tgv()]
 #'
 #' @examples
 #' \dontrun{
@@ -307,12 +310,13 @@ add_phenotype <- function(tbl,
 
 #' Assemble the composite TBV of one phenotype from `phenotype_components`
 #'
-#' Sums `weight * contributor TBV` over the phenotype's component rows, one
-#' contributor lookup per row (see `?contributor_tbv`). `ind_tbv` must
-#' already hold the source traits for every contributor
+#' Sums `weight * contributor genetic value` over the phenotype's component
+#' rows, one contributor lookup per row (see `?contributor_tbv`). Each row
+#' reads its `component_names` (`"total"` by default) from `ind_tgv`, which
+#' must already hold the source traits for every contributor
 #' (`.ap_materialize_tbvs()`). A missing piece — a `NULL` dam or sire, a
-#' contributor with no TBV, a `NULL` group value, a `NULL` covariate —
-#' makes the individual's composite `NA`.
+#' contributor with no `ind_tgv` row, a `NULL` group value, a `NULL`
+#' covariate — makes the individual's composite `NA`.
 #'
 #' @param comp_rows The phenotype's `phenotype_components` rows.
 #' @param subset_df The planned `ind_meta` rows (needs `id_ind`,
@@ -352,13 +356,14 @@ add_phenotype <- function(tbl,
       stop(what, ": weight_type '", comp$weight_type, "' is not implemented; ",
            "use 'fixed' or 'covariate'.", call. = FALSE))
 
+    comps <- .split_component_names(comp$component_names)
     vec <- switch(
       comp$contributor_type,
-      self  = .tbv_by_id(conn, trait, focal_ids),
-      dam   = .tbv_by_id(conn, trait, subset_df$id_parent_2),
-      sire  = .tbv_by_id(conn, trait, subset_df$id_parent_1),
-      group = .group_mate_tbv(conn, trait, focal_ids, comp$group_column,
-                              comp$group_table, comp$aggregation, what))
+      self  = .tgv_by_id(conn, trait, focal_ids, comps),
+      dam   = .tgv_by_id(conn, trait, subset_df$id_parent_2, comps),
+      sire  = .tgv_by_id(conn, trait, subset_df$id_parent_1, comps),
+      group = .group_mate_tgv(conn, trait, focal_ids, comp$group_column,
+                              comp$group_table, comp$aggregation, what, comps))
     composite <- composite + wt * vec
   }
 

@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Creates one row in `trait_meta` describing a **genetic component trait**: a
-#' quantity with QTL effects in `genome_effects`, TBVs in `ind_tbv`, and
+#' quantity with QTL effects in `genome_effects`, genetic values in `ind_tgv`, and
 #' additive genetic variance in `trait_var_comp`. Contains no
 #' phenotype-level information.
 #'
@@ -203,21 +203,10 @@ ensure_trait_tables <- function(pop) {
       )
     ",
 
-    ind_tbv = "
-      CREATE TABLE ind_tbv (
-        id_tbv     INTEGER PRIMARY KEY,
-        id_ind     VARCHAR,
-        trait_name VARCHAR,
-        tbv_value  DOUBLE,
-        UNIQUE (id_ind, trait_name)
-      )
-    ",
-
-    # True genetic value: the total genotypic value, decomposed by declared
-    # model structure. component_name is a dimension from the start because
-    # adding it later would change the unique key from (id_ind, trait_name) and
-    # reshape every row. No `replicate` column: like ind_tbv, that column exists
-    # only in the archive copy, added by archive_replicate() via
+    # True genetic value: the one table of genetic values, decomposed by
+    # declared model structure (the breeding value is component 'additive').
+    # component_name is part of the key from the start. No `replicate` column:
+    # that column exists only in the archive copy, added by archive_replicate() via
     # .ensure_archive_table(), which refuses to stamp a table that already has
     # one.
     ind_tgv = "
@@ -272,6 +261,7 @@ ensure_trait_tables <- function(pop) {
         id_ind           VARCHAR NOT NULL,
         index_name       VARCHAR NOT NULL,
         weight_type      VARCHAR NOT NULL,
+        component_name   VARCHAR NOT NULL,
         true_index_value DOUBLE
       )
     "

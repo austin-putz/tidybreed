@@ -106,7 +106,7 @@ restore_pop <- function(db_path,
 
   # Files written by a package version whose schema the current code cannot
   # read. The checks below fail later and further away if they are not made
-  # here: the first as a missing-column error from inside add_tbv(), the second
+  # here: the first as a missing-column error from inside the evaluator, the second
   # as a DuckDB append error from inside define_phenotype(), the third not at
   # all (old rows are silently ignored). Pre-1.0 there is no migration, so the
   # only useful thing to do is say which file and which shape.
@@ -147,7 +147,7 @@ restore_pop <- function(db_path,
   # 'epistasis' became 'additive' / 'additive_by_additive', and the reserved
   # owner 'generated_additive_tbv' became 'generated'. The shape checks above
   # pass such a file, and the old rows are then invisible to every reader --
-  # get_trait_var() returns NA and add_tbv() finds no generated terms -- while
+  # get_trait_var() returns NA and generated terms are not recognised -- while
   # new writes sit next to them under the new names.
   old_strings <- character(0)
   if ("trait_var_comp" %in% existing_tables) {
@@ -186,6 +186,42 @@ restore_pop <- function(db_path,
       "target_add_mean" %in% DBI::dbListFields(db_conn, "trait_meta")) {
     stop_stale(paste0(
       "carries the pre-v0.73.0 'trait_meta' shape (column target_add_mean)."))
+  }
+
+  # v0.74.0: ind_tgv is the one table of genetic values. ind_tbv is gone, the
+  # value components lost their 'order1_' prefix, ind_true_index gained
+  # component_name, and the phenotype_components.component_names default is
+  # 'total'. The table check always fires on an older file with traits
+  # (define_trait() created ind_tbv and ind_tgv together).
+  if ("ind_tbv" %in% existing_tables) {
+    stop_stale(paste0(
+      "carries the pre-v0.74.0 'ind_tbv' table. True genetic values now live ",
+      "only in 'ind_tgv' (the breeding value is component 'additive')."))
+  }
+  if ("ind_true_index" %in% existing_tables &&
+      !"component_name" %in% DBI::dbListFields(db_conn, "ind_true_index")) {
+    stop_stale(paste0(
+      "carries the pre-v0.74.0 'ind_true_index' shape (no component_name ",
+      "column)."))
+  }
+  old_comp <- character(0)
+  if ("ind_tgv" %in% existing_tables) {
+    n <- DBI::dbGetQuery(db_conn, paste0(
+      "SELECT COUNT(*) AS n FROM ind_tgv ",
+      "WHERE starts_with(component_name, 'order1_')"))$n
+    if (n > 0) old_comp <- c(old_comp, "ind_tgv.component_name")
+  }
+  if ("phenotype_components" %in% existing_tables) {
+    n <- DBI::dbGetQuery(db_conn, paste0(
+      "SELECT COUNT(*) AS n FROM phenotype_components ",
+      "WHERE contains(component_names, 'order1_')"))$n
+    if (n > 0) old_comp <- c(old_comp, "phenotype_components.component_names")
+  }
+  if (length(old_comp) > 0L) {
+    stop_stale(paste0(
+      "carries pre-v0.74.0 component names in ", paste(old_comp, collapse = ", "),
+      " ('order1_additive', ...). They are now 'additive', 'dominance', ",
+      "'indicator' and 'interaction'."))
   }
 
   # Infer pop_name from filename when not supplied

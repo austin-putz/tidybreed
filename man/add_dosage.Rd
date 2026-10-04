@@ -38,7 +38,7 @@ you need dosage values for marker-assisted selection, allele-frequency
 queries, or other downstream analysis.
 
 Pipe a \code{tidybreed_table} (from \code{\link[=get_table]{get_table()}} and optionally \code{\link[dplyr:filter]{dplyr::filter()}}) as the
-first argument to select individuals. As with \code{\link[=add_tbv]{add_tbv()}}, the \strong{distinct}
+first argument to select individuals. As with \code{\link[=add_tgv]{add_tgv()}}, the \strong{distinct}
 \code{id_ind} values in the collected table form the candidate set, so a table with
 multiple rows per individual (e.g. \code{ind_phenotype}) does not multiply work.
 }

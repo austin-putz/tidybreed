@@ -9,7 +9,7 @@
 #' queries, or other downstream analysis.
 #'
 #' Pipe a `tidybreed_table` (from [get_table()] and optionally [dplyr::filter()]) as the
-#' first argument to select individuals. As with [add_tbv()], the **distinct**
+#' first argument to select individuals. As with [add_tgv()], the **distinct**
 #' `id_ind` values in the collected table form the candidate set, so a table with
 #' multiple rows per individual (e.g. `ind_phenotype`) does not multiply work.
 #'

@@ -1,6 +1,6 @@
-# Coverage for add_tbv()'s index_names / true-index block (R/add_tbv.R) and its
+# Coverage for add_tgv()'s index_names / true-index block (R/add_tgv.R) and its
 # scattered input guards. The crossbreeding line-precedence join is covered
-# separately in test-add_tbv.R -- keep the two concerns in separate files.
+# separately in test-add_tgv_breeding_value.R -- keep the two concerns apart.
 
 make_index_pop <- function(pop_name = "ix", n_ind = 10, traits = c("ADG", "BW")) {
   pop <- open_pop(pop_name = pop_name, db_name = ":memory:") |>
@@ -21,10 +21,10 @@ make_index_pop <- function(pop_name = "ix", n_ind = 10, traits = c("ADG", "BW"))
   pop
 }
 
-# Wide TBV lookup keyed by id_ind -- reshape() mangles the value column name.
+# Wide breeding-value lookup keyed by id_ind -- reshape() mangles the value column name.
 tbv_wide <- function(pop, ids, trait) {
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
-  tb$tbv_value[match(paste(ids, trait), paste(tb$id_ind, tb$trait_name))]
+  tb <- tgv_additive(pop)
+  tb$tgv_value[match(paste(ids, trait), paste(tb$id_ind, tb$trait_name))]
 }
 
 true_index <- function(pop, ids, weight_type) {
@@ -40,12 +40,12 @@ all_ids <- function(pop) {
 
 # ── 1. The index_names block ────────────────────────────────────────────────
 
-test_that("add_tbv(type = 'index') writes the index-weighted sum of TBVs", {
+test_that("add_tgv(weight_type = 'index') writes the index-weighted sum of breeding values", {
   set.seed(11001)
   pop <- make_index_pop("ix_index")
   pop <- define_index(pop, "sel", c("ADG", "BW"), index_wts = c(2, 3))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel", type = "index"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel", weight_type = "index"))
 
   ids <- all_ids(pop)
   ti  <- dplyr::collect(get_table(pop, "ind_true_index"))
@@ -59,14 +59,14 @@ test_that("add_tbv(type = 'index') writes the index-weighted sum of TBVs", {
 })
 
 
-test_that("add_tbv(type = 'economic') uses economic_weight, not index_weight", {
+test_that("add_tgv(type = 'economic') uses economic_weight, not index_weight", {
   set.seed(11002)
   pop <- make_index_pop("ix_econ")
   # Deliberately different index vs economic weights so a column mix-up fails.
   pop <- define_index(pop, "sel", c("ADG", "BW"),
                       index_wts = c(2, 3), economic_wts = c(10, -1))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel", type = "economic"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel", weight_type = "economic"))
 
   ids <- all_ids(pop)
   ti  <- dplyr::collect(get_table(pop, "ind_true_index"))
@@ -78,13 +78,13 @@ test_that("add_tbv(type = 'economic') uses economic_weight, not index_weight", {
 })
 
 
-test_that("add_tbv(type = 'both') writes one index and one economic row per individual", {
+test_that("add_tgv(type = 'both') writes one index and one economic row per individual", {
   set.seed(11003)
   pop <- make_index_pop("ix_both")
   pop <- define_index(pop, "sel", c("ADG", "BW"),
                       index_wts = c(2, 3), economic_wts = c(10, -1))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel", type = "both"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel", weight_type = "both"))
 
   ids <- all_ids(pop)
   ti  <- dplyr::collect(get_table(pop, "ind_true_index"))
@@ -100,14 +100,14 @@ test_that("add_tbv(type = 'both') writes one index and one economic row per indi
 })
 
 
-test_that("add_tbv() type defaults to 'index'", {
+test_that("add_tgv() type defaults to 'index'", {
   set.seed(11004)
   pop <- make_index_pop("ix_default")
   pop <- define_index(pop, "sel", c("ADG", "BW"),
                       index_wts = c(2, 3), economic_wts = c(10, -1))
   # type omitted entirely -- exercises the match.arg() default.
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel"))
 
   ids <- all_ids(pop)
   ti  <- dplyr::collect(get_table(pop, "ind_true_index"))
@@ -119,12 +119,12 @@ test_that("add_tbv() type defaults to 'index'", {
 })
 
 
-test_that("add_tbv(overwrite_index = FALSE) skips individuals that already have a value", {
+test_that("add_tgv(overwrite_index = FALSE) skips individuals that already have a value", {
   set.seed(11005)
   pop <- make_index_pop("ix_noover")
   pop <- define_index(pop, "sel", c("ADG", "BW"), index_wts = c(2, 3))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel"))
 
   ids    <- all_ids(pop)
   before <- true_index(pop, ids, "index")
@@ -132,7 +132,7 @@ test_that("add_tbv(overwrite_index = FALSE) skips individuals that already have 
   # ind_true_index has no SQL UNIQUE constraint -- this skip is the only thing
   # standing between a re-run and silently duplicated rows.
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel"))
 
   ti <- dplyr::collect(get_table(pop, "ind_true_index"))
   expect_equal(nrow(ti), length(ids))
@@ -142,12 +142,12 @@ test_that("add_tbv(overwrite_index = FALSE) skips individuals that already have 
 })
 
 
-test_that("add_tbv(overwrite_index = TRUE) recomputes in place after weights change", {
+test_that("add_tgv(overwrite_index = TRUE) recomputes in place after weights change", {
   set.seed(11006)
   pop <- make_index_pop("ix_over")
   pop <- define_index(pop, "sel", c("ADG", "BW"), index_wts = c(2, 3))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel"))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel"))
 
   ids <- all_ids(pop)
   expect_equal(true_index(pop, ids, "index"),
@@ -156,7 +156,7 @@ test_that("add_tbv(overwrite_index = TRUE) recomputes in place after weights cha
   pop <- suppressMessages(
     define_index(pop, "sel", c("ADG", "BW"), index_wts = c(-1, 5), overwrite = TRUE))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = "sel", overwrite_index = TRUE))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = "sel", overwrite_index = TRUE))
 
   ti <- dplyr::collect(get_table(pop, "ind_true_index"))
   expect_equal(nrow(ti), length(ids))          # replaced, not appended
@@ -167,13 +167,13 @@ test_that("add_tbv(overwrite_index = TRUE) recomputes in place after weights cha
 })
 
 
-test_that("add_tbv() handles multiple index_names in one call independently", {
+test_that("add_tgv() handles multiple index_names in one call independently", {
   set.seed(11007)
   pop <- make_index_pop("ix_multi")
   pop <- define_index(pop, "idxa", c("ADG", "BW"), index_wts = c(1, 0))
   pop <- define_index(pop, "idxb", c("ADG", "BW"), index_wts = c(0, 4))
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv(index_names = c("idxa", "idxb")))
+    pop |> get_table("ind_meta") |> add_tgv(index_names = c("idxa", "idxb")))
 
   ids <- all_ids(pop)
   ti  <- dplyr::collect(get_table(pop, "ind_true_index"))
@@ -191,13 +191,13 @@ test_that("add_tbv() handles multiple index_names in one call independently", {
 })
 
 
-test_that("add_tbv() writes true index rows only for the filtered subset", {
+test_that("add_tgv() writes true index rows only for the filtered subset", {
   set.seed(11008)
   pop <- make_index_pop("ix_subset")
   pop <- define_index(pop, "sel", c("ADG", "BW"), index_wts = c(2, 3))
   pop <- suppressMessages(
     pop |> get_table("ind_meta") |> dplyr::filter(sex == "M") |>
-      add_tbv(index_names = "sel"))
+      add_tgv(index_names = "sel"))
 
   males <- sort(dplyr::pull(
     dplyr::collect(dplyr::filter(get_table(pop, "ind_meta"), sex == "M")), id_ind))
@@ -211,18 +211,18 @@ test_that("add_tbv() writes true index rows only for the filtered subset", {
 })
 
 
-test_that("add_tbv() errors on an index name that is not in index_meta", {
+test_that("add_tgv() errors on an index name that is not in index_meta", {
   set.seed(11009)
   pop <- make_index_pop("ix_unknown")
   expect_error(
-    suppressMessages(pop |> get_table("ind_meta") |> add_tbv(index_names = "nope")),
+    suppressMessages(pop |> get_table("ind_meta") |> add_tgv(index_names = "nope")),
     "not found in index_meta"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv(type = 'economic') errors when economic_weight was never supplied", {
+test_that("add_tgv(type = 'economic') errors when economic_weight was never supplied", {
   set.seed(11010)
   pop <- make_index_pop("ix_naecon")
   # No economic_wts -> define_index() omits the column from the INSERT and
@@ -241,36 +241,36 @@ test_that("add_tbv(type = 'economic') errors when economic_weight was never supp
 
   expect_error(
     suppressMessages(pop |> get_table("ind_meta") |>
-                       add_tbv(index_names = "noecon", type = "economic")),
+                       add_tgv(index_names = "noecon", weight_type = "economic")),
     "Supply them via define_index"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() rejects an index name that is not a valid SQL identifier", {
+test_that("add_tgv() rejects an index name that is not a valid SQL identifier", {
   set.seed(11011)
   pop <- make_index_pop("ix_badname")
   expect_error(
-    suppressMessages(pop |> get_table("ind_meta") |> add_tbv(index_names = "3bad")),
+    suppressMessages(pop |> get_table("ind_meta") |> add_tgv(index_names = "3bad")),
     "Invalid index name"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() errors instead of silently writing nothing when index traits have no TBVs", {
+test_that("add_tgv() errors instead of silently writing nothing when index traits have no genetic values", {
   set.seed(11012)
   pop <- make_index_pop("ix_notbv")
   # Index covers BW only, but the call computes ADG only -- so no individual has
-  # a BW row in ind_tbv. Before the guard this wrote zero rows and returned
+  # a BW row in ind_tgv. Before the guard this wrote zero rows and returned
   # cleanly, violating the documented "all index traits must be in trait_name".
   pop <- define_index(pop, "sel", "BW", index_wts = 1)
 
   expect_error(
     suppressMessages(pop |> get_table("ind_meta") |>
-                       add_tbv("ADG", index_names = "sel")),
-    "No TBVs found for index 'sel'"
+                       add_tgv("ADG", index_names = "sel")),
+    "No genetic values in ind_tgv for index 'sel'"
   )
   expect_equal(nrow(dplyr::collect(get_table(pop, "ind_true_index"))), 0L)
 
@@ -278,17 +278,17 @@ test_that("add_tbv() errors instead of silently writing nothing when index trait
 })
 
 
-test_that("add_tbv() errors when only some index traits have TBVs", {
+test_that("add_tgv() errors when only some index traits have genetic values", {
   set.seed(11013)
   pop <- make_index_pop("ix_partialtbv")
   pop <- define_index(pop, "sel", c("ADG", "BW"), index_wts = c(1, 1))
-  # ADG TBVs exist; BW ones do not -> the per-trait NA check fires.
-  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG"))
+  # ADG values exist; BW ones do not -> the per-trait NA check fires.
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tgv("ADG"))
 
   expect_error(
     suppressMessages(pop |> get_table("ind_meta") |>
-                       add_tbv("ADG", index_names = "sel")),
-    "TBVs missing for index 'sel'"
+                       add_tgv("ADG", index_names = "sel")),
+    "No genetic values in ind_tgv for index 'sel'.*BW"
   )
   close_pop(pop)
 })
@@ -296,12 +296,12 @@ test_that("add_tbv() errors when only some index traits have TBVs", {
 
 # ── 2. Scattered input guards ───────────────────────────────────────────────
 
-test_that("add_tbv() defaults trait_name to every trait in trait_meta", {
+test_that("add_tgv() defaults trait_name to every trait in trait_meta", {
   set.seed(12001)
   pop <- make_index_pop("ix_alltraits")
-  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tbv())
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tgv())
 
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tb <- tgv_additive(pop)
   expect_setequal(unique(tb$trait_name), c("ADG", "BW"))
   expect_equal(nrow(tb), 2L * length(all_ids(pop)))
 
@@ -309,76 +309,76 @@ test_that("add_tbv() defaults trait_name to every trait in trait_meta", {
 })
 
 
-test_that("add_tbv() errors when trait_meta is empty and no trait_name is given", {
+test_that("add_tgv() errors when trait_meta is empty and no trait_name is given", {
   pop <- make_test_pop("ix_notraits", n_loci = 20, n_chr = 1)
   expect_error(
-    pop |> get_table("ind_meta") |> add_tbv(),
+    pop |> get_table("ind_meta") |> add_tgv(),
     "No traits found in trait_meta"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() rejects a non-scalar custom field", {
+test_that("add_tgv() rejects a non-scalar custom field", {
   set.seed(12002)
   pop <- make_index_pop("ix_vecfield")
   expect_error(
-    pop |> get_table("ind_meta") |> add_tbv("ADG", note = c("a", "b")),
+    pop |> get_table("ind_meta") |> add_tgv("ADG", note = c("a", "b")),
     "must be a scalar"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() errors when the filtered table has no id_ind column", {
+test_that("add_tgv() errors when the filtered table has no id_ind column", {
   set.seed(12003)
   pop <- make_index_pop("ix_noid")
   expect_error(
-    pop |> get_table("genome_meta") |> dplyr::filter(chr == 1L) |> add_tbv("ADG"),
+    pop |> get_table("genome_meta") |> dplyr::filter(chr == 1L) |> add_tgv("ADG"),
     "has no 'id_ind' column"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() warns and no-ops when the filter matches no individuals", {
+test_that("add_tgv() warns and no-ops when the filter matches no individuals", {
   set.seed(12004)
   pop <- make_index_pop("ix_nomatch")
   expect_warning(
     res <- pop |> get_table("ind_meta") |>
-      dplyr::filter(id_ind == "does_not_exist") |> add_tbv("ADG"),
+      dplyr::filter(id_ind == "does_not_exist") |> add_tgv("ADG"),
     "No individuals matched"
   )
   expect_s3_class(res, "tidybreed_pop")
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+  expect_equal(nrow(tgv_additive(pop)), 0L)
   close_pop(pop)
 })
 
 
-test_that("add_tbv() errors on a trait that is not in trait_meta", {
+test_that("add_tgv() errors on a trait that is not in trait_meta", {
   set.seed(12005)
   pop <- make_index_pop("ix_notrait")
   expect_error(
-    pop |> get_table("ind_meta") |> add_tbv("NOPE"),
+    pop |> get_table("ind_meta") |> add_tgv("NOPE"),
     "Traits not found: NOPE"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() errors on a trait with no additive effects", {
+test_that("add_tgv() errors on a trait with no effects", {
   set.seed(12006)
   pop <- make_index_pop("ix_noqtl")
   pop <- with_additive_target(pop, "NOQTL", 0.25)
   expect_error(
-    pop |> get_table("ind_meta") |> add_tbv("NOQTL"),
-    "No order-one additive effects found"
+    pop |> get_table("ind_meta") |> add_tgv("NOQTL"),
+    "No genome effects found for trait 'NOQTL'"
   )
   close_pop(pop)
 })
 
 
-test_that("add_tbv() errors, naming chromosome inheritance, when an individual carries no QTL-bearing chromosome", {
+test_that("add_tgv() errors, naming chromosome inheritance, when an individual carries no QTL-bearing chromosome", {
   set.seed(12007)
   pop <- open_pop(pop_name = "ix_ychr", db_name = ":memory:") |>
     define_genome(n_loci = 10, n_chr = 2, chr_names = c("1", "Y"), chr_len_Mb = 50) |>
@@ -410,25 +410,25 @@ test_that("add_tbv() errors, naming chromosome inheritance, when an individual c
   expect_equal(n_f_rows, 0)
 
   expect_error(
-    pop |> get_table("ind_meta") |> add_tbv("YTRAIT"),
+    pop |> get_table("ind_meta") |> add_tgv("YTRAIT"),
     "chr_inheritance"
   )
   # Males do carry Y, so restricting to them succeeds.
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> dplyr::filter(sex == "M") |> add_tbv("YTRAIT"))
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 2L)
+    pop |> get_table("ind_meta") |> dplyr::filter(sex == "M") |> add_tgv("YTRAIT"))
+  expect_equal(nrow(tgv_additive(pop)), 2L)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() writes scalar custom fields to ind_tbv", {
+test_that("add_tgv() writes scalar custom fields to ind_tgv", {
   set.seed(12008)
   pop <- make_index_pop("ix_extracol")
   pop <- suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv("ADG", eval_note = "x"))
+    pop |> get_table("ind_meta") |> add_tgv("ADG", eval_note = "x"))
 
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tb <- dplyr::collect(get_table(pop, "ind_tgv"))
   expect_true("eval_note" %in% names(tb))
   expect_true(all(tb$eval_note == "x"))
 

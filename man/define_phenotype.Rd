@@ -53,16 +53,25 @@ Default \code{FALSE}.}
 
 \item{prevalence}{Numeric between 0 and 1. For categorical traits with one
 threshold (two categories), the fraction expected above the threshold.
-Mutually exclusive with \code{thresholds}. The threshold is placed on the
-liability scale from \code{mean}, the unconditional residual variance and the
-trait's stored additive target (\code{trait_var_comp}, \code{effect_name = "additive"}), so \code{\link[=add_phenotype]{add_phenotype()}} errors when no target is stored. The
-target is taken as given: if the trait's effects were written without
+Mutually exclusive with \code{thresholds}. The liability carries the trait's
+total genetic value, so the threshold is placed from \code{mean}, the
+unconditional residual variance and the trait's stored genetic targets
+(\code{trait_var_comp}, population-wide rows): the sum of the \code{additive},
+\code{dominance} and \code{additive_by_additive} diagonals, each counted only if the
+trait's model has terms of that kind. \code{\link[=add_phenotype]{add_phenotype()}} errors when a kind
+of term the model has has no stored target, or when the model has terms
+outside those three kinds (an \code{indicator} surface, other interactions).
+The threshold uses the \emph{target} at the reference population, so the
+realised prevalence of a selected or line-specific population differs.
+The target is taken as given: if the trait's effects were written without
 being calibrated to it (manual \code{effects}, or \code{scale_to_target = FALSE} in
-\code{\link[=define_additive_effects]{define_additive_effects()}}), the threshold describes a variance the model
-does not deliver and the realised prevalence is wrong, with no error. Give
-\code{thresholds} for such a trait. Not valid for composite phenotypes (\code{components} or \code{formula_tbv}): their
-genetic liability combines several traits and contributors, which no
-stored variance describes. Give \code{thresholds} instead.}
+\code{\link[=define_additive_effects]{define_additive_effects()}}, or terms from \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}),
+the threshold describes a variance the model does not deliver and the
+realised prevalence is wrong, with no error. Give \code{thresholds} for such a
+trait. Not valid for composite phenotypes (\code{components} or
+\code{formula_tbv}): their genetic liability combines several traits and
+contributors, which no stored variance describes. Give \code{thresholds}
+instead.}
 
 \item{thresholds}{Numeric vector of length K−1 for K ordered categories.
 Liability cutpoints in ascending order. Mutually exclusive with
@@ -103,8 +112,14 @@ anything else is rejected here rather than at \code{\link[=add_phenotype]{add_ph
 the covariate column; it must have exactly one row per individual.
 \item \code{poly_order} (optional): polynomial basis order.
 \item \code{poly_scale_min}, \code{poly_scale_max} (optional): Legendre scaling bounds.
-\item \code{component_names} (optional, default \code{"order1_additive"}): reserved;
-see \code{phenotype_components.component_names}.
+\item \code{component_names} (optional, default \code{"total"}): which genetic value of
+the contributor this row reads from \code{ind_tgv}. \code{"total"} is the total
+genetic value (the \code{ind_tgv_total} view: additive, dominance and every
+other component). A comma-separated list of \code{ind_tgv.component_name}
+values (\code{"additive"}, \code{"dominance"}, \code{"indicator"}, \code{"interaction"},
+e.g. \code{"additive"} or \code{"additive,dominance"}) reads their sum; a listed
+component the trait's model has no terms for contributes 0. Anything
+else, \code{"total"} mixed with other names, or a duplicate is an error.
 \item \code{group_column} (optional): column defining group membership.
 \item \code{group_table} (optional, default \code{"ind_meta"}): table containing
 \code{group_column}.
@@ -115,9 +130,11 @@ group contributors.
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
 written. Mutually exclusive with \code{formula_tbv}.}
 
-\item{formula_tbv}{Character. DSL shorthand for assembling a composite TBV
-from component traits already in \code{trait_meta}. A bare trait symbol
-(e.g. \code{"WWD"}) means the individual's own (\code{"self"}) TBV; contributor
+\item{formula_tbv}{Character. DSL shorthand for assembling a composite
+genetic value from component traits already in \code{trait_meta}. Every
+reference reads the contributor's \strong{total} genetic value
+(\code{ind_tgv_total}). A bare trait symbol (e.g. \code{"WWD"}) means the
+individual's own (\code{"self"}) value; contributor
 roles can also be given explicitly as function calls: \code{self(trait)},
 \code{dam(trait)}, \code{sire(trait)}, \code{group_sum(trait, col)}, and
 \code{group_mean(trait, col)} (\code{col} = grouping column in \code{ind_meta}, e.g.
@@ -140,8 +157,9 @@ phenotypes so dependencies are computed first. Operators \code{+}, \code{-}, \co
 \code{type = "derived_formula"}. Not valid otherwise.}
 
 \item{missing_component_action}{Character. What to do when an individual is
-missing one or more required composite-TBV components (e.g. no group
-assignment for a \code{"group"} contributor, or a missing dam/sire TBV).
+missing one or more required composite components (e.g. no group
+assignment for a \code{"group"} contributor, or a missing dam/sire genetic
+value).
 \code{"skip"} (default) excludes the individual from \code{ind_phenotype} and emits
 a warning with a count. \code{"error"} stops with an informative message
 listing affected individuals. Stored in \code{phenotype_meta} so the behaviour

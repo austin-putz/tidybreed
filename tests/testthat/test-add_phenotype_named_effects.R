@@ -69,12 +69,12 @@ draws_of <- function(pop, t, eff) {
   stats::setNames(r$draw_value, r$level)
 }
 
-# pheno_value - mean - tbv - residual: the summed random-effect contribution
+# pheno_value - mean - genetic value - residual: the summed random-effect contribution
 # of every record of one phenotype at one pheno_number, named by id_ind
 contrib_of <- function(pop, t, pheno_number = 1L) {
   r <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT p.id_ind, p.pheno_value - 10 - v.tbv_value - p.residual_value AS c ",
-    "FROM ind_phenotype AS p JOIN ind_tbv AS v ",
+    "SELECT p.id_ind, p.pheno_value - 10 - v.tgv_total - p.residual_value AS c ",
+    "FROM ind_phenotype AS p JOIN ind_tgv_total AS v ",
     "ON v.id_ind = p.id_ind AND v.trait_name = p.phenotype_name ",
     "WHERE p.phenotype_name = '", t, "' AND p.pheno_number = ", pheno_number,
     " ORDER BY p.id_ind"))

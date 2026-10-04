@@ -310,12 +310,12 @@
   for (ref in trait_refs) {
     env_list[[ref$placeholder]] <- switch(
       ref$type,
-      self       = .tbv_by_id(conn, ref$trait, focal_ids),
-      dam        = .tbv_by_id(conn, ref$trait, subset_df$id_parent_2),
-      sire       = .tbv_by_id(conn, ref$trait, subset_df$id_parent_1),
-      group_sum  = .group_mate_tbv(conn, ref$trait, focal_ids, ref$col,
+      self       = .tgv_by_id(conn, ref$trait, focal_ids),
+      dam        = .tgv_by_id(conn, ref$trait, subset_df$id_parent_2),
+      sire       = .tgv_by_id(conn, ref$trait, subset_df$id_parent_1),
+      group_sum  = .group_mate_tgv(conn, ref$trait, focal_ids, ref$col,
                                    ref$table, "sum", what),
-      group_mean = .group_mate_tbv(conn, ref$trait, focal_ids, ref$col,
+      group_mean = .group_mate_tgv(conn, ref$trait, focal_ids, ref$col,
                                    ref$table, "mean", what))
   }
   env_list

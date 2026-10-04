@@ -14,7 +14,7 @@ Option A from \code{plans/update_schema_print.md}: a hard-coded vector rather th
 a name-prefix rule or a \verb{_schema_meta} column. A table added later and not
 registered here degrades \emph{visibly} — it appears under \strong{User tables} — rather
 than being silently misfiled by a lexical rule that cannot tell
-\code{ind_haplotype} (raw genome data) from \code{ind_tbv} (simulation output).
+\code{ind_haplotype} (raw genome data) from \code{ind_tgv} (simulation output).
 }
 \details{
 In-group order is workflow order, not alphabetical. \code{"User tables"} is an

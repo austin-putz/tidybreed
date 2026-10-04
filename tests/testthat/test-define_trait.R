@@ -19,7 +19,7 @@ test_that("define_trait() creates the trait tables and inserts the row", {
 
   tables <- DBI::dbListTables(pop$db_conn)
   for (tbl in c("trait_meta", "phenotype_effects", "trait_var_comp",
-                "ind_phenotype", "ind_tbv", "ind_ebv",
+                "ind_phenotype", "ind_tgv", "ind_ebv",
                 "phenotype_meta", "phenotype_components",
                 "phenotype_var_comp")) {
     expect_true(tbl %in% tables, info = paste("missing table:", tbl))

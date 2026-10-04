@@ -52,7 +52,7 @@ test_that("add_phenotype() writes records and TBVs for continuous trait", {
   expect_true(all(ph$phenotype_name == "ADG"))
   expect_equal(mean(ph$pheno_value), 10, tolerance = 0.3)
 
-  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tbv <- tgv_additive(pop)
   expect_equal(nrow(tbv), 200)
 
   close_pop(pop)
@@ -79,7 +79,7 @@ test_that("get_table() |> filter() restricts phenotyped subset", {
 
 # ── Any table with id_ind chooses the individuals ────────────────────────────
 # One test per input shape the design targets: marker-assisted pre-selection
-# (ind_genotype / ind_haplotype), truth (ind_tbv), evaluation output (ind_ebv /
+# (ind_genotype / ind_haplotype), truth (ind_tgv), evaluation output (ind_ebv /
 # ind_index) and prior records (ind_phenotype).
 
 phenotyped_ids <- function(pop, phenotype_name = "ADG") {
@@ -127,17 +127,19 @@ test_that("add_phenotype() accepts a filtered ind_haplotype", {
 })
 
 
-test_that("add_phenotype() accepts a filtered ind_tbv", {
+test_that("add_phenotype() accepts a filtered ind_tgv", {
   pop <- make_pheno_pop("ph_tbl_tbv", n_ind = 40, n_loci = 100)
   pop <- setup_simple_trait(pop, "ADG", n_qtl = 20)
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
 
   top <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind FROM ind_tbv WHERE trait_name = 'ADG' AND tbv_value > 0")$id_ind
+    paste0("SELECT id_ind FROM ind_tgv WHERE trait_name = 'ADG' ",
+           "AND component_name = 'additive' AND tgv_value > 0"))$id_ind
 
   pop <- pop |>
-    get_table("ind_tbv") |>
-    dplyr::filter(trait_name == "ADG", tbv_value > 0) |>
+    get_table("ind_tgv") |>
+    dplyr::filter(trait_name == "ADG", component_name == "additive",
+                  tgv_value > 0) |>
     add_phenotype("ADG")
 
   expect_identical(phenotyped_ids(pop), sort(top))
@@ -307,7 +309,7 @@ test_that("add_phenotype() refuses prevalence on a composite even past define_ph
   expect_error(pop |> get_table("ind_meta") |> add_phenotype("mort"),
                "not supported for a composite phenotype")
   expect_identical(.Random.seed, seed_before)
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+  expect_equal(nrow(tgv_additive(pop)), 0L)
 })
 
 test_that("prevalence without a stored additive target errors before any write or draw", {
@@ -324,10 +326,10 @@ test_that("prevalence without a stored additive target errors before any write o
   seed_before <- .Random.seed
   expect_error(
     pop |> get_table("ind_meta") |> add_phenotype("mort"),
-    "no 'additive' row for 'mort'.*thresholds")
+    "no population-wide row for 'additive'.*thresholds")
   expect_identical(.Random.seed, seed_before)
   expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0L)
-  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tbv"))), 0L)
+  expect_equal(nrow(tgv_additive(pop)), 0L)
 
   # user_values bypass the model and place no threshold, so they still work.
   ids <- sort(dplyr::collect(get_table(pop, "ind_meta"))$id_ind)[1:5]

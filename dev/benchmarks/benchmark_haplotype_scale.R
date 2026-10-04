@@ -11,7 +11,7 @@
 #
 # This script instead validates the CURRENT long-format implementation at
 # scale: insert throughput for add_founders()/add_offspring(), the Stage 2
-# line-origin-aware add_tbv() query (both the population-wide-only and
+# line-origin-aware add_tgv() query (both the population-wide-only and
 # line-specific-with-fallback branches), and the PIVOT-based
 # extract_genotypes() export. See plans/refactor_haplotype_stage_2.md.
 #
@@ -97,7 +97,7 @@ run_scale <- function(scale_name, cfg) {
     rows_per_sec = n_offspring_rows / t_offspring$elapsed
   )
 
-  # -- add_tbv(): population-wide-only effects ---------------------------------
+  # -- add_tgv(): population-wide-only effects ---------------------------------
   pop <- define_trait(pop, "ADG_popwide") |>
     define_effect_cov_matrix("additive", 1.0, trait_name = "ADG_popwide")
   set.seed(3)
@@ -105,18 +105,18 @@ run_scale <- function(scale_name, cfg) {
     get_table("genome_meta") |>
     define_additive_effects("ADG_popwide", distribution = "normal")
 
-  t_tbv_popwide <- timed({
+  t_tgv_popwide <- timed({
     pop <<- pop |>
       get_table("ind_meta") |>
-      add_tbv("ADG_popwide")
+      add_tgv("ADG_popwide")
   })
   n_ind_total <- DBI::dbGetQuery(pop$db_conn, "SELECT COUNT(*) AS n FROM ind_meta")$n
-  results$add_tbv_popwide <- list(
-    n_ind = n_ind_total, elapsed = t_tbv_popwide$elapsed,
-    ind_per_sec = n_ind_total / t_tbv_popwide$elapsed
+  results$add_tgv_popwide <- list(
+    n_ind = n_ind_total, elapsed = t_tgv_popwide$elapsed,
+    ind_per_sec = n_ind_total / t_tgv_popwide$elapsed
   )
 
-  # -- add_tbv(): line-specific effects with fallback (Stage 2 query) ---------
+  # -- add_tgv(): line-specific effects with fallback (Stage 2 query) ---------
   pop <- define_trait(pop, "ADG_lineSpec") |>
     define_effect_cov_matrix("additive", 1.0, trait_name = "ADG_lineSpec")
   set.seed(4)
@@ -127,14 +127,14 @@ run_scale <- function(scale_name, cfg) {
   pop <- define_additive_effects(qtl_tbl, "ADG_lineSpec",
                                  distribution = "normal", line_name = "B")
 
-  t_tbv_linespec <- timed({
+  t_tgv_linespec <- timed({
     pop <<- pop |>
       get_table("ind_meta") |>
-      add_tbv("ADG_lineSpec")
+      add_tgv("ADG_lineSpec")
   })
-  results$add_tbv_linespec <- list(
-    n_ind = n_ind_total, elapsed = t_tbv_linespec$elapsed,
-    ind_per_sec = n_ind_total / t_tbv_linespec$elapsed
+  results$add_tgv_linespec <- list(
+    n_ind = n_ind_total, elapsed = t_tgv_linespec$elapsed,
+    ind_per_sec = n_ind_total / t_tgv_linespec$elapsed
   )
 
   # -- extract_genotypes(): PIVOT export for a chip-sized locus subset ---------
@@ -169,10 +169,10 @@ for (scale_name in names(all_results)) {
               res$add_founders$rows, res$add_founders$elapsed, res$add_founders$rows_per_sec))
   cat(sprintf("  add_offspring():       %10d rows in %7.2fs  (%.0f rows/sec)\n",
               res$add_offspring$rows, res$add_offspring$elapsed, res$add_offspring$rows_per_sec))
-  cat(sprintf("  add_tbv() pop-wide:    %10d ind  in %7.2fs  (%.0f ind/sec)\n",
-              res$add_tbv_popwide$n_ind, res$add_tbv_popwide$elapsed, res$add_tbv_popwide$ind_per_sec))
-  cat(sprintf("  add_tbv() line-spec:   %10d ind  in %7.2fs  (%.0f ind/sec)\n",
-              res$add_tbv_linespec$n_ind, res$add_tbv_linespec$elapsed, res$add_tbv_linespec$ind_per_sec))
+  cat(sprintf("  add_tgv() pop-wide:    %10d ind  in %7.2fs  (%.0f ind/sec)\n",
+              res$add_tgv_popwide$n_ind, res$add_tgv_popwide$elapsed, res$add_tgv_popwide$ind_per_sec))
+  cat(sprintf("  add_tgv() line-spec:   %10d ind  in %7.2fs  (%.0f ind/sec)\n",
+              res$add_tgv_linespec$n_ind, res$add_tgv_linespec$elapsed, res$add_tgv_linespec$ind_per_sec))
   cat(sprintf("  extract_genotypes():   %10d ind x %d loci in %7.2fs\n",
               res$extract_genotypes$n_ind, res$extract_genotypes$n_loci, res$extract_genotypes$elapsed))
 }

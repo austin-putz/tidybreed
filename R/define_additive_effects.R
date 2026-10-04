@@ -5,9 +5,10 @@
 #' architecture, **calibrates** it to the stored additive target, and writes
 #' one order-one `additive` term per locus and trait through the same engine as
 #' [define_genome_effect_terms()], under the reserved effect owner
-#' `"generated"`. [add_tbv()] reads order-one `additive` variants from that
-#' owner and nothing else, so effects written here and effects a user writes
-#' with [define_genome_effect_terms()] can never be confused for one another.
+#' `"generated"`. Only generators write that owner, so effects written here
+#' and effects a user writes with [define_genome_effect_terms()] can never be
+#' confused for one another. [add_tgv()] evaluates both; its `additive`
+#' component is the breeding value.
 #'
 #' @details
 #' **When the result is exact.** The requested covariance `G` is delivered
@@ -573,8 +574,8 @@ define_additive_effects <- function(tbl,
 
 #' The effect owner `define_additive_effects()` writes under
 #'
-#' Reserved: `add_tbv()` reads order-one `additive` variants from this owner and
-#' nothing else, and the general writer refuses to touch it. Keeping it distinct
+#' Reserved: only generators write it, and the general writer refuses to touch
+#' it. Keeping it distinct
 #' from the writer's `"custom"` default is what stops a rerun of the generator in
 #' replace mode from deleting a user's own terms.
 #'

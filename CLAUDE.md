@@ -76,7 +76,7 @@ compatibility policy. Until then: design first, break as needed.
 3. **Lazy evaluation** — use `dplyr::tbl()` / `get_table()` and filter before
    `collect()`-ing into R
 4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
-   return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tbv`,
+   return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tgv`,
    `add_genotypes`, `extract_genotypes`, `define_chip`, `define_additive_effects`)
    accept a `tidybreed_table` from `get_table()` and return `tidybreed_pop`
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
@@ -117,7 +117,7 @@ to all lines.
    `line_name`, not `line`).
 
 2. **All primary numeric value columns follow the `{prefix}_value` pattern.**
-   Examples: `pheno_value` in `ind_phenotype`, `tbv_value` in `ind_tbv`,
+   Examples: `pheno_value` in `ind_phenotype`, `tgv_value` in `ind_tgv`,
    `ebv_value` in `ind_ebv`, `cov_value` in `trait_var_comp`,
    `index_value` in `ind_index`.
 
@@ -127,7 +127,7 @@ to all lines.
    used as a column or function parameter that maps to one of these columns.
 
 4. **All ID foreign-key columns start with `id_`.**
-   Examples: `id_ind`, `id_trait`, `id_ebv`, `id_tbv`. No `phenotype_id`-style names.
+   Examples: `id_ind`, `id_trait`, `id_ebv`, `id_tgv`. No `phenotype_id`-style names.
 
 5. **No abbreviations in column names when the full word is unambiguous.**
    `index_weight` not `index_wt`; `trait_name_1`/`trait_name_2` not `trait_1`/`trait_2`.
@@ -148,7 +148,7 @@ The model is split into two distinct layers with a strict boundary between them:
 
 **Genetic component layer** — managed by `define_trait()`:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
-- Has QTL effects in `genome_effects`, TBVs in `ind_tbv`, additive variance target in `trait_var_comp`
+- Has QTL effects in `genome_effects`, genetic values in `ind_tgv` (the breeding value is component `additive`), generation targets in `trait_var_comp`
 - Arguments: `description`, `units` only. Targets enter **only** through
   `define_effect_cov_matrix()` or a generator's `G =` (`define_additive_effects()`),
   and a stored target block is never overwritten
@@ -180,7 +180,7 @@ simulation *output* (data produced by running the model), use `add_`. If the
 function writes rows that configure *how* the model runs (parameters, weights,
 effect definitions), use `define_`.
 
-Examples: `add_founders()`, `add_phenotype()`, `add_tbv()`, `add_ebv()`,
+Examples: `add_founders()`, `add_phenotype()`, `add_tgv()`, `add_ebv()`,
 `add_index()` — all write simulation output.  
 `define_trait()`, `define_additive_effects()`, `define_effect_cov_matrix()`,
 `define_chip()`, `define_index()` — all write model configuration.
@@ -212,8 +212,8 @@ this file was updated before.
   must not consume RNG or leave stochastic state. Nothing in `R/` touches
   `.Random.seed` — never add seed restoration to one function.
 - **Failure contract (D7):** an `add_phenotype()` error leaves `ind_phenotype`
-  and `phenotype_random_effects` untouched (the `add_tbv()` upsert is the one
-  write that remains). `tests/testthat/test-add_phenotype_failure_contract.R`
+  and `phenotype_random_effects` untouched (the `add_tgv()` write of Stage 1 is
+  the one write that remains). `tests/testthat/test-add_phenotype_failure_contract.R`
   asserts it.
 - **Genome effects:** never `SUM(genome_value)` over `genome_effect_loci` (an
   interaction term counts once per member). Row deletion from the three
@@ -222,11 +222,15 @@ this file was updated before.
   that set: DuckDB 1.5.5 cannot delete parent and child rows in one transaction,
   so `validate_genome_effects()` checks orphans before every `COMMIT` instead
   (pinned in `tests/testthat/test-genome-effects-schema.R`).
-- **One evaluator:** `add_tbv()` and `add_tgv()` share `R/genome_effects_eval.R`;
-  never write a second implementation of the effect math. `add_tbv()` reads only
-  reserved-owner, order-one `additive` terms.
+- **One evaluator, one table of genetic values:** `add_tgv()` evaluates every
+  term through `R/genome_effects_eval.R` into `ind_tgv`; never write a second
+  implementation of the effect math or a second genetic-value table. The
+  breeding value is component `additive`. Every phenotype path reads the total
+  (`ind_tgv_total`) or the components `phenotype_components.component_names`
+  lists, through `.tgv_read()` / `.tgv_by_id()`.
 - **No stored totals or derived values:** no `'total'` row in `ind_tgv` (use the
-  `ind_tgv_total` view); `ad_terms()`'s implied mean `μ` is reported, never
+  `ind_tgv_total` view, which adds the components in a fixed order so it is
+  bit-identical at any thread count); `ad_terms()`'s implied mean `μ` is reported, never
   written to `phenotype_meta.mean`; no `replicate` column outside archives.
 - **Covariance blocks** in `phenotype_var_comp` are declared whole, in one call,
   and locked once realized. There is no `force`.
@@ -246,7 +250,6 @@ this file was updated before.
 - Export: PLINK `.bed/.bim/.fam`, VCF
 - Visualization helpers
 - Realized variance components from an arbitrary effect model
-- Consolidating `ind_tbv` into `ind_tgv` (see `plans/import_qtl_effect_methods.md` §6, step 3)
 
 ## Future Compiled Code Policy
 
@@ -355,10 +358,10 @@ Remaining gaps:
 | `add_phenotype.R` | 71% | Composite/SGE and distribution branches |
 
 The BLUPF90 paths are expected to stay low without a CI solver; do not chase
-them. `add_tbv.R` was the standing concern at 37% and is now 99.6% — see
-`tests/testthat/test-add_tbv_index.R`, which covers the `index_names` /
-`weight_type` block, and `test-add_tbv.R`, which covers the line-precedence
-crossbreeding join.
+them. The breeding-value path (then its own file) was the standing concern at
+37% and reached 99.6% — see `tests/testthat/test-add_tgv_index.R`, which covers
+the `index_names` / `weight_type` block, and `test-add_tgv_breeding_value.R`,
+which covers the line-precedence crossbreeding join.
 
 ## Development Environment
 

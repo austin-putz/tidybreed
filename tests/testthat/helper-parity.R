@@ -148,7 +148,7 @@ run_parity_sim <- function() {
   # TBVs for everyone.
   pop <- pop |>
     get_table("ind_meta") |>
-    add_tbv(c("ADG", "IMP"))
+    add_tgv(c("ADG", "IMP"))
 
   # Exported genotype matrix over the ADG QTL set.
   export_df <- pop |>
@@ -160,7 +160,7 @@ run_parity_sim <- function() {
 
   tbv <- DBI::dbGetQuery(
     pop$db_conn,
-    "SELECT id_ind, trait_name, tbv_value FROM ind_tbv"
+    "SELECT id_ind, trait_name, tgv_value FROM ind_tgv WHERE component_name = 'additive'"
   )
   tbv <- tbv[order(tbv$id_ind, tbv$trait_name), , drop = FALSE]
   rownames(tbv) <- NULL

@@ -37,9 +37,9 @@ setup_cov_trait <- function(pop, mean = 100, n_qtl = 30) {
 cov_frame <- function(pop) {
   ph <- dplyr::collect(get_table(pop, "ind_phenotype"))
   im <- dplyr::collect(get_table(pop, "ind_meta"))
-  tb <- dplyr::collect(get_table(pop, "ind_tbv"))
+  tb <- tgv_additive(pop)
   ph$age <- im$age_days[match(ph$id_ind, im$id_ind)]
-  ph$tbv <- tb$tbv_value[match(ph$id_ind, tb$id_ind)]
+  ph$tbv <- tb$tgv_value[match(ph$id_ind, tb$id_ind)]
   ph
 }
 

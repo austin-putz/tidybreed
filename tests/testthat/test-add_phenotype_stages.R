@@ -245,8 +245,8 @@ test_that("user_residual is positional over the planned (id_ind-ordered) records
     add_phenotype("A", user_residual = resid))
   ph  <- phen(pop)
   tbv <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'A'")
-  tbv <- stats::setNames(tbv$tbv_value, tbv$id_ind)[ph$id_ind]
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' AND trait_name = 'A'")
+  tbv <- stats::setNames(tbv$tgv_value, tbv$id_ind)[ph$id_ind]
   expect_equal(ph$pheno_value - 10 - unname(tbv), resid)
   expect_error(
     pop |> get_table("ind_meta") |> add_phenotype("A", user_residual = 1:3),
@@ -261,7 +261,7 @@ test_that("a call consumes exactly its draws: n residuals plus one normal per ne
   on.exit(close_pop(pop))
   n <- 12L
 
-  # No random effects: exactly n normals (add_tbv, planning, commit are silent)
+  # No random effects: exactly n normals (add_tgv, planning, commit are silent)
   s_call <- state_after(21, suppressMessages(
     pop |> get_table("ind_meta") |> add_phenotype("A")))
   expect_identical(s_call, state_after(21, stats::rnorm(n)))

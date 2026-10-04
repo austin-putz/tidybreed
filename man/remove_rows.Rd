@@ -46,8 +46,8 @@ full-table deletion via \code{confirm_all = TRUE}.
 
 \strong{Single-table mode} (\code{tables = NULL}): uses the composite row key from
 the internal \code{TABLE_ROW_KEYS} registry to delete exactly the rows matched
-by the filter — no more, no less. For example, filtering \code{ind_tbv} by
-\code{trait_name == "ADG"} deletes only the ADG rows, not all TBV rows for those
+by the filter — no more, no less. For example, filtering \code{ind_tgv} by
+\code{trait_name == "ADG"} deletes only the ADG rows, not all genetic-value rows for those
 animals. Key columns are matched with \verb{IS NOT DISTINCT FROM}, so rows whose
 key is \code{NULL} — the default \code{chr_inheritance} / \code{chr_recombination} rows
 seeded by \code{\link[=define_genome]{define_genome()}}, or the shared (\verb{line_name IS NULL})
@@ -85,7 +85,7 @@ pop |>
 pop |>
   get_table("ind_meta") |>
   dplyr::filter(id_ind \%in\% culled_ids) |>
-  remove_rows(tables = c("ind_phenotype", "ind_tbv"))
+  remove_rows(tables = c("ind_phenotype", "ind_tgv"))
 
 # Preview before deleting
 pop |>

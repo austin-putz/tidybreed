@@ -515,15 +515,16 @@ pop %>% describe_table("ind_phenotype")
 # print table (no rows)
 pop %>% get_table("ind_phenotype")
 
-#-------------------- ind_tbv --------------------#
+#-------------------- ind_tgv --------------------#
 
-# ind_tbv stores the calculated TBV for each individual (only calculated once!)
+# ind_tgv stores the true genetic value of each individual, one row per
+# (animal x trait x component); the breeding value (TBV) is component 'additive'
 
 # print field descriptions
-pop %>% describe_table("ind_tbv")
+pop %>% describe_table("ind_tgv")
 
 # print table (no rows)
-pop %>% get_table("ind_tbv")
+pop %>% get_table("ind_tgv")
 
 #-------------------- ind_ebv --------------------#
 
@@ -927,12 +928,12 @@ pop <- pop %>%
     #filter(
     #  rep == repl
     #) %>%
-  add_tbv(
+  add_tgv(
     trait_name = "AP"
   )
 
-# print TBV table
-pop %>% get_table("ind_tbv")
+# print TBV table (the additive component of ind_tgv)
+pop %>% get_table("ind_tgv")
 
 # add 9k genotypes to all animals
 pop %>%
@@ -1159,12 +1160,12 @@ pop %>%
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     #filter(rep == repl) %>%
-  add_tbv(
+  add_tgv(
     trait_name = "ADG"
   )
 
-# print TBV table
-pop %>% get_table("ind_tbv")
+# print TBV table (the additive component of ind_tgv)
+pop %>% get_table("ind_tgv")
 
 # add sex effect for ADG
 pop %>%
@@ -1240,10 +1241,10 @@ pop %>%
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     #filter(rep == repl) %>%
-  add_tbv("BF")
+  add_tgv("BF")
 
 # look at TBV table
-pop %>% get_table("ind_tbv") %>% filter(trait_name == "BF")
+pop %>% get_table("ind_tgv") %>% filter(trait_name == "BF")
 
 # add overall mean for BF
 pop %>%
@@ -1312,10 +1313,10 @@ pop %>%
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     #filter(rep == repl) %>%
-  add_tbv("ADFI")
+  add_tgv("ADFI")
 
 # look at TBV table
-pop %>% get_table("ind_tbv") %>% filter(trait_name == "ADFI")
+pop %>% get_table("ind_tgv") %>% filter(trait_name == "ADFI")
 
 # test `add_phenotype()` function
 pop %>%
@@ -1440,9 +1441,9 @@ pop %>% get_table("genome_effect_loci") %>% count(trait_name)
 # TBVs for both traits in one call
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_tbv(c("WWD", "WWM"))
+  add_tgv(c("WWD", "WWM"))
 
-pop %>% get_table("ind_tbv") %>% filter(trait_name %in% c("WWD", "WWM"))
+pop %>% get_table("ind_tgv") %>% filter(trait_name %in% c("WWD", "WWM"))
 
 #------------------------------------------------------------#
 # Phenotype: WW - Weaning Weight (composite: WWD + dam(WWM))
@@ -1506,9 +1507,9 @@ pop %>%
 pop <- pop %>%
   get_table("ind_meta") %>% # here we specify the 'ind_meta' table so all animals will have their TBV calculated
     #filter(rep == repl) %>%
-  add_tbv("NW")
+  add_tgv("NW")
 
-pop %>% get_table("ind_tbv") %>% filter(trait_name == "NW")
+pop %>% get_table("ind_tgv") %>% filter(trait_name == "NW")
 
 # add overall mean for ADG
 pop %>%
@@ -1534,13 +1535,14 @@ warning("Calculate Means in Founder Generation")
 # True Breeding Values
 #------------------------------------------------------------#
 
-# print mean of TBV by trait
+# print mean of TBV (the 'additive' component of ind_tgv) by trait
 pop %>%
-  get_table("ind_tbv") %>%
+  get_table("ind_tgv") %>%
+  filter(component_name == "additive") %>%
   collect() %>%
   group_by(trait_name) %>%
   summarise(
-    MeanTBV = round(mean(tbv_value), 3),
+    MeanTBV = round(mean(tgv_value), 3),
     .groups = "drop_last"
   ) %>%
   print(n=10)
@@ -1567,7 +1569,7 @@ pop %>%
 
 # add true index value given index weights
 pop %>% get_table("ind_meta") %>% 
-  add_tbv(index_names = "maternal")
+  add_tgv(index_names = "maternal")
 
 pop %>% get_table("ind_true_index") 
 pop %>% get_table("ind_true_index") %>% collect() %>% glimpse()
@@ -1592,7 +1594,7 @@ if (FALSE) {
   pop %>% get_table("ind_phenotype") %>% remove_rows(confirm_all = TRUE)
 
   # drop every animal born after the founders, from EVERY ind_* table
-  # (ind_meta, ind_haplotype, ind_tbv, ind_true_index, ...)
+  # (ind_meta, ind_haplotype, ind_tgv, ind_true_index, ...)
   pop %>%
     get_table("ind_meta") %>%
     filter(!is.na(id_parent_1)) %>%
@@ -2695,45 +2697,38 @@ data.timing <- add_row(data.timing,
 
 warning("Fill in TBVs, TGVs and true index for every animal")
 
-# TBVs are written by add_phenotype() (for the animals it phenotypes) and by
-# add_tbv() -- NOT by add_offspring(). Animals born inside the loop that never
+# TBVs (ind_tgv) are written by add_phenotype() (for the animals it phenotypes)
+# and by add_tgv() -- NOT by add_offspring(). Animals born inside the loop that never
 # received a phenotype (young boars, piglets still on test) have none yet. One
 # call with no trait_name evaluates every trait in trait_meta; rows that already
 # exist are upserted, so this is safe to run on everyone.
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_tbv()
+  add_tgv()
 
-# every animal x every trait
-pop %>% get_table("ind_tbv") %>% count(trait_name)
+# every animal x every trait x component
+pop %>% get_table("ind_tgv") %>% count(trait_name, component_name)
 
 # true index for everyone (overwrite_index = TRUE recomputes the founders too)
 pop <- pop %>%
   get_table("ind_meta") %>%
-  add_tbv(index_names = "maternal", overwrite_index = TRUE)
+  add_tgv(index_names = "maternal", overwrite_index = TRUE)
 
 pop %>% get_table("ind_true_index")
 
-# True GENETIC values: add_tgv() evaluates EVERY stored term of a trait (additive,
-# dominance, epistatic, ...) and writes ind_tgv, one row per (animal x trait x
-# component_name). This model is purely additive, so the only component is
-# 'order1_additive' and the total (view ind_tgv_total) equals the TBV -- a
-# cheap consistency check on the evaluator.
-pop <- pop %>%
-  get_table("ind_meta") %>%
-  add_tgv()
-
-pop %>% get_table("ind_tgv") %>% count(trait_name, component_name)
-
-# TBV vs TGV total: identical under an additive-only model
+# add_tgv() evaluates EVERY stored term of a trait (additive, dominance,
+# epistatic, ...). This model is purely additive, so the only component is
+# 'additive' and the total (view ind_tgv_total, what phenotypes read) equals
+# the TBV -- a cheap consistency check on the evaluator.
 pop %>%
   get_table("ind_tgv_total") %>%
   collect() %>%
   inner_join(
-    pop %>% get_table("ind_tbv") %>% collect(),
+    pop %>% get_table("ind_tgv") %>% filter(component_name == "additive") %>%
+      collect(),
     by = c("id_ind", "trait_name")
   ) %>%
-  summarise(max_abs_diff = max(abs(tgv_total - tbv_value)))
+  summarise(max_abs_diff = max(abs(tgv_total - tgv_value)))
 
 # summary of the population (row counts per table, on-disk size)
 print(pop)
@@ -2763,10 +2758,10 @@ if (FALSE) {
     db_path = "~/Claude/tidybreed/vignettes/swine/tidybreed_output/age_at_puberty/sim.duckdb"
   )
 
-  # continue as usual, e.g. fill in TBVs
+  # continue as usual, e.g. fill in genetic values
   pop <- pop %>%
     get_table("ind_meta") %>%
-    add_tbv()
+    add_tgv()
 
   # close pop
   close_pop(pop)
@@ -2931,11 +2926,13 @@ data.ebvs.latest <- pop %>%
   collect() %>%
   select(id_ind, trait_name, ebv_value)
 
-# TBVs (one row per animal x trait, every animal after add_tbv() above)
+# TBVs (one row per animal x trait, every animal after add_tgv() above): the
+# 'additive' component of ind_tgv
 data.tbvs <- pop %>%
-  get_table("ind_tbv") %>%
+  get_table("ind_tgv") %>%
+  filter(component_name == "additive") %>%
   collect() %>%
-  select(id_ind, trait_name, tbv_value)
+  select(id_ind, trait_name, tgv_value)
 
 # join: every animal x trait, EBV is NA for animals not in the latest evaluation
 data.tbv.ebv <- data.tbvs %>%
@@ -3017,7 +3014,7 @@ data.tbv.ebv %>%
   summarise(
     n        = n(),
     mean_ebv = mean(ebv_value, na.rm = TRUE),
-    mean_tbv = mean(tbv_value),
+    mean_tbv = mean(tgv_value),
     .groups  = "drop"
   ) %>%
   arrange(trait_name, age_group) %>%
@@ -3106,7 +3103,7 @@ ggplot(aes(x=birth_date, y=ebv_value)) +
 
 # TBVs on birth date
 data.tbv.ebv %>%
-ggplot(aes(x=birth_date, y=tbv_value)) +
+ggplot(aes(x=birth_date, y=tgv_value)) +
   geom_hex() +
   geom_smooth(method = "loess", se = TRUE, linewidth=2, color=tb_colors[1]) +
   facet_wrap(~trait_name, scales="free") +
@@ -3123,7 +3120,7 @@ ggplot(aes(x=birth_date, y=tbv_value)) +
 # mean TBV by birth date
 data.tbv.ebv %>%
   group_by(trait_name, birth_date) %>%
-  summarise(MeanTBV = mean(tbv_value), .groups = "drop") %>%
+  summarise(MeanTBV = mean(tgv_value), .groups = "drop") %>%
 ggplot(aes(x=birth_date, y=MeanTBV, color=trait_name)) +
   geom_point(alpha=0.5) +
   geom_smooth(method = "loess", se = TRUE) +
@@ -3201,9 +3198,9 @@ save_fig <- function(p, name) {
 # ---------- MEAN EBV + TBV BY BIRTH YEAR-QUARTER ---------- #
 
 p <- data.tbv.ebv %>%
-  pivot_longer(cols = c(tbv_value, ebv_value), names_to = "value_type", values_to = "value") %>%
+  pivot_longer(cols = c(tgv_value, ebv_value), names_to = "value_type", values_to = "value") %>%
   filter(!is.na(value)) %>%
-  mutate(value_type = recode(value_type, tbv_value = "TBV", ebv_value = "EBV")) %>%
+  mutate(value_type = recode(value_type, tgv_value = "TBV", ebv_value = "EBV")) %>%
   group_by(value_type, trait_name, birth_yq) %>%
   summarise(mean_value = mean(value), n = n(), .groups = "drop") %>%
 ggplot(aes(x=birth_yq, y=mean_value, color=value_type, group=value_type)) +
@@ -3229,11 +3226,11 @@ save_fig(p, "mean_ebv_tbv_on_birth_yq_facet_trait.png")
 p <- data.tbv.ebv %>%
   group_by(trait_name, birth_yq) %>%
   summarise(
-    MinTBV = min(tbv_value),
-    Q1TBV  = quantile(tbv_value, prob=0.25),
-    Q2TBV  = quantile(tbv_value, prob=0.50),
-    Q3TBV  = quantile(tbv_value, prob=0.75),
-    MaxTBV = max(tbv_value),
+    MinTBV = min(tgv_value),
+    Q1TBV  = quantile(tgv_value, prob=0.25),
+    Q2TBV  = quantile(tgv_value, prob=0.50),
+    Q3TBV  = quantile(tgv_value, prob=0.75),
+    MaxTBV = max(tgv_value),
     .groups = "drop"
   ) %>% 
 ggplot(aes(x=birth_yq, group=1)) +

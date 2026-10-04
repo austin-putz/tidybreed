@@ -17,7 +17,7 @@ add_index(
 \item{tbl}{A \code{tidybreed_table} from \code{get_table()} (optionally filtered).
 Must contain \code{id_ind}, a name column (\code{trait_name}, or \code{phenotype_name}
 for \code{ind_phenotype}), and the column specified by \code{value_col}. Any table
-with this structure is accepted: \code{ind_ebv}, \code{ind_phenotype}, \code{ind_tbv},
+with this structure is accepted: \code{ind_ebv}, \code{ind_phenotype}, \code{ind_tgv},
 or a custom table.}
 
 \item{index_name}{Character scalar. Name of the index to compute; must
@@ -26,7 +26,7 @@ already exist in \code{index_meta} (created via \code{\link[=define_index]{defin
 \item{value_col}{Character scalar or \code{NULL}. The column in \code{tbl} that holds
 the numeric value to weight. When \code{NULL} (default), auto-detected from the
 table name: \code{ind_ebv} → \code{"ebv_value"}, \code{ind_phenotype} → \code{"pheno_value"},
-\code{ind_tbv} → \code{"tbv_value"}. An error is thrown for unknown tables if
+\code{ind_tgv} → \code{"tgv_value"}. An error is thrown for unknown tables if
 \code{value_col} is not supplied.}
 
 \item{overwrite_index}{Logical. If \code{TRUE}, all existing \code{ind_index} rows for
@@ -54,15 +54,17 @@ The first argument must be a \code{tidybreed_table} obtained from \code{get_tabl
 (optionally filtered). The table must contain \code{id_ind}, a trait/phenotype
 name column, and a numeric value column (\code{value_col}). For \code{ind_phenotype}
 the name column is \code{phenotype_name}; for every other table (\code{ind_ebv},
-\code{ind_tbv}, or a user-defined table) it is \code{trait_name} — this is detected
+\code{ind_tgv}, or a user-defined table) it is \code{trait_name} — this is detected
 automatically from the table's columns. Works with \code{ind_ebv} (EBVs),
-\code{ind_phenotype} (phenotypes), \code{ind_tbv} (TBVs), or any user-defined table
-with the same structure.
+\code{ind_phenotype} (phenotypes), \code{ind_tgv} (true genetic values; filter it to
+one \code{component_name}, e.g. \code{"additive"} for breeding values), or any
+user-defined table with the same structure.
 \subsection{Uniqueness requirement}{
 
 There must be exactly one row per \verb{(id_ind, trait_name)} after any filter is
 applied. If duplicates remain, an error is thrown — filter the table down to
-a single model, evaluation, or phenotype record before calling \code{add_index()}.
+a single model, evaluation, phenotype record, or \code{ind_tgv} component before
+calling \code{add_index()}. Values are never summed across rows.
 }
 
 \subsection{Completeness requirement}{
@@ -86,9 +88,11 @@ pop <- pop |>
   dplyr::filter(pheno_number == 1L) |>
   add_index("terminal")
 
-# Compute true-value index from TBVs (value_col auto-detected)
+# Compute a true-value index from breeding values (value_col auto-detected);
+# ind_tgv has one row per component, so filter to one
 pop <- pop |>
-  get_table("ind_tbv") |>
+  get_table("ind_tgv") |>
+  dplyr::filter(component_name == "additive") |>
   add_index("terminal")
 
 # Explicit value_col for a user-defined table
@@ -105,5 +109,5 @@ pop <- pop |>
 }
 \seealso{
 \code{\link[=define_index]{define_index()}}, \code{\link[=get_table]{get_table()}}, \code{\link[=add_ebv]{add_ebv()}}, \code{\link[=add_phenotype]{add_phenotype()}},
-\code{\link[=add_tbv]{add_tbv()}}
+\code{\link[=add_tgv]{add_tgv()}}
 }

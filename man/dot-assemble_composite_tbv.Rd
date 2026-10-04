@@ -27,11 +27,12 @@ Numeric vector named by \code{id_ind}; \code{NA} marks an excluded
 individual.
 }
 \description{
-Sums \verb{weight * contributor TBV} over the phenotype's component rows, one
-contributor lookup per row (see \code{?contributor_tbv}). \code{ind_tbv} must
-already hold the source traits for every contributor
+Sums \verb{weight * contributor genetic value} over the phenotype's component
+rows, one contributor lookup per row (see \code{?contributor_tbv}). Each row
+reads its \code{component_names} (\code{"total"} by default) from \code{ind_tgv}, which
+must already hold the source traits for every contributor
 (\code{.ap_materialize_tbvs()}). A missing piece — a \code{NULL} dam or sire, a
-contributor with no TBV, a \code{NULL} group value, a \code{NULL} covariate —
-makes the individual's composite \code{NA}.
+contributor with no \code{ind_tgv} row, a \code{NULL} group value, a \code{NULL}
+covariate — makes the individual's composite \code{NA}.
 }
 \keyword{internal}

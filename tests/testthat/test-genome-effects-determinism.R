@@ -3,8 +3,8 @@
 # was never the problem; the genetic values were. DuckDB's parallel hash
 # aggregate combined the per-term partial sums in whatever order the threads
 # finished, so two runs of an identical population differed in the last bits
-# of tbv_value (~1e-15 at 2000 loci), and pheno_value inherited it through the
-# TBV term.
+# of the breeding value (~1e-15 at 2000 loci), and pheno_value inherited it through the
+# genetic-value term.
 #
 # The evaluator now accumulates that one sum exactly (GEV_ACC_TYPE), so the
 # result is a function of the stored model alone. These tests fail on the
@@ -25,14 +25,14 @@ det_pop <- function(name, n_loci = 500L, n_ind = 40L) {
 
 # Repeated evaluation of one unchanged population. `expect_identical()` on
 # doubles is the whole point -- `expect_equal()` would pass on the old code.
-test_that("add_tbv() is bit-identical across repeated runs of the same population", {
+test_that("add_tgv() is bit-identical across repeated runs of the same population", {
   pop <- det_pop("det_tbv")
   on.exit(close_pop(pop), add = TRUE)
 
   once <- function() {
-    suppressMessages(pop |> get_table("ind_meta") |> add_tbv("A"))
+    suppressMessages(pop |> get_table("ind_meta") |> add_tgv("A"))
     DBI::dbGetQuery(pop$db_conn,
-      "SELECT tbv_value FROM ind_tbv ORDER BY id_ind")$tbv_value
+      "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind")$tgv_value
   }
   first <- once()
   expect_length(first, 40)

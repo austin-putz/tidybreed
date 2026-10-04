@@ -34,13 +34,13 @@ test_that("ensure_trait_tables() registers trait-layer descriptions in _schema_m
 
   n_trait_tbl <- DBI::dbGetQuery(
     pop$db_conn,
-    "SELECT COUNT(*) AS n FROM _schema_meta WHERE object_type = 'table' AND table_name = 'ind_tbv'"
+    "SELECT COUNT(*) AS n FROM _schema_meta WHERE object_type = 'table' AND table_name = 'ind_tgv'"
   )$n
   expect_equal(n_trait_tbl, 1L)
 
   n_trait_col <- DBI::dbGetQuery(
     pop$db_conn,
-    "SELECT COUNT(*) AS n FROM _schema_meta WHERE object_type = 'column' AND table_name = 'ind_tbv'"
+    "SELECT COUNT(*) AS n FROM _schema_meta WHERE object_type = 'column' AND table_name = 'ind_tgv'"
   )$n
   expect_gt(n_trait_col, 0L)
 })
@@ -79,9 +79,9 @@ test_that("schema() includes descriptions for core tables", {
   expect_equal(nrow(genome_meta_row), 1L)
   expect_true(nchar(genome_meta_row$description) > 0L)
 
-  ind_tbv_row <- s[s$table_name == "ind_tbv", ]
-  expect_equal(nrow(ind_tbv_row), 1L)
-  expect_true(nchar(ind_tbv_row$description) > 0L)
+  ind_tgv_row <- s[s$table_name == "ind_tgv", ]
+  expect_equal(nrow(ind_tgv_row), 1L)
+  expect_true(nchar(ind_tgv_row$description) > 0L)
 })
 
 

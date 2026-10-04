@@ -31,7 +31,7 @@ The modified \code{tidybreed_pop} (invisibly).
 }
 \description{
 Creates one row in \code{trait_meta} describing a \strong{genetic component trait}: a
-quantity with QTL effects in \code{genome_effects}, TBVs in \code{ind_tbv}, and
+quantity with QTL effects in \code{genome_effects}, genetic values in \code{ind_tgv}, and
 additive genetic variance in \code{trait_var_comp}. Contains no
 phenotype-level information.
 

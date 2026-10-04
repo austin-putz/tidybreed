@@ -1,6 +1,6 @@
 ---
 name: tidybreed-api
-description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tbv/add_tgv and the evaluator, index functions. Load before changing or explaining any exported function.
+description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tgv and the evaluator, index functions. Load before changing or explaining any exported function.
 ---
 
 # tidybreed Implemented Functions
@@ -48,7 +48,7 @@ version), then `...` for custom fields.
 
 ### Custom field forwarding in `add_*` functions
 
-`add_founders()`, `add_phenotype()`, `add_tbv()`, and `add_ebv()` all accept
+`add_founders()`, `add_phenotype()`, `add_tgv()`, and `add_ebv()` all accept
 `...` for optional custom columns written to the target table at the same time
 the new rows are inserted. This avoids a redundant second `mutate_table()` step.
 
@@ -104,7 +104,7 @@ functions.
 **Scalar vs. vector**:
 - `add_founders()` / `add_offspring()`: scalars broadcast; vectors must have
   length `n_males + n_females` (or `n_offspring`).
-- `add_phenotype()` / `add_tbv()` / `add_ebv()`: scalar only (row count per
+- `add_phenotype()` / `add_tgv()` / `add_ebv()`: scalar only (row count per
   trait varies). Use `mutate_table()` afterwards for per-record vectors.
 
 ### `define_chromosome()`
@@ -205,7 +205,7 @@ carries the pop reference, table name, lazy dplyr tbl, and pending filter.
 Supports `filter()`, `collect()`, `select()`, `arrange()`, `pull()`, `count()`,
 and `mutate_table()`. `close_pop()` safely closes the DuckDB connection.
 
-**Subset selection for action functions** (`add_phenotype`, `add_tbv`,
+**Subset selection for action functions** (`add_phenotype`,
 `add_tgv`, `add_ebv`, `add_dosage`, `add_genotypes`, `extract_genotypes`)
 requires `get_table()` as the first step. `filter()` is called on the
 `tidybreed_table`, not on the pop directly. **The individuals acted on are
@@ -597,19 +597,25 @@ pop |> define_genome_effect_terms(
     `contributor_type` (`"self"`, `"dam"`, `"sire"`, `"group"`). Optional
     columns: `weight`, `weight_type`, `aggregation`, `group_column`,
     `group_table`, `covariate_name`, etc. Writes to `phenotype_components`.
-    `NULL` (default) = simple single-self trait. A `group` contributor's
-    mate sum accumulates exactly (`GEV_ACC_TYPE`, `.group_mate_tbv()`), so
+    `NULL` (default) = simple single-self trait. `component_names` (default
+    `"total"`) is which genetic value a row reads: `"total"` or a
+    comma-separated list of `TGV_COMPONENT_NAMES`, validated (with every other
+    component check) before anything is written. A `group` contributor's
+    mate sum accumulates exactly (`GEV_ACC_TYPE`, `.group_mate_tgv()`), so
     `group_sum()` / `group_mean()` are bit-identical across thread counts.
   - `prevalence` (categorical, two categories) — the threshold is
-    `mean + qnorm(1 - prevalence) * sqrt(Va + Ve)`, with `Va` the trait's
-    stored `additive` diagonal. Refused with `components` / `formula_tbv`
-    (no stored variance describes a composite liability: use `thresholds`).
-    `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`, before any
-    write or draw) when the trait has no stored `additive` row; there is no
-    silent `Va = 0`. Skipped for `user_values` calls, which place no threshold.
+    `mean + qnorm(1 - prevalence) * sqrt(Vg + Ve)`, with `Vg` the active-block
+    sum (`.ap_prevalence_genetic_var()`): the trait's stored population-wide
+    `additive`, `dominance` and `additive_by_additive` diagonals, each counted
+    only if the model has terms of that kind. Refused with `components` /
+    `formula_tbv` (no stored variance describes a composite liability: use
+    `thresholds`). `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`,
+    before any write or draw) when a kind of term has no stored target or the
+    model has terms outside the three kinds; there is no silent `Vg = 0`.
+    Skipped for `user_values` calls, which place no threshold.
   - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
     `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
-    missing composite piece (missing group assignment, missing dam/sire TBV,
+    missing composite piece (missing group assignment, missing dam/sire genetic value,
     etc.). `"skip"` excludes the individual and warns with a count + up to 5
     example IDs. `"error"` stops immediately.
 
@@ -633,9 +639,9 @@ pop |> define_genome_effect_terms(
   is **not** locked by realized draws: D3 locks the covariance *matrix*, while
   the action only governs how future records condition on stored residuals.
 
-### `add_phenotype()` / `add_tbv()` / `add_tgv()`
+### `add_phenotype()` / `add_tgv()`
 
-`R/add_phenotype.R`, `R/add_tbv.R`, `R/add_tgv.R`, `R/genome_effects_eval.R`
+`R/add_phenotype.R`, `R/add_tgv.R`, `R/genome_effects_eval.R`
 
 Both functions accept a `tidybreed_table` (from `get_table()` + optional
 `filter()`) as their first argument and return `tidybreed_pop`.
@@ -643,11 +649,13 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
 - `add_phenotype()` — the workhorse. `phenotype_name` (formerly `trait_name`)
   defaults to all phenotypes in `phenotype_meta` when omitted. Runs in
   **three stages** (`R/add_phenotype_stages.R`, `?add_phenotype_stages`):
-  1. **PLAN** (`.ap_plan()`, no RNG, no writes except the `add_tbv()`
+  1. **PLAN** (`.ap_plan()`, no RNG, no writes except the `add_tgv()`
      prerequisite): sorted subset, metadata, topological sort of derived
      formulas, sex expression, repeatable guard, fixed-effect terms with
-     `null_class_action`, TBV (simple from `ind_tbv`; composite via
-     `.assemble_composite_tbv()`; `formula_tbv` via the DSL) with
+     `null_class_action`, the genetic value (simple: the trait's total,
+     `ind_tgv_total`; composite via `.assemble_composite_tbv()`, each row
+     reading its `component_names`, `"total"` by default; `formula_tbv` via
+     the DSL, total) with
      `missing_component_action`, `pheno_number`, the residual condition value
      and the random-effect level of every planned record.
   2. **RESOLVE** (`.ap_resolve()`, RNG, no writes): every draw in a fixed
@@ -689,53 +697,47 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   **Failure contract (D7)**: the database is atomic, the RNG is not. Any
   error — Stage-1 rejection, Stage-2 error after some draws, failed Stage-3
   write — leaves `ind_phenotype` and `phenotype_random_effects` untouched
-  (the RNG-independent `add_tbv()` upsert is the one write that remains), and
+  (the RNG-independent `add_tgv()` write is the one write that remains), and
   `.Random.seed` advanced by exactly the draws made before the error.
   Nothing in `R/` touches `.Random.seed`; never add seed restoration to one
   function — if the package ever adopts it, it is a package-wide policy.
   `tests/testthat/test-add_phenotype_failure_contract.R` asserts both halves.
-- `add_tbv()` — TBV-only; no phenotype records. **One filtered call into the
-  same evaluator `add_tgv()` uses** — reserved owner, order-one, contrast
-  `additive` — never a second implementation of the effect math. Computes
-  centered TBV from the
-  order-one `additive` terms owned by `generated`: each allele copy
+  **Phenotypes see the total genetic value** (0.74.0, plan §6A). Simple
+  phenotypes need a trait with at least one term (any kind, any owner). A
+  `prevalence` threshold uses the active-block rule
+  (`.ap_prevalence_genetic_var()`): the sum of the population-wide stored
+  diagonals of `additive`, `dominance` and `additive_by_additive`, each only if
+  the model has terms of that kind; an `indicator` surface or another
+  interaction, or a kind with no stored target, is an error naming
+  `thresholds =`.
+- `add_tgv(tbl, trait_name = NULL, index_names = NULL, weight_type =
+  c("index", "economic", "both"), component_name = "additive",
+  overwrite_index = FALSE, ...)` — the one table of true genetic values.
+  Evaluates **every** term of a trait (every owner) and writes `ind_tgv`, one
+  row per (individual × trait × `component_name`): `additive`, `dominance`,
+  `indicator` (a one-locus term's contrast) or `interaction` (two or more
+  loci) — `TGV_COMPONENT_NAMES`. **The breeding value is `additive`** for
+  generated effects (statistical coding at one base `p`); for hand-written
+  functional terms it is the functional additive effect (`α = a + d(q − p)`).
+  The raw sum of the stored terms; **no mean is added**. Each allele copy
   takes the most specific variant whose origin predicate matches its
   `(line_origin, parent_origin)` label, falling back per copy to the common
-  variant. This is what makes crossbreeding TBV correct (e.g. a Duroc × Landrace
-  F1 centered against each parent line's own QTL effects and base allele
-  frequency), and it is also how **imprinting** works now: a term scoped to one
-  `parent_origin` reads only that parent's copies, per locus and per line
-  rather than per trait. `trait_name` also defaults to all traits in
-  `trait_meta` when omitted. Optional arguments for true index computation:
-  - `index_names` — character vector of named indices; when supplied, multiplies
-    per-trait TBVs by the index weights and writes results to `ind_true_index`.
-    `NULL` (default) skips index computation.
-  - `type` — `"index"` (default, uses `index_weight`), `"economic"` (uses
-    `economic_weight`), or `"both"` (writes two rows per individual distinguished
-    by `weight_type`).
-  - `overwrite_index = FALSE` — when `FALSE`, skips individuals that already have
-    a value in `ind_true_index` for the given `(index_name, weight_type)`. Set
-    `TRUE` to recompute (e.g. after updating index weights).
-
-  The filter is not conservatism. Under functional `(a, d)` input the stored
-  coefficient is `a` while the breeding-value coefficient in a diploid HWE base
-  is `α = a + d(q − p)`; under epistasis, average effects depend on other loci
-  and on LD. So terms written through `define_genome_effect_terms()` move `ind_tgv`
-  and never silently redefine `ind_tbv`, and additive members sitting inside an
-  interaction are ignored.
-
-  **`add_tbv()` warns once per trait when the coefficients it reads have
-  stopped being average effects** — a non-reserved order-one `additive` term (it
-  is part of A and is skipped), an `indicator` surface, or an interaction. An
-  order-one `dominance` term centred where the additive term is centred is the
-  exception and stays **silent**: Cockerham coding is HWE-orthogonal, so it
-  contributes nothing to A and `tbv_value` remains exact. The warning is about
-  *which terms were read*, never a claim that the arithmetic is wrong.
-- `add_tgv()` — evaluates **every** term of a trait and writes `ind_tgv`, one
-  row per (individual × trait × `component_name`). The raw sum of the stored
-  terms; **no mean is added**. Idempotent per (individual, trait) — the delete
-  is by trait, not by component, so a component that leaves the model leaves
-  `ind_tgv` with it. Total via the `ind_tgv_total` view.
+  variant (crossbreeding, imprinting). Re-evaluating an (individual, trait)
+  deletes components the model no longer produces and upserts the rest on
+  `(id_ind, trait_name, component_name)`, so custom columns survive. Total via
+  the `ind_tgv_total` view (fixed-order sum, bit-identical at any thread
+  count). `...` writes scalar custom columns. True index:
+  - `index_names` — named indices; multiplies per-trait genetic values by the
+    index weights and writes `ind_true_index`.
+  - `weight_type` — `"index"` (default, `index_weight`), `"economic"`, or
+    `"both"`.
+  - `component_name` — which value is weighted: `"additive"` (default, the
+    breeding value), another component, or `"total"`; stored in
+    `ind_true_index.component_name`, so additive and total indices coexist.
+  - `overwrite_index = FALSE` — skips individuals that already have a row for
+    `(index_name, weight_type, component_name)`; `TRUE` recomputes.
+  Consumers read values through `.tgv_read()` / `.tgv_by_id()` /
+  `.group_mate_tgv()` (`components = "total"` or a listed set).
 
 #### The evaluator (`R/genome_effects_eval.R`)
 
@@ -785,12 +787,14 @@ with them for every fixture and every individual.
 - `add_index(tbl, index_name, value_col = NULL, overwrite_index = FALSE, delete_all = FALSE, ...)` —
   accepts a `tidybreed_table` from `get_table()` (optionally filtered). Any table
   with `id_ind`, `trait_name`, and a numeric value column is accepted: `ind_ebv`,
-  `ind_phenotype`, `ind_tbv`, or a user-defined table. `value_col` is auto-detected
-  from the table name (`ind_ebv` → `"ebv_value"`, `ind_phenotype` → `"pheno_value"`,
-  `ind_tbv` → `"tbv_value"`); supply it explicitly for unknown tables.
+  `ind_phenotype`, `ind_tgv` (filter to one `component_name`), or a user-defined
+  table. `value_col` is auto-detected from the table name (`ind_ebv` →
+  `"ebv_value"`, `ind_phenotype` → `"pheno_value"`, `ind_tgv` → `"tgv_value"`);
+  supply it explicitly for unknown tables.
   Multiplies each individual's values by the index weights in `index_meta` and
   appends to `ind_index`. Every individual must have exactly one value per index
   trait — an error is thrown if duplicates are found (filter to a single model /
-  `eval_number` / `pheno_number` first). Issues a warning when no filter is applied.
+  `eval_number` / `pheno_number` / `component_name` first); values are never
+  summed across rows. Issues a warning when no filter is applied.
   `overwrite_index = TRUE` clears prior runs for the named index; `delete_all = TRUE`
   clears all of `ind_index`.

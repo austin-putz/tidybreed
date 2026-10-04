@@ -62,7 +62,7 @@ pop <- define_index(pop, "terminal",
 
 # Also record the underlying economic weights (per-unit $ value), stored
 # alongside index_weight in index_meta$economic_weight — e.g. for later use
-# with add_tbv(index_names = ..., type = "economic")
+# with add_tgv(index_names = ..., weight_type = "economic")
 pop <- define_index(pop, "maternal",
                     trait_names  = c("ADG", "FCR"),
                     index_wts    = c(0.5, -0.3),

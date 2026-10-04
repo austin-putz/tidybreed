@@ -1,4 +1,4 @@
-# Stage 2 (plans/refactor_haplotype.md) -- add_tbv() using line_origin for
+# Stage 2 (plans/refactor_haplotype.md) -- add_tgv() using line_origin for
 # crossbreeding additive TBV: line-specific effects with population-wide
 # fallback, imprinting, and per-line centring.
 
@@ -72,7 +72,7 @@ independent_tbv <- function(pop, trait, ids) {
 }
 
 
-test_that("add_tbv() computes correct F1 crossbred TBV with line-specific effects", {
+test_that("add_tgv() computes correct F1 crossbred TBV with line-specific effects", {
   set.seed(1001)
   pop <- make_lines_pop("tbv_f1")
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
@@ -105,18 +105,18 @@ test_that("add_tbv() computes correct F1 crossbred TBV with line-specific effect
   expect_equal(hap_lines$line_origin[hap_lines$parent_origin == 1], "Duroc")
   expect_equal(hap_lines$line_origin[hap_lines$parent_origin == 2], "Landrace")
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F1_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F1_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "F1_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'F1_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'F1_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() falls back to population-wide effect when line_origin is NULL", {
+test_that("add_tgv() falls back to population-wide effect when line_origin is NULL", {
   pop <- make_lines_pop("tbv_null_fallback", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
     add_founders(n_males = 1, n_females = 1, line_name = "Duroc", gen = 0L)
@@ -136,18 +136,18 @@ test_that("add_tbv() falls back to population-wide effect when line_origin is NU
   DBI::dbExecute(pop$db_conn,
     "UPDATE ind_haplotype SET line_origin = NULL WHERE id_ind = 'Duroc_1'")
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "Duroc_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() prefers line-specific effect over population-wide for the same locus", {
+test_that("add_tgv() prefers line-specific effect over population-wide for the same locus", {
   pop <- make_lines_pop("tbv_dual_row", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
     add_founders(n_males = 1, n_females = 1, line_name = "Duroc", gen = 0L)
@@ -170,11 +170,11 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
     "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'ADG'")$n
   expect_equal(n_eff_rows, 2L * length(loci))  # both rows coexist, per locus
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "Duroc_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
   # Sanity: the line-specific value (5.0), not a doubled/summed value, drove the
   # result -- join per-locus since center_value varies by locus.
@@ -189,7 +189,7 @@ test_that("add_tbv() prefers line-specific effect over population-wide for the s
 })
 
 
-test_that("add_tbv() falls back per-locus when a line has effects at only some loci", {
+test_that("add_tgv() falls back per-locus when a line has effects at only some loci", {
   pop <- make_lines_pop("tbv_partial", n_loci = 10, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
     add_founders(n_males = 1, n_females = 1, line_name = "Duroc", gen = 0L)
@@ -207,18 +207,18 @@ test_that("add_tbv() falls back per-locus when a line has effects at only some l
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(locus_name %in% half_loci) |>
     define_additive_effects("ADG", effects = rep(3.0, length(half_loci)), line_name = "Duroc")
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "Duroc_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'Duroc_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() centers each allele with its own line's center_value", {
+test_that("add_tgv() centers each allele with its own line's center_value", {
   set.seed(5001)
   pop <- make_lines_pop("tbv_base_by_line", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
@@ -247,13 +247,13 @@ test_that("add_tbv() centers each allele with its own line's center_value", {
   # Not a degenerate test: the two lines' realized founder allele frequencies differ.
   expect_true(any(abs(base_duroc - base_landrace) > 1e-6))
 
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
 
   all_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   expected <- independent_tbv(pop, "ADG", all_ids)
   actual_df <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG'")
-  actual <- stats::setNames(actual_df$tbv_value, actual_df$id_ind)[all_ids]
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' AND trait_name = 'ADG'")
+  actual <- stats::setNames(actual_df$tgv_value, actual_df$id_ind)[all_ids]
   expect_equal(unname(actual), unname(expected[all_ids]), tolerance = 1e-8)
 
   close_pop(pop)
@@ -300,12 +300,12 @@ test_that("crossbreeding end to end with default bases: common + two line varian
   set.seed(6003)
   pop <- add_offspring(pop, bc)
 
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   all_ids  <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   expected <- independent_tbv(pop, "ADG", all_ids)
   actual   <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG'")
-  actual   <- stats::setNames(actual$tbv_value, actual$id_ind)[all_ids]
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' AND trait_name = 'ADG'")
+  actual   <- stats::setNames(actual$tgv_value, actual$id_ind)[all_ids]
   expect_equal(unname(actual), unname(expected[all_ids]), tolerance = 1e-8)
   expect_true(any(grepl("^F1_", all_ids)) && any(grepl("^BC_", all_ids)))
 
@@ -313,7 +313,7 @@ test_that("crossbreeding end to end with default bases: common + two line varian
 })
 
 
-test_that("add_tbv() respects parent_origin scope with line-specific imprinted effects", {
+test_that("add_tgv() respects parent_origin scope with line-specific imprinted effects", {
   pop <- make_lines_pop("tbv_imprint", n_loci = 6, n_chr = 1)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
     add_founders(n_males = 2, n_females = 2, line_name = "Duroc", gen = 0L)
@@ -351,7 +351,7 @@ test_that("add_tbv() respects parent_origin scope with line-specific imprinted e
   set.seed(3001)
   pop <- add_offspring(pop, matings)
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F1_1") |> add_tbv("IMP")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F1_1") |> add_tgv("IMP")
 
   hap_po1 <- DBI::dbGetQuery(pop$db_conn,
     "SELECT locus_name, allele, line_origin FROM ind_haplotype WHERE id_ind = 'F1_1' AND parent_origin = 1")
@@ -367,14 +367,14 @@ test_that("add_tbv() respects parent_origin scope with line-specific imprinted e
   hap_po1 <- merge(hap_po1, eff_duroc, by = "locus_name")
   expected <- sum((hap_po1$allele - hap_po1$center_value) * 1.0)
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind='F1_1' AND trait_name='IMP'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind='F1_1' AND trait_name='IMP'")$tgv_value
   expect_equal(actual, expected, tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() correctly follows line_origin through F2 recombination", {
+test_that("add_tgv() correctly follows line_origin through F2 recombination", {
   set.seed(4001)
   pop <- make_lines_pop("tbv_f2", n_loci = 40, n_chr = 3)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
@@ -414,18 +414,18 @@ test_that("add_tbv() correctly follows line_origin through F2 recombination", {
     "SELECT DISTINCT line_origin FROM ind_haplotype WHERE id_ind = 'F2_1'")$line_origin
   expect_true(all(c("Duroc", "Landrace") %in% f2_lines))
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F2_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "F2_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "F2_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'F2_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'F2_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() correctly computes a backcross (F1 x parental line) TBV", {
+test_that("add_tgv() correctly computes a backcross (F1 x parental line) TBV", {
   set.seed(6001)
   pop <- make_lines_pop("tbv_backcross", n_loci = 40, n_chr = 3)
   pop <- pop |> get_table("founder_haplotypes") |> dplyr::filter(line_name == "Duroc") |>
@@ -457,18 +457,18 @@ test_that("add_tbv() correctly computes a backcross (F1 x parental line) TBV", {
   set.seed(6005)
   pop <- add_offspring(pop, matings_bc)
 
-  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "BC_1") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "BC_1") |> add_tgv("ADG")
 
   expected <- independent_tbv(pop, "ADG", "BC_1")
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT tbv_value FROM ind_tbv WHERE id_ind = 'BC_1' AND trait_name = 'ADG'")$tbv_value
+    "SELECT tgv_value FROM ind_tgv WHERE component_name = 'additive' AND id_ind = 'BC_1' AND trait_name = 'ADG'")$tgv_value
   expect_equal(actual, unname(expected), tolerance = 1e-8)
 
   close_pop(pop)
 })
 
 
-test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no code changes needed", {
+test_that("add_tgv() computes correct TBV for a hemizygous (X-linked) QTL, no code changes needed", {
   set.seed(7001)
   pop <- open_pop(pop_name = "tbv_x", db_name = ":memory:") |>
     define_genome(n_loci = 10, n_chr = 2, chr_names = c("1", "X"), chr_len_Mb = 50) |>
@@ -487,15 +487,15 @@ test_that("add_tbv() computes correct TBV for a hemizygous (X-linked) QTL, no co
     define_additive_effects("ADG", effects = seq_len(length(all_loci)))
 
   all_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
+  pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
 
   # Males have 1 allele row at each X locus, females have 2 — independent_tbv()
   # sums over however many rows actually exist per individual, so this is a
   # genuine hemizygous-vs-diploid comparison, not a special-cased helper.
   expected <- independent_tbv(pop, "ADG", all_ids)
   actual <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG'")
-  actual_named <- stats::setNames(actual$tbv_value, actual$id_ind)
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' AND trait_name = 'ADG'")
+  actual_named <- stats::setNames(actual$tgv_value, actual$id_ind)
   expect_equal(actual_named[all_ids], expected[all_ids], tolerance = 1e-8)
 
   close_pop(pop)
@@ -529,7 +529,7 @@ test_that("base allele frequency is correct (row-count-agnostic) for a mixed aut
 })
 
 
-test_that("add_tbv() / add_tgv() accept any table with id_ind (unfiltered ind_ebv)", {
+test_that("add_tgv() accepts any table with id_ind (unfiltered ind_ebv)", {
   pop <- open_pop(pop_name = "tbv_any_tbl", db_name = ":memory:") |>
     define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 50) |>
     define_founder_haplotypes(n_haplotypes = 20, method = "fixed")
@@ -545,17 +545,16 @@ test_that("add_tbv() / add_tgv() accept any table with id_ind (unfiltered ind_eb
     paste(sprintf("(%d, '%s', 'ADG', 'm1', %d, 1)",
                   seq_along(ids), ids, seq_along(ids)), collapse = ", ")))
 
-  pop <- pop |> get_table("ind_ebv") |> add_tbv("ADG")
-  tbv_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_tbv")$id_ind
-  expect_setequal(tbv_ids, ids)
+  pop <- pop |> get_table("ind_ebv") |> add_tgv("ADG")
+  tgv_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT DISTINCT id_ind FROM ind_tgv")$id_ind
+  expect_setequal(tgv_ids, ids)
 
+  DBI::dbExecute(pop$db_conn, "DELETE FROM ind_tgv")
   pop <- pop |> get_table("ind_ebv") |> dplyr::filter(ebv_value > 1) |>
     add_tgv("ADG")
   tgv_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT DISTINCT id_ind FROM ind_tgv")$id_ind
   expect_setequal(tgv_ids, ids[2:3])
 
-  expect_error(pop |> get_table("genome_meta") |> add_tbv("ADG"),
-               "has no 'id_ind' column")
   expect_error(pop |> get_table("genome_meta") |> add_tgv("ADG"),
                "has no 'id_ind' column")
 

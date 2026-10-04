@@ -1,3 +1,56 @@
+# tidybreed 0.74.0 (2026-10-04)
+
+Step 3a of `plans/import_qtl_effect_methods.md` (consolidation and P2; plan in
+`plans/import_qtl_effect_methods_phase_3_plan.md`). **Breaking.** Databases
+written by earlier versions are not readable: `restore_pop()` refuses a file
+with an `ind_tbv` table, an `ind_true_index` without `component_name`, or
+`order1_*` component names (pre-1.0, no migration).
+
+* **`ind_tbv` and `add_tbv()` are removed.** `ind_tgv` is the one table of true
+  genetic values. The breeding value is its `component_name = "additive"` row
+  (for generated effects: statistical coding at one base allele frequency).
+  `add_tgv()` takes over `add_tbv()`'s arguments: `index_names`, `weight_type`
+  (was `type`), `overwrite_index` and `...` custom columns, plus a new
+  `component_name` (default `"additive"`; `"total"` allowed) choosing which
+  value a true index weights. The old filter that kept custom-owner additive
+  terms out of the breeding value, and its warning, are gone: every one-locus
+  additive term is part of the `additive` component.
+* **`ind_true_index` gains `component_name`**; its row key is
+  `(id_ind, index_name, weight_type, component_name)`, so an index on the
+  breeding values and one on the total coexist.
+* **Value components renamed** (§6B): `order1_additive` → `additive`,
+  `order1_dominance` → `dominance`, `order1_other` → `indicator`;
+  `interaction` unchanged. The closed set is `TGV_COMPONENT_NAMES`.
+* **Phenotypes read the total genetic value** (precondition P2): simple
+  phenotypes, every composite contributor (self, dam, sire, group) and the
+  `formula_tbv` DSL read `ind_tgv_total` instead of the additive breeding value.
+  Under an additive-only model nothing changes (the total is the breeding value,
+  bit for bit); dominance, A x A and indicator terms now reach phenotypes.
+  `phenotype_components.component_names` defaults to `"total"` and is no longer
+  reserved: a comma-separated list of components (e.g. `"additive"`) reads
+  their sum, and a component the model has no terms for contributes 0.
+  Bad values are refused by `define_phenotype()`.
+* **`ind_tgv_total` is deterministic at any thread count**: the view adds the
+  components in `component_name` order. A one-component total equals that row
+  bit for bit.
+* **Prevalence thresholds use the active model's genetic variance**: the sum of
+  the stored population-wide `additive`, `dominance` and `additive_by_additive`
+  targets, each only if the trait's model has terms of that kind. A model with
+  terms outside those kinds (an indicator surface, other interactions), or a
+  kind of term with no stored target, is an error naming
+  `define_phenotype(thresholds = )`.
+* A simple phenotype needs its trait to have at least one term, of any kind and
+  any owner (it used to need a generated additive term), so a model written only
+  with `define_genome_effect_terms()` records phenotypes.
+* `add_tgv()` re-evaluation upserts surviving components instead of deleting
+  and re-inserting them, so custom columns on `ind_tgv` rows survive.
+* `add_index()` auto-detects `tgv_value` on `ind_tgv`; filter to one
+  `component_name`, or its duplicate-row error fires (values are never summed).
+* **Bug fix:** `define_phenotype()` validated `components` after writing the
+  `phenotype_meta` row (and, with `overwrite = TRUE`, after deleting the old
+  definition), so a refused call left a half-defined or missing phenotype. All
+  component checks now run before anything is written.
+
 # tidybreed 0.73.2 (2026-10-03)
 
 Step 2 corrections from the Codex review

@@ -5,13 +5,14 @@
 #' itself, its dam or sire, or its group-mates — becomes a per-individual
 #' value. Both `.assemble_composite_tbv()` (`phenotype_components`) and
 #' `.build_tbv_env()` (`formula_tbv`) read through these helpers, and
-#' `.ap_materialize_tbvs()` uses the same group lookup to decide whose TBVs
-#' to compute first. Individual ids never appear in SQL text: every lookup
-#' joins a registered view.
+#' `.ap_materialize_tbvs()` uses the same group lookup to decide whose genetic
+#' values to compute first. Every lookup reads `ind_tgv`: the total
+#' (`ind_tgv_total`) by default, or the listed components. Individual ids
+#' never appear in SQL text: every lookup joins a registered view.
 #'
 #' Group semantics (SGE / Bijma): a focal's group-mates are the *other*
 #' individuals with the same value of `group_column` in `group_table`; the
-#' aggregate is over the mates that have a TBV; a focal with no mates gets
+#' aggregate is over the mates that have a genetic value; a focal with no mates gets
 #' `0`; a focal whose group value is `NULL` gets `NA` (a missing component).
 #' `group_table` must have exactly one row per focal individual.
 #'
@@ -56,17 +57,20 @@ NULL
 }
 
 
-#' `ind_tbv.tbv_value` of a trait per id (`NA` for a `NA` id or no TBV)
+#' Genetic value of a trait per id (`NA` for a `NA` id or no `ind_tgv` row)
+#'
+#' @param components `"total"` (the `ind_tgv_total` view, the default for
+#'   every phenotype path) or a character vector of `ind_tgv.component_name`
+#'   values, summed exactly; a listed component the individual has no row for
+#'   contributes 0. See `.tgv_read()`.
 #' @keywords internal
-.tbv_by_id <- function(conn, trait_name, ids) {
+.tgv_by_id <- function(conn, trait_name, ids, components = "total") {
   ids  <- as.character(ids)
   have <- ids[!is.na(ids)]
   out  <- rep(NA_real_, length(ids))
   if (length(have) == 0L) return(out)
-  rows <- .ap_read_by_id(conn, "ind_tbv", have, "tbv_value",
-                         where = paste0("t.trait_name = ",
-                                        DBI::dbQuoteLiteral(conn, trait_name)))
-  out[!is.na(ids)] <- rows$tbv_value[match(have, rows$id_ind)]
+  rows <- .tgv_read(conn, have, trait_name, components)
+  out[!is.na(ids)] <- rows$value[match(have, rows$id_ind)]
   out
 }
 
@@ -110,14 +114,17 @@ NULL
 }
 
 
-#' Aggregated group-mate TBV per focal individual
+#' Aggregated group-mate genetic value per focal individual
 #'
-#' @param aggregation `"sum"` or `"mean"` over the mates that have a TBV.
+#' @param aggregation `"sum"` or `"mean"` over the mates that have a genetic
+#'   value for the trait.
+#' @param components As in `.tgv_by_id()`.
 #' @return Numeric per focal: the aggregate, `0` with no such mates, `NA`
 #'   with no group value.
 #' @keywords internal
-.group_mate_tbv <- function(conn, trait_name, focal_ids, group_column,
-                            group_table, aggregation, what) {
+.group_mate_tgv <- function(conn, trait_name, focal_ids, group_column,
+                            group_table, aggregation, what,
+                            components = "total") {
   if (!aggregation %in% c("sum", "mean")) {
     stop(what, ": aggregation must be 'sum' or 'mean', not '", aggregation,
          "'.", call. = FALSE)
@@ -128,18 +135,27 @@ NULL
   on.exit(try(duckdb::duckdb_unregister(conn, "__ap_focal_groups"),
               silent = TRUE), add = TRUE)
   if (!any(has)) return(out)
+  trait_lit <- DBI::dbQuoteLiteral(conn, trait_name)
+  # One value per (mate, trait): the total, or the listed components summed in
+  # a fixed order. A mate with no ind_tgv row for the trait is not counted.
+  src <- if (identical(components, "total")) {
+    paste0("(SELECT id_ind, tgv_total AS v FROM ind_tgv_total ",
+           "WHERE trait_name = ", trait_lit, ")")
+  } else {
+    paste0("(SELECT id_ind, ", .tgv_component_sum_sql(components), " AS v ",
+           "FROM ind_tgv WHERE trait_name = ", trait_lit, " GROUP BY id_ind)")
+  }
   # The mate sum accumulates exactly (GEV_ACC_TYPE), as the evaluator does: a
   # parallel floating SUM() over three or more mates adds them in thread order,
   # and the result must not depend on DuckDB's thread count (CLAUDE.md).
   agg <- tryCatch(DBI::dbGetQuery(conn, paste0(
     "SELECT f.id_ind, ",
-    "CAST(SUM(CAST(t.tbv_value AS ", GEV_ACC_TYPE, ")) AS DOUBLE) AS total, ",
-    "COUNT(t.tbv_value) AS n_mates ",
+    "CAST(SUM(CAST(t.v AS ", GEV_ACC_TYPE, ")) AS DOUBLE) AS total, ",
+    "COUNT(t.v) AS n_mates ",
     "FROM __ap_focal_groups AS f ",
     "LEFT JOIN ", .group_members_sql(group_column, group_table), " AS m ",
     "ON m.group_val = f.group_val AND m.id_ind <> f.id_ind ",
-    "LEFT JOIN ind_tbv AS t ON t.id_ind = m.id_ind AND t.trait_name = ",
-    DBI::dbQuoteLiteral(conn, trait_name), " ",
+    "LEFT JOIN ", src, " AS t ON t.id_ind = m.id_ind ",
     "GROUP BY f.id_ind")), error = .gev_accumulator_error)
   k <- match(focal_ids[has], agg$id_ind)
   total <- agg$total[k]

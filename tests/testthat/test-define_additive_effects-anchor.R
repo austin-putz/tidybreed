@@ -91,9 +91,9 @@ test_that("A3: 'realised' delivers Cov(X B) = G on the base individuals", {
   quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 40) |>
     define_additive_effects("T1", G = 0.7, anchor = "realised",
                             base_tbl = gen0(pop), seed = 5))
-  quiet(get_table(pop, "ind_meta") |> add_tbv("T1"))
-  tbv <- dplyr::collect(get_table(pop, "ind_tbv"))
-  expect_equal(stats::var(tbv$tbv_value), 0.7, tolerance = 1e-10)
+  quiet(get_table(pop, "ind_meta") |> add_tgv("T1"))
+  tbv <- tgv_additive(pop)
+  expect_equal(stats::var(tbv$tgv_value), 0.7, tolerance = 1e-10)
 })
 
 test_that("A5: an anchor that cannot carry G is its own error, through the generator", {
@@ -707,10 +707,10 @@ test_that("paper-12: genic is the random-mating limit, approached slowly under l
   v <- numeric(7)
   for (g in 0:6) {
     pop <- suppressMessages(get_table(pop, "ind_meta") |>
-      dplyr::filter(gen == !!g) |> add_tbv("T"))
+      dplyr::filter(gen == !!g) |> add_tgv("T"))
     v[g + 1] <- stats::var(DBI::dbGetQuery(pop$db_conn, paste0(
-      "SELECT t.tbv_value FROM ind_tbv t JOIN ind_meta i USING (id_ind) ",
-      "WHERE i.gen = ", g))$tbv_value)
+      "SELECT t.tgv_value FROM ind_tgv t JOIN ind_meta i USING (id_ind) ",
+      "WHERE i.gen = ", g))$tgv_value)
     if (g == 6) break
     par <- DBI::dbGetQuery(pop$db_conn, paste0(
       "SELECT id_ind, sex FROM ind_meta WHERE gen = ", g, " ORDER BY id_ind"))

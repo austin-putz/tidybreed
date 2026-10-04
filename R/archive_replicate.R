@@ -107,7 +107,7 @@ archive_replicate <- function(
     pop,
     replicate       = getOption("tidybreed.replicate"),
     archive_path    = NULL,
-    store_and_reset = c("ind_meta", "ind_phenotype", "ind_tbv", "ind_tgv",
+    store_and_reset = c("ind_meta", "ind_phenotype", "ind_tgv",
                         "ind_ebv", "ind_index", "ind_true_index",
                         "phenotype_random_effects"),
     store_once      = c("genome_meta", "genome_effects",

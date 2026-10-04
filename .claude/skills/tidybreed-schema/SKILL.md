@@ -1,6 +1,6 @@
 ---
 name: tidybreed-schema
-description: Full tidybreed DuckDB schema reference — every table's columns, types, keys, reserved columns and invariants (genome_meta, genome_map, genome_effects*, ind_haplotype, chr_inheritance, phenotype_*, ind_tbv/tgv/ebv, index tables). Load before reading, querying, or changing any table, column, view, or DDL.
+description: Full tidybreed DuckDB schema reference — every table's columns, types, keys, reserved columns and invariants (genome_meta, genome_map, genome_effects*, ind_haplotype, chr_inheritance, phenotype_*, ind_tgv/ebv, index tables). Load before reading, querying, or changing any table, column, view, or DDL.
 ---
 
 # tidybreed Database Schema
@@ -156,7 +156,7 @@ plain autosome (`1, 1`, the default), 1 for a hemizygous sex chromosome (e.g.
 | id_ind        | VARCHAR  | FK to `ind_meta.id_ind`; part of composite PK               |
 | parent_origin | UTINYINT | 1 = from parent_1 (sire), 2 = from parent_2 (dam); PK part  |
 | strand        | UTINYINT | Copy within a parent's contribution; always 1 for diploids; PK part |
-| line_origin   | VARCHAR  | Founding line this allele traces to; used by `add_tbv()` for line-specific crossbreeding TBV |
+| line_origin   | VARCHAR  | Founding line this allele traces to; used by the evaluator (`add_tgv()`) for line-specific crossbreeding genetic values |
 | locus_id      | INTEGER  | FK to `genome_meta.locus_id`; physical sort/PK key          |
 | locus_name    | VARCHAR  | FK to `genome_meta.locus_name`; denormalized so exports and user queries read without joining `genome_meta`. The effect tables key on `locus_id`, not on this column |
 | allele        | UTINYINT | 0 or 1 (phased)                                             |
@@ -388,24 +388,25 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 | contributor_type   | VARCHAR | `"self"`, `"dam"`, `"sire"`, or `"group"`                          |
 | group_column       | VARCHAR | Column in `group_table` that holds group membership (required for `"group"`) |
 | group_table        | VARCHAR | Table containing `group_column`; default `"ind_meta"`              |
-| aggregation        | VARCHAR | `"sum"` (default) or `"mean"` — how group-mates' TBVs are combined |
+| aggregation        | VARCHAR | `"sum"` (default) or `"mean"` — how group-mates' genetic values are combined |
 | weight             | DOUBLE  | Scalar multiplier; default `1.0`                                   |
 | weight_type        | VARCHAR | `"fixed"` (default) or `"covariate"`. Those are the only two implemented, and `define_phenotype()` rejects anything else |
 | covariate_name     | VARCHAR | Covariate column when `weight_type = "covariate"`                  |
 | covariate_table    | VARCHAR | Table containing `covariate_name`                                  |
 | poly_order         | INTEGER | Polynomial basis order                                             |
 | poly_scale_min/max | DOUBLE  | Legendre scaling bounds                                            |
-| component_names    | VARCHAR | Comma-separated `ind_tgv.component_name` values this component draws from; default `"order1_additive"`. **Reserved** — `add_phenotype()` reads only the additive breeding value today. This is the one reserved column here, kept because its counterpart (`ind_tgv.component_name`) is already written by `add_tgv()` |
+| component_names    | VARCHAR | Which genetic value of the source trait this row reads: `"total"` (default; the `ind_tgv_total` view) or a comma-separated list of `ind_tgv.component_name` values (`additive`, `dominance`, `indicator`, `interaction`), summed. A listed component the model has no terms for contributes 0. Validated in `define_phenotype()` (`.split_component_names()`) |
 
 **Note on SGE (Social Genetic Effects / Bijma model)**: for `contributor_type = "group"`,
-`add_phenotype()` aggregates group-mates' TBVs (excluding self). A singleton (no
+`add_phenotype()` aggregates group-mates' genetic values (excluding self). A singleton (no
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
 `group_table` must have exactly one row per focal individual (error otherwise).
 All contributor lookups — self, dam, sire, group, and `formula_tbv`'s
 `dam()`/`sire()`/`group_sum()`/`group_mean()` — go through `R/contributor_tbv.R`
-(`.tbv_by_id()`, `.group_mate_tbv()`, `.group_members()`), one registered-view
-SQL each; ids never enter SQL text.
+(`.tgv_by_id()`, `.group_mate_tgv()`, `.group_members()`), one registered-view
+SQL each; ids never enter SQL text. They read `ind_tgv`: the total by default,
+or the components a row's `component_names` lists.
 
 **Reserved**: all columns (managed exclusively by
 `define_phenotype(..., components = ...)`).
@@ -536,45 +537,41 @@ Phenotype records in long format. Populated by `add_phenotype()`.
 All nine columns are in the base `CREATE TABLE` (in `ensure_trait_tables()`);
 nothing is added by on-demand `ALTER TABLE`. **Reserved**: all nine.
 
-### `ind_tbv`
-
-True breeding values (simulation ground truth). Populated by
-`add_phenotype()` and `add_tbv()`. Logical key `(id_ind, trait_name)` unique.
-
-| Column     | Type    | Notes                                  |
-|------------|---------|----------------------------------------|
-| id_tbv     | INTEGER | Primary key assigned by tidybreed via `next_int_id()` |
-| id_ind     | VARCHAR |                                        |
-| trait_name | VARCHAR |                                        |
-| tbv_value  | DOUBLE  |                                        |
-
 ### `ind_tgv`
 
-True **genetic** values (simulation ground truth): the total genotypic value,
-split by declared model structure. One row per (individual × trait × component).
-Populated by `add_tgv()`. Created in `define_trait()`'s lazy DDL block beside
-`ind_tbv`.
+True **genetic** values (simulation ground truth) — **the one table of genetic
+values** (0.74.0 removed the separate breeding-value table). One row per
+(individual × trait × component). Populated by `add_tgv()`, which
+`add_phenotype()` calls for every trait it reads. Created in `define_trait()`'s
+lazy DDL block.
 
 | Column         | Type    | Notes                                              |
 |----------------|---------|-----------------------------------------------------|
 | id_tgv         | INTEGER | Primary key assigned via `next_int_id()`            |
 | id_ind         | VARCHAR |                                                     |
 | trait_name     | VARCHAR |                                                     |
-| component_name | VARCHAR | `"order1_additive"`, `"order1_dominance"`, `"order1_other"` (a hand-entered order-1 indicator surface), or `"interaction"` (any term with ≥ 2 members) |
+| component_name | VARCHAR | `"additive"`, `"dominance"`, `"indicator"` (the contrast of a one-locus term; `indicator` is a hand-entered genotype surface), or `"interaction"` (any term over ≥ 2 loci). The closed set `TGV_COMPONENT_NAMES` |
 | tgv_value      | DOUBLE  | Raw sum of the contributing terms; **no mean is added** |
 
 **Unique**: `(id_ind, trait_name, component_name)`. **Reserved**: all columns.
 
-`component_name` records **how a term was declared, not a variance component**.
-A functional A×A term contributes to A, D *and* I in the statistical sense; the
-names carry the order precisely so they cannot be misread as `V_A` / `V_D` /
-`V_I`. There is deliberately **no** `replicate` column: like `ind_tbv`, that
-column exists only in the archive copy, and `archive_replicate()` refuses to
-stamp a table that already has one.
+**The breeding value is `component_name = "additive"`** for generated effects
+(statistical coding at one base `p` per locus). For hand-written functional
+terms `additive` is the functional additive effect, not the breeding value
+(`α = a + d(q − p)`; under epistasis average effects depend on other loci and
+on LD). `component_name` records how a term was declared; for generated effects
+that *is* the genic decomposition. There is deliberately **no** `replicate`
+column: that column exists only in the archive copy, and `archive_replicate()`
+refuses to stamp a table that already has one. Re-evaluation deletes an
+(individual, trait)'s components the model no longer produces and upserts the
+rest, so custom columns (`add_tgv(...)`) survive.
 
 The total is the derived view **`ind_tgv_total`** (`id_ind`, `trait_name`,
 `tgv_total`), never a stored `'total'` row — a stored total would make every
-`SUM(tgv_value)` double-count.
+`SUM(tgv_value)` double-count. It adds the components in `component_name`
+order (`list_sum(list(tgv_value ORDER BY component_name))`), so it is
+bit-identical at any thread count, and a one-component total equals that row
+bit for bit. Phenotypes read it by default.
 
 ### `ind_ebv`
 
@@ -627,8 +624,8 @@ Populated by `add_index()`.
 
 ### `ind_true_index`
 
-True selection index values computed from TBVs (simulation ground truth).
-Populated by `add_tbv()` when `index_names` is supplied.
+True selection index values computed from `ind_tgv` (simulation ground truth).
+Populated by `add_tgv()` when `index_names` is supplied.
 
 | Column           | Type    | Notes                                                        |
 |------------------|---------|--------------------------------------------------------------|
@@ -636,10 +633,12 @@ Populated by `add_tbv()` when `index_names` is supplied.
 | id_ind           | VARCHAR |                                                              |
 | index_name       | VARCHAR | FK to `index_meta.index_name`                                |
 | weight_type      | VARCHAR | `"index"` (uses `index_weight`) or `"economic"` (uses `economic_weight`) |
-| true_index_value | DOUBLE  | Weighted sum: `sum(weight_i * tbv_i)` across index traits    |
+| component_name   | VARCHAR | The genetic value weighted: an `ind_tgv.component_name` (`"additive"`, the breeding value, by default) or `"total"` |
+| true_index_value | DOUBLE  | Weighted sum: `sum(weight_i * value_i)` across index traits  |
 
-**Reserved**: all columns (managed exclusively by `add_tbv()` when `index_names` is supplied).
+**Reserved**: all columns (managed exclusively by `add_tgv()` when `index_names` is supplied).
 
-Logical row key `(id_ind, index_name, weight_type)` — one true index value per
-individual × index × weight type. No SQL `UNIQUE` constraint; uniqueness enforced
-in R via DELETE + INSERT when `overwrite_index = TRUE`.
+Logical row key `(id_ind, index_name, weight_type, component_name)` — one true
+index value per individual × index × weight type × component, so an additive
+and a total index coexist. No SQL `UNIQUE` constraint; uniqueness enforced in R
+via DELETE + INSERT when `overwrite_index = TRUE`.

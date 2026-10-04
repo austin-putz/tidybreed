@@ -380,47 +380,48 @@ test_that("add_index() errors when duplicate (id_ind, trait_name) rows remain", 
 # add_index() — generalized table support
 # ============================================================
 
-test_that("add_index() auto-detects tbv_value for ind_tbv", {
-  pop <- make_index_pop("ai_tbv")
+test_that("T6: add_index() on ind_tgv refuses to sum components, and works on one", {
+  pop <- make_index_pop("ai_tgv")
   on.exit(close_pop(pop))
 
-  # Write TBVs directly
-  ind_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
-  tbv_adg <- data.frame(
-    id_ind     = ind_ids,
-    trait_name = "ADG",
-    tbv_value  = seq(50, 140, length.out = length(ind_ids)),
-    stringsAsFactors = FALSE
-  )
-  tbv_fcr <- data.frame(
-    id_ind     = ind_ids,
-    trait_name = "FCR",
-    tbv_value  = seq(1.0, 1.9, length.out = length(ind_ids)),
-    stringsAsFactors = FALSE
-  )
-  combined <- rbind(tbv_adg, tbv_fcr)
-  combined$id_tbv <- seq_len(nrow(combined))
-  DBI::dbWriteTable(pop$db_conn, "ind_tbv", combined, append = TRUE)
+  # Genetic values written directly: two components per individual x trait,
+  # as for a model with dominance.
+  ind_ids <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_ind FROM ind_meta ORDER BY id_ind")$id_ind
+  n <- length(ind_ids)
+  rows <- rbind(
+    data.frame(id_ind = ind_ids, trait_name = "ADG", component_name = "additive",
+               tgv_value = seq(50, 140, length.out = n)),
+    data.frame(id_ind = ind_ids, trait_name = "ADG", component_name = "dominance",
+               tgv_value = seq(-3, 3, length.out = n)),
+    data.frame(id_ind = ind_ids, trait_name = "FCR", component_name = "additive",
+               tgv_value = seq(1.0, 1.9, length.out = n)),
+    data.frame(id_ind = ind_ids, trait_name = "FCR", component_name = "dominance",
+               tgv_value = seq(0.1, 0.2, length.out = n)))
+  rows <- cbind(id_tgv = seq_len(nrow(rows)), rows)
+  DBI::dbWriteTable(pop$db_conn, "ind_tgv", rows, append = TRUE)
 
   pop <- define_index(pop, "terminal",
                       trait_names = c("ADG", "FCR"),
                       index_wts   = c(1.0, -1.0))
 
-  # ind_tbv has one row per (id_ind, trait_name) by design; suppress advisory warning
-  suppressWarnings(
-    pop <- pop |> get_table("ind_tbv") |> add_index("terminal")
-  )
+  # Unfiltered: two values per individual x trait -- an error, never a sum.
+  expect_error(suppressWarnings(
+    pop |> get_table("ind_tgv") |> add_index("terminal")),
+    "more than one|duplicate|exactly one", ignore.case = TRUE)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_index"))), 0L)
 
+  # Filtered to the breeding values: tgv_value is auto-detected.
+  suppressWarnings(
+    pop <- pop |> get_table("ind_tgv") |>
+      dplyr::filter(component_name == "additive") |> add_index("terminal")
+  )
   result <- DBI::dbGetQuery(pop$db_conn,
     "SELECT * FROM ind_index ORDER BY id_ind")
-  expect_equal(nrow(result), 10L)
-
-  adg_v <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'ADG' ORDER BY id_ind")
-  fcr_v <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv WHERE trait_name = 'FCR' ORDER BY id_ind")
-  expected <- adg_v$tbv_value * 1.0 + fcr_v$tbv_value * (-1.0)
-  expect_equal(result$index_value, expected, tolerance = 1e-9)
+  expect_equal(nrow(result), n)
+  expected <- seq(50, 140, length.out = n) - seq(1.0, 1.9, length.out = n)
+  expect_equal(result$index_value[match(ind_ids, result$id_ind)], expected,
+               tolerance = 1e-12)
 })
 
 

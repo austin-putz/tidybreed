@@ -8,13 +8,14 @@ The one place a contributor of a composite phenotype — the individual
 itself, its dam or sire, or its group-mates — becomes a per-individual
 value. Both \code{.assemble_composite_tbv()} (\code{phenotype_components}) and
 \code{.build_tbv_env()} (\code{formula_tbv}) read through these helpers, and
-\code{.ap_materialize_tbvs()} uses the same group lookup to decide whose TBVs
-to compute first. Individual ids never appear in SQL text: every lookup
-joins a registered view.
+\code{.ap_materialize_tbvs()} uses the same group lookup to decide whose genetic
+values to compute first. Every lookup reads \code{ind_tgv}: the total
+(\code{ind_tgv_total}) by default, or the listed components. Individual ids
+never appear in SQL text: every lookup joins a registered view.
 
 Group semantics (SGE / Bijma): a focal's group-mates are the \emph{other}
 individuals with the same value of \code{group_column} in \code{group_table}; the
-aggregate is over the mates that have a TBV; a focal with no mates gets
+aggregate is over the mates that have a genetic value; a focal with no mates gets
 \code{0}; a focal whose group value is \code{NULL} gets \code{NA} (a missing component).
 \code{group_table} must have exactly one row per focal individual.
 }

@@ -784,8 +784,8 @@ pop |>
 ```r
 # All animals in ind_meta
 pop <- pop |>
-    get_table("ind_meta") |>      # pass table with no filter, so "select all" 
-  add_tbv(trait_name = "ADG")     # calculate TBV for all individuals (notice we use "traitn_name" here)
+    get_table("ind_meta") |>      # pass table with no filter, so "select all"
+  add_tgv(trait_name = "ADG")     # true genetic values for all individuals; the TBV is component "additive"
 ```
 
 Then the real great part of the package is to simply extract any table, and utilize
@@ -794,16 +794,17 @@ the functions you already know to verify it worked (or didn't...).
 ```r
 # Check means by trait
 pop |>
-  get_table("ind_tbv") |>
+  get_table("ind_tgv") |>
+  filter(component_name == "additive") |>  # the breeding values
   collect() |>                              # pull into R memory
   group_by(trait_name) |>
-  summarise(MeanTBV = mean(tbv_value))
+  summarise(MeanTBV = mean(tgv_value))
 ```
 
 Define a selection index first, then compute true index values from TBVs (ground truth for monitoring genetic trend):
 
 ```r
-# Define the index weights (must exist before add_tbv uses index_names)
+# Define the index weights (must exist before add_tgv uses index_names)
 pop |>
   define_index(
     index_name   = "maternal",
@@ -815,7 +816,7 @@ pop |>
 # Compute true index values from TBVs and write to ind_true_index
 pop |>
   get_table("ind_meta") |>
-  add_tbv(index_names = "maternal")       # will save the true breeding value index in 'ind_true_index' table)
+  add_tgv(index_names = "maternal")       # will save the true breeding value index in 'ind_true_index' table)
 
 pop |> 
   get_table("ind_true_index") |> 
@@ -1057,11 +1058,10 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | `genome_effect_members` | 1 per (term × locus) | The loci a term spans and each locus's basis function (`additive` / `dominance` / `indicator`) |
 | `genome_effect_member_origins` | 1 per (term × locus × origin) | Optional line / parent-of-origin scope on a member; no rows = applies to every allele copy |
 | `genome_effect_terms`, `genome_effect_loci` | views | Term-grain and locus-grain reads over the three tables above (`family_key`, `locus_name`, `genome_value`) |
-| `ind_tgv` | 1 per (individual × trait × component) | True genetic values by declared model structure; total via the `ind_tgv_total` view |
+| `ind_tgv` | 1 per (individual × trait × component) | True genetic values (simulation ground truth); the breeding value is component `additive`; total via the `ind_tgv_total` view |
 | `ind_meta` | 1 per individual | Pedigree, sex, line; user date/status columns added via `mutate_table()` |
 | `ind_phenotype` | 1 per (individual × phenotype record) | Long-format phenotype records |
-| `ind_tbv` | 1 per (individual × trait) | True breeding values (simulation ground truth) |
-| `ind_true_index` | 1 per (individual × index × weight type) | True index values from TBVs |
+| `ind_true_index` | 1 per (individual × index × weight type × component) | True index values from `ind_tgv` |
 | `ind_ebv` | 1 per (individual × trait × evaluation) | Estimated breeding values from BLUP/GBLUP |
 | `ind_index` | 1 per (individual × index × run) | Computed selection index values |
 | `trait_meta` | 1 per genetic trait | Genetic-layer configuration (variance target, units) |
@@ -1133,7 +1133,7 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 
 | Function | Purpose |
 |----------|---------|
-| `add_tbv()` | Compute and store true breeding values in `ind_tbv` |
+| `add_tgv()` | Compute and store true genetic values in `ind_tgv` (and true index values) |
 | `add_phenotype()` | Sample and store phenotype records in `ind_phenotype` |
 | `add_ebv()` | Run BLUPF90 or parent average; store results in `ind_ebv` |
 | `add_index()` | Compute weighted index from `ind_ebv` (or any table); store in `ind_index` |

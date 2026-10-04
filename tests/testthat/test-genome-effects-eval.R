@@ -275,7 +275,7 @@ test_that("gate 21: each term maps to one component, and the components sum to t
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tg <- gev_tgv(pop)
   expect_setequal(unique(tg$component_name),
-                  c("order1_additive", "order1_dominance", "order1_other",
+                  c("additive", "dominance", "indicator",
                     "interaction"))
   # One row per (individual, component): no term lands in two components.
   expect_false(anyDuplicated(paste(tg$id_ind, tg$component_name)) > 0L)
@@ -315,33 +315,33 @@ test_that("a component that leaves the model leaves ind_tgv with it", {
     locus_name = loci[1], contrast_name = "dominance",
     center_value = 0.5, genome_value = 2.0), effect_owner = "dom")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
-  expect_true("order1_dominance" %in% gev_tgv(pop)$component_name)
+  expect_true("dominance" %in% gev_tgv(pop)$component_name)
 
   DBI::dbExecute(pop$db_conn, paste0(
     "DELETE FROM genome_effect_members WHERE id_genome_effect IN ",
     "(SELECT id_genome_effect FROM genome_effects WHERE effect_owner = 'dom')"))
   DBI::dbExecute(pop$db_conn, "DELETE FROM genome_effects WHERE effect_owner = 'dom'")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
-  expect_false("order1_dominance" %in% gev_tgv(pop)$component_name)
+  expect_false("dominance" %in% gev_tgv(pop)$component_name)
 })
 
-test_that("gates 32-33: custom terms move tgv_value and leave tbv_value alone", {
+test_that("gates 32-33: an indicator surface and an interaction leave the additive component alone", {
   pop <- gev_lines_pop("gev_tbv_filter")
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
-  pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tbv0 <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind")
   tgv0 <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tgv_total FROM ind_tgv_total ORDER BY id_ind")
-  expect_equal(tbv0$tbv_value, tgv0$tgv_total, tolerance = 1e-10)
+  expect_equal(tbv0$tgv_value, tgv0$tgv_total, tolerance = 1e-10)
 
   # A functional dominance surface, and a custom additive term inside an
-  # interaction. Neither is a breeding-value coefficient.
+  # interaction. Neither is a one-locus additive term, so neither enters the
+  # 'additive' component; both enter the total.
   pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "indicator",
     copy_count_value = 2L, dosage_value = 1L, genome_value = 1.7),
@@ -351,140 +351,49 @@ test_that("gates 32-33: custom terms move tgv_value and leave tbv_value alone", 
     contrast_name = "additive", center_value = 0.5,
     genome_value = 3.0), effect_owner = "AxA")
 
-  # Both new terms are ones add_tbv() must ignore, so it now says so (Q1).
-  expect_warning(pop <- pop |> get_table("ind_meta") |> add_tbv("ADG"),
-                 "does not read")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tbv1 <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind")
   tgv1 <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tgv_total FROM ind_tgv_total ORDER BY id_ind")
 
-  expect_equal(tbv1$tbv_value, tbv0$tbv_value, tolerance = 1e-10)
+  expect_equal(tbv1$tgv_value, tbv0$tgv_value, tolerance = 1e-10)
   expect_false(isTRUE(all.equal(tgv1$tgv_total, tgv0$tgv_total)))
   expect_setequal(unique(gev_tgv(pop)$component_name),
-                  c("order1_additive", "order1_other", "interaction"))
+                  c("additive", "indicator", "interaction"))
 })
 
-# ── Q1: add_tbv() says when its coefficients stopped being average effects ──
+# ── T5: every one-locus additive term is in the additive component ─────────
 
-# The rule is not "this trait has non-additive terms". It is "some term either
-# contributes to the additive component or shifts the coefficients add_tbv()
-# reads". A Cockerham dominance term centred where the additive term is centred
-# does neither, and must stay silent -- it is the common case, and a warning
-# there would train the user to ignore the message.
-
-gev_q1_pop <- function(name) {
-  pop <- gev_lines_pop(name)
+# ind_tgv is the one table of genetic values (plans/import_qtl_effect_methods.md
+# §6.1): a custom-owner additive term is part of A and lands in the 'additive'
+# row next to the generated ones (before 0.74.0 the breeding-value table left it out).
+test_that("T5: a custom-owner additive term appears in the additive row", {
+  pop <- gev_lines_pop("gev_t5")
+  on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
-  # Population-wide effect on a two-line pool: the pooled default is the
-  # intended base here, said explicitly so it does not warn.
   pop <- pop |> get_table("genome_meta") |>
     define_additive_effects("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
-  pop
-}
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tgv("ADG"))
+  before <- tgv_additive(pop, "ADG")
 
-gev_add_centre <- function(pop, locus) {
-  DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT DISTINCT m.center_value FROM genome_effect_members m ",
-    "JOIN genome_effects e USING (id_genome_effect) ",
-    "JOIN genome_effect_loci l USING (id_genome_effect, member_slot) ",
-    "WHERE e.effect_owner = '", tidybreed:::GE_GENERATED_OWNER, "' ",
-    "AND l.locus_name = '", locus, "'"))$center_value[1]
-}
-
-test_that("Q1: a purely generated additive model is silent", {
-  pop <- gev_q1_pop("gev_q1_clean")
-  on.exit(close_pop(pop), add = TRUE)
-  expect_silent(suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv("ADG")))
-})
-
-test_that("Q1: a Cockerham dominance term at the additive centre is silent", {
-  pop <- gev_q1_pop("gev_q1_cockerham")
-  on.exit(close_pop(pop), add = TRUE)
-  L <- gev_loci(pop)[1]
-  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
-    locus_name = L, contrast_name = "dominance",
-    center_value = gev_add_centre(pop, L), genome_value = 1.3),
-    effect_owner = "dom")
-  # HWE-orthogonal: contributes nothing to A, leaves the additive coefficient
-  # an average effect. tbv_value is still exact, so there is nothing to say.
-  expect_silent(suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv("ADG")))
-})
-
-test_that("Q1: a dominance term centred somewhere else does warn", {
-  pop <- gev_q1_pop("gev_q1_offcentre")
-  on.exit(close_pop(pop), add = TRUE)
-  L <- gev_loci(pop)[1]
-  off <- gev_add_centre(pop, L) + 0.2
-  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
-    locus_name = L, contrast_name = "dominance",
-    center_value = off, genome_value = 1.3), effect_owner = "dom")
-  expect_warning(suppressMessages(
-    pop |> get_table("ind_meta") |> add_tbv("ADG")), "no longer average effects")
-})
-
-test_that("Q1: a functional indicator surface warns", {
-  pop <- gev_q1_pop("gev_q1_functional")
-  on.exit(close_pop(pop), add = TRUE)
-  L <- gev_loci(pop)[1]
-  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
-    locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
-    dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
-  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
-                warning = conditionMessage)
-  expect_match(w, "indicator")
-  expect_match(w, "alpha = a \\+ d\\(q - p\\)")
-  expect_match(w, "add_tgv\\(\\)")
-})
-
-test_that("Q1: an interaction warns, and is named as one", {
-  pop <- gev_q1_pop("gev_q1_epi")
-  on.exit(close_pop(pop), add = TRUE)
-  loci <- gev_loci(pop)
-  cells <- expand.grid(a = 0:2, b = 0:2)
-  pop <- define_genome_effect_terms(pop, "ADG",
-    genotype_terms(stats::setNames(cells, loci[1:2]),
-                   value = c(0, 0, 0, 0, 1, 2, 0, 2, 3)),
-    effect_owner = "AxA")
-  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
-                warning = conditionMessage)
-  expect_match(w, "interaction")
-  expect_match(w, "on other loci and on LD")
-})
-
-test_that("Q1: a custom order-one additive term warns -- it is part of A", {
-  pop <- gev_q1_pop("gev_q1_custom_add")
-  on.exit(close_pop(pop), add = TRUE)
-  L <- gev_loci(pop)[1]
+  L <- loci[1]
   pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = L, contrast_name = "additive", center_value = 0.5,
     genome_value = 0.9), effect_owner = "hand")
-  w <- tryCatch(suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG")),
-                warning = conditionMessage)
-  expect_match(w, "'hand'")
-  expect_match(w, "additive")
-})
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tgv("ADG"))
+  after <- tgv_additive(pop, "ADG")
 
-test_that("Q1: the warning never changes the number", {
-  pop <- gev_q1_pop("gev_q1_value")
-  on.exit(close_pop(pop), add = TRUE)
-  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tbv("ADG"))
-  before <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
-
-  L <- gev_loci(pop)[1]
-  pop <- define_genome_effect_terms(pop, "ADG", data.frame(
-    locus_name = L, contrast_name = "indicator", copy_count_value = 2L,
-    dosage_value = 1L, genome_value = 1.3), effect_owner = "functional_d")
-  suppressWarnings(suppressMessages(
-    pop <- pop |> get_table("ind_meta") |> add_tbv("ADG")))
-  after <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
-  expect_equal(before, after)
+  # The hand term's contribution, per individual, computed from the copies.
+  hap <- DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT h.id_ind, SUM(h.allele) AS dose FROM ind_haplotype h ",
+    "JOIN genome_meta g USING (locus_id) WHERE g.locus_name = '", L, "' ",
+    "GROUP BY h.id_ind"))
+  want <- before$tgv_value +
+    0.9 * (hap$dose[match(before$id_ind, hap$id_ind)] - 2 * 0.5)
+  expect_equal(after$tgv_value, want, tolerance = 1e-12)
+  expect_setequal(unique(gev_tgv(pop)$component_name), "additive")
 })
 
 
@@ -544,7 +453,7 @@ test_that("gate 25: repeated (a, d) appends accumulate, locus by locus", {
   expect_equal(unname(two[ids]), unname(want), tolerance = 1e-10)
 })
 
-test_that("gate 39: an order-one surface is 'order1_other' and sums into the total", {
+test_that("gate 39: an order-one surface is 'indicator' and sums into the total", {
   pop <- gev_lines_pop("gev_surface")
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
@@ -553,7 +462,7 @@ test_that("gate 39: an order-one surface is 'order1_other' and sums into the tot
     copy_count = stats::setNames(list(2L), loci[1])), effect_owner = "surface")
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tg <- gev_tgv(pop)
-  expect_setequal(unique(tg$component_name), "order1_other")
+  expect_setequal(unique(tg$component_name), "indicator")
   tot <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, tgv_total FROM ind_tgv_total ORDER BY id_ind")
   expect_equal(sort(tg$tgv_value), sort(tot$tgv_total))
@@ -589,7 +498,7 @@ test_that("gate 45: a paternally qualified X term contributes 0 beside a matchin
 
   ids <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, sex FROM ind_meta ORDER BY id_ind")
-  expect_no_error(pop |> get_table("ind_meta") |> add_tbv("ADG"))
+  expect_no_error(pop |> get_table("ind_meta") |> add_tgv("ADG"))
 
   # The male value is the autosomal part alone; recomputed independently.
   hap <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -602,12 +511,12 @@ test_that("gate 45: a paternally qualified X term contributes 0 beside a matchin
     "WHERE g.chr_name = 'A1' AND o.line_match_type IS NULL"))
   auto <- tapply((hap$allele - hap$center_value) * hap$genome_value, hap$id_ind, sum)
   got <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT id_ind, tbv_value FROM ind_tbv ORDER BY id_ind")
+    "SELECT id_ind, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind")
   males <- ids$id_ind[ids$sex == "M"]
-  expect_equal(got$tbv_value[match(males, got$id_ind)], as.numeric(auto[males]),
+  expect_equal(got$tgv_value[match(males, got$id_ind)], as.numeric(auto[males]),
                tolerance = 1e-10)
   females <- ids$id_ind[ids$sex == "F"]
-  expect_false(isTRUE(all.equal(got$tbv_value[match(females, got$id_ind)],
+  expect_false(isTRUE(all.equal(got$tgv_value[match(females, got$id_ind)],
                                 as.numeric(auto[females]))))
 })
 
@@ -617,11 +526,11 @@ test_that("gate 45: the X term alone errors for males, who have no paternal X co
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
     define_additive_effects("ADG", effects = c(2.0, 2.0), parent_origin = 1)
 
-  expect_error(pop |> get_table("ind_meta") |> add_tbv("ADG"),
+  expect_error(pop |> get_table("ind_meta") |> add_tgv("ADG"),
                "No allele copy matched any effect")
   # Females, who do carry a paternal X, evaluate normally.
   expect_no_error(pop |> get_table("ind_meta") |>
-                    dplyr::filter(sex == "F") |> add_tbv("ADG"))
+                    dplyr::filter(sex == "F") |> add_tgv("ADG"))
 })
 
 

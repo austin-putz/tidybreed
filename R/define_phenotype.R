@@ -31,17 +31,25 @@
 #'   `NULL` means no limit.
 #' @param prevalence Numeric between 0 and 1. For categorical traits with one
 #'   threshold (two categories), the fraction expected above the threshold.
-#'   Mutually exclusive with `thresholds`. The threshold is placed on the
-#'   liability scale from `mean`, the unconditional residual variance and the
-#'   trait's stored additive target (`trait_var_comp`, `effect_name =
-#'   "additive"`), so [add_phenotype()] errors when no target is stored. The
-#'   target is taken as given: if the trait's effects were written without
+#'   Mutually exclusive with `thresholds`. The liability carries the trait's
+#'   total genetic value, so the threshold is placed from `mean`, the
+#'   unconditional residual variance and the trait's stored genetic targets
+#'   (`trait_var_comp`, population-wide rows): the sum of the `additive`,
+#'   `dominance` and `additive_by_additive` diagonals, each counted only if the
+#'   trait's model has terms of that kind. [add_phenotype()] errors when a kind
+#'   of term the model has has no stored target, or when the model has terms
+#'   outside those three kinds (an `indicator` surface, other interactions).
+#'   The threshold uses the *target* at the reference population, so the
+#'   realised prevalence of a selected or line-specific population differs.
+#'   The target is taken as given: if the trait's effects were written without
 #'   being calibrated to it (manual `effects`, or `scale_to_target = FALSE` in
-#'   [define_additive_effects()]), the threshold describes a variance the model
-#'   does not deliver and the realised prevalence is wrong, with no error. Give
-#'   `thresholds` for such a trait. Not valid for composite phenotypes (`components` or `formula_tbv`): their
-#'   genetic liability combines several traits and contributors, which no
-#'   stored variance describes. Give `thresholds` instead.
+#'   [define_additive_effects()], or terms from [define_genome_effect_terms()]),
+#'   the threshold describes a variance the model does not deliver and the
+#'   realised prevalence is wrong, with no error. Give `thresholds` for such a
+#'   trait. Not valid for composite phenotypes (`components` or
+#'   `formula_tbv`): their genetic liability combines several traits and
+#'   contributors, which no stored variance describes. Give `thresholds`
+#'   instead.
 #' @param thresholds Numeric vector of length K−1 for K ordered categories.
 #'   Liability cutpoints in ascending order. Mutually exclusive with
 #'   `prevalence`.
@@ -75,8 +83,14 @@
 #'     the covariate column; it must have exactly one row per individual.
 #'   - `poly_order` (optional): polynomial basis order.
 #'   - `poly_scale_min`, `poly_scale_max` (optional): Legendre scaling bounds.
-#'   - `component_names` (optional, default `"order1_additive"`): reserved;
-#'     see `phenotype_components.component_names`.
+#'   - `component_names` (optional, default `"total"`): which genetic value of
+#'     the contributor this row reads from `ind_tgv`. `"total"` is the total
+#'     genetic value (the `ind_tgv_total` view: additive, dominance and every
+#'     other component). A comma-separated list of `ind_tgv.component_name`
+#'     values (`"additive"`, `"dominance"`, `"indicator"`, `"interaction"`,
+#'     e.g. `"additive"` or `"additive,dominance"`) reads their sum; a listed
+#'     component the trait's model has no terms for contributes 0. Anything
+#'     else, `"total"` mixed with other names, or a duplicate is an error.
 #'   - `group_column` (optional): column defining group membership.
 #'   - `group_table` (optional, default `"ind_meta"`): table containing
 #'     `group_column`.
@@ -85,9 +99,11 @@
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
 #'   written. Mutually exclusive with `formula_tbv`.
-#' @param formula_tbv Character. DSL shorthand for assembling a composite TBV
-#'   from component traits already in `trait_meta`. A bare trait symbol
-#'   (e.g. `"WWD"`) means the individual's own (`"self"`) TBV; contributor
+#' @param formula_tbv Character. DSL shorthand for assembling a composite
+#'   genetic value from component traits already in `trait_meta`. Every
+#'   reference reads the contributor's **total** genetic value
+#'   (`ind_tgv_total`). A bare trait symbol (e.g. `"WWD"`) means the
+#'   individual's own (`"self"`) value; contributor
 #'   roles can also be given explicitly as function calls: `self(trait)`,
 #'   `dam(trait)`, `sire(trait)`, `group_sum(trait, col)`, and
 #'   `group_mean(trait, col)` (`col` = grouping column in `ind_meta`, e.g.
@@ -108,8 +124,9 @@
 #'   (`Inf`/`NaN`) are converted to `NA` with a warning. Required when
 #'   `type = "derived_formula"`. Not valid otherwise.
 #' @param missing_component_action Character. What to do when an individual is
-#'   missing one or more required composite-TBV components (e.g. no group
-#'   assignment for a `"group"` contributor, or a missing dam/sire TBV).
+#'   missing one or more required composite components (e.g. no group
+#'   assignment for a `"group"` contributor, or a missing dam/sire genetic
+#'   value).
 #'   `"skip"` (default) excludes the individual from `ind_phenotype` and emits
 #'   a warning with a count. `"error"` stops with an informative message
 #'   listing affected individuals. Stored in `phenotype_meta` so the behaviour
@@ -380,6 +397,74 @@ define_phenotype <- function(pop,
     )
   }
 
+  # ── Components: every check before anything is written ─────────────────
+  # (an overwrite deletes the old rows first, and a refusal after the
+  # phenotype_meta insert would leave a half-defined phenotype behind).
+
+  if (!is.null(components)) {
+    required_cols <- c("source_trait_name", "contributor_type")
+    missing_req <- setdiff(required_cols, names(components))
+    if (length(missing_req) > 0) {
+      stop("components data frame is missing required column(s): ",
+           paste(missing_req, collapse = ", "), call. = FALSE)
+    }
+
+    valid_contributor_types <- c("self", "dam", "sire", "group")
+    bad_ct <- !components$contributor_type %in% valid_contributor_types
+    if (any(bad_ct)) {
+      stop("Invalid contributor_type value(s): ",
+           paste(unique(components$contributor_type[bad_ct]), collapse = ", "),
+           ". Must be one of: ", paste(valid_contributor_types, collapse = ", "),
+           call. = FALSE)
+    }
+
+    # group contributors require group_column
+    grp_rows <- components[components$contributor_type == "group", , drop = FALSE]
+    if (nrow(grp_rows) > 0) {
+      gcol <- if ("group_column" %in% names(grp_rows)) grp_rows$group_column
+              else rep(NA_character_, nrow(grp_rows))
+      bad_gc <- is.na(gcol) | !nzchar(as.character(gcol))
+      if (any(bad_gc))
+        stop("components with contributor_type = 'group' must specify group_column.",
+             call. = FALSE)
+
+      # Both reach SQL through .group_members_sql(). The read-time existence
+      # checks in .read_one_per_id() would catch a bad name eventually, but
+      # define_effect_random() and define_effect_fixed_cov() validate their
+      # equivalents here, and a definition-time error names the real mistake.
+      for (g in unique(as.character(gcol))) {
+        validate_sql_identifier(g, what = "group_column")
+      }
+      gtab <- if ("group_table" %in% names(grp_rows)) {
+        as.character(grp_rows$group_table)
+      } else "ind_meta"
+      for (g in unique(gtab[!is.na(gtab) & nzchar(gtab)])) {
+        validate_sql_identifier(g, what = "group_table")
+      }
+    }
+
+    # add_phenotype() implements 'fixed' and 'covariate' and rejects the rest.
+    # Reject here too: a weight_type that can never be evaluated is a mistake
+    # in the model definition, and the error belongs at the call that made it.
+    if ("weight_type" %in% names(components)) {
+      wt  <- as.character(components$weight_type)
+      wt  <- wt[!is.na(wt) & nzchar(wt)]
+      bad <- setdiff(unique(wt), c("fixed", "covariate"))
+      if (length(bad) > 0) {
+        stop("components: weight_type ",
+             paste0("'", bad, "'", collapse = ", "),
+             " is not implemented. Use 'fixed' or 'covariate'.", call. = FALSE)
+      }
+    }
+
+    if ("component_names" %in% names(components)) {
+      components$component_names <- vapply(
+        as.character(components$component_names),
+        function(x) paste(.split_component_names(x, strict = TRUE), collapse = ","),
+        character(1), USE.NAMES = FALSE)
+    }
+  }
+
   # ── Residual block checks, before anything is written ─────────────────────
   #
   # `residual_var` is the D1 algorithm with N = {phenotype_name}: it writes a
@@ -483,61 +568,6 @@ define_phenotype <- function(pop,
   # ── Components ────────────────────────────────────────────────────────────
 
   if (!is.null(components)) {
-    required_cols <- c("source_trait_name", "contributor_type")
-    missing_req <- setdiff(required_cols, names(components))
-    if (length(missing_req) > 0) {
-      stop("components data frame is missing required column(s): ",
-           paste(missing_req, collapse = ", "), call. = FALSE)
-    }
-
-    valid_contributor_types <- c("self", "dam", "sire", "group")
-    bad_ct <- !components$contributor_type %in% valid_contributor_types
-    if (any(bad_ct)) {
-      stop("Invalid contributor_type value(s): ",
-           paste(unique(components$contributor_type[bad_ct]), collapse = ", "),
-           ". Must be one of: ", paste(valid_contributor_types, collapse = ", "),
-           call. = FALSE)
-    }
-
-    # group contributors require group_column
-    grp_rows <- components[components$contributor_type == "group", , drop = FALSE]
-    if (nrow(grp_rows) > 0) {
-      gcol <- if ("group_column" %in% names(grp_rows)) grp_rows$group_column
-              else rep(NA_character_, nrow(grp_rows))
-      bad_gc <- is.na(gcol) | !nzchar(as.character(gcol))
-      if (any(bad_gc))
-        stop("components with contributor_type = 'group' must specify group_column.",
-             call. = FALSE)
-
-      # Both reach SQL through .group_members_sql(). The read-time existence
-      # checks in .read_one_per_id() would catch a bad name eventually, but
-      # define_effect_random() and define_effect_fixed_cov() validate their
-      # equivalents here, and a definition-time error names the real mistake.
-      for (g in unique(as.character(gcol))) {
-        validate_sql_identifier(g, what = "group_column")
-      }
-      gtab <- if ("group_table" %in% names(grp_rows)) {
-        as.character(grp_rows$group_table)
-      } else "ind_meta"
-      for (g in unique(gtab[!is.na(gtab) & nzchar(gtab)])) {
-        validate_sql_identifier(g, what = "group_table")
-      }
-    }
-
-    # add_phenotype() implements 'fixed' and 'covariate' and rejects the rest.
-    # Reject here too: a weight_type that can never be evaluated is a mistake
-    # in the model definition, and the error belongs at the call that made it.
-    if ("weight_type" %in% names(components)) {
-      wt  <- as.character(components$weight_type)
-      wt  <- wt[!is.na(wt) & nzchar(wt)]
-      bad <- setdiff(unique(wt), c("fixed", "covariate"))
-      if (length(bad) > 0) {
-        stop("components: weight_type ",
-             paste0("'", bad, "'", collapse = ", "),
-             " is not implemented. Use 'fixed' or 'covariate'.", call. = FALSE)
-      }
-    }
-
     # Fill defaults for optional columns
     n_comp <- nrow(components)
     if (!"weight"              %in% names(components)) components$weight              <- 1.0
@@ -547,7 +577,7 @@ define_phenotype <- function(pop,
     if (!"poly_order"          %in% names(components)) components$poly_order          <- NA_integer_
     if (!"poly_scale_min"      %in% names(components)) components$poly_scale_min      <- NA_real_
     if (!"poly_scale_max"      %in% names(components)) components$poly_scale_max      <- NA_real_
-    if (!"component_names"     %in% names(components)) components$component_names     <- "order1_additive"
+    if (!"component_names"     %in% names(components)) components$component_names     <- "total"
     if (!"group_column"        %in% names(components)) components$group_column        <- NA_character_
     if (!"group_table"         %in% names(components)) components$group_table         <- "ind_meta"
     if (!"aggregation"         %in% names(components)) components$aggregation         <- "sum"
@@ -585,4 +615,37 @@ define_phenotype <- function(pop,
           msg_suffix, ".")
 
   invisible(pop)
+}
+
+
+#' Parse a `phenotype_components.component_names` value
+#'
+#' `NA` or empty is `"total"`. Otherwise a comma-separated list, each name in
+#' [TGV_COMPONENT_NAMES], or exactly `"total"`.
+#'
+#' @param strict `TRUE` (in [define_phenotype()]) errors on a bad value; the
+#'   reader in `add_phenotype()` sees only values that passed it.
+#' @return Character vector: `"total"`, or the listed components.
+#' @keywords internal
+#' @noRd
+.split_component_names <- function(x, strict = FALSE) {
+  if (length(x) != 1L || is.na(x) || !nzchar(trimws(x))) return("total")
+  parts <- trimws(strsplit(x, ",", fixed = TRUE)[[1]])
+  ok    <- c(TGV_COMPONENT_NAMES, "total")
+  bad   <- setdiff(parts, ok)
+  msg <- if (length(bad) > 0L) {
+    paste0("component_names '", x, "': unknown component(s) ",
+           paste0("'", bad, "'", collapse = ", "), ". Use \"total\" or a ",
+           "comma-separated list of ", paste0("\"", TGV_COMPONENT_NAMES, "\"",
+                                              collapse = ", "), ".")
+  } else if ("total" %in% parts && length(parts) > 1L) {
+    paste0("component_names '", x, "': \"total\" already includes every ",
+           "component and cannot be combined with others.")
+  } else if (anyDuplicated(parts)) {
+    paste0("component_names '", x, "' lists a component twice.")
+  }
+  if (!is.null(msg)) {
+    stop(msg, if (!strict) " (stored in phenotype_components)", call. = FALSE)
+  }
+  parts
 }

@@ -4,7 +4,15 @@
 \alias{add_tgv}
 \title{Compute and store true genetic values}
 \usage{
-add_tgv(tbl, trait_name = NULL)
+add_tgv(
+  tbl,
+  trait_name = NULL,
+  index_names = NULL,
+  weight_type = c("index", "economic", "both"),
+  component_name = "additive",
+  overwrite_index = FALSE,
+  ...
+)
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}, optionally piped through
@@ -16,6 +24,32 @@ individuals that have rows there. A table without \code{id_ind} is an error.}
 
 \item{trait_name}{Character vector of trait name(s). When \code{NULL} (default),
 all traits in \code{trait_meta} are used (in \code{id_trait} order).}
+
+\item{index_names}{Character vector of named index(es) from \code{index_meta} for
+which true index values are computed and written to \code{ind_true_index}. When
+\code{NULL} (default), no true index is computed. Every index trait must have an
+\code{ind_tgv} row for every individual of the subset (computed by this call or
+an earlier one).}
+
+\item{weight_type}{Which weight column from \code{index_meta} to use: \code{"index"}
+uses \code{index_weight}, \code{"economic"} uses \code{economic_weight}, \code{"both"} computes
+and stores both (distinguished by \code{ind_true_index.weight_type}). Defaults to
+\code{"index"}.}
+
+\item{component_name}{Which genetic value the true index weights: one of
+\code{"additive"} (default — selection indices are on breeding values),
+\code{"dominance"}, \code{"indicator"}, \code{"interaction"}, or \code{"total"} (the
+\code{ind_tgv_total} view). A component the trait's model has no terms for
+contributes 0. Stored in \code{ind_true_index.component_name}.}
+
+\item{overwrite_index}{Logical. When \code{FALSE} (default), individuals that
+already have a true index value for the given
+\verb{(index_name, weight_type, component_name)} are skipped. When \code{TRUE},
+existing rows are deleted and recomputed (use when index weights have
+changed).}
+
+\item{...}{Optional extra columns written to \code{ind_tgv} (scalars only;
+broadcast to every row written).}
 }
 \value{
 The modified \code{tidybreed_pop} (invisibly).
@@ -25,23 +59,30 @@ Evaluates the stored effect model for each individual in the current subset
 and writes the result to \code{ind_tgv}, one row per
 (individual x trait x \strong{component}). The total is the derived view
 \code{ind_tgv_total}, never a stored row — a stored total would make every
-\code{SUM(tgv_value)} double-count.
+\code{SUM(tgv_value)} double-count. This is the one table of true genetic values:
+\code{\link[=add_phenotype]{add_phenotype()}} calls this function for every trait a phenotype reads, and
+reads the total (or the components \code{phenotype_components.component_names}
+lists) from it.
 
-Unlike \code{\link[=add_tbv]{add_tbv()}}, this evaluates \strong{every} term of the trait: additive,
-dominance, hand-entered genotype surfaces and multi-locus interactions, under
-every effect owner. \code{component_name} records how each term was \emph{declared}:\tabular{ll}{
+Every term of the trait is evaluated: additive, dominance, hand-entered
+genotype surfaces and multi-locus interactions, under every effect owner.
+\code{component_name} records how each term was declared:\tabular{ll}{
    \code{component_name} \tab Terms it collects \cr
-   \code{"order1_additive"} \tab single-member terms whose contrast is \code{additive} \cr
-   \code{"order1_dominance"} \tab single-member \code{dominance} terms \cr
-   \code{"order1_other"} \tab single-member \code{indicator} terms (a hand-entered surface) \cr
-   \code{"interaction"} \tab any term with two or more members \cr
+   \code{"additive"} \tab one-locus terms whose contrast is \code{additive} \cr
+   \code{"dominance"} \tab one-locus \code{dominance} terms \cr
+   \code{"indicator"} \tab one-locus \code{indicator} terms (a hand-entered genotype surface) \cr
+   \code{"interaction"} \tab any term over two or more loci \cr
 }
 
 
-These are \strong{model-structure components, not variance components.} A
-functional A x A term contributes to \eqn{V_A}, \eqn{V_D} \emph{and} \eqn{V_I} in
-the statistical sense; the names carry the declared order precisely so they
-cannot be read as an orthogonal decomposition.
+\strong{The breeding value is \code{component_name = "additive"}} for effects written
+in statistical coding at a single base allele frequency per locus, which is
+what the generators (\code{\link[=define_additive_effects]{define_additive_effects()}}) write. For hand-written
+functional terms (\code{\link[=ad_terms]{ad_terms()}} with \code{coding = "functional"}, or an
+\code{indicator} surface) \code{additive} is the functional additive effect, not the
+breeding value: under functional coding the average effect is
+\eqn{\alpha = a + d(q - p)}, and under epistasis it depends on other loci
+and on LD.
 
 \code{ind_tgv} stores the \strong{raw sum of the stored terms — no mean is added.} A
 pure Cockerham model yields centered deviations; a raw \code{indicator} surface
@@ -49,9 +90,27 @@ yields absolute genotypic values with a non-zero mean by construction, and is
 not silently re-centered. See \code{\link[=ad_terms]{ad_terms()}}, which reports the implied genetic
 mean and writes it nowhere.
 
-Writes are idempotent: an individual's rows for a trait are replaced, so
-re-evaluating after changing the effect model never leaves stale components
-behind.
+Each allele copy takes the \strong{most specific} variant whose origin predicate
+matches its \verb{(line_origin, parent_origin)} label, falling back per copy to
+the common variant. This per-copy fallback is what makes crossbred genetic
+values correct — e.g. a Duroc x Landrace F1 is centered against each parent
+line's own effects and base allele frequency. \strong{Imprinting} is a property of
+the effect, not of the trait: a term scoped to one \code{parent_origin} reads
+only that parent's allele copies.
+
+Re-evaluating replaces an individual's rows for a trait: a component the
+model no longer has is deleted, so no stale component survives, and a
+component that is still there is updated in place, keeping any custom
+columns added to it.
+
+Optionally computes true selection index values by multiplying per-trait
+genetic values (\code{component_name}, default the breeding value) by weights
+from named indices defined with \code{\link[=define_index]{define_index()}}, and writes them to
+\code{ind_true_index}.
+
+Every individual in the subset receives a value for every requested trait —
+unlike \code{\link[=add_phenotype]{add_phenotype()}}, no sex-expression rule is applied here
+(\code{expressed_sex} is a property of \code{phenotype_meta}, not of a genetic trait).
 }
 \section{Resource guard}{
 
@@ -72,12 +131,21 @@ pop <- pop |>
   dplyr::filter(gen == 2L) |>
   add_tgv("ADG")
 
-# The components, and the derived total
-pop |> get_table("ind_tgv") |> dplyr::collect()
+# The breeding values, and the derived total
+pop |> get_table("ind_tgv") |>
+  dplyr::filter(component_name == "additive") |> dplyr::collect()
 pop |> get_table("ind_tgv_total") |> dplyr::collect()
+
+# Genetic values + true index values (index and economic weights) on the
+# breeding values, written to ind_true_index
+pop <- pop |>
+  get_table("ind_meta") |>
+  dplyr::filter(gen == 2L) |>
+  add_tgv(c("ADG", "BW"), index_names = "terminal", weight_type = "both")
 }
 }
 \seealso{
-\code{\link[=add_tbv]{add_tbv()}} for the breeding value, \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} and
-\code{\link[=define_additive_effects]{define_additive_effects()}} for writing the terms this evaluates.
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} and \code{\link[=define_additive_effects]{define_additive_effects()}} for
+writing the terms this evaluates, \code{\link[=add_phenotype]{add_phenotype()}}, \code{\link[=define_index]{define_index()}},
+\code{\link[=add_index]{add_index()}}.
 }

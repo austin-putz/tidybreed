@@ -1,5 +1,5 @@
 # Stage 3 exit-criteria tests spanning add_dosage() / extract_genotypes() /
-# add_tbv() / add_phenotype(): the ind_genotype cache must never diverge from
+# add_tgv() / add_phenotype(): the ind_genotype cache must never diverge from
 # a direct extraction, and its (partial) population must never leak into
 # TBV/phenotype results.
 
@@ -59,7 +59,7 @@ test_that("add_dosage() cache matches extract_genotypes() direct computation", {
   expect_equal(cache_vals, as.data.frame(direct_vals))
 })
 
-test_that("populating ind_genotype for a subset does not change add_tbv()/add_phenotype() results", {
+test_that("populating ind_genotype for a subset does not change add_tgv()/add_phenotype() results", {
   pop_a <- make_identical_pop("cache_a")
   pop_b <- make_identical_pop("cache_b")
   on.exit({close_pop(pop_a); close_pop(pop_b)}, add = TRUE)
@@ -77,14 +77,14 @@ test_that("populating ind_genotype for a subset does not change add_tbv()/add_ph
     "SELECT COUNT(*) AS n FROM ind_genotype")$n, 0L)
 
   set.seed(601)
-  pop_a <- pop_a |> get_table("ind_meta") |> add_tbv("ADG")
+  pop_a <- pop_a |> get_table("ind_meta") |> add_tgv("ADG")
   set.seed(601)
-  pop_b <- pop_b |> get_table("ind_meta") |> add_tbv("ADG")
+  pop_b <- pop_b |> get_table("ind_meta") |> add_tgv("ADG")
 
   tbv_a <- DBI::dbGetQuery(pop_a$db_conn,
-    "SELECT id_ind, trait_name, tbv_value FROM ind_tbv ORDER BY id_ind, trait_name")
+    "SELECT id_ind, trait_name, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind, trait_name")
   tbv_b <- DBI::dbGetQuery(pop_b$db_conn,
-    "SELECT id_ind, trait_name, tbv_value FROM ind_tbv ORDER BY id_ind, trait_name")
+    "SELECT id_ind, trait_name, tgv_value FROM ind_tgv WHERE component_name = 'additive' ORDER BY id_ind, trait_name")
   expect_equal(tbv_a, tbv_b)
 
   set.seed(602)

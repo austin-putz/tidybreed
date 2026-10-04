@@ -199,7 +199,7 @@ test_that("restore_pop() errors when genome_meta table is missing", {
 })
 
 
-# ── Gate 49: a pre-term-model file stops here, not inside add_tbv() ─────────
+# ── Gate 49: a pre-term-model file stops here, not inside add_tgv() ─────────
 
 test_that("restore_pop() refuses the pre-v0.65.0 genome_effects shape", {
   tmp <- tempfile(fileext = ".duckdb")

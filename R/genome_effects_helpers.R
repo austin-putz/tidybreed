@@ -82,12 +82,23 @@
 #' The total is derived, never stored: a stored `'total'` row would make every
 #' `SUM(tgv_value)` double-count.
 #'
+#' Phenotypes read this view, so it must be bit-identical whatever DuckDB's
+#' thread count (CLAUDE.md). With up to four components per individual x trait
+#' a parallel floating `SUM()` is not, so the components are added in a fixed
+#' order (`component_name`) with `list_sum(list(... ORDER BY ...))`: the result
+#' is a function of the stored rows alone. Not `GEV_ACC_TYPE`, which the
+#' evaluator uses for its many-term sum: a `DOUBLE -> DECIMAL(38, 18) ->
+#' DOUBLE` round trip is not exact (it moved ~10% of single-component totals
+#' by one ulp), while an ordered floating sum of one row returns that row bit
+#' for bit, so an additive-only trait's total *is* its breeding value.
+#'
 #' @keywords internal
 #' @noRd
 .ind_tgv_total_view_sql <- function() {
   paste0(
     "CREATE VIEW ind_tgv_total AS ",
-    "SELECT id_ind, trait_name, SUM(tgv_value) AS tgv_total ",
+    "SELECT id_ind, trait_name, ",
+    "list_sum(list(tgv_value ORDER BY component_name)) AS tgv_total ",
     "FROM ind_tgv GROUP BY id_ind, trait_name"
   )
 }

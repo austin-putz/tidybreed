@@ -117,7 +117,7 @@ test_that("remove_rows() in single-table mode does not touch other tables", {
   close_pop(pop)
 })
 
-test_that("remove_rows() deletes ind_tbv rows filtered by trait_name only", {
+test_that("remove_rows() deletes ind_tgv rows filtered by trait_name only", {
   pop <- make_pop_for_remove()
 
   # Add a second trait so we can check only ADG is deleted
@@ -130,17 +130,17 @@ test_that("remove_rows() deletes ind_tbv rows filtered by trait_name only", {
   pop <- get_table(pop, "ind_meta") |> add_phenotype("BW")
 
   n_bw_before <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM ind_tbv WHERE trait_name = 'BW'")$n
+    "SELECT COUNT(*) AS n FROM ind_tgv WHERE trait_name = 'BW'")$n
   expect_gt(n_bw_before, 0L)
 
-  pop <- get_table(pop, "ind_tbv") |>
+  pop <- get_table(pop, "ind_tgv") |>
     dplyr::filter(trait_name == "ADG") |>
     remove_rows(verbose = FALSE)
 
   n_adg_after <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM ind_tbv WHERE trait_name = 'ADG'")$n
+    "SELECT COUNT(*) AS n FROM ind_tgv WHERE trait_name = 'ADG'")$n
   n_bw_after  <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM ind_tbv WHERE trait_name = 'BW'")$n
+    "SELECT COUNT(*) AS n FROM ind_tgv WHERE trait_name = 'BW'")$n
 
   expect_equal(n_adg_after, 0L)
   expect_equal(n_bw_after, n_bw_before)
@@ -159,7 +159,7 @@ test_that("remove_rows(tables = 'all') removes individual from all ind_* tables"
     dplyr::filter(id_ind == remove_id) |>
     remove_rows(tables = "all", verbose = FALSE)
 
-  for (tbl_name in c("ind_meta", "ind_phenotype", "ind_tbv",
+  for (tbl_name in c("ind_meta", "ind_phenotype", "ind_tgv",
                       "ind_haplotype")) {
     n <- DBI::dbGetQuery(
       pop$db_conn,
@@ -186,14 +186,14 @@ test_that("remove_rows(tables = c(...)) removes from only listed tables", {
 
   pop <- get_table(pop, "ind_meta") |>
     dplyr::filter(id_ind == remove_id) |>
-    remove_rows(tables = c("ind_phenotype", "ind_tbv"), verbose = FALSE)
+    remove_rows(tables = c("ind_phenotype", "ind_tgv"), verbose = FALSE)
 
-  # ind_phenotype and ind_tbv cleaned
+  # ind_phenotype and ind_tgv cleaned
   n_pheno <- DBI::dbGetQuery(pop$db_conn,
     paste0("SELECT COUNT(*) AS n FROM ind_phenotype WHERE id_ind = '",
            remove_id, "'"))$n
   n_tbv   <- DBI::dbGetQuery(pop$db_conn,
-    paste0("SELECT COUNT(*) AS n FROM ind_tbv WHERE id_ind = '",
+    paste0("SELECT COUNT(*) AS n FROM ind_tgv WHERE id_ind = '",
            remove_id, "'"))$n
   expect_equal(n_pheno, 0L)
   expect_equal(n_tbv, 0L)

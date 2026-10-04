@@ -447,9 +447,9 @@ test_that("ind_tgv_total sums components and is never stored", {
   pop <- ge_pop()
   on.exit(close_pop(pop), add = TRUE)
   DBI::dbExecute(pop$db_conn,
-                 "INSERT INTO ind_tgv VALUES (1,'A_1','ADG','order1_additive',2.0)")
+                 "INSERT INTO ind_tgv VALUES (1,'A_1','ADG','additive',2.0)")
   DBI::dbExecute(pop$db_conn,
-                 "INSERT INTO ind_tgv VALUES (2,'A_1','ADG','order1_dominance',-0.5)")
+                 "INSERT INTO ind_tgv VALUES (2,'A_1','ADG','dominance',-0.5)")
 
   tot <- pop |> get_table("ind_tgv_total") |> dplyr::collect()
   expect_equal(nrow(tot), 1L)
@@ -502,7 +502,7 @@ test_that("open_pop() alone creates no genome-effect table", {
 
   expect_false(any(c("genome_effects", "genome_effect_members",
                      "genome_effect_member_origins") %in% live))
-  expect_true("ind_tgv" %in% live)   # a result table, created with ind_tbv
+  expect_true("ind_tgv" %in% live)   # a result table, created with the trait tables
   expect_message(define_genome(pop, n_loci = 10, n_chr = 1, chr_len_Mb = 50),
                  "Defined genome")
 })
@@ -665,7 +665,7 @@ test_that("a view lists exactly the columns it reserves, and refuses writes", {
   # remove_rows() checks for an empty/unfiltered selection before it consults
   # TABLE_NO_ROW_DELETE, so the view needs a row for the refusal to be reached.
   DBI::dbExecute(pop$db_conn,
-                 "INSERT INTO ind_tgv VALUES (1,'A_1','ADG','order1_additive',2.0)")
+                 "INSERT INTO ind_tgv VALUES (1,'A_1','ADG','additive',2.0)")
   expect_error(
     pop |> get_table("ind_tgv_total") |>
       dplyr::filter(trait_name == "ADG") |> remove_rows(),

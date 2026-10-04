@@ -322,7 +322,7 @@ open_pop <- function(pop_name     = getOption("tidybreed.pop_name",  "sim"),
       poly_order          INTEGER,
       poly_scale_min      DOUBLE,
       poly_scale_max      DOUBLE,
-      component_names     VARCHAR DEFAULT 'order1_additive'
+      component_names     VARCHAR DEFAULT 'total'
     )
   ")
 
