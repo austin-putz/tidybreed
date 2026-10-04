@@ -85,7 +85,9 @@ that varies locus by locus, write the terms with
 to the target. \code{FALSE} writes the draw unscaled and takes no target.}
 
 \item{warn_bounds}{Numeric length 2, \code{c(lower, upper)} with
-\verb{0 < lower <= upper}, or \code{NULL} to turn the comparison warning off.
+\verb{0 < lower <= upper}, or \code{NULL} to turn the comparison off. Outside
+the bounds, an observed or genic-limit comparison warns; a founder-pool
+comparison adds the realised-anchor hint to its message.
 Default \code{c(0.8, 1.25)} (±25\%, multiplicative).}
 
 \item{seed}{Optional integer, applied with \code{\link[=set.seed]{set.seed()}} after every check
@@ -147,8 +149,12 @@ a warning gives the delivered covariance and correlation and names
 After calibration the delivered covariance is compared with what another
 population sees (§7.4 of the plan): the \strong{pool expectation} \verb{2 Cov(H)}
 when the base is the founder pool, the \strong{observed} \code{Cov(X)} when it selects
-individuals, and the genic limit under \code{anchor = "realised"}. A relative
-spectrum outside \code{warn_bounds} is a warning. Nothing is stored.
+individuals, and the genic limit under \code{anchor = "realised"}. The founder
+pool's comparison is always a message: a small pool's departure is its
+sampling LD, not a mistake in the call. To get the target exactly in the
+founders, add them first and calibrate with \code{anchor = "realised"} on them.
+The observed and genic-limit comparisons warn when the relative spectrum
+leaves \code{warn_bounds}. Nothing is stored.
 }
 \section{Targets}{
 

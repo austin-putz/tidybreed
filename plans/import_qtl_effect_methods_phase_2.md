@@ -65,7 +65,8 @@ Ported from `simulate_qtl_effects/R/qtl_effects.R`, the current file (never the 
   - pool expectation `2 Cov(H)` for a founder base;
   - observed `Cov(X)` for an individuals base;
   - the genic limit under `"realised"`.
-  - A relative spectrum outside `warn_bounds` is a warning. Nothing is stored.
+  - A relative spectrum outside `warn_bounds` is a warning (0.73.1: except the founder
+    pool, which is always a message; Q22). Nothing is stored.
 - **Messages:** the closing message says "exact" / "approximate" / "not calibrated" and
   gives the delivered covariance. A line-scoped call adds the §7.6 line-mean message
   (A13).
@@ -189,9 +190,9 @@ Recorded in the main plan's Step 2 "As built" paragraph.
 
 - **The default `warn_bounds` fires on most small founder pools.** It produced 116 of
   the suite's 127 warnings, on pools of 20–100 haplotypes. Sampling LD in `2 Cov(H)` is
-  larger than the ±25% band. This is recorded as **Q22** (open, recommendation (b): a
-  message for the pool comparison, a warning only for observed individuals). It is a
-  user decision.
+  larger than the ±25% band. Recorded as **Q22**; decided (b) and built in 0.73.1:
+  the pool comparison is always a message (with the realised-anchor hint outside the
+  bounds); only observed individuals and the realised anchor's genic limit warn.
 - `extract_genotypes()` reads a missing allele copy as dosage 0 and does not sort its
   rows. The realised anchor therefore collects dosages itself rather than through it.
 - `trait_var_comp` has no uniqueness constraint. The block key is enforced in

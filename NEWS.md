@@ -1,3 +1,14 @@
+# tidybreed 0.73.1 (2026-10-03)
+
+* `define_additive_effects()`: the founder-pool comparison (§7.4) is now always
+  a `message()`, never a warning. A small pool's departure from the target is
+  its sampling LD, not a mistake in the call (with 200 QTL the ±25% default
+  fired on ~45% of 100-haplotype two-trait pools). Outside `warn_bounds` the
+  message adds the fix: add the founders first and calibrate with
+  `anchor = "realised"` on them. Observed base individuals and the realised
+  anchor's genic limit still warn. Decision Q22 (b) in
+  `plans/import_qtl_effect_methods.md`.
+
 # tidybreed 0.73.0 (2026-10-03)
 
 Step 2 of `plans/import_qtl_effect_methods.md`: Part A (exact multi-trait

@@ -161,6 +161,8 @@ This pass found internal inconsistencies, which are now fixed:
       - the `ad_terms()` coding for step 3.
 16. **2026-10-03 — step 2 built (0.73.0).** Deviations in Step 2's "As built" paragraph
     and `_phase_2.md`. New open question Q22 (default `warn_bounds` on small pools).
+17. **2026-10-03 — Q22 decided (b), built 0.73.1.** The founder-pool comparison is a
+    message; only observed individuals and the genic limit warn (§7.4, Q22).
 
 ---
 
@@ -1169,7 +1171,9 @@ or a structured pairing, gives something else. Label it "pool expectation" in me
 never "founders". When `base_tbl` selects individuals, use their $\mathrm{Cov}(\mathbf X)$
 and label it "observed".
 
-*(As built 0.73.0: the default warns on most small founder pools; see Q22.)*
+*(Q22, decided (b), 0.73.1: the pool comparison is always a `message()`, with a hint
+to calibrate `anchor = "realised"` on the founders when it leaves `warn_bounds`; only the
+observed and genic-limit comparisons `warning()`.)*
 
 **Storage: none.** Diagnostics are printed (`message()` / `warning()`) and not stored: not
 as an attribute on the pop (CLAUDE.md: never in the R object), and not as rows in
@@ -1739,7 +1743,8 @@ makes any later failure a behaviour change, not a missed rename. How to do it sa
   whose genotypes cannot be collected, is skipped with a `message()`. Diagnostics run
   for the common scope only. **Observed: the default `warn_bounds` fires on most small
   founder pools** (116 of the suite's 127 warnings, pools of 20–100 haplotypes), because
-  the pool's sampling LD moves `2 Cov(H)` well away from the genic limit. See Q22.
+  the pool's sampling LD moves `2 Cov(H)` well away from the genic limit. Q22 decided
+  (b) in 0.73.1: the pool comparison is a message.
 - **`seed`** must be an integer scalar (validated with the other arguments).
 - Paper tests 10 and 11 stay on the internals (dual anchor); test 12 uses
   `add_offspring()` (§1A).
@@ -2255,7 +2260,7 @@ gates A12 (withdrawn), A19 and PH7.
 
 ---
 
-### Q22 — Default of `warn_bounds` on small founder pools *(open; found in step 2)*
+### Q22 — Default of `warn_bounds` on small founder pools *(decided (b), 2026-10-03; built 0.73.1)*
 
 §7.4 compares the calibrated covariance with what another population sees. With a
 founder-pool base the comparison is the pool expectation `2 Cov(H)`, which carries the
@@ -2271,7 +2276,23 @@ but a warning that almost always fires gets ignored.
 | (b) Pool comparison as a `message()`, `warning()` only for an **observed** base (real individuals) or the realised anchor's genic limit | Keeps the information; warns only when real individuals are off |
 | (c) Widen the default for the pool comparison by its expected sampling error (~`1/sqrt(n_haplotypes)`) | Warns only beyond sampling noise; more machinery |
 
-Recommended: (b). Decide before step 5, which reuses the diagnostics.
+Simulated fire rate of the ±25% default, 200 unlinked QTL (pure sampling LD):
+
+| Haplotypes | 1 trait | 2 traits, r_g 0.4 |
+|---|---|---|
+| 20 | 48% | 89% |
+| 50 | 29% | 68% |
+| 100 | 10% | 45% |
+| 200 | 4% | 10% |
+| 500+ | 0% | 0% |
+
+**Decision (b).** The founder-pool comparison is always a `message()` giving the
+relative spectrum and the pool size; outside `warn_bounds` it adds the fix ("add the
+founders first and calibrate with `anchor = "realised"` on them", AlphaSimR's default
+behaviour). The observed (`base_tbl` selects individuals) and genic-limit (realised
+anchor) comparisons keep the `warning()`: there the user chose the animals, and the fix
+is one argument. (c) stays possible later as a structure detector on top of (b). Step 5
+reuses the same rule.
 
 ## 13. Explicitly out of scope
 

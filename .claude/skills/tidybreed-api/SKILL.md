@@ -342,7 +342,9 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   6. **Diagnostics** (common scope only, nothing stored): the relative
      spectrum of what another population sees vs the target — pool
      expectation `2 Cov(H)` (founder base), observed `Cov(X)` (individuals
-     base), or the genic limit (realised anchor) — warns outside
+     base), or the genic limit (realised anchor). The founder-pool
+     comparison is always a `message()` (sampling LD, Q22), adding the
+     realised-anchor hint outside `warn_bounds`; the other two warn outside
      `warn_bounds` (default `c(0.8, 1.25)`, `NULL` = off).
   7. **Message** says "exact" / "approximate" / "not calibrated" with the
      delivered covariance; a line-scoped call adds the line-mean message.

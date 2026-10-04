@@ -157,7 +157,7 @@ test_that("A7: 'union' keeps per-trait QTL sets and warns 'approximate'", {
       define_additive_effects(c("T1", "T2"), G = G2, warn_bounds = NULL)))
 })
 
-test_that("A8: warn_bounds fires on an inbred base, not on HWE/LE data", {
+test_that("A8: warn_bounds fires on an inbred base, not on HWE/LE data; a pool only messages", {
   pop <- anchor_pop("a8", n_loci = 10, n_hap = 4000, n_ind = 2000)
   on.exit(close_pop(pop))
   gm <- get_table(pop, "genome_meta")
@@ -177,14 +177,35 @@ test_that("A8: warn_bounds fires on an inbred base, not on HWE/LE data", {
   expect_no_warning(suppressMessages(
     define_additive_effects(gm, "T1", G = 1, base_tbl = gen0(pop), seed = 1,
                             warn_bounds = NULL)))
-  # A founder-pool base is labelled the pool expectation.
+  # A founder-pool base is the pool expectation, reported as a message with
+  # the realised-anchor hint, never a warning (Q22).
   pop2 <- anchor_pop("a8b", n_loci = 10, n_hap = 6, n_ind = 10)
   on.exit(close_pop(pop2), add = TRUE)
-  w <- tryCatch(suppressMessages(
+  msgs <- character()
+  expect_no_warning(withCallingHandlers(
     define_additive_effects(get_table(pop2, "genome_meta"), "T1", G = 1,
-                            warn_bounds = c(0.999, 1.001), seed = 1)),
-    warning = function(cnd) conditionMessage(cnd))
-  expect_match(w, "pool expectation")
+                            warn_bounds = c(0.999, 1.001), seed = 1),
+    message = function(cnd) {
+      msgs <<- c(msgs, conditionMessage(cnd))
+      invokeRestart("muffleMessage")
+    }))
+  pool_msg <- grep("pool expectation", msgs, value = TRUE)
+  expect_length(pool_msg, 1L)
+  expect_match(pool_msg, "sampling LD of 6 haplotypes")
+  expect_match(pool_msg, 'anchor = "realised"', fixed = TRUE)
+  # Inside the bounds the message stays, without the hint.
+  quiet(get_table(pop2, "trait_var_comp") |> remove_rows(confirm_all = TRUE))
+  msgs <- character()
+  withCallingHandlers(
+    define_additive_effects(get_table(pop2, "genome_meta"), "T1", G = 1,
+                            warn_bounds = c(1e-6, 1e6), seed = 1),
+    message = function(cnd) {
+      msgs <<- c(msgs, conditionMessage(cnd))
+      invokeRestart("muffleMessage")
+    })
+  pool_msg <- grep("pool expectation", msgs, value = TRUE)
+  expect_length(pool_msg, 1L)
+  expect_no_match(pool_msg, "realised")
 })
 
 test_that("A9: parent_origin uses n_eligible = 1 in the genic weights", {

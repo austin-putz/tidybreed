@@ -53,8 +53,12 @@
 #' After calibration the delivered covariance is compared with what another
 #' population sees (§7.4 of the plan): the **pool expectation** `2 Cov(H)`
 #' when the base is the founder pool, the **observed** `Cov(X)` when it selects
-#' individuals, and the genic limit under `anchor = "realised"`. A relative
-#' spectrum outside `warn_bounds` is a warning. Nothing is stored.
+#' individuals, and the genic limit under `anchor = "realised"`. The founder
+#' pool's comparison is always a message: a small pool's departure is its
+#' sampling LD, not a mistake in the call. To get the target exactly in the
+#' founders, add them first and calibrate with `anchor = "realised"` on them.
+#' The observed and genic-limit comparisons warn when the relative spectrum
+#' leaves `warn_bounds`. Nothing is stored.
 #'
 #' @section Targets:
 #' The target is the population-wide (or line) `additive` block of
@@ -194,7 +198,9 @@
 #' @param scale_to_target Logical. `TRUE` (default) calibrates sampled effects
 #'   to the target. `FALSE` writes the draw unscaled and takes no target.
 #' @param warn_bounds Numeric length 2, `c(lower, upper)` with
-#'   `0 < lower <= upper`, or `NULL` to turn the comparison warning off.
+#'   `0 < lower <= upper`, or `NULL` to turn the comparison off. Outside
+#'   the bounds, an observed or genic-limit comparison warns; a founder-pool
+#'   comparison adds the realised-anchor hint to its message.
 #'   Default `c(0.8, 1.25)` (±25%, multiplicative).
 #' @param seed Optional integer, applied with [set.seed()] after every check
 #'   and immediately before the draw, so a refused call never touches the RNG.
@@ -1031,6 +1037,7 @@ QTL_REALISED_MAX_CELLS <- 2e7
   if (target$rank == 0L) return(invisible(NULL))
   conn <- pop$db_conn
   locus_ids <- genome_order$locus_id[rows]
+  pool <- FALSE
   if (anchor == "realised") {
     p <- p_base[rows]
     cand  <- crossprod(B * sqrt(2 * p * (1 - p)))
@@ -1058,6 +1065,7 @@ QTL_REALISED_MAX_CELLS <- 2e7
     Hc <- sweep(H, 2L, colMeans(H), "-")
     cand  <- 2 * crossprod(Hc %*% B) / (nrow(H) - 1)
     label <- "founder pool (pool expectation under random pairing)"
+    pool  <- TRUE
   } else if (base_tbl$table_name == "ind_haplotype") {
     return(invisible(NULL))
   } else {
@@ -1074,7 +1082,18 @@ QTL_REALISED_MAX_CELLS <- 2e7
     label <- "base individuals (observed)"
   }
   spec <- .qtl_relative_spectrum(target, cand)
-  if (min(spec) < warn_bounds[1] || max(spec) > warn_bounds[2]) {
+  outside <- min(spec) < warn_bounds[1] || max(spec) > warn_bounds[2]
+  if (pool) {
+    # A pool's departure is its sampling LD, not a mistake in the call (Q22):
+    # always reported, never a warning.
+    message("The ", label, " sees relative spectrum ",
+            .qtl_spectrum_text(spec), " of the target (sampling LD of ", n_h,
+            " haplotypes).",
+            if (outside) paste0(
+              " For the target exactly in the founders, add them first and ",
+              "call again with anchor = \"realised\" and base_tbl = those ",
+              "individuals."))
+  } else if (outside) {
     warning("The calibration is exact under the ", anchor, " anchor, but the ",
             label, " sees a covariance departing from the target: relative ",
             "spectrum ", .qtl_spectrum_text(spec), " outside warn_bounds [",
