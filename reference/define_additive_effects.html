@@ -21,7 +21,7 @@ component is the breeding value.'><meta property="og:image" content="https://aus
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -250,6 +250,13 @@ never silently ignores a stored target. Filter them away with
 <code>trait_var_comp_tbl</code> to say so explicitly.</p></li>
 </ul><p>With <code>line_name = "C"</code> the default reads line C's block when one exists and
 otherwise the population-wide one.</p>
+<p>A new <code>G</code> must not leave other generated terms describing the old target.
+A call replaces only its own scope, so <code>G</code> is refused when generated
+additive terms of a line with no target of its own fell back to the target
+it would write; the error gives the route (give that line its own <code>G</code>
+first). Terms of another <code>parent_origin</code> at the same target scope cannot get
+their own target (targets are per line), so the call writes and warns,
+naming the scopes to re-run without <code>G</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="generated-means-calibrated">Generated means calibrated<a class="anchor" aria-label="anchor" href="#generated-means-calibrated"></a></h2>

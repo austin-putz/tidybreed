@@ -48,8 +48,9 @@ effect generators read it and never overwrite it either.
 A target is written before its effects are generated, or with them. A
 genetic block is refused when any of its traits already has terms of that
 kind written by a generator (owner &quot;generated&quot;) at the block's scope:
-population-wide terms for line_name = NULL, line-&quot;C&quot; terms for
-line_name = &quot;C&quot;. Those terms were calibrated to the target they were
+line-&quot;C&quot; terms for line_name = &quot;C&quot;; for line_name = NULL, the
+population-wide terms and the terms of every line with no block of its own
+(the generator calibrated those to the population-wide target). Those terms were calibrated to the target they were
 generated with, and a new target would not describe them; the prevalence
 threshold of define_phenotype() trusts the stored target for exactly that
 reason. The refusal holds after the old block is removed too. To change
@@ -109,8 +110,9 @@ effect generators read it and never overwrite it either.
 A target is written before its effects are generated, or with them. A
 genetic block is refused when any of its traits already has terms of that
 kind written by a generator (owner &quot;generated&quot;) at the block's scope:
-population-wide terms for line_name = NULL, line-&quot;C&quot; terms for
-line_name = &quot;C&quot;. Those terms were calibrated to the target they were
+line-&quot;C&quot; terms for line_name = &quot;C&quot;; for line_name = NULL, the
+population-wide terms and the terms of every line with no block of its own
+(the generator calibrated those to the population-wide target). Those terms were calibrated to the target they were
 generated with, and a new target would not describe them; the prevalence
 threshold of define_phenotype() trusts the stored target for exactly that
 reason. The refusal holds after the old block is removed too. To change
@@ -129,7 +131,7 @@ refused as input."><meta property="og:image" content="https://austin-putz.github
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -204,8 +206,9 @@ effect generators read it and never overwrite it either.</p>
 <p><strong>A target is written before its effects are generated, or with them.</strong> A
 genetic block is refused when any of its traits already has terms of that
 kind written by a generator (owner <code>"generated"</code>) at the block's scope:
-population-wide terms for <code>line_name = NULL</code>, line-<code>"C"</code> terms for
-<code>line_name = "C"</code>. Those terms were calibrated to the target they were
+line-<code>"C"</code> terms for <code>line_name = "C"</code>; for <code>line_name = NULL</code>, the
+population-wide terms and the terms of every line with no block of its own
+(the generator calibrated those to the population-wide target). Those terms were calibrated to the target they were
 generated with, and a new target would not describe them; the prevalence
 threshold of <code><a href="define_phenotype.html">define_phenotype()</a></code> trusts the stored target for exactly that
 reason. The refusal holds after the old block is removed too. To change

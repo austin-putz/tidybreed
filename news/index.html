@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,14 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.74.2" id="tidybreed-0742-2026-10-04">tidybreed 0.74.2 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0742-2026-10-04"></a></h2>
+<p>Review fixes for step 3b (<code>plans/import_qtl_effect_methods_phase_3.md</code>, “3b review”). Both close a way to leave generated terms describing a target other than the stored one, which the prevalence threshold would then trust.</p>
+<ul><li>
+<strong><code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> now sees line terms that fell back to the population-wide target.</strong> Line terms generated with no line target of their own are calibrated to the population-wide target; a new population-wide target is now refused while they exist, as it already was for population-wide terms.</li>
+<li>
+<strong><code>define_additive_effects(G = )</code> checks the other scopes of its target.</strong> A call replaces only its own scope. It now refuses a new target that line terms without their own target fell back to (route: give that line its own <code>G</code> first), and warns, naming the scopes to re-run, for terms of another <code>parent_origin</code> on the same target (targets are per line, so refusing would deadlock). Both checks run before the seed.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.1" id="tidybreed-0741-2026-10-04">tidybreed 0.74.1 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0741-2026-10-04"></a></h2>
 <p>Step 3b of <code>plans/import_qtl_effect_methods.md</code> (Q21: <em>generated</em> means <em>calibrated</em>; plan in <code>plans/import_qtl_effect_methods_phase_3_plan.md</code>). <strong>Breaking.</strong> Seeded output of calibrated calls is unchanged.</p>

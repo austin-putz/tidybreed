@@ -71,10 +71,11 @@ it either.
 **A target is written before its effects are generated, or with them.**
 A genetic block is refused when any of its traits already has terms of
 that kind written by a generator (owner `"generated"`) at the block's
-scope: population-wide terms for `line_name = NULL`, line-`"C"` terms
-for `line_name = "C"`. Those terms were calibrated to the target they
-were generated with, and a new target would not describe them; the
-prevalence threshold of
+scope: line-`"C"` terms for `line_name = "C"`; for `line_name = NULL`,
+the population-wide terms and the terms of every line with no block of
+its own (the generator calibrated those to the population-wide target).
+Those terms were calibrated to the target they were generated with, and
+a new target would not describe them; the prevalence threshold of
 [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
 trusts the stored target for exactly that reason. The refusal holds
 after the old block is removed too. To change the target, remove the old
