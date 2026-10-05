@@ -21,7 +21,6 @@ $trait_refs: list of lists, each with:
 - placeholder: unique R symbol name for the pre-fetched vector
 - call:        the reference as written, for messages
 $expr: \code{expr} with every reference replaced by its placeholder
-$has_scalar_constant: logical
 }
 \description{
 One depth-first pass. Each bare trait symbol or DSL call becomes one

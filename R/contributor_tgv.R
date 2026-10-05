@@ -30,12 +30,15 @@ NULL
 #' @param what Prefix for error messages, e.g. `"Residual condition lookup"`.
 #' @keywords internal
 .read_one_per_id <- function(conn, table, column, ids, what) {
-  if (!table %in% DBI::dbListTables(conn)) {
-    stop(what, ": table '", table, "' does not exist.", call. = FALSE)
+  tables <- DBI::dbListTables(conn)
+  if (!table %in% tables) {
+    stop(what, ": table '", table, "' does not exist.",
+         .case_hint(table, tables), call. = FALSE)
   }
-  if (!column %in% DBI::dbListFields(conn, table)) {
+  fields <- DBI::dbListFields(conn, table)
+  if (!column %in% fields) {
     stop(what, ": column '", column, "' not found in table '", table, "'.",
-         call. = FALSE)
+         .case_hint(column, fields), call. = FALSE)
   }
   rows    <- .ap_read_by_id(conn, table, ids, column)
   counts  <- table(rows$id_ind)

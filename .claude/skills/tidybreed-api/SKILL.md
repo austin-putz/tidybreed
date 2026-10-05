@@ -633,8 +633,9 @@ pop |> define_genome_effect_terms(
     column. Any other call (only `+ - * / ^`, parentheses, numbers and the
     math whitelist are allowed — the expression is `eval()`ed), an unknown
     or extra positional argument, or a non-identifier `col` / `table` is an
-    error in `define_phenotype()`, before anything is written. A numeric
-    constant warns.
+    error in `define_phenotype()`, before anything is written. Numbers
+    (weights, offsets) are accepted silently. Table and column names match
+    exactly; a case-only mismatch gets a "did you mean" hint (`.case_hint()`).
   - `prevalence` (categorical, two categories) — the threshold is
     `mean + qnorm(1 - prevalence) * sqrt(Vg + Ve)`, with `Vg` the active-block
     sum (`.ap_prevalence_genetic_var()`): the trait's stored population-wide

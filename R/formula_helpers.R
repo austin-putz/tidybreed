@@ -48,7 +48,7 @@
 #'
 #' @param conn DBI connection.
 #' @param formula_tgv Character. The DSL formula string.
-#' @return Invisible NULL on success. Stops on error; warns for scalar constants.
+#' @return Invisible NULL on success. Stops on error.
 #' @keywords internal
 .validate_formula_tgv <- function(conn, formula_tgv) {
   walk_res <- .walk_formula_tgv_ast(.parse_formula_tgv(formula_tgv))
@@ -80,7 +80,8 @@
     if (!ref$type %in% c("group_sum", "group_mean")) next
     where <- paste0("`formula_tgv = \"", formula_tgv, "\"`, ", ref$call)
     if (!ref$table %in% tables) {
-      stop(where, ": table '", ref$table, "' does not exist.", call. = FALSE)
+      stop(where, ": table '", ref$table, "' does not exist.",
+           .case_hint(ref$table, tables), call. = FALSE)
     }
     fields <- DBI::dbListFields(conn, ref$table)
     if (!"id_ind" %in% fields) {
@@ -89,19 +90,23 @@
     }
     if (!ref$col %in% fields) {
       stop(where, ": column '", ref$col, "' not found in table '", ref$table,
-           "'. Add it (e.g. with mutate_table()) before define_phenotype().",
+           "'.", .case_hint(ref$col, fields),
+           " Add it (e.g. with mutate_table()) before define_phenotype().",
            call. = FALSE)
     }
   }
 
-  if (walk_res$has_scalar_constant)
-    warning(
-      "Scalar arithmetic constant detected in `formula_tgv = \"", formula_tgv, "\"`. ",
-      "Adjusting genetic values by a fixed constant is unusual. Proceeding as requested.",
-      call. = FALSE
-    )
-
   invisible(NULL)
+}
+
+
+# " Did you mean 'x'?" when `name` matches one of `choices` only up to case,
+# else "". Names are matched exactly everywhere in tidybreed, although DuckDB
+# itself ignores case, so a case slip gets a hint rather than a silent match.
+.case_hint <- function(name, choices) {
+  hit <- choices[tolower(choices) == tolower(name)]
+  if (length(hit) == 0L) return("")
+  paste0(" Did you mean '", hit[1], "'? Names are case-sensitive.")
 }
 
 
@@ -262,11 +267,9 @@
 #'     - placeholder: unique R symbol name for the pre-fetched vector
 #'     - call:        the reference as written, for messages
 #'   $expr: `expr` with every reference replaced by its placeholder
-#'   $has_scalar_constant: logical
 #' @keywords internal
 .walk_formula_tgv_ast <- function(expr) {
   trait_refs       <- list()
-  has_scalar_const <- FALSE
   allowed_calls    <- c(.FORMULA_ARITH_OPS, .FORMULA_MATH_WHITELIST)
 
   add_ref <- function(trait, type, col, table, component, call) {
@@ -330,10 +333,8 @@
   }
 
   walk <- function(e) {
-    if (is.numeric(e)) {
-      has_scalar_const <<- TRUE
-      return(e)
-    }
+    # Numbers are ordinary weights and offsets (0.5 * dam(WWM)).
+    if (is.numeric(e)) return(e)
     if (is.name(e)) {
       nm <- as.character(e)
       if (nm %in% c(allowed_calls, .FORMULA_TGV_DSL_FUNS)) {
@@ -364,8 +365,7 @@
   }
 
   new_expr <- walk(expr)
-  list(trait_refs = trait_refs, expr = new_expr,
-       has_scalar_constant = has_scalar_const)
+  list(trait_refs = trait_refs, expr = new_expr)
 }
 
 

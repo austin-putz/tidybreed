@@ -189,10 +189,8 @@ mutate_derived <- function(tbl_obj, compute, join_table = NULL,
         call. = FALSE
       )
     }
-    join_ids <- unique(df_primary[[join_by]])
-    df_join  <- dplyr::tbl(con, join_table) |>
-      dplyr::filter(.data[[join_by]] %in% !!join_ids) |>
-      dplyr::collect()
+    df_join <- .md_rows_by_key(con, join_table, join_by,
+                               unique(df_primary[[join_by]]))
 
     df_joined <- dplyr::left_join(
       df_primary, df_join,
@@ -294,10 +292,8 @@ mutate_derived <- function(tbl_obj, compute, join_table = NULL,
       dedup_df <- result_df[!duplicated(result_df$join_id), , drop = FALSE]
 
       # Fetch dest PK + join_by from the destination table
-      dest_pk_df <- dplyr::tbl(con, dest_table) |>
-        dplyr::select(dplyr::all_of(c(dest_pk, join_by))) |>
-        dplyr::filter(.data[[join_by]] %in% !!uid) |>
-        dplyr::collect()
+      dest_pk_df <- .md_rows_by_key(con, dest_table, join_by, uid,
+                                    columns = c(dest_pk, join_by))
 
       # Align: merge preserves Date/POSIXct class on .result column
       merged <- merge(
@@ -342,4 +338,29 @@ mutate_derived <- function(tbl_obj, compute, join_table = NULL,
   }
 
   invisible(pop)
+}
+
+
+#' Rows of `table` whose `key` column is in `values`
+#'
+#' The values (usually individual ids) are registered as a view and joined,
+#' never written into SQL text (CLAUDE.md). `NA` values match nothing, as
+#' they would under `%in%` in SQL.
+#'
+#' @param columns Columns to return; `NULL` returns every column.
+#' @return A tibble.
+#' @keywords internal
+#' @noRd
+.md_rows_by_key <- function(con, table, key, values, columns = NULL) {
+  tmp <- "__md_keys"
+  keys <- data.frame(k = unique(values[!is.na(values)]),
+                     stringsAsFactors = FALSE)
+  duckdb::duckdb_register(con, tmp, keys)
+  on.exit(try(duckdb::duckdb_unregister(con, tmp), silent = TRUE), add = TRUE)
+  q <- function(x) as.character(DBI::dbQuoteIdentifier(con, x))
+  cols <- if (is.null(columns)) "t.*"
+          else paste0("t.", q(unique(columns)), collapse = ", ")
+  tibble::as_tibble(DBI::dbGetQuery(con, paste0(
+    "SELECT ", cols, " FROM ", q(table), " AS t JOIN ", tmp, " AS f ",
+    "ON t.", q(key), " = f.k")))
 }

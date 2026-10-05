@@ -183,19 +183,18 @@ test_that("formula_tgv with invalid R syntax raises a parse error", {
   )
 })
 
-test_that("formula_tgv with scalar constant warns", {
+test_that("formula_tgv with numeric weights and offsets is accepted silently", {
   set.seed(7)
   pop <- make_formula_pop("fA7")
   on.exit(close_pop(pop))
   pop <- setup_ww_traits(pop)
 
-  expect_warning(
+  expect_no_warning(
     define_phenotype(pop, "WW4",
       type        = "continuous",
       mean        = 230,
       residual_var = 180,
-      formula_tgv = "WWD + 0.5 * dam(WWM) - 10"),
-    "Scalar arithmetic constant"
+      formula_tgv = "WWD + 0.5 * dam(WWM) - 10")
   )
 })
 

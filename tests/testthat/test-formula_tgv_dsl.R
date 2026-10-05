@@ -125,9 +125,8 @@ test_that("PH2: references read the total by default and a named component when 
 test_that("PH2: table = reads the named table; group terms differing only in table stay distinct", {
   pop <- dsl_pop("ph2_table")
   on.exit(close_pop(pop), add = TRUE)
-  expect_warning(pop <- define_phenotype(pop, "G2", residual_var = 1,
-    formula_tgv = "group_sum(T, pen) + 2 * group_sum(T, pen, table = \"pens\")"),
-    "Scalar arithmetic constant")
+  pop <- define_phenotype(pop, "G2", residual_var = 1,
+    formula_tgv = "group_sum(T, pen) + 2 * group_sum(T, pen, table = \"pens\")")
   pop <- define_phenotype(pop, "Gc", residual_var = 1,
     formula_tgv = "group_mean(T, pen, table = pens, component = \"additive\")")
   set.seed(8)
@@ -171,18 +170,26 @@ test_that("PH2: define_phenotype() refuses anything outside the DSL, before writ
   bad("group_sum(T, pen, table = \"nope\")", "table 'nope' does not exist")
   bad("group_sum(T, pen, table = \"genome_meta\")", "has no 'id_ind' column")
   bad("group_sum(T, litter)", "column 'litter' not found in table 'ind_meta'")
+  bad("group_sum(T, pen, table = \"Pens\")",
+      "table 'Pens' does not exist. Did you mean 'pens'\\? Names are case-sensitive")
+  bad("group_sum(T, PEN)", "column 'PEN' not found.*Did you mean 'pen'\\?")
   bad("system(\"echo hi\")", "`system\\(\"echo hi\"\\)` is not allowed")
   bad("T + \"a\"", "the constant `\"a\"` is not allowed")
   bad("T + dam", "`dam` is a function name, not a trait")
   bad("T; T", "must be a single expression")
   bad("Q + dam(T)", "Unknown trait name\\(s\\)")
   expect_equal(phenotype_rows(pop), 0L)
+  # The add_phenotype() lookup (components groups and covariates) gives the
+  # same hint.
+  expect_error(.read_one_per_id(pop$db_conn, "Pens", "pen", "A_1", "Lookup"),
+               "Lookup: table 'Pens' does not exist. Did you mean 'pens'\\?")
+  expect_error(.read_one_per_id(pop$db_conn, "pens", "Pen", "A_1", "Lookup"),
+               "column 'Pen' not found in table 'pens'. Did you mean 'pen'\\?")
 
-  # The math whitelist and numbers still work (with the usual constant warning).
-  expect_warning(
+  # The math whitelist and numbers work.
+  expect_no_warning(
     pop <- define_phenotype(pop, "W", residual_var = 1,
-                            formula_tgv = "sqrt(abs(T)) + 0.5 * dam(T)"),
-    "Scalar arithmetic constant")
+                            formula_tgv = "sqrt(abs(T)) + 0.5 * dam(T)"))
   expect_equal(phenotype_rows(pop), 1L)
 })
 
@@ -217,23 +224,6 @@ test_that("3c.2b: Stage 1 evaluates contributor ids without SQL text, as an ind_
                    via_filter[, c("id_ind", "trait_name", "component_name", "tgv_value")])
 })
 
-# Every SQL statement DuckDB receives while `code` runs.
-record_sql <- function(code) {
-  rec <- new.env()
-  rec$sql <- character()
-  # do.call() passes the built expression: trace() quotes its `tracer`.
-  suppressMessages(do.call(trace, list("dbSendQuery",
-    signature = c("duckdb_connection", "character"),
-    tracer = bquote(assign("sql", c(get("sql", envir = .(rec)), statement),
-                           envir = .(rec))),
-    where = asNamespace("DBI"), print = FALSE), quote = TRUE))
-  on.exit(suppressMessages(untrace("dbSendQuery",
-    signature = c("duckdb_connection", "character"),
-    where = asNamespace("DBI"))), add = TRUE)
-  force(code)
-  rec$sql
-}
-
 test_that("3c.2b: no individual id appears in any SQL add_phenotype() sends", {
   # A filtered subset (the plan's ind_meta read), dams and group-mates (the
   # Stage 1 contributor sets), and every lookup after them.
@@ -252,10 +242,7 @@ test_that("3c.2b: no individual id appears in any SQL add_phenotype() sends", {
     add_phenotype(c("T", "W", "C"))))
   expect_gt(length(sql), 20L)
   expect_equal(nrow(dsl_records(pop, "W")), 30L)
-  quoted <- paste0("'", ids, "'")
-  leaked <- quoted[vapply(quoted, function(q) any(grepl(q, sql, fixed = TRUE)),
-                          logical(1))]
-  expect_identical(leaked, character(0))
+  expect_identical(leaked_ids(sql, ids), character(0))
 })
 
 test_that("derived formula: only phenotype names, numbers, operators and math functions", {

@@ -12,7 +12,7 @@
 \item{formula_tgv}{Character. The DSL formula string.}
 }
 \value{
-Invisible NULL on success. Stops on error; warns for scalar constants.
+Invisible NULL on success. Stops on error.
 }
 \description{
 Parses the DSL formula and walks it with \code{.walk_formula_tgv_ast()}, which

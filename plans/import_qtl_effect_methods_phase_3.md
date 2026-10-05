@@ -642,6 +642,45 @@ before the commit.
   grammar under `define_phenotype()` (api), and `.tgv_compute_ids()` in the
   contributor note.
 
+### 3c follow-ups (0.74.4)
+
+These are the three items the 3c review left for after the commit (`67eb28f`).
+
+1. **`mutate_derived()` ids out of SQL.** The `join_table` read and the
+   destination-key read used `filter(.data[[join_by]] %in% !!ids)`.
+   - Both now go through `.md_rows_by_key()`, which registers the key values as
+     a view, joins on the quoted `join_by`, and drops `NA` keys, as SQL `IN`
+     did.
+   - `dbQuoteIdentifier()` is used rather than `validate_sql_identifier()`. The
+     column already has to exist, and refusing SQL keywords would break a
+     legitimate `join_by` such as `date`.
+   - `record_sql()` / `leaked_ids()` moved to `helper-sql.R`, shared by both
+     id gates.
+   - Mutation check: the 0.74.3 `mutate_derived.R` fails the new gate.
+2. **The scalar-constant warning is dropped.** Numbers are part of both
+   grammars. The warning fired on every maternal weight, and was the source of
+   five of the suite's eleven standing warnings.
+3. **Case hint, not case folding.** The alternatives were:
+   - match names case-insensitively, as DuckDB does, which would have meant
+     changing every exact `%in%` check on `pop$tables` and `dbListFields()`;
+   - or keep exact matching everywhere and explain the slip.
+
+   The hint was chosen. `.case_hint()` adds "Did you mean 'pens'? Names are
+   case-sensitive." in `.validate_formula_tgv()` (define time) and in
+   `.read_one_per_id()` (the `add_phenotype()` lookup for `components` groups
+   and covariates), so both places treat a case slip the same way.
+
+**Suite** (`NOT_CRAN=true`): 71 files, 1033 tests, 3892 expectations; 0
+failed, 0 errors, 0 skipped. There are 6 warnings, down from 11; the five
+removed were the scalar-constant warning. The remaining six are pre-existing:
+- `add_founders` named pool;
+- `add_phenotype` on `ind_ebv`;
+- `genome_map` BIGINT;
+- parity;
+- the composite covariate test.
+
+`pkgdown::check_pkgdown()` is clean.
+
 ### Next
 
 Step 3 is complete. The next step in `plans/import_qtl_effect_methods.md` §10

@@ -505,3 +505,23 @@ test_that("primary table columns take precedence when join_table has same column
   expect_true(all(result$trait_name_check == "AP"))
   close_pop(pop)
 })
+
+
+test_that("mutate_derived() never writes ids into SQL text", {
+  # Both id reads (the join_table rows and the destination keys) go through
+  # a registered view.
+  pop <- make_ap_pop()
+  on.exit(close_pop(pop), add = TRUE)
+  ids <- dplyr::collect(get_table(pop, "ind_meta"))$id_ind
+  sql <- record_sql(pop <- suppressMessages(get_table(pop, "ind_phenotype") |>
+    dplyr::filter(phenotype_name == "AP", pheno_number == 1L) |>
+    mutate_derived(
+      compute    = \(df) df$birth_date + as.integer(df$pheno_value),
+      join_table = "ind_meta",
+      join_by    = "id_ind",
+      write_to   = c(ind_meta = "puberty_date"))))
+  expect_gt(length(sql), 0L)
+  expect_identical(leaked_ids(sql, ids), character(0))
+  meta_f <- dplyr::collect(dplyr::filter(get_table(pop, "ind_meta"), sex == "F"))
+  expect_false(anyNA(meta_f$puberty_date))
+})
