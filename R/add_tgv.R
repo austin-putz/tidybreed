@@ -193,6 +193,56 @@ add_tgv <- function(tbl, trait_name = NULL,
     return(invisible(pop))
   }
 
+  .tgv_compute(pop, ids, traits, extra_cols)
+
+  if (!is.null(index_names)) {
+    weight_types <- switch(weight_type,
+                           index    = "index",
+                           economic = "economic",
+                           both     = c("index", "economic"))
+    for (idx in index_names) {
+      .tgv_true_index(conn, ids, idx, weight_types, component_name,
+                      overwrite_index)
+    }
+  }
+
+  invisible(pop)
+}
+
+
+#' Evaluate and write the genetic values of a known set of individuals
+#'
+#' The body of [add_tgv()] after the individuals are resolved, and the entry
+#' point `add_phenotype()`'s Stage 1 uses for contributor sets (dams, sires,
+#' group-mates), so those ids never pass through a rendered `filter()`. Ids
+#' not in `ind_meta` are dropped, as `resolve_subset_ids()` drops them; the
+#' rest are evaluated in sorted order.
+#'
+#' @param ids Character vector of individuals (any order, may repeat).
+#' @param traits Trait names, already resolved.
+#' @param extra_cols Named list of scalar custom fields for `ind_tgv`.
+#' @return `pop`, invisibly.
+#' @keywords internal
+#' @noRd
+.tgv_compute_ids <- function(pop, ids, traits, extra_cols = list()) {
+  conn <- pop$db_conn
+  ids  <- unique(as.character(ids[!is.na(ids)]))
+  if (length(ids) == 0L) return(invisible(pop))
+  tmp <- "__tgv_compute_ids"
+  duckdb::duckdb_register(conn, tmp, data.frame(id_ind = ids,
+                                                stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
+  ids <- DBI::dbGetQuery(conn, paste0(
+    "SELECT DISTINCT m.id_ind FROM ind_meta m JOIN ", tmp,
+    " USING (id_ind) ORDER BY m.id_ind"))$id_ind
+  if (length(ids) == 0L) return(invisible(pop))
+  .tgv_compute(pop, ids, traits, extra_cols)
+}
+
+
+# The evaluation and the ind_tgv write, for resolved ids in sorted order.
+.tgv_compute <- function(pop, ids, traits, extra_cols) {
+  conn  <- pop$db_conn
   model <- .gev_read_model(conn, traits)
   for (t in traits) .gev_require_terms(model, t)
 
@@ -208,18 +258,6 @@ add_tgv <- function(tbl, trait_name = NULL,
             "' (", paste(sort(unique(res$component_name[res$trait_name == t])),
                          collapse = ", "), ").")
   }
-
-  if (!is.null(index_names)) {
-    weight_types <- switch(weight_type,
-                           index    = "index",
-                           economic = "economic",
-                           both     = c("index", "economic"))
-    for (idx in index_names) {
-      .tgv_true_index(conn, ids, idx, weight_types, component_name,
-                      overwrite_index)
-    }
-  }
-
   invisible(pop)
 }
 

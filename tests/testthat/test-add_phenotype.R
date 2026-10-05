@@ -286,7 +286,7 @@ test_that("prevalence on a composite phenotype is refused in define_phenotype()"
   pop <- with_additive_target(pop, "mort", 1)
   expect_error(
     define_phenotype(pop, "mort_total", type = "categorical",
-                     prevalence = 0.1, residual_var = 1, formula_tbv = "mort"),
+                     prevalence = 0.1, residual_var = 1, formula_tgv = "mort"),
     "not supported for a composite phenotype")
   expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_meta"))), 0L)
 })

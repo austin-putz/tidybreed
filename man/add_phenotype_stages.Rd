@@ -8,7 +8,7 @@
 \itemize{
 \item \strong{Stage 1 — PLAN} (\code{.ap_plan()}): decide the final record list for every
 phenotype. Sex expression, the repeatable guard, fixed-effect
-contributions and \code{null_class_action = "skip"}, formula/composite TBV
+contributions and \code{null_class_action = "skip"}, formula/composite genetic-value
 evaluation and \code{missing_component_action}, path classification,
 \code{pheno_number} assignment, the residual condition value of every record,
 and the random-effect level every record touches. \strong{No random number is

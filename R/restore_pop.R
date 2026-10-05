@@ -224,6 +224,14 @@ restore_pop <- function(db_path,
       "'indicator' and 'interaction'."))
   }
 
+  # v0.74.3: phenotype_meta.formula_tbv became formula_tgv (Q18).
+  if ("phenotype_meta" %in% existing_tables &&
+      "formula_tbv" %in% DBI::dbListFields(db_conn, "phenotype_meta")) {
+    stop_stale(paste0(
+      "carries the pre-v0.74.3 'phenotype_meta' shape (column formula_tbv, ",
+      "now formula_tgv)."))
+  }
+
   # Infer pop_name from filename when not supplied
   if (is.null(pop_name)) {
     base     <- basename(db_path)

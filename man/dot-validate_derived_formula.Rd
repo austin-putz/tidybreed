@@ -15,8 +15,9 @@
 Invisible NULL on success.
 }
 \description{
-Symbols that are not in phenotype_meta generate a warning (not an error),
-allowing config-first workflows where components are defined before their
+The grammar is checked strictly (\code{.check_derived_formula()}). Symbols that
+are not in phenotype_meta generate a warning (not an error), allowing
+config-first workflows where components are defined before their
 dependents. A hard error at add_phenotype() time fires if still missing.
 }
 \keyword{internal}

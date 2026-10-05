@@ -2,7 +2,7 @@
 # formula_helpers.R
 #
 # Internal helpers for formula-based phenotype specification:
-#   - formula_tbv : DSL string for composite TBV assembly
+#   - formula_tgv : DSL string for composite genetic-value assembly
 #   - formula     : arithmetic derivation over existing ind_phenotype records
 # ============================================================================
 
@@ -14,7 +14,7 @@
   "sin", "cos", "tan", "asin", "acos", "atan"
 )
 
-.FORMULA_TBV_DSL_FUNS <- c("self", "dam", "sire", "group_sum", "group_mean")
+.FORMULA_TGV_DSL_FUNS <- c("self", "dam", "sire", "group_sum", "group_mean")
 
 .FORMULA_ARITH_OPS <- c("+", "-", "*", "/", "^", "(", ")")
 
@@ -35,29 +35,25 @@
 }
 
 
-# ── formula_tbv validation ────────────────────────────────────────────────────
+# ── formula_tgv validation ────────────────────────────────────────────────────
 
-#' Validate a formula_tbv string at define_phenotype() time.
+#' Validate a formula_tgv string at define_phenotype() time.
 #'
-#' Parses the DSL formula, walks the AST to collect trait references, and
-#' checks that every trait name is present in trait_meta. Provides close-match
-#' suggestions via agrep() for typos.
+#' Parses the DSL formula and walks it with `.walk_formula_tgv_ast()`, which
+#' refuses any call outside the DSL, the arithmetic operators and the math
+#' whitelist, and any DSL call with an argument it does not take. Then checks
+#' every referenced trait against `trait_meta` (with close-match suggestions
+#' via `agrep()`), and every group `table` / `col` against the database: the
+#' table must exist and hold `id_ind` and the column.
 #'
-#' @param formula_tbv Character. The DSL formula string.
-#' @param known_traits Character vector of trait names from trait_meta.
+#' @param conn DBI connection.
+#' @param formula_tgv Character. The DSL formula string.
 #' @return Invisible NULL on success. Stops on error; warns for scalar constants.
 #' @keywords internal
-.validate_formula_tbv <- function(formula_tbv, known_traits) {
-  expr <- tryCatch(
-    parse(text = formula_tbv, keep.source = FALSE)[[1]],
-    error = function(e)
-      stop("Could not parse `formula_tbv = \"", formula_tbv, "\"`: ",
-           conditionMessage(e), call. = FALSE)
-  )
+.validate_formula_tgv <- function(conn, formula_tgv) {
+  walk_res <- .walk_formula_tgv_ast(.parse_formula_tgv(formula_tgv))
 
-  walk_res <- .walk_formula_tbv_ast(expr)
-
-  # Validate each referenced trait
+  known_traits <- DBI::dbGetQuery(conn, "SELECT trait_name FROM trait_meta")$trait_name
   ref_traits <- unique(vapply(walk_res$trait_refs, `[[`, character(1), "trait"))
   unknown    <- setdiff(ref_traits, known_traits)
 
@@ -71,17 +67,37 @@
         paste0("  '", u, "' → not found in trait_meta")
     }, character(1))
     stop(
-      "Unknown trait name(s) in `formula_tbv = \"", formula_tbv, "\"`:\n",
+      "Unknown trait name(s) in `formula_tgv = \"", formula_tgv, "\"`:\n",
       paste(suggestions, collapse = "\n"), "\n",
       "All symbols must be trait names defined with define_trait() in trait_meta.",
       call. = FALSE
     )
   }
 
+  # Group lookups: the table and column must exist now, not at add_phenotype().
+  tables <- DBI::dbListTables(conn)
+  for (ref in walk_res$trait_refs) {
+    if (!ref$type %in% c("group_sum", "group_mean")) next
+    where <- paste0("`formula_tgv = \"", formula_tgv, "\"`, ", ref$call)
+    if (!ref$table %in% tables) {
+      stop(where, ": table '", ref$table, "' does not exist.", call. = FALSE)
+    }
+    fields <- DBI::dbListFields(conn, ref$table)
+    if (!"id_ind" %in% fields) {
+      stop(where, ": table '", ref$table, "' has no 'id_ind' column, so it ",
+           "cannot give each individual a group.", call. = FALSE)
+    }
+    if (!ref$col %in% fields) {
+      stop(where, ": column '", ref$col, "' not found in table '", ref$table,
+           "'. Add it (e.g. with mutate_table()) before define_phenotype().",
+           call. = FALSE)
+    }
+  }
+
   if (walk_res$has_scalar_constant)
     warning(
-      "Scalar arithmetic constant detected in `formula_tbv = \"", formula_tbv, "\"`. ",
-      "Adjusting TBVs by a fixed constant is unusual. Proceeding as requested.",
+      "Scalar arithmetic constant detected in `formula_tgv = \"", formula_tgv, "\"`. ",
+      "Adjusting genetic values by a fixed constant is unusual. Proceeding as requested.",
       call. = FALSE
     )
 
@@ -89,12 +105,91 @@
 }
 
 
+# Parse a formula_tgv string to one expression.
+.parse_formula_tgv <- function(formula_tgv) {
+  exprs <- tryCatch(
+    parse(text = formula_tgv, keep.source = FALSE),
+    error = function(e)
+      stop("Could not parse `formula_tgv = \"", formula_tgv, "\"`: ",
+           conditionMessage(e), call. = FALSE)
+  )
+  if (length(exprs) != 1L) {
+    stop("`formula_tgv = \"", formula_tgv, "\"` must be a single expression.",
+         call. = FALSE)
+  }
+  exprs[[1]]
+}
+
+
 # ── derived formula validation ────────────────────────────────────────────────
+
+#' Check a derived formula's grammar and return the phenotypes it reads
+#'
+#' The expression is `eval()`ed at `add_phenotype()` time, so only phenotype
+#' names, numbers, the arithmetic operators and the math whitelist are
+#' accepted. Any other call or constant is an error naming it.
+#'
+#' @param expr Parsed R expression.
+#' @param formula The formula string, for messages.
+#' @return Character vector of the phenotype names referenced (unique).
+#' @keywords internal
+.check_derived_formula <- function(expr, formula) {
+  allowed <- c(.FORMULA_ARITH_OPS, .FORMULA_MATH_WHITELIST)
+  where <- paste0("`formula = \"", formula, "\"`: ")
+  syms <- character(0)
+  walk <- function(e) {
+    if (is.numeric(e)) return(invisible())
+    if (is.name(e)) {
+      nm <- as.character(e)
+      if (!nzchar(nm) || nm %in% allowed) {
+        stop(where, "`", nm, "` is not a phenotype name.", call. = FALSE)
+      }
+      syms <<- c(syms, nm)
+      return(invisible())
+    }
+    if (is.call(e)) {
+      head <- e[[1]]
+      fn <- if (is.name(head)) as.character(head) else ""
+      if (!fn %in% allowed) {
+        stop(where, "`", paste(deparse(e, width.cutoff = 500L), collapse = " "),
+             "` is not allowed. Use phenotype names, numbers, the operators ",
+             "+ - * / ^ and the math functions ",
+             paste(.FORMULA_MATH_WHITELIST, collapse = ", "), ".",
+             call. = FALSE)
+      }
+      for (child in as.list(e)[-1]) walk(child)
+      return(invisible())
+    }
+    stop(where, "the constant `", paste(deparse(e), collapse = " "),
+         "` is not allowed; only numbers and phenotype names may appear.",
+         call. = FALSE)
+  }
+  walk(expr)
+  unique(syms)
+}
+
+
+# Parse a derived formula string to one expression.
+.parse_derived_formula <- function(formula) {
+  exprs <- tryCatch(
+    parse(text = formula, keep.source = FALSE),
+    error = function(e)
+      stop("Could not parse `formula = \"", formula, "\"`: ",
+           conditionMessage(e), call. = FALSE)
+  )
+  if (length(exprs) != 1L) {
+    stop("`formula = \"", formula, "\"` must be a single expression.",
+         call. = FALSE)
+  }
+  exprs[[1]]
+}
+
 
 #' Validate a derived formula string at define_phenotype() time.
 #'
-#' Symbols that are not in phenotype_meta generate a warning (not an error),
-#' allowing config-first workflows where components are defined before their
+#' The grammar is checked strictly (`.check_derived_formula()`). Symbols that
+#' are not in phenotype_meta generate a warning (not an error), allowing
+#' config-first workflows where components are defined before their
 #' dependents. A hard error at add_phenotype() time fires if still missing.
 #'
 #' @param formula Character. The arithmetic formula string.
@@ -102,16 +197,7 @@
 #' @return Invisible NULL on success.
 #' @keywords internal
 .validate_derived_formula <- function(formula, known_phenos) {
-  expr <- tryCatch(
-    parse(text = formula, keep.source = FALSE)[[1]],
-    error = function(e)
-      stop("Could not parse `formula = \"", formula, "\"`: ",
-           conditionMessage(e), call. = FALSE)
-  )
-
-  symbols <- .extract_all_symbols(expr)
-  symbols <- setdiff(symbols,
-                     c(.FORMULA_MATH_WHITELIST, .FORMULA_ARITH_OPS))
+  symbols <- .check_derived_formula(.parse_derived_formula(formula), formula)
 
   unknown <- setdiff(symbols, known_phenos)
   if (length(unknown) > 0) {
@@ -135,215 +221,206 @@
 }
 
 
-# ── formula_tbv AST walk ──────────────────────────────────────────────────────
+# ── formula_tgv AST walk ──────────────────────────────────────────────────────
 
-#' Walk the AST of a formula_tbv expression, returning structured trait refs.
+# The arguments each DSL function takes: the positional ones, in order, and
+# the optional named ones. Nothing else is accepted.
+.FORMULA_TGV_DSL_ARGS <- list(
+  self       = list(positional = "trait",          named = "component"),
+  dam        = list(positional = "trait",          named = "component"),
+  sire       = list(positional = "trait",          named = "component"),
+  group_sum  = list(positional = c("trait", "col"), named = c("component", "table")),
+  group_mean = list(positional = c("trait", "col"), named = c("component", "table"))
+)
+
+#' Walk a formula_tgv expression: validate it, collect its references, and
+#' replace each with a placeholder
 #'
-#' Each occurrence of a bare symbol or DSL function call gets a unique
-#' placeholder name (e.g. ".tbv_self_WWD_1", ".tbv_dam_WWM_2") so that the
-#' same trait can appear multiple times with distinct pre-fetched vectors.
+#' One depth-first pass. Each bare trait symbol or DSL call becomes one
+#' reference and is replaced, in the returned expression, by that reference's
+#' unique placeholder symbol (`.tgv_1`, `.tgv_2`, ...), so the same trait can
+#' appear several times with different contributors, components or tables.
 #'
-#' @param expr Parsed R expression (from `parse()[[1]]`).
+#' The DSL: a bare symbol is `self(trait)`; `self(trait)`, `dam(trait)` and
+#' `sire(trait)` take one positional trait; `group_sum(trait, col)` and
+#' `group_mean(trait, col)` take a trait and a group column. All five take an
+#' optional named `component =` (one of [TGV_COMPONENT_NAMES] or `"total"`,
+#' the default); the group functions also take a named `table =` (default
+#' `"ind_meta"`). Trait, column and table are symbols or strings; `col` and
+#' `table` must be SQL identifiers. Any other argument, any call outside the
+#' DSL, the arithmetic operators and the math whitelist, and any constant
+#' that is not a number is an error naming the offending call.
+#'
+#' @param expr Parsed R expression (from `.parse_formula_tgv()`).
 #' @return A list:
 #'   $trait_refs: list of lists, each with:
 #'     - trait:       character trait name
 #'     - type:        "self", "dam", "sire", "group_sum", or "group_mean"
 #'     - col:         group column name (NA for non-group types)
 #'     - table:       group table name  (NA for non-group types)
+#'     - component:   "total" or one ind_tgv.component_name
 #'     - placeholder: unique R symbol name for the pre-fetched vector
+#'     - call:        the reference as written, for messages
+#'   $expr: `expr` with every reference replaced by its placeholder
 #'   $has_scalar_constant: logical
 #' @keywords internal
-.walk_formula_tbv_ast <- function(expr) {
+.walk_formula_tgv_ast <- function(expr) {
   trait_refs       <- list()
   has_scalar_const <- FALSE
-  counter          <- 0L
+  allowed_calls    <- c(.FORMULA_ARITH_OPS, .FORMULA_MATH_WHITELIST)
 
-  recurse <- function(e) {
-    if (is.numeric(e) || is.complex(e)) {
-      has_scalar_const <<- TRUE
-      return()
-    }
-    if (is.name(e)) {
-      nm <- as.character(e)
-      if (nm %in% c(.FORMULA_ARITH_OPS, .FORMULA_MATH_WHITELIST,
-                    .FORMULA_TBV_DSL_FUNS)) return()
-      counter <<- counter + 1L
-      ph <- paste0(".tbv_self_", nm, "_", counter)
-      trait_refs[[length(trait_refs) + 1L]] <<- list(
-        trait = nm, type = "self",
-        col = NA_character_, table = NA_character_,
-        placeholder = ph
-      )
-      return()
-    }
-    if (is.call(e)) {
-      fn <- as.character(e[[1]])
-      if (fn == "self") {
-        tr <- as.character(e[[2]])
-        counter <<- counter + 1L
-        trait_refs[[length(trait_refs) + 1L]] <<- list(
-          trait = tr, type = "self",
-          col = NA_character_, table = NA_character_,
-          placeholder = paste0(".tbv_self_", tr, "_", counter)
-        )
-        return()
-      }
-      if (fn %in% c("dam", "sire")) {
-        tr <- as.character(e[[2]])
-        counter <<- counter + 1L
-        trait_refs[[length(trait_refs) + 1L]] <<- list(
-          trait = tr, type = fn,
-          col = NA_character_, table = NA_character_,
-          placeholder = paste0(".tbv_", fn, "_", tr, "_", counter)
-        )
-        return()
-      }
-      if (fn %in% c("group_sum", "group_mean")) {
-        tr  <- as.character(e[[2]])
-        col <- as.character(e[[3]])
-        # Optional table= argument (named or positional 4th)
-        args <- as.list(e)[-1]
-        tbl  <- "ind_meta"
-        if (!is.null(names(args)) && "table" %in% names(args))
-          tbl <- as.character(args[["table"]])
-        else if (length(args) >= 3)
-          tbl <- as.character(args[[3]])
-        counter <<- counter + 1L
-        trait_refs[[length(trait_refs) + 1L]] <<- list(
-          trait = tr, type = fn,
-          col = col, table = tbl,
-          placeholder = paste0(".tbv_", fn, "_", tr, "_", col, "_", counter)
-        )
-        return()
-      }
-      # Arithmetic / other calls: recurse into arguments
-      for (child in as.list(e)[-1]) recurse(child)
-    }
+  add_ref <- function(trait, type, col, table, component, call) {
+    ph <- paste0(".tgv_", length(trait_refs) + 1L)
+    trait_refs[[length(trait_refs) + 1L]] <<- list(
+      trait = trait, type = type, col = col, table = table,
+      component = component, placeholder = ph, call = call)
+    as.name(ph)
   }
 
-  recurse(expr)
-  list(trait_refs = trait_refs, has_scalar_constant = has_scalar_const)
-}
+  dsl_call <- function(e, fn) {
+    shown <- paste(deparse(e, width.cutoff = 500L), collapse = " ")
+    bad <- function(...) {
+      stop("formula_tgv: ", shown, ": ", ..., call. = FALSE)
+    }
+    spec <- .FORMULA_TGV_DSL_ARGS[[fn]]
+    args <- as.list(e)[-1]
+    nms  <- names(args)
+    if (is.null(nms)) nms <- rep("", length(args))
+    pos  <- args[nms == ""]
+    named <- args[nms != ""]
+    if (length(pos) != length(spec$positional)) {
+      bad(fn, "() takes ", length(spec$positional), " positional argument",
+          if (length(spec$positional) > 1L) "s", " (",
+          paste(spec$positional, collapse = ", "), "), not ", length(pos),
+          if (length(spec$named) > 0L)
+            paste0("; ", paste0("`", spec$named, " =`", collapse = " and "),
+                   " must be named"), ".")
+    }
+    unknown <- setdiff(names(named), spec$named)
+    if (length(unknown) > 0L) {
+      bad(fn, "() has no argument `", unknown[1], "`; it takes ",
+          paste0("`", spec$named, " =`", collapse = " and "), ".")
+    }
+    if (anyDuplicated(names(named))) {
+      bad("argument `", names(named)[anyDuplicated(names(named))],
+          "` is given twice.")
+    }
+    value <- function(x, what) {
+      if (is.name(x)) return(as.character(x))
+      if (is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)) return(x)
+      bad("`", what, "` must be a name or a single string.")
+    }
+    trait <- value(pos[[1]], "trait")
+    col   <- if (length(pos) >= 2L) value(pos[[2]], "col") else NA_character_
+    component <- if (is.null(named$component)) "total"
+                 else value(named$component, "component")
+    if (!component %in% c(TGV_COMPONENT_NAMES, "total")) {
+      bad("`component = \"", component, "\"` must be one of ",
+          paste0("'", c(TGV_COMPONENT_NAMES, "total"), "'", collapse = ", "), ".")
+    }
+    table <- NA_character_
+    if (fn %in% c("group_sum", "group_mean")) {
+      table <- if (is.null(named$table)) "ind_meta" else value(named$table, "table")
+      tryCatch({
+        validate_sql_identifier(col,   what = "group column")
+        validate_sql_identifier(table, what = "group table")
+      }, error = function(err) bad(conditionMessage(err)))
+    }
+    add_ref(trait, if (fn == "self") "self" else fn, col, table, component, shown)
+  }
 
-
-# ── formula_tbv AST substitution ─────────────────────────────────────────────
-
-#' Replace DSL calls and bare symbols in the formula_tbv AST with placeholders.
-#'
-#' Traverses in the same depth-first order as .walk_formula_tbv_ast(), matching
-#' each node to its pre-assigned placeholder from trait_refs (using sequential
-#' .used flags so repeated occurrences are handled correctly).
-#'
-#' @param expr Parsed R expression.
-#' @param trait_refs List from .walk_formula_tbv_ast()$trait_refs.
-#' @return Modified expression with placeholder symbols.
-#' @keywords internal
-.substitute_tbv_ast <- function(expr, trait_refs) {
-  used <- logical(length(trait_refs))
-
-  transform <- function(e) {
-    if (is.name(e)) {
-      nm <- as.character(e)
-      if (nm %in% c(.FORMULA_ARITH_OPS, .FORMULA_MATH_WHITELIST,
-                    .FORMULA_TBV_DSL_FUNS)) return(e)
-      for (i in seq_along(trait_refs)) {
-        r <- trait_refs[[i]]
-        if (!used[i] && r$type == "self" && r$trait == nm) {
-          used[i] <<- TRUE
-          return(as.name(r$placeholder))
-        }
-      }
+  walk <- function(e) {
+    if (is.numeric(e)) {
+      has_scalar_const <<- TRUE
       return(e)
     }
-    if (is.call(e)) {
-      fn <- as.character(e[[1]])
-      if (fn %in% c("self", "dam", "sire")) {
-        tr  <- as.character(e[[2]])
-        typ <- if (fn == "self") "self" else fn
-        for (i in seq_along(trait_refs)) {
-          r <- trait_refs[[i]]
-          if (!used[i] && r$type == typ && r$trait == tr) {
-            used[i] <<- TRUE
-            return(as.name(r$placeholder))
-          }
-        }
+    if (is.name(e)) {
+      nm <- as.character(e)
+      if (nm %in% c(allowed_calls, .FORMULA_TGV_DSL_FUNS)) {
+        stop("formula_tgv: `", nm, "` is a function name, not a trait.",
+             call. = FALSE)
       }
-      if (fn %in% c("group_sum", "group_mean")) {
-        tr  <- as.character(e[[2]])
-        col <- as.character(e[[3]])
-        for (i in seq_along(trait_refs)) {
-          r <- trait_refs[[i]]
-          if (!used[i] && r$type == fn && r$trait == tr && r$col == col) {
-            used[i] <<- TRUE
-            return(as.name(r$placeholder))
-          }
-        }
-      }
-      # Recurse: arithmetic and other calls
-      new_args <- lapply(as.list(e)[-1], transform)
-      as.call(c(list(e[[1]]), new_args))
-    } else {
-      e  # numeric / logical literals pass through
+      return(add_ref(nm, "self", NA_character_, NA_character_, "total", nm))
     }
+    if (is.call(e)) {
+      head <- e[[1]]
+      fn <- if (is.name(head)) as.character(head) else ""
+      if (fn %in% .FORMULA_TGV_DSL_FUNS) return(dsl_call(e, fn))
+      if (!fn %in% allowed_calls) {
+        stop("formula_tgv: `",
+             paste(deparse(e, width.cutoff = 500L), collapse = " "),
+             "` is not allowed. Use the contributor functions ",
+             paste0(.FORMULA_TGV_DSL_FUNS, "()", collapse = ", "),
+             ", the operators + - * / ^ and the math functions ",
+             paste(.FORMULA_MATH_WHITELIST, collapse = ", "), ".",
+             call. = FALSE)
+      }
+      args <- lapply(as.list(e)[-1], walk)
+      return(as.call(c(list(head), args)))
+    }
+    stop("formula_tgv: the constant `",
+         paste(deparse(e), collapse = " "), "` is not allowed; only numbers ",
+         "may appear outside a contributor function.", call. = FALSE)
   }
 
-  transform(expr)
+  new_expr <- walk(expr)
+  list(trait_refs = trait_refs, expr = new_expr,
+       has_scalar_constant = has_scalar_const)
 }
 
 
-# ── TBV vector pre-fetching ───────────────────────────────────────────────────
+# ── Genetic-value pre-fetching ────────────────────────────────────────────────
 
-#' Pre-fetch every TBV vector a `formula_tbv` expression needs
+#' Pre-fetch every genetic-value vector a `formula_tgv` expression needs
 #'
-#' One contributor lookup per trait reference (see `?contributor_tbv`),
-#' returned as a named list ready to be the `eval()` environment.
+#' One contributor lookup per reference (see `?contributor_tgv`), reading
+#' the reference's `component` (`"total"` by default), returned as a named
+#' list ready to be the `eval()` environment.
 #'
-#' @param trait_refs List from `.walk_formula_tbv_ast()$trait_refs`.
+#' @param trait_refs List from `.walk_formula_tgv_ast()$trait_refs`.
 #' @param subset_df The planned `ind_meta` rows.
 #' @return Named list: placeholder -> numeric vector (`NA` = missing piece).
 #' @keywords internal
-.build_tbv_env <- function(pop, trait_refs, subset_df, phenotype_name) {
+.build_tgv_env <- function(pop, trait_refs, subset_df, phenotype_name) {
   conn      <- pop$db_conn
   focal_ids <- as.character(subset_df$id_ind)
-  what      <- paste0("formula_tbv for phenotype '", phenotype_name, "'")
+  what      <- paste0("formula_tgv for phenotype '", phenotype_name, "'")
   env_list  <- list()
   for (ref in trait_refs) {
     env_list[[ref$placeholder]] <- switch(
       ref$type,
-      self       = .tgv_by_id(conn, ref$trait, focal_ids),
-      dam        = .tgv_by_id(conn, ref$trait, subset_df$id_parent_2),
-      sire       = .tgv_by_id(conn, ref$trait, subset_df$id_parent_1),
+      self       = .tgv_by_id(conn, ref$trait, focal_ids, ref$component),
+      dam        = .tgv_by_id(conn, ref$trait, subset_df$id_parent_2,
+                              ref$component),
+      sire       = .tgv_by_id(conn, ref$trait, subset_df$id_parent_1,
+                              ref$component),
       group_sum  = .group_mate_tgv(conn, ref$trait, focal_ids, ref$col,
-                                   ref$table, "sum", what),
+                                   ref$table, "sum", what, ref$component),
       group_mean = .group_mate_tgv(conn, ref$trait, focal_ids, ref$col,
-                                   ref$table, "mean", what))
+                                   ref$table, "mean", what, ref$component))
   }
   env_list
 }
 
 
-# ── Top-level formula_tbv evaluator ──────────────────────────────────────────
+# ── Top-level formula_tgv evaluator ──────────────────────────────────────────
 
-#' Evaluate a formula_tbv string for a set of individuals.
+#' Evaluate a formula_tgv string for a set of individuals.
 #'
-#' Orchestrates: parse → AST walk → TBV pre-fetch → AST substitution → eval().
+#' Orchestrates: parse → AST walk (references replaced by placeholders) →
+#' genetic-value pre-fetch → eval().
 #'
 #' @param pop A tidybreed_pop object.
-#' @param formula_tbv Character. DSL formula string from phenotype_meta.
+#' @param formula_tgv Character. DSL formula string from phenotype_meta.
 #' @param subset_df Data frame: sex-filtered ind_meta rows.
 #' @param phenotype_name Character. Used in error messages.
 #' @return Named numeric vector (names = id_ind). NA marks excluded individuals
-#'         (missing dam/sire TBV, or NA group membership).
+#'         (a missing dam/sire genetic value, or NA group membership).
 #' @keywords internal
-.eval_formula_tbv <- function(pop, formula_tbv, subset_df, phenotype_name) {
-  expr       <- parse(text = formula_tbv, keep.source = FALSE)[[1]]
-  walk_res   <- .walk_formula_tbv_ast(expr)
-  trait_refs <- walk_res$trait_refs
-
-  tbv_env       <- .build_tbv_env(pop, trait_refs, subset_df, phenotype_name)
-  modified_expr <- .substitute_tbv_ast(expr, trait_refs)
-
-  result <- eval(modified_expr, envir = list2env(tbv_env, parent = baseenv()))
+.eval_formula_tgv <- function(pop, formula_tgv, subset_df, phenotype_name) {
+  walk_res <- .walk_formula_tgv_ast(.parse_formula_tgv(formula_tgv))
+  tgv_env  <- .build_tgv_env(pop, walk_res$trait_refs, subset_df, phenotype_name)
+  result   <- eval(walk_res$expr, envir = list2env(tgv_env, parent = baseenv()))
   stats::setNames(as.numeric(result), as.character(subset_df$id_ind))
 }
 
@@ -412,9 +489,9 @@
 #' @keywords internal
 .eval_derived_formula <- function(pop, formula, ids, phenotype_name,
                                   pending = NULL) {
-  expr    <- parse(text = formula, keep.source = FALSE)[[1]]
-  symbols <- .extract_all_symbols(expr)
-  symbols <- setdiff(symbols, c(.FORMULA_MATH_WHITELIST, .FORMULA_ARITH_OPS))
+  # Re-checked here: the stored string is eval()ed below.
+  expr    <- .parse_derived_formula(formula)
+  symbols <- .check_derived_formula(expr, formula)
 
   if (length(ids) == 0) return(numeric(0))
 
@@ -449,7 +526,7 @@
   wide_df <- .pivot_pheno_wide(rows, ids, symbols)
 
   result <- tryCatch(
-    eval(expr, envir = wide_df),
+    eval(expr, envir = wide_df, enclos = baseenv()),
     error = function(e)
       stop("Error evaluating formula '", formula, "' for phenotype '",
            phenotype_name, "': ", conditionMessage(e), call. = FALSE)
@@ -477,7 +554,7 @@
 #' Topologically sort phenotypes for safe evaluation order.
 #'
 #' Derived formula phenotypes depend on other phenotypes being present in
-#' ind_phenotype first. formula_tbv and components phenotypes have no
+#' ind_phenotype first. formula_tgv and components phenotypes have no
 #' inter-phenotype dependencies (they depend on trait_meta, not phenotype_meta).
 #'
 #' Uses Kahn's BFS algorithm. Detects cycles and stops with an informative error.

@@ -718,7 +718,7 @@ pop <- pop |>
   define_phenotype(
     phenotype_name           = "WW",
     type                     = "continuous",         # simple continuous phenotype, 
-    formula_tbv              = "WWD + dam(WWM)",     # DSL: self + dam TBV for 'MILK'
+    formula_tgv              = "WWD + dam(WWM)",     # DSL: own + dam total genetic value
     mean                     = 6.0,
     expressed_sex            = "both",
     missing_component_action = "skip",   # skip founders with no dam record

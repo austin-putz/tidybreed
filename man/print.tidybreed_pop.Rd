@@ -21,7 +21,7 @@ one section each for the \strong{genome} (loci, chromosomes, physical/genetic
 length, founder haplotype pool), the \strong{model} (genetic-component traits,
 observed phenotypes, selection indices, causal loci), the \strong{individuals} (total,
 broken down by sex and by line), and the \strong{records} written so far
-(phenotypes, TBVs, EBVs, index values).
+(phenotypes, genetic values, EBVs, index values).
 
 Sections are shown only when their underlying data exists, so a freshly
 opened population collapses to just the header, the database line, and a

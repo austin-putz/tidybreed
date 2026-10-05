@@ -1,11 +1,11 @@
-#' Contributor lookups for composite and `formula_tbv` phenotypes
+#' Contributor lookups for composite and `formula_tgv` phenotypes
 #'
 #' @description
 #' The one place a contributor of a composite phenotype — the individual
 #' itself, its dam or sire, or its group-mates — becomes a per-individual
-#' value. Both `.assemble_composite_tbv()` (`phenotype_components`) and
-#' `.build_tbv_env()` (`formula_tbv`) read through these helpers, and
-#' `.ap_materialize_tbvs()` uses the same group lookup to decide whose genetic
+#' value. Both `.assemble_composite_tgv()` (`phenotype_components`) and
+#' `.build_tgv_env()` (`formula_tgv`) read through these helpers, and
+#' `.ap_materialize_tgvs()` uses the same group lookup to decide whose genetic
 #' values to compute first. Every lookup reads `ind_tgv`: the total
 #' (`ind_tgv_total`) by default, or the listed components. Individual ids
 #' never appear in SQL text: every lookup joins a registered view.
@@ -16,7 +16,7 @@
 #' `0`; a focal whose group value is `NULL` gets `NA` (a missing component).
 #' `group_table` must have exactly one row per focal individual.
 #'
-#' @name contributor_tbv
+#' @name contributor_tgv
 #' @keywords internal
 NULL
 

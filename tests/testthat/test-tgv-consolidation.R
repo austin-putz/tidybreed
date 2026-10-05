@@ -204,6 +204,10 @@ test_that("T8: archive, remove_rows and restore_pop know ind_tgv, not the old ta
     DBI::dbExecute(conn, sql)
     DBI::dbDisconnect(conn, shutdown = TRUE)
   }
+  # 0.74.3 (Q18): the formula_tbv column became formula_tgv.
+  run_sql("ALTER TABLE phenotype_meta RENAME COLUMN formula_tgv TO formula_tbv")
+  expect_error(restore_pop(tmp), "pre-v0\\.74\\.3 'phenotype_meta' shape")
+  run_sql("ALTER TABLE phenotype_meta RENAME COLUMN formula_tbv TO formula_tgv")
   run_sql("INSERT INTO ind_tgv VALUES (999, 'X_1', 'T', 'order1_additive', 1.0)")
   expect_error(restore_pop(tmp), "pre-v0\\.74\\.0 component names in ind_tgv")
   run_sql("DELETE FROM ind_tgv WHERE id_tgv = 999")

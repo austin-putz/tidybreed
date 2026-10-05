@@ -119,7 +119,7 @@ TABLE_RESERVED_COLS <- list(
                        "expressed_sex", "repeatable", "min_value", "max_value",
                        "prevalence", "thresholds", "cat_values", "cat_names",
                        "store_liability", "missing_component_action",
-                       "condition_change_action", "formula_tbv", "formula"),
+                       "condition_change_action", "formula_tgv", "formula"),
   phenotype_effects    = c("phenotype_name", "effect_name", "effect_class", "source_column",
                        "source_table", "distribution", "levels_json", "slope",
                        "center", "value", "poly_order", "null_class_action"),

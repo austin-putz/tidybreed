@@ -19,8 +19,8 @@
 #' @param type Character. One of `"continuous"`, `"count"`, `"categorical"`,
 #'   or `"derived_formula"`. `"derived_formula"` phenotypes are computed at
 #'   [add_phenotype()] time by evaluating the `formula` expression over already-
-#'   recorded phenotype values for the same individuals; they have no TBV,
-#'   no residual variance, and no QTL of their own.
+#'   recorded phenotype values for the same individuals; they have no genetic
+#'   value, no residual variance, and no QTL of their own.
 #' @param mean Numeric. The intercept. Default `0`. A record is `mean` + the
 #'   genetic value as stored + random effects + residual; nothing is added
 #'   to make the realised mean hit `mean`. Generated effects have mean 0 in
@@ -56,7 +56,7 @@
 #'   [define_genome_effect_terms()] carry values nothing checked against a
 #'   target, so [add_phenotype()] errors for such a trait; give `thresholds`.
 #'   Not valid for composite phenotypes (`components` or
-#'   `formula_tbv`): their genetic liability combines several traits and
+#'   `formula_tgv`): their genetic liability combines several traits and
 #'   contributors, which no stored variance describes. Give `thresholds`
 #'   instead.
 #' @param thresholds Numeric vector of length K−1 for K ordered categories.
@@ -107,19 +107,34 @@
 #'     group contributors.
 #'
 #'   `NULL` (default) → simple single-self trait; `phenotype_components` not
-#'   written. Mutually exclusive with `formula_tbv`.
-#' @param formula_tbv Character. DSL shorthand for assembling a composite
-#'   genetic value from component traits already in `trait_meta`. Every
-#'   reference reads the contributor's **total** genetic value
-#'   (`ind_tgv_total`). A bare trait symbol (e.g. `"WWD"`) means the
-#'   individual's own (`"self"`) value; contributor
-#'   roles can also be given explicitly as function calls: `self(trait)`,
-#'   `dam(trait)`, `sire(trait)`, `group_sum(trait, col)`, and
-#'   `group_mean(trait, col)` (`col` = grouping column in `ind_meta`, e.g.
-#'   pen or litter). These are combined with the arithmetic operators `+`,
-#'   `-`, `*`, `/`, and parentheses (e.g. `"WWD + dam(WWM)"`,
-#'   `"ADG_direct + group_sum(ADG_social, pen_id)"`). Mutually exclusive with
-#'   `components`. Not valid with `type = "derived_formula"`.
+#'   written. Mutually exclusive with `formula_tgv`.
+#' @param formula_tgv Character. DSL shorthand for assembling a composite
+#'   genetic value from component traits already in `trait_meta`. A bare
+#'   trait symbol (e.g. `"WWD"`) is the individual's own (`"self"`) value;
+#'   contributor roles are given as calls:
+#'   - `self(trait)`, `dam(trait)`, `sire(trait)`: one positional trait;
+#'   - `group_sum(trait, col)`, `group_mean(trait, col)`: the sum or mean
+#'     over the individual's group-mates (the *other* individuals with the
+#'     same value of `col`; a group of one gives `0`).
+#'
+#'   Every call takes an optional named `component =`: which genetic value
+#'   of the contributor to read from `ind_tgv` — `"total"` (the default, the
+#'   `ind_tgv_total` view: additive, dominance and every other component),
+#'   or one component, `"additive"` (the breeding value for generated
+#'   effects), `"dominance"`, `"indicator"` or `"interaction"`; a component
+#'   the trait's model has no terms for reads 0. The group calls also take
+#'   a named `table =` (default `"ind_meta"`): the table holding `col`, with
+#'   exactly one row per individual. Both must be named, e.g.
+#'   `"WWD + dam(WWM, component = \"additive\")"` or
+#'   `"ADG_direct + group_sum(ADG_social, pen, table = \"pens\")"`.
+#'
+#'   References combine with `+`, `-`, `*`, `/`, `^`, parentheses, numbers
+#'   and the math functions listed under `formula`. Anything else — another
+#'   function, an unknown or positional extra argument, a component outside
+#'   that list, a `col` or `table` that is not a plain identifier, or a table
+#'   or column that does not exist yet — is an error here, before anything
+#'   is written. Mutually exclusive with `components`. Not valid with
+#'   `type = "derived_formula"`.
 #' @param formula Character. Arithmetic expression evaluated over already-
 #'   recorded phenotype values to produce a derived phenotype (e.g.
 #'   `"ADFI / ADG"` for feed conversion ratio). Phenotype names reference
@@ -213,13 +228,13 @@
 #'       "WWM",              "dam"
 #'     ))
 #'
-#' # ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
+#' # ── Maternal composite via formula_tgv shorthand (equivalent to above) ──
 #' pop <- pop |>
 #'   define_phenotype("WW2",
 #'     type         = "continuous",
 #'     mean         = 230,
 #'     residual_var = 180,
-#'     formula_tbv  = "WWD + dam(WWM)")
+#'     formula_tgv  = "WWD + dam(WWM)")
 #'
 #' # ── SGE (social genetic effects): ADG = direct (self) + social group sum ──
 #' pop <- pop |>
@@ -227,10 +242,10 @@
 #'     type         = "continuous",
 #'     mean         = 850,
 #'     residual_var = 100,
-#'     formula_tbv  = "ADG_direct + group_sum(ADG_social, pen_id)")
+#'     formula_tgv  = "ADG_direct + group_sum(ADG_social, pen_id)")
 #'
 #' # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
-#' # (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)
+#' # (Define ADFI and ADG first, then derive FCR — no genetic value or residual needed)
 #' pop <- pop |>
 #'   define_phenotype("FCR",
 #'     type    = "derived_formula",
@@ -254,7 +269,7 @@ define_phenotype <- function(pop,
                              store_liability          = FALSE,
                              residual_var             = NULL,
                              components               = NULL,
-                             formula_tbv              = NULL,
+                             formula_tgv              = NULL,
                              formula                  = NULL,
                              missing_component_action = c("skip", "error"),
                              condition_change_action  = c("error", "independent"),
@@ -290,7 +305,7 @@ define_phenotype <- function(pop,
     if (has_thresholds && has_prevalence) {
       stop("Supply `thresholds` OR `prevalence`, not both.", call. = FALSE)
     }
-    if (has_prevalence && (!is.null(components) || !is.null(formula_tbv))) {
+    if (has_prevalence && (!is.null(components) || !is.null(formula_tgv))) {
       stop(.prevalence_composite_msg(phenotype_name), call. = FALSE)
     }
 
@@ -316,11 +331,11 @@ define_phenotype <- function(pop,
 
   # ── Formula / derived_formula validation ──────────────────────────────────
 
-  # formula_tbv and components are mutually exclusive
-  if (!is.null(formula_tbv) && !is.null(components))
+  # formula_tgv and components are mutually exclusive
+  if (!is.null(formula_tgv) && !is.null(components))
     stop(
-      "Supply `formula_tbv` OR `components`, not both. ",
-      "`formula_tbv` is the DSL shorthand; `components` is the advanced path ",
+      "Supply `formula_tgv` OR `components`, not both. ",
+      "`formula_tgv` is the DSL shorthand; `components` is the advanced path ",
       "(covariate weights, Legendre polynomial weights).",
       call. = FALSE
     )
@@ -329,7 +344,7 @@ define_phenotype <- function(pop,
   if (!is.null(formula) && type != "derived_formula")
     stop(
       "`formula` requires `type = \"derived_formula\"`. ",
-      "For composite TBV composition use `formula_tbv` instead.",
+      "For a composite genetic value use `formula_tgv` instead.",
       call. = FALSE
     )
 
@@ -344,13 +359,13 @@ define_phenotype <- function(pop,
       )
     if (!is.null(components))
       stop(
-        "`derived_formula` phenotypes have no TBV components. Do not supply `components`.",
+        "`derived_formula` phenotypes have no genetic components. Do not supply `components`.",
         call. = FALSE
       )
-    if (!is.null(formula_tbv))
+    if (!is.null(formula_tgv))
       stop(
-        "`derived_formula` phenotypes use `formula` (not `formula_tbv`). ",
-        "`formula_tbv` is for composite TBV assembly, not arithmetic derivation.",
+        "`derived_formula` phenotypes use `formula` (not `formula_tgv`). ",
+        "`formula_tgv` assembles a composite genetic value, not arithmetic derivation.",
         call. = FALSE
       )
     if (is.null(formula))
@@ -361,19 +376,12 @@ define_phenotype <- function(pop,
       )
   }
 
-  # Validate formula_tbv: parse + trait symbol check (group columns deferred)
-  if (!is.null(formula_tbv)) {
-    if (!is.character(formula_tbv) || length(formula_tbv) != 1 || !nzchar(formula_tbv))
-      stop("`formula_tbv` must be a non-empty character string.", call. = FALSE)
-    known_traits <- DBI::dbGetQuery(
-      pop$db_conn, "SELECT trait_name FROM trait_meta"
-    )$trait_name
-    .validate_formula_tbv(formula_tbv, known_traits)
-    if (grepl("group_sum|group_mean", formula_tbv))
-      message(
-        "Note: group column name(s) in formula_tbv are validated at add_phenotype() ",
-        "time, not now. A clear error is raised then if a column is missing."
-      )
+  # Validate formula_tgv: grammar, traits, and every group table / column
+  if (!is.null(formula_tgv)) {
+    if (!is.character(formula_tgv) || length(formula_tgv) != 1 ||
+        is.na(formula_tgv) || !nzchar(formula_tgv))
+      stop("`formula_tgv` must be a non-empty character string.", call. = FALSE)
+    .validate_formula_tgv(pop$db_conn, formula_tgv)
   }
 
   # Validate derived formula symbols (best-effort — warn if not yet defined)
@@ -557,7 +565,7 @@ define_phenotype <- function(pop,
     store_liability          = as.logical(store_liability),
     missing_component_action = missing_component_action,
     condition_change_action  = condition_change_action,
-    formula_tbv              = if (is.null(formula_tbv)) NA_character_ else formula_tbv,
+    formula_tgv              = if (is.null(formula_tgv)) NA_character_ else formula_tgv,
     formula                  = if (is.null(formula))     NA_character_ else formula
   )
 
@@ -618,7 +626,7 @@ define_phenotype <- function(pop,
   }
 
   msg_suffix <- ""
-  if (!is.null(formula_tbv)) msg_suffix <- " [formula_tbv DSL]"
+  if (!is.null(formula_tgv)) msg_suffix <- " [formula_tgv DSL]"
   if (!is.null(formula))     msg_suffix <- " [derived_formula]"
   message("Added phenotype '", phenotype_name, "' (type: ", type, ")",
           msg_suffix, ".")

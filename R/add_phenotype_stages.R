@@ -5,7 +5,7 @@
 #'
 #' * **Stage 1 — PLAN** (`.ap_plan()`): decide the final record list for every
 #'   phenotype. Sex expression, the repeatable guard, fixed-effect
-#'   contributions and `null_class_action = "skip"`, formula/composite TBV
+#'   contributions and `null_class_action = "skip"`, formula/composite genetic-value
 #'   evaluation and `missing_component_action`, path classification,
 #'   `pheno_number` assignment, the residual condition value of every record,
 #'   and the random-effect level every record touches. **No random number is
@@ -75,7 +75,7 @@ NULL
 #'     \item{`path`}{`"model"`, `"derived_formula"` or `"user_values"`.}
 #'     \item{`id_ind`, `pheno_number`}{The planned records, `id_ind`-ordered.
 #'       `pheno_number` is the value Stage 3 writes.}
-#'     \item{`tbv`}{Numeric per record (`"model"` path only).}
+#'     \item{`tgv`}{Total genetic value per record (`"model"` path only).}
 #'     \item{`fixed`}{Fixed-effect contribution per record (`"model"` path;
 #'       zeros for `"derived_formula"`, which has no model terms).}
 #'     \item{`random`}{Random-effect terms: a list of
@@ -102,9 +102,9 @@ NULL
   # ── Subset ──────────────────────────────────────────────────────────────
   subset_ids <- resolve_subset_ids(tbl, "phenotyping")
   if (!is.null(subset_ids)) {
-    ind_meta_subset <- get_table(pop, "ind_meta") |>
-      dplyr::filter(.data$id_ind %in% !!subset_ids) |>
-      dplyr::collect()
+    # Through a registered view: ids never appear in SQL text.
+    ind_meta_subset <- tibble::as_tibble(.ap_read_by_id(
+      conn, "ind_meta", subset_ids, DBI::dbListFields(conn, "ind_meta")))
   } else {
     ind_meta_subset <- dplyr::collect(get_table(pop, "ind_meta"))
   }
@@ -140,15 +140,15 @@ NULL
     v[is.na(v) | !nzchar(v)] <- NA_character_
     stats::setNames(as.character(v), phenos)
   }
-  formula_tbv_str <- .blank_to_na(pheno_meta$formula_tbv)
+  formula_tgv_str <- .blank_to_na(pheno_meta$formula_tgv)
   formula_str     <- .blank_to_na(pheno_meta$formula)
-  has_formula_tbv <- !is.na(formula_tbv_str)
+  has_formula_tgv <- !is.na(formula_tgv_str)
   has_formula     <- !is.na(formula_str)
 
   # A simple phenotype reads its trait's total genetic value, so the trait
   # needs at least one term, of any kind and any owner. A line-specific-only
   # model qualifies.
-  for (t in phenos[!has_components & !has_formula_tbv & !has_formula]) {
+  for (t in phenos[!has_components & !has_formula_tgv & !has_formula]) {
     n_eff <- nrow(.gev_read_model(conn, t)$terms)
     if (n_eff == 0L) {
       stop(
@@ -168,7 +168,7 @@ NULL
   # .ap_liability_records()). Checked here, before any ind_tgv write or draw.
   # user_values bypass the model, so no threshold is ever placed for them.
   if (is.null(user_values)) {
-    .ap_check_prevalence(pop, pheno_meta, has_components | has_formula_tbv)
+    .ap_check_prevalence(pop, pheno_meta, has_components | has_formula_tgv)
   }
 
   # Derived formulas read the phenotypes they reference, so those go first.
@@ -176,9 +176,9 @@ NULL
     phenos              <- .topo_sort_phenotypes(pheno_meta)
     pheno_meta          <- pheno_meta[match(phenos, pheno_meta$phenotype_name), , drop = FALSE]
     has_components      <- has_components[phenos]
-    has_formula_tbv     <- has_formula_tbv[phenos]
+    has_formula_tgv     <- has_formula_tgv[phenos]
     has_formula         <- has_formula[phenos]
-    formula_tbv_str     <- formula_tbv_str[phenos]
+    formula_tgv_str     <- formula_tgv_str[phenos]
     formula_str         <- formula_str[phenos]
     components_by_pheno <- components_by_pheno[phenos]
   }
@@ -210,9 +210,9 @@ NULL
     }
   }
 
-  # ── TBVs: the one write before Stage 3 (idempotent, RNG-neutral) ────────
-  pop <- .ap_materialize_tbvs(pop, tbl, phenos, has_components, has_formula_tbv,
-                              has_formula, components_by_pheno, formula_tbv_str,
+  # ── Genetic values: the one write before Stage 3 (idempotent, RNG-neutral) ────────
+  pop <- .ap_materialize_tgvs(pop, tbl, phenos, has_components, has_formula_tgv,
+                              has_formula, components_by_pheno, formula_tgv_str,
                               subset_by_pheno)
 
   # ── Per-phenotype record planning ───────────────────────────────────────
@@ -225,9 +225,9 @@ NULL
             else                       "model"
     entries[[t]] <- .ap_plan_phenotype(
       pop, t, pheno_meta[i, , drop = FALSE], subset_by_pheno[[t]], path,
-      tbv_kind = if (has_formula_tbv[t]) "formula_tbv"
+      tgv_kind = if (has_formula_tgv[t]) "formula_tgv"
                  else if (has_components[t]) "components" else "simple",
-      formula_tbv = formula_tbv_str[[t]], formula = formula_str[[t]],
+      formula_tgv = formula_tgv_str[[t]], formula = formula_str[[t]],
       comp_rows = components_by_pheno[[t]], user_values = user_values,
       n_phenos = length(phenos))
   }
@@ -283,16 +283,16 @@ NULL
 }
 
 
-#' Materialize the TBVs Stage 1 reads (simple, composite, formula_tbv)
+#' Materialize the genetic values Stage 1 reads (simple, composite, formula_tgv)
 #' @keywords internal
-.ap_materialize_tbvs <- function(pop, tbl, phenos, has_components,
-                                 has_formula_tbv, has_formula,
-                                 components_by_pheno, formula_tbv_str,
+.ap_materialize_tgvs <- function(pop, tbl, phenos, has_components,
+                                 has_formula_tgv, has_formula,
+                                 components_by_pheno, formula_tgv_str,
                                  subset_by_pheno) {
   conn <- pop$db_conn
-  simple_phenos      <- phenos[!has_components & !has_formula_tbv & !has_formula]
+  simple_phenos      <- phenos[!has_components & !has_formula_tgv & !has_formula]
   composite_phenos   <- phenos[has_components]
-  formula_tbv_phenos <- phenos[has_formula_tbv]
+  formula_tgv_phenos <- phenos[has_formula_tgv]
 
   # Simple: phenotype_name == trait_name in trait_meta
   if (length(simple_phenos) > 0) {
@@ -328,19 +328,17 @@ NULL
       }
     }
     if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
-      contrib_tbl <- get_table(pop, "ind_meta") |>
-        dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tgv(contrib_tbl, trait_name = all_source_traits)
+      pop <- .tgv_compute_ids(pop, all_contributor_ids,
+                              .gev_resolve_traits(conn, all_source_traits))
     }
   }
 
-  # formula_tbv — gather all contributor IDs + source traits via AST walk
-  if (length(formula_tbv_phenos) > 0) {
+  # formula_tgv — gather all contributor IDs + source traits via AST walk
+  if (length(formula_tgv_phenos) > 0) {
     all_source_traits   <- character(0)
     all_contributor_ids <- character(0)
-    for (t in formula_tbv_phenos) {
-      expr      <- parse(text = formula_tbv_str[[t]], keep.source = FALSE)[[1]]
-      walk_res  <- .walk_formula_tbv_ast(expr)
+    for (t in formula_tgv_phenos) {
+      walk_res  <- .walk_formula_tgv_ast(.parse_formula_tgv(formula_tgv_str[[t]]))
       subset_df <- subset_by_pheno[[t]]
       all_source_traits <- unique(c(all_source_traits,
         vapply(walk_res$trait_refs, `[[`, character(1), "trait")))
@@ -351,14 +349,13 @@ NULL
           sire = parent_ids(subset_df$id_parent_1),
           group_sum = , group_mean =
             .group_members(conn, subset_df$id_ind, ref$col, ref$table,
-                           what = paste0("formula_tbv for phenotype '", t, "'")))
+                           what = paste0("formula_tgv for phenotype '", t, "'")))
         all_contributor_ids <- unique(c(all_contributor_ids, ids))
       }
     }
     if (length(all_contributor_ids) > 0 && length(all_source_traits) > 0) {
-      contrib_tbl <- get_table(pop, "ind_meta") |>
-        dplyr::filter(.data$id_ind %in% !!all_contributor_ids)
-      pop <- add_tgv(contrib_tbl, trait_name = all_source_traits)
+      pop <- .tgv_compute_ids(pop, all_contributor_ids,
+                              .gev_resolve_traits(conn, all_source_traits))
     }
   }
 
@@ -368,18 +365,19 @@ NULL
 
 #' Plan the records of one phenotype
 #'
-#' Applies the covariate skip and the TBV exclusions, reads the TBV, and
+#' Applies the covariate skip and the genetic-value exclusions, reads the
+#' genetic value, and
 #' assigns `pheno_number`. Emits the same warnings and messages the
 #' exclusions always have. No RNG, no writes.
 #'
 #' @keywords internal
-.ap_plan_phenotype <- function(pop, t, m, subset_df, path, tbv_kind,
-                               formula_tbv, formula, comp_rows, user_values,
+.ap_plan_phenotype <- function(pop, t, m, subset_df, path, tgv_kind,
+                               formula_tgv, formula, comp_rows, user_values,
                                n_phenos) {
   conn  <- pop$db_conn
   empty <- list(phenotype_name = t, path = path,
                 id_ind = character(0), pheno_number = integer(0),
-                tbv = numeric(0), fixed = numeric(0), random = list(),
+                tgv = numeric(0), fixed = numeric(0), random = list(),
                 condition_table = NULL, condition_column = NULL,
                 condition_value = NULL, user_values = NULL, formula = formula)
 
@@ -424,7 +422,7 @@ NULL
   if (path == "derived_formula") {
     empty$id_ind       <- ids_t
     empty$pheno_number <- next_pheno_numbers(pop, t, ids_t)
-    empty$tbv          <- rep(0, length(ids_t))
+    empty$tgv          <- rep(0, length(ids_t))
     empty$fixed        <- rep(0, length(ids_t))
     return(empty)
   }
@@ -446,48 +444,47 @@ NULL
     }
   }
 
-  # ── TBV ─────────────────────────────────────────────────────────────────
-  if (tbv_kind == "formula_tbv") {
+  # ── Genetic value ─────────────────────────────────────────────────────────────
+  if (tgv_kind == "formula_tgv") {
     mca     <- .ap_missing_action(m)
-    raw_tbv <- .eval_formula_tbv(pop, formula_tbv, subset_df, t)
-    tbv     <- unname(raw_tbv[ids_t])
-    excl    <- is.na(tbv)
+    raw_tgv <- .eval_formula_tgv(pop, formula_tgv, subset_df, t)
+    tgv     <- unname(raw_tgv[ids_t])
+    excl    <- is.na(tgv)
     if (any(excl)) {
       n_excl   <- sum(excl)
       excl_ids <- ids_t[excl]
       msg <- paste0(
         n_excl, " individual(s) had one or more missing components for phenotype '",
-        t, "' (formula_tbv: ", formula_tbv, ") and were excluded. ",
+        t, "' (formula_tgv: ", formula_tgv, ") and were excluded. ",
         "(IDs: ", paste(head(excl_ids, 5), collapse = ", "),
         if (n_excl > 5) paste0(" ... +", n_excl - 5L, " more") else "", ")"
       )
       if (mca == "error") stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
-      ids_t <- ids_t[!excl]; tbv <- tbv[!excl]; terms <- .ap_subset_terms(terms, !excl)
+      ids_t <- ids_t[!excl]; tgv <- tgv[!excl]; terms <- .ap_subset_terms(terms, !excl)
       if (length(ids_t) == 0) {
-        message("Phenotype '", t, "': all individuals excluded (no formula_tbv result).")
+        message("Phenotype '", t, "': all individuals excluded (no formula_tgv result).")
         return(empty)
       }
     }
-  } else if (tbv_kind == "components") {
+  } else if (tgv_kind == "components") {
     mca <- .ap_missing_action(m)
-    tbv  <- unname(.assemble_composite_tbv(pop, t, comp_rows, subset_df,
+    tgv  <- unname(.assemble_composite_tgv(pop, t, comp_rows, subset_df,
                                            missing_component_action = mca)[ids_t])
-    excl <- is.na(tbv)
+    excl <- is.na(tgv)
     if (any(excl)) {
-      ids_t <- ids_t[!excl]; tbv <- tbv[!excl]; terms <- .ap_subset_terms(terms, !excl)
+      ids_t <- ids_t[!excl]; tgv <- tgv[!excl]; terms <- .ap_subset_terms(terms, !excl)
       if (length(ids_t) == 0) {
-        message("Phenotype '", t, "': all individuals excluded (no composite TBV).")
+        message("Phenotype '", t, "': all individuals excluded (no composite genetic value).")
         return(empty)
       }
     }
   } else {
-    tgv <- .tgv_by_id(conn, t, ids_t, "total")
-    tbv <- unname(tgv)
+    tgv <- unname(.tgv_by_id(conn, t, ids_t, "total"))
   }
 
   empty$id_ind       <- ids_t
   empty$pheno_number <- next_pheno_numbers(pop, t, ids_t)
-  empty$tbv          <- as.numeric(tbv)
+  empty$tgv          <- as.numeric(tgv)
   empty$fixed        <- terms$fixed
   empty$random       <- terms$random
   empty
@@ -627,7 +624,7 @@ NULL
 
     r <- residuals[[t]]
     pheno_mean <- if (is.na(m$mean)) 0 else m$mean
-    liability  <- pheno_mean + e$fixed + random_contrib[[t]] + e$tbv + r$value
+    liability  <- pheno_mean + e$fixed + random_contrib[[t]] + e$tgv + r$value
     records[[t]] <- .ap_liability_records(pop, t, m, e, liability, r)
   }
 
@@ -1130,7 +1127,7 @@ NULL
 .prevalence_composite_msg <- function(phenotype_name) {
   paste0(
     "Phenotype '", phenotype_name, "': `prevalence` is not supported for a ",
-    "composite phenotype (`components` or `formula_tbv`). Its genetic ",
+    "composite phenotype (`components` or `formula_tgv`). Its genetic ",
     "liability combines several traits and contributors, which no stored ",
     "variance describes, so the threshold cannot be placed. Give explicit ",
     "liability cutpoints with define_phenotype(thresholds = ) instead.")
@@ -1218,7 +1215,7 @@ NULL
 #'
 #' @param pheno_meta The call's `phenotype_meta` rows.
 #' @param composite Logical, per row: has `phenotype_components` or
-#'   `formula_tbv`.
+#'   `formula_tgv`.
 #' @keywords internal
 .ap_check_prevalence <- function(pop, pheno_meta, composite) {
   for (i in seq_len(nrow(pheno_meta))) {

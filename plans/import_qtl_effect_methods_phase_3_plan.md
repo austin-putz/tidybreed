@@ -6,7 +6,7 @@
 - Gates T1–T9 and PH1–PH8 (§11).
 
 **Versions:** 0.74.0 (3a), 0.74.1 (3b), 0.74.2 (3b review fixes), 0.74.3 (3c).
-**Status:** 3a built 2026-10-04 (0.74.0), 3b built 2026-10-04 (0.74.1); as-built notes in the main plan's Step 3. 3c planned.
+**Status:** built 2026-10-04: 3a (0.74.0), 3b (0.74.1, review fixes 0.74.2), 3c (0.74.3). As-built notes are in the main plan's Step 3; results are in `import_qtl_effect_methods_phase_3.md`.
 **Starting point:** 0.73.2 (`be43687`).
 
 Step 3 makes `ind_tgv` the only table of true genetic values. Every phenotype sees the
@@ -353,6 +353,9 @@ Outside `tests/`:
 - `.substitute_tgv_ast()` matches on **every** ref field. Today it ignores `table`, so
   two group terms differing only in table collide. That is a latent bug, fixed here, and
   a test covers it.
+  *As built:* not a live bug. Both passes visited references in the same order, so
+  each node took its own reference (checked against 0.74.2). The substitution now
+  happens inside the walk, one pass, and the test covers it.
 - `col` and `table` pass `validate_sql_identifier()` (as `define_phenotype.R:517,523`).
   `define_phenotype()` checks that the table exists and has the column. The current
   "validated at `add_phenotype()` time" message goes.

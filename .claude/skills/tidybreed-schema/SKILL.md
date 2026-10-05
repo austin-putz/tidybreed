@@ -368,6 +368,8 @@ SGE ADG) appear only here.
 | cat_names                | VARCHAR | Comma-separated labels per category                           |
 | store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |
 | missing_component_action | VARCHAR | `"skip"` (default) or `"error"` — what to do when any component of a composite phenotype cannot be resolved for an individual |
+| formula_tgv              | VARCHAR | DSL composite genetic value: `self/dam/sire(trait, component =)`, `group_sum/group_mean(trait, col, component =, table =)`, bare symbol = `self`; `component` defaults to `"total"`, `table` to `"ind_meta"`. Fully validated by `define_phenotype()` (grammar, traits, group table/column exist) |
+| formula                  | VARCHAR | Arithmetic over other phenotypes' records (`derived_formula` only) |
 | condition_change_action  | VARCHAR | `"error"` (default) or `"independent"` — what to do when a correlated phenotype's stored residual was drawn under a different residual `condition_level` than the current record resolves to (see `plans/sample_correlated_effects.md` D2/D6). Must agree across every phenotype in one residual covariance block, so it is **block-scoped**: `define_phenotype()` sets it while the phenotype is still a block of one, and `define_condition_change_action()` changes it afterwards, on every member in one transaction |
 
 **Reserved**: all columns (managed by `define_phenotype()`, except
@@ -402,11 +404,13 @@ component). Populated by `define_phenotype(..., components = ...)`. Simple
 group-mates) receives a social contribution of 0 and is not excluded. An individual
 with no group assignment receives `NA` and is handled by `missing_component_action`.
 `group_table` must have exactly one row per focal individual (error otherwise).
-All contributor lookups — self, dam, sire, group, and `formula_tbv`'s
-`dam()`/`sire()`/`group_sum()`/`group_mean()` — go through `R/contributor_tbv.R`
+All contributor lookups — self, dam, sire, group, and `formula_tgv`'s
+`dam()`/`sire()`/`group_sum()`/`group_mean()` — go through `R/contributor_tgv.R`
 (`.tgv_by_id()`, `.group_mate_tgv()`, `.group_members()`), one registered-view
 SQL each; ids never enter SQL text. They read `ind_tgv`: the total by default,
-or the components a row's `component_names` lists.
+or the components a row's `component_names` (or a DSL call's `component =`)
+lists. Stage 1 computes the contributors' genetic values through
+`.tgv_compute_ids()` (`R/add_tgv.R`), which also registers its ids as a view.
 
 **Reserved**: all columns (managed exclusively by
 `define_phenotype(..., components = ...)`).

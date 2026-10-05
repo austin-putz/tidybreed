@@ -34,11 +34,13 @@
 #'   `define_phenotype(..., components = ...)`), `G_i` is the weighted sum of
 #'   contributor genetic values (self, dam, sire, or group): the total by
 #'   default, or the components each row lists in `component_names` — see
-#'   `.assemble_composite_tbv()`.
-#' * For **`formula_tbv`** composite phenotypes (`phenotype_meta.formula_tbv`
-#'   set, written by `define_phenotype(..., formula_tbv = ...)`), `G_i` is
+#'   `.assemble_composite_tgv()`.
+#' * For **`formula_tgv`** composite phenotypes (`phenotype_meta.formula_tgv`
+#'   set, written by `define_phenotype(..., formula_tgv = ...)`), `G_i` is
 #'   evaluated from a small DSL expression referencing self/dam/sire/group
-#'   total genetic values instead of a `phenotype_components` data frame.
+#'   genetic values instead of a `phenotype_components` data frame: the
+#'   total by default, or the one component a reference names with
+#'   `component =` (see [define_phenotype()]).
 #' * `e_i` is the residual, drawn from the phenotype's residual covariance
 #'   block in `phenotype_var_comp` (see [define_residual_cov()]). Within a
 #'   block, residuals are **correlated across phenotypes and sequential in
@@ -69,7 +71,7 @@
 #' When `phenotype_meta.type == "derived_formula"` (`phenotype_meta.formula`
 #' set), the phenotype value is computed directly as an arithmetic expression
 #' over other individuals' already-written `ind_phenotype` records — there is
-#' no TBV, no mean/fixed/random contribution, and no residual draw for that
+#' no genetic value, no mean/fixed/random contribution, and no residual draw for that
 #' phenotype. When a call mixes `derived_formula` phenotypes with others that
 #' feed them, the phenotypes are topologically sorted first so dependencies
 #' are written before the formulas that consume them.
@@ -114,7 +116,7 @@
 #'   (default), all phenotypes in `phenotype_meta` are used in
 #'   `id_phenotype_meta` order.
 #' @param user_residual Optional residuals to use instead of drawing them
-#'   (the mean, covariate and TBV contributions are still computed and
+#'   (the mean, covariate and genetic-value contributions are still computed and
 #'   added). When exactly one phenotype in the call is generated from the
 #'   model, a plain numeric vector matched **by position** to that
 #'   phenotype's planned records — sorted `id_ind` order after sex
@@ -181,7 +183,7 @@
 #' # Unfiltered ind_ebv means "every animal that has an EBV", not everyone
 #' pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
 #'
-#' # Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
+#' # Composite (maternal) phenotype: WW = direct (self) + maternal (dam) genetic value,
 #' # registered once via define_phenotype(components = ...)
 #' pop <- pop |>
 #'   define_phenotype("WW", type = "continuous", mean = 230, residual_var = 180,
@@ -231,7 +233,7 @@
 #' #   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45
 #'
 #' # Escape hatch: supply phenotype values directly (skips the model, but
-#' # still computes and stores TBVs); named vector matches by id_ind
+#' # still computes and stores genetic values); named vector matches by id_ind
 #' pop <- pop |>
 #'   get_table("ind_meta") |>
 #'   dplyr::filter(gen == 0L, sex == "M") |>
@@ -308,13 +310,13 @@ add_phenotype <- function(tbl,
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
-#' Assemble the composite TBV of one phenotype from `phenotype_components`
+#' Assemble the composite genetic value of one phenotype from `phenotype_components`
 #'
 #' Sums `weight * contributor genetic value` over the phenotype's component
-#' rows, one contributor lookup per row (see `?contributor_tbv`). Each row
+#' rows, one contributor lookup per row (see `?contributor_tgv`). Each row
 #' reads its `component_names` (`"total"` by default) from `ind_tgv`, which
 #' must already hold the source traits for every contributor
-#' (`.ap_materialize_tbvs()`). A missing piece — a `NULL` dam or sire, a
+#' (`.ap_materialize_tgvs()`). A missing piece — a `NULL` dam or sire, a
 #' contributor with no `ind_tgv` row, a `NULL` group value, a `NULL`
 #' covariate — makes the individual's composite `NA`.
 #'
@@ -327,7 +329,7 @@ add_phenotype <- function(tbl,
 #' @return Numeric vector named by `id_ind`; `NA` marks an excluded
 #'   individual.
 #' @keywords internal
-.assemble_composite_tbv <- function(pop, phenotype_name, comp_rows, subset_df,
+.assemble_composite_tgv <- function(pop, phenotype_name, comp_rows, subset_df,
                                     missing_component_action) {
   conn      <- pop$db_conn
   focal_ids <- as.character(subset_df$id_ind)

@@ -10,8 +10,8 @@
   m,
   subset_df,
   path,
-  tbv_kind,
-  formula_tbv,
+  tgv_kind,
+  formula_tgv,
   formula,
   comp_rows,
   user_values,
@@ -19,7 +19,8 @@
 )
 }
 \description{
-Applies the covariate skip and the TBV exclusions, reads the TBV, and
+Applies the covariate skip and the genetic-value exclusions, reads the
+genetic value, and
 assigns \code{pheno_number}. Emits the same warnings and messages the
 exclusions always have. No RNG, no writes.
 }

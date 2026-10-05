@@ -1444,13 +1444,13 @@ pop %>% get_table("ind_tgv") %>% filter(trait_name %in% c("WWD", "WWM"))
 # Phenotype: WW - Weaning Weight (composite: WWD + dam(WWM))
 #------------------------------------------------------------#
 
-warning("Define WW phenotype (formula_tbv DSL)")
+warning("Define WW phenotype (formula_tgv DSL)")
 
 pop <- pop %>%
   define_phenotype(
     phenotype_name           = "WW",
     type                     = "continuous",
-    formula_tbv              = "WWD + dam(WWM)",
+    formula_tgv              = "WWD + dam(WWM)",
     mean                     = config$general$wean_weight_mean,
     expressed_sex            = "both",
     repeatable               = FALSE,

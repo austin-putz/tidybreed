@@ -10,7 +10,7 @@
 | 3a | 0.74.0 | Consolidation (P1) + phenotypes read the total (P2) + value names + active-block prevalence rule | **done** 2026-10-04 |
 | 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, owner rule, `define_effect_cov_matrix()` refusal | **done** 2026-10-04 |
 | 3b review | 0.74.2 | Fallback-line scope in the cov refusal; `G =` refuses/warns for stranded scopes | **done** 2026-10-04 |
-| 3c | 0.74.3 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =` | planned |
+| 3c | 0.74.3 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =`, Stage 1 ids out of SQL | **done** 2026-10-04 |
 
 ---
 
@@ -457,8 +457,192 @@ expectations; 0 failed, 0 errors, 0 skipped. 11 warnings, all pre-existing.
 
 **Version shift:** 3c becomes 0.74.3.
 
+## 3c — Q18: `formula_tgv` and the DSL arguments (0.74.3)
+
+Plan: `import_qtl_effect_methods_phase_3_plan.md` §3c, with 3c.2b added after
+3a. **Breaking:** the argument and the `phenotype_meta` column are renamed, and
+the DSL's positional `table` is removed. Seeded output is unchanged.
+
+### What shipped
+
+1. **Rename, no alias.** These are now `formula_tgv`:
+   - `define_phenotype(formula_tbv = )`;
+   - the `phenotype_meta.formula_tbv` column (DDL, `TABLE_RESERVED_COLS`,
+     `schema()` text);
+   - every internal name: `.validate_/.eval_formula_tgv()`,
+     `.walk_formula_tgv_ast()`, `.build_tgv_env()`, `.ap_materialize_tgvs()`,
+     `.assemble_composite_tgv()`, `tgv_kind`, `.FORMULA_TGV_DSL_FUNS`, and the
+     plan entry's `tbv` field (now `tgv`, the total);
+   - `R/contributor_tbv.R` became `R/contributor_tgv.R` (`git mv`), along with
+     its Rd topic.
+
+   `restore_pop()` refuses a file with the old column. "Composite TBV" in
+   roxygen, messages and `schema()` text became "composite genetic value".
+2. **The DSL** (`R/formula_helpers.R`, `.FORMULA_TGV_DSL_ARGS`):
+   - `self` / `dam` / `sire` take one positional trait;
+   - `group_sum` / `group_mean` take `trait, col`;
+   - every call takes a named-only `component =`, which is one of
+     `TGV_COMPONENT_NAMES` or `"total"` (the default);
+   - the group calls take a named-only `table =`, default `"ind_meta"`.
+
+   Trait, column and table may be symbols or strings. `col` and `table` must
+   pass `validate_sql_identifier()`. Each reference reads its own component
+   through `.tgv_by_id()` / `.group_mate_tgv()`.
+3. **One pass.** `.walk_formula_tgv_ast()` validates each reference and
+   replaces it with a `.tgv_<n>` placeholder in the same traversal, returning
+   the substituted expression. `.substitute_tbv_ast()` is deleted.
+4. **Define-time validation** (`.validate_formula_tgv(conn, formula)`). All of
+   the following are checked before any write:
+   - the parse, with exactly one expression;
+   - the grammar;
+   - the traits, with `agrep()` suggestions;
+   - for each group reference, that the table exists, has `id_ind` and has the
+     column.
+
+   The old "validated at `add_phenotype()` time" message is gone.
+5. **3c.2b, Stage 1 ids out of SQL.** `add_tgv()` is split into these parts:
+   - the exported function, which resolves the individuals and writes the true
+     index;
+   - `.tgv_compute()`, which evaluates and writes `ind_tgv`;
+   - `.tgv_compute_ids()`, used by Stage 1 for its contributor sets (dams,
+     sires, group-mates). It registers the ids as a view, joins `ind_meta`, and
+     drops `NA`, repeated and unknown ids, as `resolve_subset_ids()` does.
+
+   Simple phenotypes still pass the user's own table to `add_tgv()`.
+
+### Found while building
+
+- **Arbitrary code ran from a stored formula (security bug).** The old walker
+  recursed into any call, and the evaluator ran the expression in an
+  environment whose parent is `baseenv()`. `formula_tbv = "system('...')"`
+  therefore passed `define_phenotype()`, was stored, and executed at every
+  `add_phenotype()`. A formula may now use only:
+  - the DSL calls;
+  - `+ - * / ^` and parentheses;
+  - numbers;
+  - the math whitelist.
+
+  A string constant outside a call, a function name used as a trait, and a
+  second expression (`"T; T"`) are refused too. Named arguments of the math
+  functions (`round(x, digits = 2)`) still work.
+- **The planned "duplicate-ref" bug was not live.** The old
+  `.substitute_tbv_ast()` ignored `table` when matching. But the walk and the
+  substitution visited references in the same depth-first order, so each node
+  always took its own reference. Checked against 0.74.2 with formulas whose
+  group terms differ only in `table`, in both orders. NEWS and the plan say so;
+  the one-pass design now makes it hold by construction.
+- **No quote can reach an id through the API.** `add_founders()` validates
+  `line_name`, so ids are identifiers. The 3c.2b gate therefore passes ids with
+  quotes straight to `.tgv_compute_ids()` (they are dropped as unknown) and
+  compares 700 ids, plus `NA` and repeats, with an `ind_meta` filter, using
+  `expect_identical()`.
+
+### Deviations from the plan
+
+- `.substitute_tgv_ast()` was dropped, not fixed (item 3), so the planned
+  mutation "drop `table` from ref matching" has no code to mutate. The mutation
+  run instead ignored a named `table =`. Three expectations failed: the
+  table-reading gate, and the refusals of `table = "nope"` and of a table
+  without `id_ind`.
+- **Group column validation moved to define time (design consequence).** The
+  plan asked for it, and it has a cost: a group column must now exist before
+  `define_phenotype()`, so the config-first order no longer works for it.
+  `formula =` (derived) keeps its warn-only check. `components =` groups are
+  still checked only at `add_phenotype()`, as before; that is out of 3c's scope.
+
+### Tests
+
+`test-formula_tgv_dsl.R` (new; fixture: generated additive plus user dominance,
+30 offspring, two pen groupings):
+
+| Gate | What it checks |
+|---|---|
+| PH2 components | `T + dam(T)` reads totals; `dam(T, component = "additive")` reads the dam's additive value, which differs from her total; `sire(T, component = 'dominance')` |
+| PH2 table | `group_sum(T, pen) + 2 * group_sum(T, pen, table = "pens")` matches a hand sum over each grouping (and the groupings differ); `group_mean(..., table = pens, component = "additive")` |
+| PH2 refusals | 19 bad formulas: bogus or non-string component, extra positional, unknown or repeated named argument, nested call, positional `table`, too few arguments, non-identifier `col` / `table`, missing table, table without `id_ind`, missing column, `system()`, a string constant, a function name as trait, two expressions, unknown trait. `phenotype_meta` stays empty |
+| 3c.2b | `.tgv_compute_ids()` on 700 ids (reversed, repeated, `NA`, two quoted unknowns) gives the same `ind_tgv` rows as `filter(id_ind %in% ids) |> add_tgv()` |
+
+Also:
+- `test-formula_phenotype.R`: fC5 now expects the define-time error and an
+  empty `phenotype_meta`;
+- `test-tgv-consolidation.R` T8: the `formula_tbv` refusal;
+- the 36 `formula_tbv` uses in tests are renamed.
+
+### Verification
+
+- **Suite** (`NOT_CRAN=true`): 71 files, 1032 tests, 3891 expectations, after the review
+  fixes; 0 failed, 0 errors, 0 skipped. There are 11 warnings, all
+  pre-existing (the same count as 0.74.2).
+- **Mutation check:** the walker was edited to ignore a named `table =`. Three
+  expectations in `test-formula_tgv_dsl.R` failed. The file was restored and
+  checked afterwards.
+- The touched files pass on their own, and so does T8 with the new
+  `formula_tbv` refusal.
+- `devtools::document()` and `pkgdown::check_pkgdown()` are clean.
+- The introduction vignette, purled and sourced under `load_all()`, runs to the
+  end; its one warning is the old `farm` notice. The swine script parses (its
+  one `formula_tgv` is `"WWD + dam(WWM)"`).
+- **PH8 grep** over `R/`, `tests/`, `man/`, `vignettes/`, `dev/`, `NAMESPACE`,
+  `CLAUDE.md`, `README.md`, `_pkgdown.yml`, `package_summary.md` and the
+  skills, for `ind_tbv`, `add_tbv`, `tbv_value`, `id_tbv`, `formula_tbv`,
+  `order1_`, `.gev_reserved_additive` and `.gev_warn_tbv_stale`. Hits remain
+  only in the code and tests that refuse or check for these names:
+  - `restore_pop()`'s pre-0.74.0 and pre-0.74.3 refusals;
+  - T8's old-shape fixtures;
+  - `test-open_pop.R`'s absence check;
+  - PH3's `order1_additive` refusal.
+
+### 3c review (before commit)
+
+A full review of 3c found two bugs and two stale docs, all fixed in 0.74.3
+before the commit.
+
+1. **3c.2b was incomplete (bug).** `.ap_plan()` still read the phenotyped
+   subset with `filter(id_ind %in% !!subset_ids)`, which renders the ids. It now
+   uses `.ap_read_by_id()`.
+   - The first 3c.2b gate called `.tgv_compute_ids()` directly, so it could not
+     see this.
+   - A new gate traces DuckDB's `dbSendQuery` method, which carries every
+     statement, dbplyr's included. It runs `add_phenotype()` on a filtered
+     subset, with simple, `components` (sire) and `formula_tgv` (dam,
+     component, group) phenotypes, and asserts that no quoted id appears in any
+     of the statements.
+   - Mutation check: with the old `.ap_plan()` filter restored, the gate fails;
+     with the fix, it passes.
+2. **Derived `formula =` could run arbitrary R (security; predates 3c).**
+   Confirmed end to end: `formula = "ADG + nchar(system(...))"` was accepted
+   and the command ran during `add_phenotype()`.
+   - `.check_derived_formula()` now gives the same closed grammar as the DSL
+     (phenotype names, numbers, operators, the math whitelist).
+   - It runs in `.validate_derived_formula()` and again in
+     `.eval_derived_formula()`, which now evaluates with `enclos = baseenv()`.
+   - The gate checks the refusals at define time, and that a malicious formula
+     written straight into `phenotype_meta` is refused at `add_phenotype()`. It
+     sets an environment variable as its payload, and the variable stays unset;
+     no record is written.
+3. **Stale docs.**
+   - The `add_phenotype()` roxygen now says DSL references can read one
+     component.
+   - CLAUDE.md's "One evaluator" rule names `component =`, and a new hard rule
+     says stored formulas have a closed grammar.
+
+**Left for 0.74.4** (agreed with the user):
+- `mutate_derived()` renders join ids into SQL;
+- the scalar-constant warning fires on ordinary weights such as
+  `0.5 * dam(WWM)`;
+- the group-table existence check is case-sensitive, while DuckDB is not.
+
+### Plan bookkeeping
+
+- `plans/import_qtl_effect_methods.md`: Step 3 is marked done, the §10 table
+  marks step 3 done, and an "As built, 3c" paragraph is added.
+- `plans/import_qtl_effect_methods_phase_3_plan.md`: the status line, plus an
+  as-built note on the duplicate-ref item.
+- Skills: `formula_tgv` in the `phenotype_meta` table (schema), the DSL
+  grammar under `define_phenotype()` (api), and `.tgv_compute_ids()` in the
+  contributor note.
+
 ### Next
 
-3c (0.74.3): `formula_tbv` → `formula_tgv`; the DSL's named-only `component =` /
-`table =` with identifier validation; the duplicate-ref fix; Stage 1's ids out of
-SQL text; the PH8 grep.
+Step 3 is complete. The next step in `plans/import_qtl_effect_methods.md` §10
+is step 4 (Part B, 0.75.0).

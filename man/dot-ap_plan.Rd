@@ -23,7 +23,7 @@ in the same order, each with
 \item{\code{path}}{\code{"model"}, \code{"derived_formula"} or \code{"user_values"}.}
 \item{\code{id_ind}, \code{pheno_number}}{The planned records, \code{id_ind}-ordered.
 \code{pheno_number} is the value Stage 3 writes.}
-\item{\code{tbv}}{Numeric per record (\code{"model"} path only).}
+\item{\code{tgv}}{Total genetic value per record (\code{"model"} path only).}
 \item{\code{fixed}}{Fixed-effect contribution per record (\code{"model"} path;
 zeros for \code{"derived_formula"}, which has no model terms).}
 \item{\code{random}}{Random-effect terms: a list of

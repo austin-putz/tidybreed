@@ -575,7 +575,7 @@ test_that("Variable pen sizes (5 and 10) both produce phenotypes without unexpec
 })
 
 
-# ── 13. Contributor lookups (R/contributor_tbv.R) ─────────────────────────────
+# ── 13. Contributor lookups (R/contributor_tgv.R) ─────────────────────────────
 
 test_that("SGE group contribution equals the hand-computed sum / mean of the pen-mates' TBVs, excluding self", {
   set.seed(1301)

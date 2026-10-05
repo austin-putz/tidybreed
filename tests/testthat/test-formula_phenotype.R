@@ -1,7 +1,7 @@
 # Tests for formula-based phenotype specification:
 #   Group A  — Schema / define_phenotype validation
-#   Group B  — formula_tbv maternal model (WW = WWD + 0.5 * dam(WWM))
-#   Group C  — formula_tbv SGE model (ADG_obs = ADG_direct + group_sum(...))
+#   Group B  — formula_tgv maternal model (WW = WWD + 0.5 * dam(WWM))
+#   Group C  — formula_tgv SGE model (ADG_obs = ADG_direct + group_sum(...))
 #   Group D  — derived_formula arithmetic (FCR = ADFI / ADG)
 #   Group E  — Backward compatibility (existing components path unchanged)
 
@@ -73,7 +73,7 @@ setup_sge_traits <- function(pop) {
 
 # ── Group A: Schema / define validation ───────────────────────────────────────
 
-test_that("formula_tbv is stored in phenotype_meta", {
+test_that("formula_tgv is stored in phenotype_meta", {
   set.seed(1)
   pop <- make_formula_pop("fA1")
   on.exit(close_pop(pop))
@@ -83,12 +83,12 @@ test_that("formula_tbv is stored in phenotype_meta", {
     type        = "continuous",
     mean        = 230,
     residual_var = 180,
-    formula_tbv = "WWD + 0.5 * dam(WWM)")
+    formula_tgv = "WWD + 0.5 * dam(WWM)")
 
   pm <- dplyr::collect(get_table(pop, "phenotype_meta"))
   ww <- pm[pm$phenotype_name == "WW", ]
   expect_equal(nrow(ww), 1L)
-  expect_equal(ww$formula_tbv, "WWD + 0.5 * dam(WWM)")
+  expect_equal(ww$formula_tgv, "WWD + 0.5 * dam(WWM)")
   expect_true(is.na(ww$formula))
 })
 
@@ -114,10 +114,10 @@ test_that("formula is stored in phenotype_meta for derived_formula", {
   fcr <- pm[pm$phenotype_name == "FCR", ]
   expect_equal(fcr$formula,   "ADFI / ADG")
   expect_equal(fcr$type, "derived_formula")
-  expect_true(is.na(fcr$formula_tbv))
+  expect_true(is.na(fcr$formula_tgv))
 })
 
-test_that("formula_tbv and components together raises an error", {
+test_that("formula_tgv and components together raises an error", {
   set.seed(3)
   pop <- make_formula_pop("fA3")
   on.exit(close_pop(pop))
@@ -128,12 +128,12 @@ test_that("formula_tbv and components together raises an error", {
       type        = "continuous",
       mean        = 230,
       residual_var = 180,
-      formula_tbv = "WWD + 0.5 * dam(WWM)",
+      formula_tgv = "WWD + 0.5 * dam(WWM)",
       components  = tibble::tribble(
         ~source_trait_name, ~contributor_type,
         "WWD", "self", "WWM", "dam"
       )),
-    "formula_tbv.*OR.*components"
+    "formula_tgv.*OR.*components"
   )
 })
 
@@ -150,7 +150,7 @@ test_that("derived_formula with residual_var raises an error", {
   )
 })
 
-test_that("unknown trait in formula_tbv raises error with close-match suggestion", {
+test_that("unknown trait in formula_tgv raises error with close-match suggestion", {
   set.seed(5)
   pop <- make_formula_pop("fA5")
   on.exit(close_pop(pop))
@@ -162,12 +162,12 @@ test_that("unknown trait in formula_tbv raises error with close-match suggestion
       type        = "continuous",
       mean        = 230,
       residual_var = 180,
-      formula_tbv = "WWD + 0.5 * dam(WWM)"),
+      formula_tgv = "WWD + 0.5 * dam(WWM)"),
     "Unknown trait name"
   )
 })
 
-test_that("formula_tbv with invalid R syntax raises a parse error", {
+test_that("formula_tgv with invalid R syntax raises a parse error", {
   set.seed(6)
   pop <- make_formula_pop("fA6")
   on.exit(close_pop(pop))
@@ -178,12 +178,12 @@ test_that("formula_tbv with invalid R syntax raises a parse error", {
       type        = "continuous",
       mean        = 230,
       residual_var = 180,
-      formula_tbv = "WWD + ("),
+      formula_tgv = "WWD + ("),
     "parse"
   )
 })
 
-test_that("formula_tbv with scalar constant warns", {
+test_that("formula_tgv with scalar constant warns", {
   set.seed(7)
   pop <- make_formula_pop("fA7")
   on.exit(close_pop(pop))
@@ -194,7 +194,7 @@ test_that("formula_tbv with scalar constant warns", {
       type        = "continuous",
       mean        = 230,
       residual_var = 180,
-      formula_tbv = "WWD + 0.5 * dam(WWM) - 10"),
+      formula_tgv = "WWD + 0.5 * dam(WWM) - 10"),
     "Scalar arithmetic constant"
   )
 })
@@ -211,9 +211,9 @@ test_that("derived_formula missing formula raises error", {
 })
 
 
-# ── Group B: formula_tbv maternal model ───────────────────────────────────────
+# ── Group B: formula_tgv maternal model ───────────────────────────────────────
 
-test_that("formula_tbv maternal WW: correct record count and no WW in ind_tgv", {
+test_that("formula_tgv maternal WW: correct record count and no WW in ind_tgv", {
   set.seed(101)
   pop <- make_formula_pop("fB1")
   on.exit(close_pop(pop))
@@ -223,7 +223,7 @@ test_that("formula_tbv maternal WW: correct record count and no WW in ind_tgv", 
     type        = "continuous",
     mean        = 230,
     residual_var = 180,
-    formula_tbv = "WWD + 0.5 * dam(WWM)")
+    formula_tgv = "WWD + 0.5 * dam(WWM)")
 
   pop <- add_offspring_gen(pop, n_off = 40)
 
@@ -239,7 +239,7 @@ test_that("formula_tbv maternal WW: correct record count and no WW in ind_tgv", 
   expect_true("WWM" %in% tbv_traits)
 })
 
-test_that("formula_tbv maternal WW: mean phenotype approximately correct", {
+test_that("formula_tgv maternal WW: mean phenotype approximately correct", {
   set.seed(102)
   pop <- make_formula_pop("fB2")
   on.exit(close_pop(pop))
@@ -249,7 +249,7 @@ test_that("formula_tbv maternal WW: mean phenotype approximately correct", {
     type        = "continuous",
     mean        = 230,
     residual_var = 180,
-    formula_tbv = "WWD + 0.5 * dam(WWM)")
+    formula_tgv = "WWD + 0.5 * dam(WWM)")
 
   pop <- add_offspring_gen(pop, n_off = 80)
   pop <- get_table(pop, "ind_meta") |>
@@ -260,7 +260,7 @@ test_that("formula_tbv maternal WW: mean phenotype approximately correct", {
   expect_equal(mean(ph$pheno_value), 230, tolerance = 40)
 })
 
-test_that("formula_tbv maternal model produces no phenotype_components rows", {
+test_that("formula_tgv maternal model produces no phenotype_components rows", {
   set.seed(103)
   pop <- make_formula_pop("fB3")
   on.exit(close_pop(pop))
@@ -270,13 +270,13 @@ test_that("formula_tbv maternal model produces no phenotype_components rows", {
     type        = "continuous",
     mean        = 230,
     residual_var = 180,
-    formula_tbv = "WWD + 0.5 * dam(WWM)")
+    formula_tgv = "WWD + 0.5 * dam(WWM)")
 
   pc <- dplyr::collect(get_table(pop, "phenotype_components"))
   expect_equal(nrow(pc[pc$phenotype_name == "WW", ]), 0L)
 })
 
-test_that("formula_tbv founders (no dam) are excluded with skip warning", {
+test_that("formula_tgv founders (no dam) are excluded with skip warning", {
   set.seed(104)
   pop <- make_formula_pop("fB4")
   on.exit(close_pop(pop))
@@ -286,7 +286,7 @@ test_that("formula_tbv founders (no dam) are excluded with skip warning", {
     type        = "continuous",
     mean        = 230,
     residual_var = 180,
-    formula_tbv = "WWD + 0.5 * dam(WWM)",
+    formula_tgv = "WWD + 0.5 * dam(WWM)",
     missing_component_action = "skip")
 
   # Founders have no parents — dam TBV will be NA → all excluded with warning
@@ -296,9 +296,9 @@ test_that("formula_tbv founders (no dam) are excluded with skip warning", {
 })
 
 
-# ── Group C: formula_tbv SGE model ────────────────────────────────────────────
+# ── Group C: formula_tgv SGE model ────────────────────────────────────────────
 
-test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tgv", {
+test_that("formula_tgv SGE basic end-to-end: 40 records, ADG_obs not in ind_tgv", {
   set.seed(201)
   pop <- make_formula_pop("fC1")
   on.exit(close_pop(pop))
@@ -308,7 +308,7 @@ test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tgv"
     type        = "continuous",
     mean        = 850,
     residual_var = 300,
-    formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
+    formula_tgv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG_obs")
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
@@ -317,7 +317,7 @@ test_that("formula_tbv SGE basic end-to-end: 40 records, ADG_obs not in ind_tgv"
   expect_false("ADG_obs" %in% tbv_traits)
 })
 
-test_that("formula_tbv group_mean vs group_sum produce different phenotype values", {
+test_that("formula_tgv group_mean vs group_sum produce different phenotype values", {
   set.seed(202)
   pop_sum  <- make_formula_pop("fC2s")
   pop_mean <- make_formula_pop("fC2m")
@@ -327,10 +327,10 @@ test_that("formula_tbv group_mean vs group_sum produce different phenotype value
 
   pop_sum <- define_phenotype(pop_sum, "ADG_obs",
     type = "continuous", mean = 850, residual_var = 300,
-    formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
+    formula_tgv = "ADG_direct + group_sum(ADG_SGE, pen_id)")
   pop_mean <- define_phenotype(pop_mean, "ADG_obs",
     type = "continuous", mean = 850, residual_var = 300,
-    formula_tbv = "ADG_direct + group_mean(ADG_SGE, pen_id)")
+    formula_tgv = "ADG_direct + group_mean(ADG_SGE, pen_id)")
 
   set.seed(301); pop_sum  <- get_table(pop_sum,  "ind_meta") |> add_phenotype("ADG_obs", seed = 99L)
   set.seed(301); pop_mean <- get_table(pop_mean, "ind_meta") |> add_phenotype("ADG_obs", seed = 99L)
@@ -342,7 +342,7 @@ test_that("formula_tbv group_mean vs group_sum produce different phenotype value
   expect_false(isTRUE(all.equal(ph_sum, ph_mean)))
 })
 
-test_that("formula_tbv multiple group terms in one formula work", {
+test_that("formula_tgv multiple group terms in one formula work", {
   set.seed(203)
   pop <- make_formula_pop("fC3")
   on.exit(close_pop(pop))
@@ -369,14 +369,14 @@ test_that("formula_tbv multiple group terms in one formula work", {
     type        = "continuous",
     mean        = 850,
     residual_var = 300,
-    formula_tbv = "ADG_direct + group_sum(SGE_pen, pen_id) + group_sum(SGE_barn, barn_id)")
+    formula_tgv = "ADG_direct + group_sum(SGE_pen, pen_id) + group_sum(SGE_barn, barn_id)")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG_multi")
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 40L)
 })
 
-test_that("formula_tbv explicit table= argument works", {
+test_that("formula_tgv explicit table= argument works", {
   set.seed(204)
   pop <- make_formula_pop("fC4")
   on.exit(close_pop(pop))
@@ -386,30 +386,29 @@ test_that("formula_tbv explicit table= argument works", {
     type        = "continuous",
     mean        = 850,
     residual_var = 300,
-    formula_tbv = "ADG_direct + group_sum(ADG_SGE, pen_id, table = \"ind_meta\")")
+    formula_tgv = "ADG_direct + group_sum(ADG_SGE, pen_id, table = \"ind_meta\")")
 
   pop <- get_table(pop, "ind_meta") |> add_phenotype("ADG_obs")
   ph  <- dplyr::collect(get_table(pop, "ind_phenotype"))
   expect_equal(nrow(ph), 40L)
 })
 
-test_that("formula_tbv missing group column errors at add_phenotype with clear message", {
+test_that("formula_tgv missing group column errors at define_phenotype", {
   set.seed(205)
   pop <- make_formula_pop("fC5")
   on.exit(close_pop(pop))
   pop <- setup_sge_traits(pop)
 
-  # Define formula with a non-existent column name
-  pop <- define_phenotype(pop, "ADG_obs",
-    type        = "continuous",
-    mean        = 850,
-    residual_var = 300,
-    formula_tbv = "ADG_direct + group_sum(ADG_SGE, nonexistent_col)")
-
+  # A non-existent column is refused before anything is written
   expect_error(
-    get_table(pop, "ind_meta") |> add_phenotype("ADG_obs"),
-    "nonexistent_col.*not found"
+    define_phenotype(pop, "ADG_obs",
+      type        = "continuous",
+      mean        = 850,
+      residual_var = 300,
+      formula_tgv = "ADG_direct + group_sum(ADG_SGE, nonexistent_col)"),
+    "column 'nonexistent_col' not found in table 'ind_meta'"
   )
+  expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_meta"))), 0L)
 })
 
 

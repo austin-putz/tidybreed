@@ -10,7 +10,7 @@
 \item{pheno_meta}{The call's \code{phenotype_meta} rows.}
 
 \item{composite}{Logical, per row: has \code{phenotype_components} or
-\code{formula_tbv}.}
+\code{formula_tgv}.}
 }
 \description{
 Runs \code{.ap_prevalence_genetic_var()} for every categorical phenotype placed

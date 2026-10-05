@@ -75,7 +75,7 @@ test_that("a seeded SGE phenotype is bit-identical at 1 and 8 threads", {
     on.exit(close_pop(pop), add = TRUE)
     DBI::dbExecute(pop$db_conn, paste0("SET threads = ", threads))
     pop <- define_phenotype(pop, "W", residual_var = 1,
-                            formula_tbv = "D + group_sum(S, pen_id) + group_mean(D, pen_id)")
+                            formula_tgv = "D + group_sum(S, pen_id) + group_mean(D, pen_id)")
     set.seed(77)
     pop <- pop |> get_table("ind_meta") |> add_phenotype("W")
     DBI::dbGetQuery(pop$db_conn,

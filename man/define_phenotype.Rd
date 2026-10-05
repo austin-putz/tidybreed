@@ -20,7 +20,7 @@ define_phenotype(
   store_liability = FALSE,
   residual_var = NULL,
   components = NULL,
-  formula_tbv = NULL,
+  formula_tgv = NULL,
   formula = NULL,
   missing_component_action = c("skip", "error"),
   condition_change_action = c("error", "independent"),
@@ -36,8 +36,8 @@ define_phenotype(
 \item{type}{Character. One of \code{"continuous"}, \code{"count"}, \code{"categorical"},
 or \code{"derived_formula"}. \code{"derived_formula"} phenotypes are computed at
 \code{\link[=add_phenotype]{add_phenotype()}} time by evaluating the \code{formula} expression over already-
-recorded phenotype values for the same individuals; they have no TBV,
-no residual variance, and no QTL of their own.}
+recorded phenotype values for the same individuals; they have no genetic
+value, no residual variance, and no QTL of their own.}
 
 \item{mean}{Numeric. The intercept. Default \code{0}. A record is \code{mean} + the
 genetic value as stored + random effects + residual; nothing is added
@@ -78,7 +78,7 @@ target, so the target describes them. Terms written with
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} carry values nothing checked against a
 target, so \code{\link[=add_phenotype]{add_phenotype()}} errors for such a trait; give \code{thresholds}.
 Not valid for composite phenotypes (\code{components} or
-\code{formula_tbv}): their genetic liability combines several traits and
+\code{formula_tgv}): their genetic liability combines several traits and
 contributors, which no stored variance describes. Give \code{thresholds}
 instead.}
 
@@ -137,20 +137,37 @@ group contributors.
 }
 
 \code{NULL} (default) → simple single-self trait; \code{phenotype_components} not
-written. Mutually exclusive with \code{formula_tbv}.}
+written. Mutually exclusive with \code{formula_tgv}.}
 
-\item{formula_tbv}{Character. DSL shorthand for assembling a composite
-genetic value from component traits already in \code{trait_meta}. Every
-reference reads the contributor's \strong{total} genetic value
-(\code{ind_tgv_total}). A bare trait symbol (e.g. \code{"WWD"}) means the
-individual's own (\code{"self"}) value; contributor
-roles can also be given explicitly as function calls: \code{self(trait)},
-\code{dam(trait)}, \code{sire(trait)}, \code{group_sum(trait, col)}, and
-\code{group_mean(trait, col)} (\code{col} = grouping column in \code{ind_meta}, e.g.
-pen or litter). These are combined with the arithmetic operators \code{+},
-\code{-}, \code{*}, \code{/}, and parentheses (e.g. \code{"WWD + dam(WWM)"},
-\code{"ADG_direct + group_sum(ADG_social, pen_id)"}). Mutually exclusive with
-\code{components}. Not valid with \code{type = "derived_formula"}.}
+\item{formula_tgv}{Character. DSL shorthand for assembling a composite
+genetic value from component traits already in \code{trait_meta}. A bare
+trait symbol (e.g. \code{"WWD"}) is the individual's own (\code{"self"}) value;
+contributor roles are given as calls:
+\itemize{
+\item \code{self(trait)}, \code{dam(trait)}, \code{sire(trait)}: one positional trait;
+\item \code{group_sum(trait, col)}, \code{group_mean(trait, col)}: the sum or mean
+over the individual's group-mates (the \emph{other} individuals with the
+same value of \code{col}; a group of one gives \code{0}).
+}
+
+Every call takes an optional named \verb{component =}: which genetic value
+of the contributor to read from \code{ind_tgv} — \code{"total"} (the default, the
+\code{ind_tgv_total} view: additive, dominance and every other component),
+or one component, \code{"additive"} (the breeding value for generated
+effects), \code{"dominance"}, \code{"indicator"} or \code{"interaction"}; a component
+the trait's model has no terms for reads 0. The group calls also take
+a named \verb{table =} (default \code{"ind_meta"}): the table holding \code{col}, with
+exactly one row per individual. Both must be named, e.g.
+\verb{"WWD + dam(WWM, component = \\"additive\\")"} or
+\verb{"ADG_direct + group_sum(ADG_social, pen, table = \\"pens\\")"}.
+
+References combine with \code{+}, \code{-}, \code{*}, \code{/}, \code{^}, parentheses, numbers
+and the math functions listed under \code{formula}. Anything else — another
+function, an unknown or positional extra argument, a component outside
+that list, a \code{col} or \code{table} that is not a plain identifier, or a table
+or column that does not exist yet — is an error here, before anything
+is written. Mutually exclusive with \code{components}. Not valid with
+\code{type = "derived_formula"}.}
 
 \item{formula}{Character. Arithmetic expression evaluated over already-
 recorded phenotype values to produce a derived phenotype (e.g.
@@ -260,13 +277,13 @@ pop <- pop |>
       "WWM",              "dam"
     ))
 
-# ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
+# ── Maternal composite via formula_tgv shorthand (equivalent to above) ──
 pop <- pop |>
   define_phenotype("WW2",
     type         = "continuous",
     mean         = 230,
     residual_var = 180,
-    formula_tbv  = "WWD + dam(WWM)")
+    formula_tgv  = "WWD + dam(WWM)")
 
 # ── SGE (social genetic effects): ADG = direct (self) + social group sum ──
 pop <- pop |>
@@ -274,10 +291,10 @@ pop <- pop |>
     type         = "continuous",
     mean         = 850,
     residual_var = 100,
-    formula_tbv  = "ADG_direct + group_sum(ADG_social, pen_id)")
+    formula_tgv  = "ADG_direct + group_sum(ADG_social, pen_id)")
 
 # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
-# (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)
+# (Define ADFI and ADG first, then derive FCR — no genetic value or residual needed)
 pop <- pop |>
   define_phenotype("FCR",
     type    = "derived_formula",

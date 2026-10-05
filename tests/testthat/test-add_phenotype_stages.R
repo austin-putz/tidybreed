@@ -90,7 +90,7 @@ test_that("null_class_action = 'skip': seeded output is identical with or withou
   expect_identical(re_rows(pop_with)$draw_value, re_rows(pop_without)$draw_value)
 })
 
-test_that("composite and formula_tbv exclusions consume no RNG either", {
+test_that("composite and formula_tgv exclusions consume no RNG either", {
   build <- function(name, how) {
     pop <- make_stage_pop(name, traits = c("A_direct", "A_social"))
     pop <- set_col(pop, "pen", "P1")
@@ -106,11 +106,11 @@ test_that("composite and formula_tbv exclusions consume no RNG either", {
     } else {
       pop <- suppressMessages(define_phenotype(
         pop, "A_obs", type = "continuous", mean = 10, residual_var = 1,
-        formula_tbv = "A_direct + group_sum(A_social, pen)"))
+        formula_tgv = "A_direct + group_sum(A_social, pen)"))
     }
     pop
   }
-  for (how in c("components", "formula_tbv")) {
+  for (how in c("components", "formula_tgv")) {
     pop_with    <- build(paste0("st_excl_with_", how), how)
     pop_without <- build(paste0("st_excl_without_", how), how)
 

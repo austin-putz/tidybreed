@@ -26,7 +26,7 @@ individuals that have rows there. A table without \code{id_ind} is an error.}
 \code{id_phenotype_meta} order.}
 
 \item{user_residual}{Optional residuals to use instead of drawing them
-(the mean, covariate and TBV contributions are still computed and
+(the mean, covariate and genetic-value contributions are still computed and
 added). When exactly one phenotype in the call is generated from the
 model, a plain numeric vector matched \strong{by position} to that
 phenotype's planned records — sorted \code{id_ind} order after sex
@@ -98,11 +98,13 @@ function calls internally for every source trait it needs.
 \code{define_phenotype(..., components = ...)}), \code{G_i} is the weighted sum of
 contributor genetic values (self, dam, sire, or group): the total by
 default, or the components each row lists in \code{component_names} — see
-\code{.assemble_composite_tbv()}.
-\item For \strong{\code{formula_tbv}} composite phenotypes (\code{phenotype_meta.formula_tbv}
-set, written by \code{define_phenotype(..., formula_tbv = ...)}), \code{G_i} is
+\code{.assemble_composite_tgv()}.
+\item For \strong{\code{formula_tgv}} composite phenotypes (\code{phenotype_meta.formula_tgv}
+set, written by \code{define_phenotype(..., formula_tgv = ...)}), \code{G_i} is
 evaluated from a small DSL expression referencing self/dam/sire/group
-total genetic values instead of a \code{phenotype_components} data frame.
+genetic values instead of a \code{phenotype_components} data frame: the
+total by default, or the one component a reference names with
+\verb{component =} (see \code{\link[=define_phenotype]{define_phenotype()}}).
 \item \code{e_i} is the residual, drawn from the phenotype's residual covariance
 block in \code{phenotype_var_comp} (see \code{\link[=define_residual_cov]{define_residual_cov()}}). Within a
 block, residuals are \strong{correlated across phenotypes and sequential in
@@ -134,7 +136,7 @@ random effect for within-animal covariance).
 When \code{phenotype_meta.type == "derived_formula"} (\code{phenotype_meta.formula}
 set), the phenotype value is computed directly as an arithmetic expression
 over other individuals' already-written \code{ind_phenotype} records — there is
-no TBV, no mean/fixed/random contribution, and no residual draw for that
+no genetic value, no mean/fixed/random contribution, and no residual draw for that
 phenotype. When a call mixes \code{derived_formula} phenotypes with others that
 feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.
@@ -199,7 +201,7 @@ pop <- pop |>
 # Unfiltered ind_ebv means "every animal that has an EBV", not everyone
 pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
 
-# Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
+# Composite (maternal) phenotype: WW = direct (self) + maternal (dam) genetic value,
 # registered once via define_phenotype(components = ...)
 pop <- pop |>
   define_phenotype("WW", type = "continuous", mean = 230, residual_var = 180,
@@ -249,7 +251,7 @@ pop <- pop |>
 #   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45
 
 # Escape hatch: supply phenotype values directly (skips the model, but
-# still computes and stores TBVs); named vector matches by id_ind
+# still computes and stores genetic values); named vector matches by id_ind
 pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(gen == 0L, sex == "M") |>

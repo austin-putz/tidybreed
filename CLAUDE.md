@@ -158,7 +158,7 @@ The model is split into two distinct layers with a strict boundary between them:
 - One row in `phenotype_meta` per observed phenotype individuals receive records for (e.g. `ADG`, `WW`, `mortality`)
 - For simple traits, `phenotype_name` equals the `trait_name` of its single genetic component
 - For composite traits (maternal, SGE), `phenotype_name` is new and one or more `trait_meta` rows feed into it via `phenotype_components`
-- Arguments: `type`, `mean`, `expressed_sex`, `repeatable`, `min_value`, `max_value`, `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`, `residual_var`, `components`, `formula_tbv`, `formula`, `missing_component_action`
+- Arguments: `type`, `mean`, `expressed_sex`, `repeatable`, `min_value`, `max_value`, `prevalence`, `thresholds`, `cat_values`, `cat_names`, `store_liability`, `residual_var`, `components`, `formula_tgv`, `formula`, `missing_component_action`
 
 **The rule**: if an argument describes the genetics (variance, QTL structure, parent-of-origin), it belongs in `define_trait()`. If it describes what observers record (mean, distribution, sex expression, residual noise, how to assemble from components), it belongs in `define_phenotype()`. Never put observation-layer arguments on `define_trait()` or genetic-layer arguments on `define_phenotype()`.
 
@@ -206,7 +206,7 @@ this file was updated before.
 
 - **IDs:** integer primary keys are assigned by `next_int_id()`, never by DuckDB
   auto-increment. Individual ids never appear in SQL text — register them as a
-  view (`resolve_subset_ids()`, `.ap_read_by_id()`, `R/contributor_tbv.R`).
+  view (`resolve_subset_ids()`, `.ap_read_by_id()`, `R/contributor_tgv.R`).
 - **RNG:** never call `dbWriteTable()` in the `add_phenotype()` path (it advances
   the RNG); sort before every RNG-consuming step; an individual without a record
   must not consume RNG or leave stochastic state. Nothing in `R/` touches
@@ -234,7 +234,13 @@ this file was updated before.
   implementation of the effect math or a second genetic-value table. The
   breeding value is component `additive`. Every phenotype path reads the total
   (`ind_tgv_total`) or the components `phenotype_components.component_names`
-  lists, through `.tgv_read()` / `.tgv_by_id()`.
+  lists (or a `formula_tgv` reference's `component =`), through `.tgv_read()` /
+  `.tgv_by_id()`.
+- **Stored formulas are `eval()`ed, so their grammar is closed:** `formula_tgv`
+  (`.walk_formula_tgv_ast()`) and `formula` (`.check_derived_formula()`) accept
+  only their references, numbers, `+ - * / ^`, parentheses and
+  `.FORMULA_MATH_WHITELIST`, checked in `define_phenotype()` and again before
+  every evaluation. Never widen that to arbitrary calls.
 - **No stored totals or derived values:** no `'total'` row in `ind_tgv` (use the
   `ind_tgv_total` view, which adds the components in a fixed order so it is
   bit-identical at any thread count); `ad_terms()`'s implied mean `μ` is reported, never

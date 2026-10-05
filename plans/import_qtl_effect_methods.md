@@ -1583,7 +1583,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
 | 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
-| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 | 2 (the `line_name` readers, §6C); 3a, 3b **done** |
+| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
 | 5 | Part C | 0.76.0 | 2, 3, 4 |
 
@@ -1781,7 +1781,7 @@ response at the end of that file). Gates R1–R9 in
 - `parent_origin` validated before coercion. Anchor-rank check before `set.seed()`.
 - The mixed-`parent_origin` message states the real reason (one anchor per call).
 
-### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.3) *(planned 2026-10-04, see `import_qtl_effect_methods_phase_3_plan.md`)*
+### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.3) *(done 2026-10-04; plan `import_qtl_effect_methods_phase_3_plan.md`, results `import_qtl_effect_methods_phase_3.md`)*
 
 **Decided while planning (2026-10-04):**
 - `add_tgv()`'s true-index argument is `component_name` (naming rule 1), not `component`
@@ -1846,6 +1846,41 @@ without a stored block, the line scope); the unused-argument gate in
   now count for a population-wide block, and `define_additive_effects(G = )` refuses
   (fallback lines) or warns (other `parent_origin`) for scopes it would strand
   (`.dae_target_dependents()`). Gates in `test-phenotype-total-genetic-value.R`.
+
+**As built, 3c (0.74.3).** PH2 and the Stage 1 id gate are in
+`test-formula_tgv_dsl.R`; the `formula_tbv` refusal is in T8.
+- **The parser is one pass.** `.walk_formula_tgv_ast()` validates each reference
+  and replaces it with a `.tgv_<n>` placeholder as it goes, so
+  `.substitute_tbv_ast()` is gone.
+- **The "duplicate-ref bug" was not real.** The old matcher did ignore `table`,
+  but both passes visited references in the same order. Each node therefore took
+  its own reference, as checked against 0.74.2. The one-pass design makes this
+  hold by construction.
+- **Found while building (security):** the old walker recursed into any call,
+  and `.eval_formula_tbv()` evaluated the expression in an environment whose
+  parent is `baseenv()`. A stored `formula_tbv` such as `system(...)` was
+  therefore run at `add_phenotype()` time. Only the DSL, `+ - * / ^`,
+  parentheses, numbers and the math whitelist are now accepted, and anything
+  else is refused in `define_phenotype()`.
+- **Group tables and columns are checked at define time.** The table must exist
+  with `id_ind` and the column. This ends the config-first order for a group
+  column: add the column before `define_phenotype()`.
+- **3c.2b:** `add_tgv()` is split. The exported function resolves the
+  individuals, and `.tgv_compute()` evaluates and writes. Stage 1 calls
+  `.tgv_compute_ids()`, which registers its ids as a view and joins `ind_meta`.
+  Ids cannot contain a quote through the API (`add_founders()` validates
+  `line_name`), so the gate passes one directly to `.tgv_compute_ids()`, along
+  with 700 ids, `NA` and repeats. The result matches an `ind_meta` filter exactly.
+- PH8 is clean except for the refusal code and its tests: `restore_pop()`'s
+  pre-0.74.0 and pre-0.74.3 checks, T8, `test-open_pop.R`'s absence check, and
+  PH3's `order1_additive` refusal.
+- **Review before commit:**
+  - `.ap_plan()` also rendered the phenotyped subset's ids. It is fixed, and a
+    gate traces every statement `add_phenotype()` sends.
+  - The derived `formula =` path ran arbitrary R (it predates 3c). It now has
+    the same closed grammar, re-checked before `eval()`.
+  - Two stale docs are fixed.
+  - Details are in the results file. Three follow-ups go to 0.74.4.
 
 
 - Consolidation, as specified in §6.3 (tasks 1–7).

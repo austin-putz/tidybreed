@@ -621,6 +621,20 @@ pop |> define_genome_effect_terms(
     component check) before anything is written. A `group` contributor's
     mate sum accumulates exactly (`GEV_ACC_TYPE`, `.group_mate_tgv()`), so
     `group_sum()` / `group_mean()` are bit-identical across thread counts.
+  - `formula_tgv` — DSL shorthand for a composite genetic value (Q18). A bare trait symbol is `self(trait)`;
+    `self(trait)` / `dam(trait)` / `sire(trait)` take one positional trait,
+    `group_sum(trait, col)` / `group_mean(trait, col)` two. Every call takes a
+    named-only `component =` (`TGV_COMPONENT_NAMES` or `"total"`, default
+    `"total"`); the group calls a named-only `table =` (default
+    `"ind_meta"`). `.walk_formula_tgv_ast()` validates and substitutes in one
+    pass (each reference becomes a `.tgv_<n>` placeholder, so two references
+    differing in any argument stay distinct); `.validate_formula_tgv()` also
+    checks the traits and that each group table exists with `id_ind` and the
+    column. Any other call (only `+ - * / ^`, parentheses, numbers and the
+    math whitelist are allowed — the expression is `eval()`ed), an unknown
+    or extra positional argument, or a non-identifier `col` / `table` is an
+    error in `define_phenotype()`, before anything is written. A numeric
+    constant warns.
   - `prevalence` (categorical, two categories) — the threshold is
     `mean + qnorm(1 - prevalence) * sqrt(Vg + Ve)`, with `Vg` the active-block
     sum (`.ap_prevalence_genetic_var()`): the trait's stored population-wide
@@ -628,7 +642,7 @@ pop |> define_genome_effect_terms(
     only if the model has terms of that kind, and **every term must be owned
     by `"generated"`** (the owner rule, 0.74.1, Q21: only generator terms are
     known to deliver the stored target). Refused with `components` /
-    `formula_tbv` (no stored variance describes a composite liability: use
+    `formula_tgv` (no stored variance describes a composite liability: use
     `thresholds`). `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`,
     before any write or draw) when any term is not `"generated"`, a kind of
     term has no stored target, or the model has terms outside the three
@@ -674,9 +688,9 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
      prerequisite): sorted subset, metadata, topological sort of derived
      formulas, sex expression, repeatable guard, fixed-effect terms with
      `null_class_action`, the genetic value (simple: the trait's total,
-     `ind_tgv_total`; composite via `.assemble_composite_tbv()`, each row
-     reading its `component_names`, `"total"` by default; `formula_tbv` via
-     the DSL, total) with
+     `ind_tgv_total`; composite via `.assemble_composite_tgv()`, each row
+     reading its `component_names`, `"total"` by default; `formula_tgv` via
+     the DSL, each reference's `component =`, `"total"` by default) with
      `missing_component_action`, `pheno_number`, the residual condition value
      and the random-effect level of every planned record.
   2. **RESOLVE** (`.ap_resolve()`, RNG, no writes): every draw in a fixed
