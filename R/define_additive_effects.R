@@ -89,6 +89,14 @@
 #' With `line_name = "C"` the default reads line C's block when one exists and
 #' otherwise the population-wide one.
 #'
+#' A new `G` must not leave other generated terms describing the old target.
+#' A call replaces only its own scope, so `G` is refused when generated
+#' additive terms of a line with no target of its own fell back to the target
+#' it would write; the error gives the route (give that line its own `G`
+#' first). Terms of another `parent_origin` at the same target scope cannot get
+#' their own target (targets are per line), so the call writes and warns,
+#' naming the scopes to re-run without `G`.
+#'
 #' @section Generated means calibrated:
 #' The generator always samples **and** calibrates: every term it writes
 #' under the `"generated"` owner delivers its stored target. That is what lets
@@ -349,7 +357,7 @@ define_additive_effects <- function(tbl,
 
   # ── 2. The target (§6C). ──────────────────────────────────────────────────
   tgt <- .dae_resolve_target(pop, trait_name, line_name, G,
-                             trait_var_comp_tbl)
+                             trait_var_comp_tbl, po)
   G <- tgt$G
 
   # ── 3. Loci, base, and the anchor's data. ─────────────────────────────────
@@ -491,6 +499,17 @@ define_additive_effects <- function(tbl,
   }
   .ge_commit(conn, unique(drop), built, before_commit = write_target)
   .dae_warn_parent_only(conn, trait_name)
+  if (length(tgt$stale)) {
+    warning("The new '", "additive' target ",
+            if (is.null(line_name)) "(population-wide)"
+            else paste0("(line '", line_name, "')"),
+            " is also the target of generated terms this call did not ",
+            "replace: ", paste(tgt$stale, collapse = "; "), ". They were ",
+            "calibrated to the old target and do not deliver the new one, and ",
+            "define_phenotype(prevalence = ) trusts the stored target. Re-run ",
+            "define_additive_effects() for each of those scopes now (without ",
+            "`G`: it reads the new target).", call. = FALSE)
+  }
   if (!is.null(diag_res)) .dae_report_diagnostics(diag_res, anchor, warn_bounds)
 
   # ── 8. Messages. ──────────────────────────────────────────────────────────
@@ -792,7 +811,7 @@ QTL_REALISED_MAX_CELLS <- 2e7
 #' @keywords internal
 #' @noRd
 .dae_resolve_target <- function(pop, trait_name, line_name, G,
-                                trait_var_comp_tbl) {
+                                trait_var_comp_tbl, po = NULL) {
   conn <- pop$db_conn
 
   if (!is.null(G)) {
@@ -854,7 +873,20 @@ QTL_REALISED_MAX_CELLS <- 2e7
            "the terms in one transaction. To remove it first:\n",
            .tvc_removal_call("additive", line_name, block), call. = FALSE)
     }
-    return(list(G = (G + t(G)) / 2, write = TRUE))
+    dep <- .dae_target_dependents(conn, trait_name, line_name, po)
+    if (length(dep$line)) {
+      stop("A new '", "additive' target ",
+           if (is.null(line_name)) "(population-wide)"
+           else paste0("(line '", line_name, "')"),
+           " would also be the target of generated terms this call does not ",
+           "replace: ", paste(dep$line, collapse = "; "), ". They fell back to ",
+           "this target when they were generated (their line has no target ",
+           "of its own), so they would keep delivering the old one. Give each ",
+           "such line its own target first, which re-draws its terms: ",
+           "define_additive_effects(..., line_name = <line>, G = ). Then re-run ",
+           "this call.", call. = FALSE)
+    }
+    return(list(G = (G + t(G)) / 2, write = TRUE, stale = dep$other))
   }
 
   explicit <- !is.null(trait_var_comp_tbl)
@@ -941,6 +973,51 @@ QTL_REALISED_MAX_CELLS <- 2e7
   }
   .qtl_target_std(unname(M), name = "the stored 'additive' block")
   list(G = M, write = FALSE)
+}
+
+#' Generated terms a newly written target would describe but this call keeps
+#'
+#' A call with `G =` writes the `additive` target at `line_name` and replaces
+#' only its own scope, `(line_name, parent_origin)`, per trait. Other generated
+#' additive terms calibrated to that same target scope (see
+#' `.tvc_generated_terms()`) would be left describing the old one. Two kinds:
+#'
+#' * `line`: terms of a line with no target of its own, which fell back to the
+#'   population-wide target. The call refuses: the line can get its own target
+#'   first (`line_name = , G =`), so there is always a route.
+#' * `other`: terms at the target's own line scope with another
+#'   `parent_origin`. Targets are per line, not per parent, so refusing would
+#'   deadlock (each scope would block the other); the call warns instead,
+#'   naming the scopes to re-run (decided 2026-10-04).
+#'
+#' @return list(line = character labels, other = character labels).
+#' @keywords internal
+#' @noRd
+.dae_target_dependents <- function(conn, trait_name, line_name, po) {
+  g <- .tvc_generated_terms(conn, "additive", trait_name, line_name)
+  out <- list(line = character(0), other = character(0))
+  if (!any(g$hit)) return(out)
+  m <- g$model
+  for (i in which(g$hit)) {
+    id <- m$terms$id_genome_effect[i]
+    t  <- m$terms$trait_name[i]
+    mm <- m$members[m$members$id_genome_effect == id, , drop = FALSE]
+    oo <- m$origins[m$origins$id_genome_effect == id, , drop = FALSE]
+    own <- .ge_scope_from_origin(.dae_scope(line_name, po[[t]]), "replace_scope")
+    if (.ge_term_at_scope(mm, oo, own)) next
+    pp  <- unique(stats::na.omit(oo$parent_origin))
+    lbl <- paste0("trait '", t, "', ",
+                  .dae_scope_label(if (is.na(g$line[i])) NULL else g$line[i],
+                                   if (length(pp)) pp[1] else NULL))
+    if (is.null(line_name) && !is.na(g$line[i])) {
+      out$line <- c(out$line, lbl)
+    } else {
+      out$other <- c(out$other, lbl)
+    }
+  }
+  out$line  <- unique(out$line)
+  out$other <- unique(out$other)
+  out
 }
 
 #' Default target rows: the call's line block, else population-wide

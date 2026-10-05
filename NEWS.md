@@ -1,3 +1,21 @@
+# tidybreed 0.74.2 (2026-10-04)
+
+Review fixes for step 3b (`plans/import_qtl_effect_methods_phase_3.md`, "3b
+review"). Both close a way to leave generated terms describing a target other
+than the stored one, which the prevalence threshold would then trust.
+
+* **`define_effect_cov_matrix()` now sees line terms that fell back to the
+  population-wide target.** Line terms generated with no line target of their
+  own are calibrated to the population-wide target; a new population-wide
+  target is now refused while they exist, as it already was for population-wide
+  terms.
+* **`define_additive_effects(G = )` checks the other scopes of its target.** A
+  call replaces only its own scope. It now refuses a new target that line terms
+  without their own target fell back to (route: give that line its own `G`
+  first), and warns, naming the scopes to re-run, for terms of another
+  `parent_origin` on the same target (targets are per line, so refusing would
+  deadlock). Both checks run before the seed.
+
 # tidybreed 0.74.1 (2026-10-04)
 
 Step 3b of `plans/import_qtl_effect_methods.md` (Q21: *generated* means

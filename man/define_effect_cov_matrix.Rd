@@ -91,8 +91,9 @@ effect generators read it and never overwrite it either.
 \strong{A target is written before its effects are generated, or with them.} A
 genetic block is refused when any of its traits already has terms of that
 kind written by a generator (owner \code{"generated"}) at the block's scope:
-population-wide terms for \code{line_name = NULL}, line-\code{"C"} terms for
-\code{line_name = "C"}. Those terms were calibrated to the target they were
+line-\code{"C"} terms for \code{line_name = "C"}; for \code{line_name = NULL}, the
+population-wide terms and the terms of every line with no block of its own
+(the generator calibrated those to the population-wide target). Those terms were calibrated to the target they were
 generated with, and a new target would not describe them; the prevalence
 threshold of \code{\link[=define_phenotype]{define_phenotype()}} trusts the stored target for exactly that
 reason. The refusal holds after the old block is removed too. To change

@@ -327,7 +327,12 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      number for one trait; dimnames checked, never relabelled; PSD) is written
      with the terms and refused over any stored block (whole-table check, even
      identical; the error gives a working `remove_rows()` call and says to
-     re-run the same call). `G = NULL`
+     re-run the same call). A new `G` is also refused when generated terms
+     of a line with no target of its own fell back to it (they would keep
+     the old one; route: that line's own `G` first), and it warns, naming
+     them, for other-`parent_origin` terms at the same target scope (no
+     per-parent target exists, so refusing would deadlock;
+     `.dae_target_dependents()`). `G = NULL`
      reads the stored rows (line block, else population-wide), or
      `trait_var_comp_tbl` rows. Refused: a stored block pairing a call trait
      with an outside trait; a stored `dominance` / `additive_by_additive` block
@@ -556,8 +561,9 @@ pop |> define_genome_effect_terms(
   block for the same `effect_name` × any trait × `line_name`; `line_name` is
   genetic-only). The exported function also **refuses a genetic block when a
   trait already has `"generated"` terms of that kind at the block's scope**
-  (`.tvc_refuse_under_generated()`, 0.74.1, Q21): population-wide terms for
-  `line_name = NULL`, line-C terms for `"C"`; still refused after the old
+  (`.tvc_refuse_under_generated()`, 0.74.1, Q21): line-C terms for `"C"`;
+  for `line_name = NULL`, population-wide terms **and** the terms of any line
+  with no block of its own (they fell back to the population-wide target); still refused after the old
   block is removed. The route is `remove_rows()` then
   `define_additive_effects(G = )`, which writes target and terms together. A
   line's target before that line's effects is accepted; a generator's `G =`

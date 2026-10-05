@@ -181,6 +181,14 @@ never silently ignores a stored target. Filter them away with
 
 With \code{line_name = "C"} the default reads line C's block when one exists and
 otherwise the population-wide one.
+
+A new \code{G} must not leave other generated terms describing the old target.
+A call replaces only its own scope, so \code{G} is refused when generated
+additive terms of a line with no target of its own fell back to the target
+it would write; the error gives the route (give that line its own \code{G}
+first). Terms of another \code{parent_origin} at the same target scope cannot get
+their own target (targets are per line), so the call writes and warns,
+naming the scopes to re-run without \code{G}.
 }
 
 \section{Generated means calibrated}{

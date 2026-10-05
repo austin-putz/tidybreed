@@ -378,7 +378,7 @@ test_that("PH7: define_effect_cov_matrix() refuses a target under generated term
   # The stored block is there: refused, naming the remove-and-regenerate route.
   err <- tryCatch(define_effect_cov_matrix(pop, "additive", 2, trait_name = "T"),
                   error = conditionMessage)
-  expect_match(err, "already have generated 'additive' terms \\(population-wide\\)")
+  expect_match(err, "already have generated 'additive' terms \\(population-wide")
   expect_match(err, "remove_rows\\(\\)")
   expect_match(err, "define_additive_effects\\(\\.\\.\\., G = \\)")
 
@@ -434,4 +434,104 @@ test_that("PH7: a line's target is accepted before that line's effects, refused 
   expect_no_error(suppressMessages(
     define_effect_cov_matrix(pop, "additive", 0.7, trait_name = "T",
                              line_name = "B")))
+})
+
+test_that("PH7: line terms that fell back to the population-wide target block a new one", {
+  # Line-A terms generated with no line-A target are calibrated to the
+  # population-wide target (the generator's line -> NULL fallback). Replacing
+  # that target would leave them describing the old one.
+  set.seed(3403)
+  pop <- open_pop(pop_name = "ph7_fallback", db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 50) |>
+    define_founder_haplotypes(n_haplotypes = 60, method = "beta", line_name = "A")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- with_additive_target(pop, "T", 1)
+  pop <- suppressMessages(pop |> get_table("genome_meta") |>
+    define_additive_effects("T", line_name = "A", warn_bounds = NULL, seed = 1))
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
+  expect_error(define_effect_cov_matrix(pop, "additive", 50, trait_name = "T"),
+               "scoped to a line with no target of its own.*re-run the others")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "trait_var_comp"))), 0L)
+  # A line-A block cannot be added under them either.
+  expect_error(define_effect_cov_matrix(pop, "additive", 50, trait_name = "T",
+                                        line_name = "A"),
+               "terms \\(line 'A'\\)")
+
+  # With a line-A block stored before generation, the line terms are
+  # calibrated to it, and a population-wide target stays free.
+  pop2 <- open_pop(pop_name = "ph7_fallback2", db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 50) |>
+    define_founder_haplotypes(n_haplotypes = 60, method = "beta", line_name = "A")
+  on.exit(close_pop(pop2), add = TRUE)
+  pop2 <- define_trait(pop2, "T")
+  pop2 <- suppressMessages(pop2 |> get_table("genome_meta") |>
+    define_additive_effects("T", G = 1, line_name = "A", warn_bounds = NULL,
+                            seed = 1))
+  expect_no_error(suppressMessages(
+    define_effect_cov_matrix(pop2, "additive", 2, trait_name = "T")))
+})
+
+test_that("PH7: G = refuses when a fallback line depends on the target, warns for other parents", {
+  # Decided 2026-10-04 (3b review). A new target written by the generator
+  # must not leave other generated terms calibrated to the old one.
+  mk <- function(name) {
+    set.seed(3404)
+    pop <- open_pop(pop_name = name, db_name = ":memory:") |>
+      define_genome(n_loci = 20, n_chr = 1, chr_len_Mb = 20) |>
+      define_founder_haplotypes(n_haplotypes = 60, method = "beta",
+                                line_name = "A")
+    define_trait(pop, "T")
+  }
+  tvc <- function(pop) dplyr::collect(get_table(pop, "trait_var_comp"))
+
+  # (1) Line-A terms fell back to the population-wide target: refused, before
+  # any write or draw, naming the line route.
+  pop <- mk("ph7_dep_line")
+  on.exit(close_pop(pop), add = TRUE)
+  gm <- pop |> get_table("genome_meta")
+  fh <- get_table(pop, "founder_haplotypes")
+  pop <- suppressMessages(gm |> define_additive_effects("T", G = 1,
+    base_tbl = fh, warn_bounds = NULL, seed = 1))
+  pop <- suppressMessages(gm |> define_additive_effects("T", line_name = "A",
+    warn_bounds = NULL, seed = 2))
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
+  terms_before <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_genome_effect, genome_value FROM genome_effects ORDER BY 1")
+  seed_before <- .Random.seed
+  expect_error(gm |> define_additive_effects("T", G = 50, base_tbl = fh,
+                                             warn_bounds = NULL, seed = 3),
+               "line A, both parents' copies.*line_name = <line>, G = ")
+  expect_identical(.Random.seed, seed_before)
+  expect_equal(nrow(tvc(pop)), 0L)
+  expect_identical(DBI::dbGetQuery(pop$db_conn,
+    "SELECT id_genome_effect, genome_value FROM genome_effects ORDER BY 1"),
+    terms_before)
+
+  # The route: line A gets its own target first, then the common call works.
+  pop <- suppressMessages(gm |> define_additive_effects("T", line_name = "A",
+    G = 50, warn_bounds = NULL, seed = 4))
+  expect_no_warning(pop <- suppressMessages(gm |> define_additive_effects("T",
+    G = 50, base_tbl = fh, warn_bounds = NULL, seed = 3)))
+  expect_setequal(tvc(pop)$line_name, c(NA, "A"))
+
+  # (2) Common + parent_origin = 1 on the same (population-wide) target:
+  # refusing would deadlock, so the call warns, naming the scope to re-run.
+  pop2 <- mk("ph7_dep_po")
+  on.exit(close_pop(pop2), add = TRUE)
+  gm2 <- pop2 |> get_table("genome_meta")
+  pop2 <- suppressMessages(gm2 |> dplyr::filter(locus_id <= 10L) |>
+    define_additive_effects("T", G = 1, warn_bounds = NULL, seed = 1))
+  pop2 <- suppressMessages(gm2 |> dplyr::filter(locus_id > 10L) |>
+    define_additive_effects("T", parent_origin = 1, warn_bounds = NULL, seed = 2))
+  pop2 <- suppressMessages(get_table(pop2, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
+  expect_warning(pop2 <- suppressMessages(gm2 |> dplyr::filter(locus_id <= 10L) |>
+    define_additive_effects("T", G = 50, warn_bounds = NULL, seed = 3)),
+    "did not replace: trait 'T', all lines, parent_origin 1 only.*Re-run")
+  expect_equal(get_trait_var(pop2, "additive", "T"), 50)
+  # Re-running the named scope without G reads the new target; no warning.
+  expect_no_warning(suppressMessages(gm2 |> dplyr::filter(locus_id > 10L) |>
+    define_additive_effects("T", parent_origin = 1, warn_bounds = NULL, seed = 2)))
 })

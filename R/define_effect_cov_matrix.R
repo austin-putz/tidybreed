@@ -54,8 +54,9 @@
 #' **A target is written before its effects are generated, or with them.** A
 #' genetic block is refused when any of its traits already has terms of that
 #' kind written by a generator (owner `"generated"`) at the block's scope:
-#' population-wide terms for `line_name = NULL`, line-`"C"` terms for
-#' `line_name = "C"`. Those terms were calibrated to the target they were
+#' line-`"C"` terms for `line_name = "C"`; for `line_name = NULL`, the
+#' population-wide terms and the terms of every line with no block of its own
+#' (the generator calibrated those to the population-wide target). Those terms were calibrated to the target they were
 #' generated with, and a new target would not describe them; the prevalence
 #' threshold of [define_phenotype()] trusts the stored target for exactly that
 #' reason. The refusal holds after the old block is removed too. To change
@@ -392,20 +393,45 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
   invisible(traits)
 }
 
-#' The traits with generated terms of one kind at one target scope
+#' The traits with generated terms of one kind calibrated to one target scope
 #'
-#' A `line_name = NULL` target covers the population-wide terms (common or
-#' parent-only); a `line_name = "C"` target covers line-C terms.
+#' A `line_name = "C"` target covers line-C terms. A `line_name = NULL` target
+#' covers the population-wide terms (common or parent-only) **and** the
+#' line-scoped terms of every line that has no stored block of its own for
+#' that kind and trait: the generator resolves a line's target with the
+#' `line -> NULL` fallback (`.tvc_resolve_line()`), so those terms were
+#' calibrated to the population-wide target. A line block cannot be added
+#' under existing line terms (the refusal below), so a line block present now
+#' was present when its terms were generated.
 #' @return Sorted character vector of trait names (empty when none).
 #' @keywords internal
 .tvc_generated_traits <- function(conn, effect_name, traits, line_name) {
+  g <- .tvc_generated_terms(conn, effect_name, traits, line_name)
+  sort(unique(g$model$terms$trait_name[g$hit]))
+}
+
+#' The generated terms calibrated to one target scope, term by term
+#'
+#' The work behind `.tvc_generated_traits()`, which see for the scope rule.
+#' @return list(model = the `.gev_read_model()` result for the generated
+#'   owner, hit = logical per term, line = each term's line or `NA`).
+#' @keywords internal
+.tvc_generated_terms <- function(conn, effect_name, traits, line_name) {
   model <- .gev_read_model(conn, traits, effect_owner = GE_GENERATED_OWNER)
-  if (nrow(model$terms) == 0L) return(character(0))
+  if (nrow(model$terms) == 0L) {
+    return(list(model = model, hit = logical(0), line = character(0)))
+  }
   kind <- .gev_target_kind(model)
   tl   <- .gev_term_line(model)
-  at   <- if (is.null(line_name)) is.na(tl) else (!is.na(tl) & tl == line_name)
-  hit  <- !is.na(kind) & kind == effect_name & at
-  sort(unique(model$terms$trait_name[hit]))
+  tr   <- model$terms$trait_name
+  at <- if (!is.null(line_name)) {
+    !is.na(tl) & tl == line_name
+  } else {
+    is.na(tl) | vapply(seq_along(tl), function(i) {
+      !is.na(tl[i]) && is.null(.tvc_resolve_line(conn, effect_name, tr[i], tl[i]))
+    }, logical(1))
+  }
+  list(model = model, hit = !is.na(kind) & kind == effect_name & at, line = tl)
 }
 
 #' Refuse a genetic target under terms a generator calibrated (Q21)
@@ -422,8 +448,9 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
 .tvc_refuse_under_generated <- function(conn, effect_name, traits, line_name) {
   hit_traits <- .tvc_generated_traits(conn, effect_name, traits, line_name)
   if (length(hit_traits) == 0L) return(invisible(NULL))
-  scope <- if (is.null(line_name)) "population-wide" else
-    paste0("line '", line_name, "'")
+  scope <- if (is.null(line_name)) {
+    "population-wide, or scoped to a line with no target of its own"
+  } else paste0("line '", line_name, "'")
   block <- .tvc_block_traits(conn, effect_name, line_name, traits)
   remove <- if (length(block)) paste0(
     "remove the stored block:\n",
@@ -431,7 +458,11 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
   regenerate <- if (effect_name == "additive") paste0(
     "call define_additive_effects(..., G = ) with the new matrix",
     if (!is.null(line_name)) paste0(' and line_name = "', line_name, '"'),
-    ", which writes the target and re-draws the terms in one transaction.")
+    ", which writes the target and re-draws the terms in one transaction",
+    if (is.null(line_name)) paste0(
+      " (it re-draws one scope per call: re-run the others, each line and ",
+      "parent_origin, afterwards so they read the new target)"),
+    ".")
   else paste0("re-run the generator that wrote them with the new target.")
   stop("Trait(s) ", paste(hit_traits, collapse = ", "), " already have ",
        "generated '", effect_name, "' terms (", scope, "), calibrated to ",

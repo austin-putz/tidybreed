@@ -9,7 +9,8 @@
 |---|---|---|---|
 | 3a | 0.74.0 | Consolidation (P1) + phenotypes read the total (P2) + value names + active-block prevalence rule | **done** 2026-10-04 |
 | 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, owner rule, `define_effect_cov_matrix()` refusal | **done** 2026-10-04 |
-| 3c | 0.74.2 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =` | planned |
+| 3b review | 0.74.2 | Fallback-line scope in the cov refusal; `G =` refuses/warns for stranded scopes | **done** 2026-10-04 |
+| 3c | 0.74.3 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =` | planned |
 
 ---
 
@@ -401,8 +402,63 @@ They moved by category:
   - an "As built, 3b" paragraph is added.
 - `plans/import_qtl_effect_methods_phase_3_plan.md`: the status line.
 
+### 3b review (0.74.2)
+
+A full review of 3b after its commit (`1e00e39`) found two ways to leave
+generated terms describing a target other than the stored one. Both were fixed,
+and the generator-side behaviour was decided by the user.
+
+1. **`define_effect_cov_matrix()` missed fallback line terms (bug).** Take
+   line-A terms generated with no line-A target. They were calibrated to the
+   population-wide target through the generator's `line → NULL` fallback. The
+   refusal only looked at population-wide terms, so after `remove_rows()` a
+   population-wide target of 50 was accepted for terms that deliver about 1,
+   and the prevalence threshold trusted it. Reproduced, then fixed:
+   - `.tvc_generated_terms()` counts, for a `line_name = NULL` block, the terms
+     of every line with no block of its own.
+   - This is sound because a line block cannot be added under existing line
+     terms. A line block present now was therefore present when its terms were
+     generated.
+2. **`define_additive_effects(G = )` could strand other scopes (design,
+   decided 2026-10-04).** A call replaces only its own scope. Take common
+   terms with line-A fallback terms. Removing the target and re-running the
+   common scope with `G = 50` succeeded, while the line-A terms still
+   delivered 1. `.dae_target_dependents()` now acts before the seed:
+   - It **refuses** when a fallback line depends on the target. The route is to
+     give that line its own `G` first (`line_name = , G =`), then re-run.
+   - It **warns** for terms of another `parent_origin` at the same target
+     scope, naming them. Targets are per line, not per parent, so a refusal
+     would deadlock: each scope would block the other, and generated terms
+     cannot be removed any other way. The user chose this split over refusing
+     everything with a new reset path.
+
+**Gates** (`test-phenotype-total-genetic-value.R`):
+- "line terms that fell back … block a new one";
+- "G = refuses when a fallback line depends on the target, warns for other
+  parents". It checks that nothing is written or drawn on the refusal, that the
+  route succeeds, and that the warning's re-run is silent.
+
+**Mutation check:** with the fallback-line clause removed (in memory), 7
+expectations fail across both gates.
+
+**Reviewed and found sound:**
+- the generator diff, a pure removal (`exact` can never be NA);
+- the owner rule's placement, before the kind check, in both PLAN and the
+  liability stage;
+- `.gev_target_kind()` / `.gev_term_line()`; `'any'` and `'unknown'` origins
+  count as population-wide;
+- the test helpers and the `additive_flat` change;
+- the A15 parse anchor;
+- docs, NEWS and the skills.
+
+**Suite after the fixes** (`NOT_CRAN=true`): 70 files, 1026 tests, 3840
+expectations; 0 failed, 0 errors, 0 skipped. 11 warnings, all pre-existing.
+`pkgdown::check_pkgdown()` is clean.
+
+**Version shift:** 3c becomes 0.74.3.
+
 ### Next
 
-3c (0.74.2): `formula_tbv` → `formula_tgv`; the DSL's named-only `component =` /
+3c (0.74.3): `formula_tbv` → `formula_tgv`; the DSL's named-only `component =` /
 `table =` with identifier validation; the duplicate-ref fix; Stage 1's ids out of
 SQL text; the PH8 grep.

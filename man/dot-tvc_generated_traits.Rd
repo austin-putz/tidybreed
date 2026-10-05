@@ -2,7 +2,7 @@
 % Please edit documentation in R/define_effect_cov_matrix.R
 \name{.tvc_generated_traits}
 \alias{.tvc_generated_traits}
-\title{The traits with generated terms of one kind at one target scope}
+\title{The traits with generated terms of one kind calibrated to one target scope}
 \usage{
 .tvc_generated_traits(conn, effect_name, traits, line_name)
 }
@@ -10,7 +10,13 @@
 Sorted character vector of trait names (empty when none).
 }
 \description{
-A \code{line_name = NULL} target covers the population-wide terms (common or
-parent-only); a \code{line_name = "C"} target covers line-C terms.
+A \code{line_name = "C"} target covers line-C terms. A \code{line_name = NULL} target
+covers the population-wide terms (common or parent-only) \strong{and} the
+line-scoped terms of every line that has no stored block of its own for
+that kind and trait: the generator resolves a line's target with the
+\code{line -> NULL} fallback (\code{.tvc_resolve_line()}), so those terms were
+calibrated to the population-wide target. A line block cannot be added
+under existing line terms (the refusal below), so a line block present now
+was present when its terms were generated.
 }
 \keyword{internal}

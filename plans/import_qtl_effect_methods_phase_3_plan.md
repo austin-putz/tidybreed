@@ -5,7 +5,7 @@
   §10 Step 3.
 - Gates T1–T9 and PH1–PH8 (§11).
 
-**Versions:** 0.74.0 (3a), 0.74.1 (3b), 0.74.2 (3c).
+**Versions:** 0.74.0 (3a), 0.74.1 (3b), 0.74.2 (3b review fixes), 0.74.3 (3c).
 **Status:** 3a built 2026-10-04 (0.74.0), 3b built 2026-10-04 (0.74.1); as-built notes in the main plan's Step 3. 3c planned.
 **Starting point:** 0.73.2 (`be43687`).
 
@@ -32,7 +32,7 @@ by Part C (step 5) reach phenotypes.
 |---|---|---|
 | 3a | 0.74.0 | P1 consolidation + P2 readers + the value-name half of §6B + the active-block prevalence rule |
 | 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, the owner rule, the `define_effect_cov_matrix()` refusal, the reworded "already stored" error |
-| 3c | 0.74.2 | Q18: `formula_tbv` → `formula_tgv`, the DSL's named-only `component =` / `table =`, identifier validation |
+| 3c | 0.74.3 (was 0.74.2; 0.74.2 went to the 3b review fixes) | Q18: `formula_tbv` → `formula_tgv`, the DSL's named-only `component =` / `table =`, identifier validation |
 
 The order matters:
 - 3a can keep the old `effects` path, because those terms are still `generated`, and
@@ -279,7 +279,8 @@ Error strings that name the removed arguments are reworded to point at the write
 - It refuses an `effect_name` in `GENETIC_EFFECT_NAMES` when any trait of the block has
   `generated` terms of that kind at the block's scope:
   - a `line_name = NULL` block is checked against terms whose origin `line_name` is NULL
-    (common or parent-only);
+    (common or parent-only), *and (3b review, 0.74.2) the terms of any line with no
+    block of its own, which fell back to it*;
   - a `line_name = "C"` block is checked against line-C-scoped terms.
 - A line-C target written before line-C effects are generated still works (A17).
 - The error gives the sequence: `remove_rows()` the old block, then
@@ -326,7 +327,7 @@ Outside `tests/`:
 
 ---
 
-## 3c — Q18: `formula_tgv` and the DSL arguments (0.74.2)
+## 3c — Q18: `formula_tgv` and the DSL arguments (0.74.3)
 
 ### 3c.1 Rename (no alias)
 - The argument, and the `phenotype_meta` column (`R/open_pop.R:287-306`).
@@ -384,7 +385,7 @@ Outside `tests/`:
   and `docs/` are excepted.
 - 36 `formula_tbv` uses in `test-formula_phenotype.R` are renamed. The existing `table =`
   test (:379) is kept in its named form.
-- **Bookkeeping:** NEWS 0.74.2, DESCRIPTION, docs.
+- **Bookkeeping:** NEWS 0.74.3, DESCRIPTION, docs.
 
 ---
 

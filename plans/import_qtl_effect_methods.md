@@ -751,6 +751,13 @@ because they measure `ind_tgv`, and nobody would notice.
   `generated` terms of that kind **at the block's scope**: a `line_name = NULL` block
   against common-scope terms, and a `line_name = "C"` block against line-C-scoped terms.
   So writing a line-C target and then generating line-C effects still works (A17).
+  *Corrected in the 3b review (0.74.2):* a `line_name = NULL` block also covers the
+  terms of every line that has no block of its own, because the generator calibrated
+  them to the population-wide target through the `line → NULL` fallback. And the
+  generator's own `G =` must not strand other scopes: it refuses when such fallback
+  line terms depend on the target it writes, and warns for other-`parent_origin`
+  terms at the same target scope (no per-parent target exists, so a refusal would
+  deadlock). Decided by the user 2026-10-04.
   Without this refusal, `remove_rows()` plus a new target would leave the old terms
   calibrated to a target that is gone. To change a target: `remove_rows()` the old block,
   then regenerate with `define_additive_effects(G = )`, which writes target and terms in
@@ -1576,7 +1583,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
 | 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
-| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 / 0.74.2 | 2 (the `line_name` readers, §6C); 3a, 3b **done** |
+| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 | 2 (the `line_name` readers, §6C); 3a, 3b **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
 | 5 | Part C | 0.76.0 | 2, 3, 4 |
 
@@ -1774,7 +1781,7 @@ response at the end of that file). Gates R1–R9 in
 - `parent_origin` validated before coercion. Anchor-rank check before `set.seed()`.
 - The mixed-`parent_origin` message states the real reason (one anchor per call).
 
-### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.2) *(planned 2026-10-04, see `import_qtl_effect_methods_phase_3_plan.md`)*
+### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.3) *(planned 2026-10-04, see `import_qtl_effect_methods_phase_3_plan.md`)*
 
 **Decided while planning (2026-10-04):**
 - `add_tgv()`'s true-index argument is `component_name` (naming rule 1), not `component`
@@ -1783,7 +1790,7 @@ response at the end of that file). Gates R1–R9 in
   component_name)`, so an additive and a total index can coexist.
 - Three commits, each with the full suite green and a review pause: **3a** (0.74.0)
   consolidation + P2 readers + value names + the active-block prevalence rule; **3b**
-  (0.74.1) Q21 removal, owner rule, `define_effect_cov_matrix()` refusal; **3c** (0.74.2)
+  (0.74.1) Q21 removal, owner rule, `define_effect_cov_matrix()` refusal; **3c** (0.74.3; 0.74.2 went to the 3b review fixes)
   Q18. The results go in one `_phase_3.md`, a section per sub-step as it lands.
 
 **As built, 3a (0.74.0).** Gates T3–T9, PH1, PH3–PH6 and the step-3a part of PH7
@@ -1835,6 +1842,10 @@ without a stored block, the line scope); the unused-argument gate in
   generate with `G`, then `remove_rows()` the target.
 - **Issue found:** the store-then-select route above (see the Q21 bullet in the step
   list) is closed under existing generated terms; the error is now state-aware.
+- **Review (0.74.2):** two staleness holes, both fixed (§6A note): fallback line terms
+  now count for a population-wide block, and `define_additive_effects(G = )` refuses
+  (fallback lines) or warns (other `parent_origin`) for scopes it would strand
+  (`.dae_target_dependents()`). Gates in `test-phenotype-total-genetic-value.R`.
 
 
 - Consolidation, as specified in §6.3 (tasks 1–7).
