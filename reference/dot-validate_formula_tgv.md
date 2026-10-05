@@ -27,4 +27,4 @@ and hold `id_ind` and the column.
 
 ## Value
 
-Invisible NULL on success. Stops on error; warns for scalar constants.
+Invisible NULL on success. Stops on error.

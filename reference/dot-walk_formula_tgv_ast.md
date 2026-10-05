@@ -27,7 +27,6 @@ for non-group types) - component: "total" or one
 ind_tgv.component_name - placeholder: unique R symbol name for the
 pre-fetched vector - call: the reference as written, for messages
 \$expr: `expr` with every reference replaced by its placeholder
-\$has_scalar_constant: logical
 
 ## Details
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## tidybreed 0.74.4 (2026-10-05)
+
+Follow-ups from the step 3c review
+(`plans/import_qtl_effect_methods_phase_3.md`, “3c review”).
+
+- **[`mutate_derived()`](https://austin-putz.github.io/tidybreed/reference/mutate_derived.md)
+  no longer writes ids into SQL text.** Its `join_table` read and its
+  destination-key read rendered every `join_by` value into an `IN (...)`
+  list. Both now join a registered view (`.md_rows_by_key()`). A test
+  records every statement DuckDB receives and finds no id in any of
+  them.
+- **`formula_tgv` no longer warns about numeric constants.** The warning
+  fired on ordinary weights and offsets, such as the maternal `0.5` in
+  `WWD + 0.5 * dam(WWM)`. Numbers are part of the grammar. Five of the
+  suite’s standing warnings came from it.
+- **A case slip in a table or column name gets a hint.** tidybreed
+  matches names exactly, although DuckDB ignores case.
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)’s
+  `formula_tgv` check and
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)’s
+  group and covariate lookup now add “Did you mean ‘pens’? Names are
+  case-sensitive.” when the name matches only up to case.
+
 ## tidybreed 0.74.3 (2026-10-04)
 
 Step 3c of `plans/import_qtl_effect_methods.md` (Q18; plan in

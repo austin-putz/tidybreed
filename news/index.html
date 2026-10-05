@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,16 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.74.4" id="tidybreed-0744-2026-10-05">tidybreed 0.74.4 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0744-2026-10-05"></a></h2>
+<p>Follow-ups from the step 3c review (<code>plans/import_qtl_effect_methods_phase_3.md</code>, “3c review”).</p>
+<ul><li>
+<strong><code><a href="../reference/mutate_derived.html">mutate_derived()</a></code> no longer writes ids into SQL text.</strong> Its <code>join_table</code> read and its destination-key read rendered every <code>join_by</code> value into an <code>IN (...)</code> list. Both now join a registered view (<code>.md_rows_by_key()</code>). A test records every statement DuckDB receives and finds no id in any of them.</li>
+<li>
+<strong><code>formula_tgv</code> no longer warns about numeric constants.</strong> The warning fired on ordinary weights and offsets, such as the maternal <code>0.5</code> in <code>WWD + 0.5 * dam(WWM)</code>. Numbers are part of the grammar. Five of the suite’s standing warnings came from it.</li>
+<li>
+<strong>A case slip in a table or column name gets a hint.</strong> tidybreed matches names exactly, although DuckDB ignores case. <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code>’s <code>formula_tgv</code> check and <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code>’s group and covariate lookup now add “Did you mean ‘pens’? Names are case-sensitive.” when the name matches only up to case.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.3" id="tidybreed-0743-2026-10-04">tidybreed 0.74.3 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0743-2026-10-04"></a></h2>
 <p>Step 3c of <code>plans/import_qtl_effect_methods.md</code> (Q18; plan in <code>plans/import_qtl_effect_methods_phase_3_plan.md</code>). <strong>Breaking.</strong> This completes step 3. Seeded output is unchanged.</p>
