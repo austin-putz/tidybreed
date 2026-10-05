@@ -1,3 +1,52 @@
+# tidybreed 0.74.5 (2026-10-05)
+
+Fixes from the Codex review of step 3
+(`plans/import_qtl_effect_methods_phase_3_codex_review.md`; results in
+`plans/import_qtl_effect_methods_phase_3.md`, "Codex review of step 3"). All
+nine findings were reproduced and fixed. **Breaking** where a call used to
+succeed with a wrong result.
+
+* **The `prevalence` threshold uses the whole liability's variance.** It now
+  adds every named random effect's stored variance (`normal`, `uniform`) to
+  the genetic targets and the residual. A permanent-environment effect of 9
+  with residual 1 used to give a prevalence of 0.34 for a requested 0.1.
+  Refused, naming `thresholds =`: a `gamma` random effect (its mean is
+  `sqrt(variance)`), a residual with conditional strata, and a total variance
+  of 0. The roxygen states that the threshold is a Gaussian approximation at an
+  HWE/LE reference with orthogonal components, and that fixed effects are not
+  in it.
+* **`prevalence` refuses generated variants for two parent scopes** of one kind
+  at one line (paternal-only + maternal-only, or common + a parent-only
+  fallback). Each variant is calibrated to the target alone; together they
+  deliver a different variance.
+* **`define_additive_effects(trait_var_comp_tbl = )` must select the block
+  the call's scope reads** (the line's own block, else population-wide).
+  Selecting another scope's block calibrated the terms to a target no reader
+  associates with them.
+* **A zero-target trait in `method = "union"` loses its old generated terms**
+  at the scope, like every other trait of the call. They used to survive and
+  deliver their old variance under a stored target of 0.
+* **New `remove_generated_effects(pop, trait_name, line_name, parent_origin)`**
+  deletes the generated terms at exactly one scope, of every kind (a
+  calibrated model is removed whole, never one component). It is the only route
+  besides re-running that scope: the parent-fallback warning used to recommend
+  operations that refuse the reserved owner.
+* **`add_tgv(index_names = )` warns** when an `"additive"` true index is
+  computed for a trait with `indicator` terms or hand-written interactions,
+  whose additive value the structural `additive` component misses.
+* **Categorical classification is strict exceedance:** a liability exactly on
+  a cutpoint stays in the lower category, as "the fraction above the
+  threshold" says. Seeded output changes only for liabilities that land
+  exactly on a cutpoint (discrete genetic values with no residual).
+* **`define_phenotype()`**: `thresholds` must be finite and strictly ascending
+  (`c(1, NA)` declared three categories and classified into two); `mean` must
+  be one finite number and is checked before anything is written; the
+  replacement of an existing definition is one transaction, so a refused
+  `overwrite = TRUE` no longer deletes the old row.
+* **`formula_tgv`**: a result that is `Inf` or `NaN` (division by zero,
+  overflow, a domain error) is an error before any draw; a constant expression
+  is broadcast instead of failing.
+
 # tidybreed 0.74.4 (2026-10-05)
 
 Follow-ups from the step 3c review

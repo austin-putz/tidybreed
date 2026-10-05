@@ -332,7 +332,10 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      the old one; route: that line's own `G` first), and it warns, naming
      them, for other-`parent_origin` terms at the same target scope (no
      per-parent target exists, so refusing would deadlock;
-     `.dae_target_dependents()`). `G = NULL`
+     `.dae_target_dependents()`). An explicit `trait_var_comp_tbl` picks
+     the effect and the traits, never the scope: its block must be the one
+     the call's scope reads (`.tvc_resolve_line()`: the line's own block,
+     else population-wide), or the call is refused (0.74.5). `G = NULL`
      reads the stored rows (line block, else population-wide), or
      `trait_var_comp_tbl` rows. Refused: a stored block pairing a call trait
      with an outside trait; a stored `dominance` / `additive_by_additive` block
@@ -358,7 +361,9 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      rank(B0'MB0) < rank(G). `"union"` (k >= 2) scales each trait alone and
      warns "approximate" whenever the delivered covariance misses `G`
      (including a zero target covariance on overlapping sets); a trait with
-     positive target variance and no QTL is an error.
+     positive target variance and no QTL is an error; one with target 0 gets
+     no terms, and its old variant at the scope is deleted like every
+     other trait's (0.74.5).
   5. **Diagnostics computed** (common scope only, nothing stored), **before**
      the commit so they cannot fail after it: the relative spectrum of what
      another population sees vs the target — pool expectation `2 Cov(H)` with
@@ -446,6 +451,25 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   pop |> get_table("genome_meta") |>
     define_additive_effects("IMP", line_name = "Duroc", parent_origin = 1)
   ```
+
+### `remove_generated_effects()`
+
+`R/remove_generated_effects.R` (0.74.5)
+
+`remove_generated_effects(pop, trait_name, line_name = NULL, parent_origin =
+NULL)` — the **only** route that deletes generated terms other than re-running
+their scope: `define_genome_effect_terms()` and `remove_rows()` refuse the
+reserved owner. Deletes, per trait, the generated terms of **every kind** (additive,
+dominance, interaction) at exactly the scope `.dae_scope(line_name,
+parent_origin)` (via `.ge_resolve_deletes(..., "replace_scope")`, which
+matches origin rows, not contrasts), in one transaction
+validated by `validate_genome_effects()`. Errors, deleting nothing (all or
+nothing across traits), when a trait has none at the scope. Targets and
+`ind_tgv` are untouched; values are stale until `add_tgv()` re-evaluates. The
+typical use is a variant added by a re-run with a new `parent_origin`, which
+`.dae_warn_parent_only()` now names. A generated model is removed whole, never
+per component (decided 2026-10-05): a step-5 `define_genome_effects()` model is
+common-scope, so `remove_generated_effects(pop, trait)` removes all of it.
 
 ### `extract_allele_freq()`
 
@@ -636,19 +660,36 @@ pop |> define_genome_effect_terms(
     error in `define_phenotype()`, before anything is written. Numbers
     (weights, offsets) are accepted silently. Table and column names match
     exactly; a case-only mismatch gets a "did you mean" hint (`.case_hint()`).
-  - `prevalence` (categorical, two categories) — the threshold is
-    `mean + qnorm(1 - prevalence) * sqrt(Vg + Ve)`, with `Vg` the active-block
-    sum (`.ap_prevalence_genetic_var()`): the trait's stored population-wide
+  - `prevalence` (categorical, two categories) — the fraction strictly
+    above the threshold `mean + qnorm(1 - prevalence) * sqrt(Vg + Vr + Ve)`,
+    a Gaussian approximation at an HWE/LE reference with orthogonal
+    components (fixed effects are not in it). `Vg` is the active-block sum
+    (`.ap_prevalence_genetic_var()`): the trait's stored population-wide
     `additive`, `dominance` and `additive_by_additive` diagonals, each counted
     only if the model has terms of that kind, and **every term must be owned
     by `"generated"`** (the owner rule, 0.74.1, Q21: only generator terms are
-    known to deliver the stored target). Refused with `components` /
+    known to deliver the stored target). `Vr` is every named random effect's
+    stored variance (`.ap_prevalence_env_var()`, 0.74.5; `normal` and
+    `uniform`); `Ve` the unconditional residual. Refused with `components` /
     `formula_tgv` (no stored variance describes a composite liability: use
     `thresholds`). `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`,
     before any write or draw) when any term is not `"generated"`, a kind of
-    term has no stored target, or the model has terms outside the three
-    kinds; there is no silent `Vg = 0`.
+    term has no stored target, the model has terms outside the three kinds,
+    one kind at one line has generated variants for two parent scopes
+    (`.gev_term_parent()`; each was calibrated alone), a random effect is
+    `gamma`, or the residual has conditional strata; and in RESOLVE when the
+    total is 0. There is no silent `Vg = 0`.
     Skipped for `user_values` calls, which place no threshold.
+  - `thresholds` — finite, strictly ascending; validated before any write. A
+    liability exactly on a cutpoint stays in the lower category
+    (`liability_to_categorical()`, `findInterval(left.open = TRUE)`).
+  - `formula_tgv` evaluation (`.eval_formula_tgv()`): a constant is
+    broadcast; an `Inf` / `NaN` the arithmetic produced (not an `NA` from a
+    missing contributor) is an error in PLAN naming the individuals.
+  - **Atomic.** `mean` (one finite number) and `thresholds` are checked first;
+    the delete of an overwritten definition, the `phenotype_meta` insert, the
+    residual (`.pvc_write_block()`, transaction-free) and the components are
+    one transaction.
   - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
     `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
     missing composite piece (missing group assignment, missing dam/sire genetic value,
@@ -743,9 +784,11 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   `prevalence` threshold uses the active-block rule
   (`.ap_prevalence_genetic_var()`): the sum of the population-wide stored
   diagonals of `additive`, `dominance` and `additive_by_additive`, each only if
-  the model has terms of that kind; a term not owned by `"generated"`, an
-  `indicator` surface or another interaction, or a kind with no stored
-  target, is an error naming `thresholds =`.
+  the model has terms of that kind, plus the named random effects' variances
+  and the residual; a term not owned by `"generated"`, an `indicator` surface
+  or another interaction, a kind with no stored target, two parent scopes of
+  one kind at one line, a `gamma` effect or conditional residual strata is an
+  error naming `thresholds =`.
 - `add_tgv(tbl, trait_name = NULL, index_names = NULL, weight_type =
   c("index", "economic", "both"), component_name = "additive",
   overwrite_index = FALSE, ...)` — the one table of true genetic values.
@@ -770,6 +813,9 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   - `component_name` — which value is weighted: `"additive"` (default, the
     breeding value), another component, or `"total"`; stored in
     `ind_true_index.component_name`, so additive and total indices coexist.
+    `"additive"` is structural, so it **warns** when an index trait has
+    `indicator` terms or hand-written interactions, whose additive value it
+    misses (`.tgv_warn_structural_additive()`, 0.74.5).
   - `overwrite_index = FALSE` — skips individuals that already have a row for
     `(index_name, weight_type, component_name)`; `TRUE` recomputes.
   Consumers read values through `.tgv_read()` / `.tgv_by_id()` /

@@ -282,3 +282,55 @@ test_that("missing_component_action stored in phenotype_meta, defaults to 'skip'
     "SELECT missing_component_action FROM phenotype_meta WHERE phenotype_name = 'BW'")
   expect_equal(row2$missing_component_action, "error")
 })
+
+
+# ── Step-3 review (findings 8, 9): a refused definition changes nothing ──────
+
+test_that("a refused overwrite leaves the old definition, components and residual (finding 8)", {
+  pop <- make_pheno_base_pop("dp_atomic")
+  on.exit(close_pop(pop))
+  pop <- with_additive_target(pop, "D", 1)
+  pop <- with_additive_target(pop, "M", 1)
+  pop <- define_phenotype(pop, "W", mean = 5, residual_var = 3,
+                          formula_tgv = NULL,
+                          components = data.frame(source_trait_name = c("D", "M"),
+                                                  contributor_type  = c("self", "dam")))
+  snap <- function() lapply(c("phenotype_meta", "phenotype_components",
+                              "phenotype_var_comp"), function(t)
+    DBI::dbGetQuery(pop$db_conn, paste0("SELECT * FROM ", t, " ORDER BY 1")))
+  before <- snap()
+  expect_error(define_phenotype(pop, "W", mean = NULL, overwrite = TRUE),
+               "`mean`.*one finite number")
+  expect_error(define_phenotype(pop, "W", mean = c(1, 2), overwrite = TRUE),
+               "`mean`")
+  expect_error(define_phenotype(pop, "W", mean = NA_real_, overwrite = TRUE),
+               "`mean`")
+  expect_identical(snap(), before)
+
+  # A failure inside the writes, after the old rows are deleted and the new
+  # row and residual are written, rolls all of it back.
+  orig <- next_int_id
+  local_mocked_bindings(next_int_id = function(conn, table, ...) {
+    if (identical(table, "phenotype_components")) stop("injected failure")
+    orig(conn, table, ...)
+  })
+  expect_error(define_phenotype(pop, "W", mean = 9, residual_var = 4,
+                                overwrite = TRUE,
+                                components = data.frame(source_trait_name = "D",
+                                                        contributor_type = "self")),
+               "injected failure")
+  expect_identical(snap(), before)
+})
+
+test_that("thresholds must be finite and strictly ascending (finding 9)", {
+  pop <- make_pheno_base_pop("dp_thresholds")
+  on.exit(close_pop(pop))
+  pop <- with_additive_target(pop, "T", 1)
+  for (thr in list(c(1, NA_real_), c(1, Inf), c(1, 0), c(0, 0), "1")) {
+    expect_error(define_phenotype(pop, "T", type = "categorical",
+                                  thresholds = thr, residual_var = 1),
+                 "`thresholds` must be finite numbers in strictly ascending")
+  }
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM phenotype_meta")$n, 0)
+})

@@ -673,3 +673,109 @@ test_that("centres and effects follow locus_id whatever order or projection tbl 
   expect_equal(got$locus_id, want$locus_id)
   expect_equal(got$center_value, want$allele_freq)
 })
+
+
+# ── Step-3 review (findings 1, 2): the stored target describes every retained
+# generated term at its scope ─────────────────────────────────────────────────
+
+dae_review_pop <- function(name) {
+  set.seed(3401)
+  open_pop(pop_name = name, db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 100) |>
+    define_founder_haplotypes(n_haplotypes = 100) |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 30, n_females = 30, line_name = "A")
+}
+
+# sum n_eligible p q a^2 over a trait's generated additive terms
+dae_genic <- function(pop, trait) {
+  x <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT m.center_value AS p, e.genome_value AS a,
+            COUNT(o.origin_slot) AS n_origin
+     FROM genome_effect_members m
+     JOIN genome_effects e USING (id_genome_effect)
+     LEFT JOIN genome_effect_member_origins o
+       ON o.id_genome_effect = m.id_genome_effect
+      AND o.member_slot = m.member_slot AND o.parent_origin IS NOT NULL
+     WHERE e.trait_name = ?
+     GROUP BY m.id_genome_effect, m.member_slot, m.center_value, e.genome_value",
+    params = list(trait))
+  sum(ifelse(x$n_origin > 0, 1, 2) * x$p * (1 - x$p) * x$a^2)
+}
+
+test_that("trait_var_comp_tbl must select the block the call's scope reads (finding 1)", {
+  pop <- dae_review_pop("dae_tvc_scope")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "T")
+  pop <- suppressMessages(define_effect_cov_matrix(pop, "additive", 1, trait_name = "T"))
+  pop <- suppressMessages(define_effect_cov_matrix(pop, "additive", 100,
+                                                   trait_name = "T", line_name = "A"))
+  pop <- suppressMessages(define_effect_cov_matrix(pop, "additive", 7,
+                                                   trait_name = "T", line_name = "B"))
+  tvc <- function(...) get_table(pop, "trait_var_comp") |>
+    dplyr::filter(effect_name == "additive", ...)
+  gm <- get_table(pop, "genome_meta")
+  n_terms <- function() DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_effects")$n
+
+  seed_before <- .Random.seed
+  # Common call, line-A rows.
+  expect_error(gm |> define_additive_effects("T", seed = 11, warn_bounds = NULL,
+                 trait_var_comp_tbl = tvc(line_name == "A")),
+               "selects the line 'A'.*described by the population-wide block")
+  # Line-A call, line-B rows.
+  expect_error(gm |> define_additive_effects("T", line_name = "A", seed = 11,
+                 warn_bounds = NULL, trait_var_comp_tbl = tvc(line_name == "B")),
+               "selects the line 'B'.*line 'A' block")
+  # Line-A call, population-wide rows although line A has its own block.
+  expect_error(gm |> define_additive_effects("T", line_name = "A", seed = 11,
+                 warn_bounds = NULL, trait_var_comp_tbl = tvc(is.na(line_name))),
+               "selects the population-wide.*has a block of its own")
+  expect_identical(.Random.seed, seed_before)
+  expect_equal(n_terms(), 0)
+
+  # Same scope: accepted and calibrated to that block.
+  pop <- suppressMessages(gm |> define_additive_effects("T", seed = 11,
+    warn_bounds = NULL, trait_var_comp_tbl = tvc(is.na(line_name))))
+  expect_equal(dae_genic(pop, "T"), 1, tolerance = 1e-8)
+})
+
+test_that("trait_var_comp_tbl accepts the line -> population-wide fallback (finding 1)", {
+  pop <- dae_review_pop("dae_tvc_fallback")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- with_additive_target(pop, "T", 1)
+  pop <- suppressMessages(get_table(pop, "genome_meta") |>
+    define_additive_effects("T", line_name = "A", seed = 1, warn_bounds = NULL,
+      trait_var_comp_tbl = get_table(pop, "trait_var_comp") |>
+        dplyr::filter(effect_name == "additive", is.na(line_name))))
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_effect_member_origins
+     WHERE line_name = 'A'")$n, 12)
+})
+
+test_that("a zero-target union trait loses its old terms at the scope (finding 2)", {
+  pop <- dae_review_pop("dae_union_zero")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "T")
+  pop <- define_trait(pop, "U")
+  gm <- get_table(pop, "genome_meta")
+  pop <- suppressMessages(gm |> dplyr::filter(locus_id <= 6L) |>
+    define_additive_effects("T", G = 1, seed = 1, warn_bounds = NULL))
+  pop <- suppressMessages(gm |> dplyr::filter(locus_id > 6L) |>
+    define_additive_effects("U", G = 1, seed = 2, warn_bounds = NULL))
+  expect_equal(dae_genic(pop, "U"), 1, tolerance = 1e-8)
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
+
+  G <- diag(c(1, 0)); dimnames(G) <- list(c("T", "U"), c("T", "U"))
+  expect_message(pop <- suppressWarnings(gm |> dplyr::filter(locus_id <= 6L) |>
+    define_additive_effects(c("T", "U"), G = G, method = "union", seed = 13,
+                            warn_bounds = NULL)),
+    "Trait 'U' has no QTL.*generated effects at this scope are removed")
+  # The stored diagonal (0) describes what U's retained model delivers (0).
+  expect_equal(get_trait_var(pop, "additive", "U"), 0)
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'U'")$n, 0)
+  expect_equal(dae_genic(pop, "U"), 0)
+  expect_equal(dae_genic(pop, "T"), 1, tolerance = 1e-8)
+})

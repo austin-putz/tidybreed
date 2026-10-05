@@ -28,7 +28,12 @@
 #' `indicator` surface) `additive` is the functional additive effect, not the
 #' breeding value: under functional coding the average effect is
 #' \eqn{\alpha = a + d(q - p)}, and under epistasis it depends on other loci
-#' and on LD.
+#' and on LD. A true index on `"additive"` therefore **warns** when an index
+#' trait has `indicator` terms or hand-written interaction terms: a 0/1/2
+#' dosage surface entered with [genotype_terms()] is genetically additive but
+#' has no `additive` rows, and its additive index is 0. `"total"` is a
+#' different objective (selection on genetic value), not a breeding-value
+#' projection.
 #'
 #' `ind_tgv` stores the **raw sum of the stored terms — no mean is added.** A
 #' pure Cockerham model yields centered deviations; a raw `indicator` surface
@@ -342,6 +347,39 @@ add_tgv <- function(tbl, trait_name = NULL,
 }
 
 
+#' Warn when the `additive` component is not known to be the breeding value
+#'
+#' `component_name = "additive"` is structural: the terms declared additive.
+#' That is the breeding value for statistical coding at one base (what the
+#' generators write), but not for a functional genotype surface (`indicator`
+#' terms) or a hand-written interaction, whose additive value lies partly in
+#' those terms. An index on such a trait would silently lose it: a 0/1/2
+#' dosage surface entered with [genotype_terms()] has no additive rows and
+#' gives an all-zero index. Generated interactions (step 5, statistical
+#' coding) do not warn.
+#' @keywords internal
+#' @noRd
+.tgv_warn_structural_additive <- function(conn, idx_name, idx_traits) {
+  model <- .gev_read_model(conn, idx_traits)
+  terms <- model$terms
+  hit <- terms$component_name == "indicator" |
+    (terms$component_name == "interaction" &
+       terms$effect_owner != GE_GENERATED_OWNER)
+  if (!any(hit)) return(invisible(NULL))
+  warning("True index '", idx_name, "' weights the 'additive' component, but ",
+          "trait(s) ", paste(sort(unique(terms$trait_name[hit])), collapse = ", "),
+          " also have ", paste(sort(unique(terms$component_name[hit])),
+                               collapse = " and "),
+          " terms written by hand. Their additive value lies partly in those ",
+          "terms, so the 'additive' component is not the breeding value (a ",
+          "genotype surface entered with genotype_terms() has no additive ",
+          "terms at all). Use component_name = \"total\" for selection on ",
+          "genetic value, or write the model in statistical (Cockerham) coding ",
+          "with ad_terms(coding = \"cockerham\").", call. = FALSE)
+  invisible(NULL)
+}
+
+
 #' Compute and write one index's true index values
 #'
 #' @keywords internal
@@ -359,6 +397,7 @@ add_tgv <- function(tbl, trait_name = NULL,
          "Define it with define_index() first.", call. = FALSE)
   }
   idx_traits <- idx_meta$trait_name
+  warn_additive <- identical(component_name, "additive")
 
   tmp <- paste0("__ti_ids_", as.character(round(as.numeric(Sys.time()) * 1000)))
   on.exit(try(duckdb::duckdb_unregister(conn, tmp), silent = TRUE), add = TRUE)
@@ -393,6 +432,10 @@ add_tgv <- function(tbl, trait_name = NULL,
       next
     }
 
+    if (warn_additive) {
+      .tgv_warn_structural_additive(conn, idx_name, idx_traits)
+      warn_additive <- FALSE
+    }
     vals      <- .tgv_read(conn, target_ids, idx_traits, component_name)
     ind_order <- sort(unique(target_ids))
     val_mat <- matrix(

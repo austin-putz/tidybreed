@@ -415,13 +415,33 @@
 #' @param subset_df Data frame: sex-filtered ind_meta rows.
 #' @param phenotype_name Character. Used in error messages.
 #' @return Named numeric vector (names = id_ind). NA marks excluded individuals
-#'         (a missing dam/sire genetic value, or NA group membership).
+#'         (a missing dam/sire genetic value, or NA group membership). A
+#'         constant expression is broadcast to every individual. An `Inf`,
+#'         `-Inf` or `NaN` from the arithmetic itself (division by zero,
+#'         overflow, a domain error) is an error: it is a fault of the model,
+#'         not a missing component.
 #' @keywords internal
 .eval_formula_tgv <- function(pop, formula_tgv, subset_df, phenotype_name) {
   walk_res <- .walk_formula_tgv_ast(.parse_formula_tgv(formula_tgv))
   tgv_env  <- .build_tgv_env(pop, walk_res$trait_refs, subset_df, phenotype_name)
-  result   <- eval(walk_res$expr, envir = list2env(tgv_env, parent = baseenv()))
-  stats::setNames(as.numeric(result), as.character(subset_df$id_ind))
+  ids      <- as.character(subset_df$id_ind)
+  result   <- suppressWarnings(
+    eval(walk_res$expr, envir = list2env(tgv_env, parent = baseenv())))
+  result   <- as.numeric(result)
+  if (length(result) == 1L) result <- rep(result, length(ids))
+  # NA from a missing contributor stays NA (missing_component_action);
+  # anything else non-finite was produced by the formula.
+  missing_in <- Reduce(`|`, lapply(tgv_env, is.na), rep(FALSE, length(ids)))
+  bad <- !is.finite(result) & !(is.na(result) & missing_in)
+  if (any(bad)) {
+    stop("Phenotype '", phenotype_name, "': formula_tgv `", formula_tgv,
+         "` gave a non-finite genetic value (Inf, -Inf or NaN) for ",
+         sum(bad), " individual(s) (e.g. ",
+         paste(utils::head(ids[bad], 5), collapse = ", "), "): division by ",
+         "zero, overflow or a function outside its domain. Nothing was ",
+         "written.", call. = FALSE)
+  }
+  stats::setNames(result, ids)
 }
 
 

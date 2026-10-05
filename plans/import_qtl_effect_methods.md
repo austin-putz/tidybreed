@@ -547,6 +547,11 @@ not recorded. What the model *is* can be read from its terms (principle 6).
   `define_additive_effects()` call needs the same filter, or the rows removed with
   `remove_rows()` (§6C).
 - Both checks run **before any write**, including target writes (§7.1).
+- **Removal** (decided 2026-10-05): `remove_generated_effects(pop, trait_name,
+  line_name, parent_origin)` deletes every `generated` term at one scope,
+  whatever its kind. A `define_genome_effects()` model is common-scope, so
+  `remove_generated_effects(pop, trait)` removes it whole. There is no
+  per-component removal.
 - An additive-only model is **row-identical** whichever generator wrote it, owner included
   (gate C4).
 
@@ -1583,7 +1588,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 0b | Two live bug fixes (below) | 0.71.2 | **done** (`_phase_0b.md`) |
 | 1 | Rename only | 0.72.0 | **done** (`_phase_1.md`) |
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
-| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 | 2 (the `line_name` readers, §6C); **done** |
+| 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
 | 5 | Part C | 0.76.0 | 2, 3, 4 |
 
@@ -1781,7 +1786,7 @@ response at the end of that file). Gates R1–R9 in
 - `parent_origin` validated before coercion. Anchor-rank check before `set.seed()`.
 - The mixed-`parent_origin` message states the real reason (one anchor per call).
 
-### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.3) *(done 2026-10-04; plan `import_qtl_effect_methods_phase_3_plan.md`, results `import_qtl_effect_methods_phase_3.md`)*
+### Step 3 — consolidation, P2 and Q18 (0.74.0–0.74.5) *(done 2026-10-04, review fixes 2026-10-05; plan `import_qtl_effect_methods_phase_3_plan.md`, results `import_qtl_effect_methods_phase_3.md`)*
 
 **Decided while planning (2026-10-04):**
 - `add_tgv()`'s true-index argument is `component_name` (naming rule 1), not `component`
@@ -1921,6 +1926,35 @@ without a stored block, the line scope); the unused-argument gate in
 - CLAUDE.md hard rules (D7, "one evaluator"), design principle 4's action list, and the
   skills drop `add_tbv()` / `ind_tbv`.
 
+**As built, step-3 review (0.74.5).** Codex reviewed 0.74.4
+(`import_qtl_effect_methods_phase_3_codex_review.md`); all nine findings were
+reproduced and fixed (`_phase_3.md`, "Codex review of step 3"). What changes
+for the rest of this plan:
+- **Q21 is narrower than it read.** `generated` proves a *variant* was
+  calibrated to a target. The threshold now also requires that the target is
+  the one the variant's scope reads (`trait_var_comp_tbl` cannot pick another
+  scope's block), that no stale variant survives a zero-target `union` call,
+  and that each kind has one parent scope per line. A trait with two parent
+  scopes is legal but takes `thresholds`.
+- **The threshold's `V` is the whole liability:** genetic targets + named
+  random effects (`normal`, `uniform`) + the unconditional residual. `gamma`
+  effects, conditional residual strata and `V = 0` are refused. It is
+  documented as a Gaussian approximation at an HWE/LE reference with
+  orthogonal components; fixed effects are not in `V`.
+- **New exported `remove_generated_effects()`** (user decision): the one
+  route that deletes generated terms, one scope at a time. **It removes every
+  kind at the scope** (decided 2026-10-05, option A): additive, dominance and
+  interaction terms go together, so a step-5 model (common scope only) is
+  removed whole in one call. Rejected: additive-only with a refusal (no way to
+  delete a step-5 model without first regenerating it), and a kind argument
+  (removing D from a jointly calibrated model leaves A calibrated beside a D
+  that no longer exists; "A without D" is a generator re-run with an
+  additive-only target).
+- **An `"additive"` true index warns** on `indicator` terms or hand-written
+  interactions (user decision: warn, not refuse).
+- Strict exceedance at cutpoints; non-finite `formula_tgv` results are errors;
+  constant `formula_tgv` broadcasts; `define_phenotype()` is atomic.
+
 ### Step 4 — Part B (0.75.0)
 
 - Report the reference population and interpretation of every estimate in the output
@@ -1931,6 +1965,10 @@ without a stored block, the line scope); the unused-argument gate in
   `trait_var_comp` by `line_name`.
 
 - `extract_genetic_variance()` (§8), with `between_components` (Q16).
+- Keep every cross-component covariance term and name the population of each
+  estimate (step-3 review): the prevalence rule's sum of diagonals is a
+  reference-model rule, and Part B is the place to show when it fails (LD,
+  a coding reference other than the base).
 - The NOIA conversion pair `.noia_to_stored()` / `.stored_to_functional()` (Q13), which
   case 1 needs.
 - **`aa_terms()`**, and the fixed column set for `ad_terms()` / `genotype_terms()` (§9.3,
@@ -1949,6 +1987,16 @@ without a stored block, the line scope); the unused-argument gate in
 - Apply 0.73.2's target rules to `G_A`, `G_D`, `G_AA` and the additive floor
   (`.qtl_target_std()` + `.qtl_calibrate()` verification), and test non-additive values
   in **phenotypes**, not only `ind_tgv`.
+- Step-3 review: PH7's A + D + A×A prevalence test plants coefficients, so it
+  tests routing, not calibration. Add a gate that generates a calibrated
+  A + D + A×A model and follows it to a `prevalence` phenotype, checking that
+  the generated reference satisfies the orthogonality the summed targets assume,
+  at equilibrium and out of it (reuse the sum-plus-cross-covariance identity).
+  Generated dominance or A×A with parent scopes must obey the one-parent-scope
+  rule of `.ap_prevalence_genetic_var()`. `remove_generated_effects()` already
+  removes every kind at a scope (decided 2026-10-05); step 5 adds a gate on a
+  real `define_genome_effects()` model, and its roxygen names the function as
+  the removal route.
 - The vignette states the scope promise (Codex review, "Changes to the remaining plan"
   item 5 and its table "What 'target this G in that population' means"): exact for a
   feasible `G` under the named anchor and QTL set; a line call calibrates its own
@@ -2414,6 +2462,13 @@ tolerance and no new metadata. It also makes `define_additive_effects()` and
 **Decision (2026-10-03): (a).** Skipping calibration is only ever wanted for the user's
 own numbers, and those belong in the writer. Applied in §0A, §6A, §7.1, Q2, steps 2–3 and
 gates A12 (withdrawn), A19 and PH7.
+
+**Refined (2026-10-05, step-3 Codex review).** The owner proves that each variant
+was calibrated, not which target or that the variants together deliver it. Three
+holes were closed in 0.74.5: an explicit `trait_var_comp_tbl` from another scope
+(now refused), a zero-target `union` trait keeping its old terms (now deleted), and
+variants for two parent scopes counted as one target (now refused for
+`prevalence`). See "As built, step-3 review" under Step 3.
 
 ---
 

@@ -39,29 +39,56 @@
 #' @param min_value,max_value Numeric. Clipping bounds for count traits.
 #'   `NULL` means no limit.
 #' @param prevalence Numeric between 0 and 1. For categorical traits with one
-#'   threshold (two categories), the fraction expected above the threshold.
-#'   Mutually exclusive with `thresholds`. The liability carries the trait's
-#'   total genetic value, so the threshold is placed from `mean`, the
-#'   unconditional residual variance and the trait's stored genetic targets
-#'   (`trait_var_comp`, population-wide rows): the sum of the `additive`,
-#'   `dominance` and `additive_by_additive` diagonals, each counted only if the
-#'   trait's model has terms of that kind. [add_phenotype()] errors when a kind
-#'   of term the model has has no stored target, or when the model has terms
-#'   outside those three kinds (an `indicator` surface, other interactions).
-#'   The threshold uses the *target* at the reference population, so the
-#'   realised prevalence of a selected or line-specific population differs.
-#'   Every term of the trait must be owned by `"generated"`: a generator
-#'   ([define_additive_effects()]) always calibrates its terms to the stored
-#'   target, so the target describes them. Terms written with
-#'   [define_genome_effect_terms()] carry values nothing checked against a
-#'   target, so [add_phenotype()] errors for such a trait; give `thresholds`.
-#'   Not valid for composite phenotypes (`components` or
-#'   `formula_tgv`): their genetic liability combines several traits and
-#'   contributors, which no stored variance describes. Give `thresholds`
-#'   instead.
-#' @param thresholds Numeric vector of length K−1 for K ordered categories.
-#'   Liability cutpoints in ascending order. Mutually exclusive with
-#'   `prevalence`.
+#'   threshold (two categories), the fraction expected strictly above the
+#'   threshold. Mutually exclusive with `thresholds`. The threshold is
+#'   `mean + qnorm(1 - prevalence) * sqrt(V)`, where `V` is the variance of
+#'   the whole liability:
+#'   - the trait's stored genetic targets (`trait_var_comp`, population-wide
+#'     rows): the sum of the `additive`, `dominance` and
+#'     `additive_by_additive` diagonals, each counted only if the trait's
+#'     model has terms of that kind;
+#'   - the stored variance of every named random effect
+#'     ([define_effect_random()]; `normal` and `uniform` are centred with that
+#'     variance);
+#'   - the unconditional residual variance.
+#'
+#'   This is a **Gaussian approximation** at a reference population in
+#'   Hardy-Weinberg and linkage equilibrium. It is exact only when the
+#'   liability is normal: a few large QTL make the genetic value discrete,
+#'   and the realised prevalence then differs even in an infinite reference
+#'   population. Summing the component targets also assumes they are
+#'   orthogonal (no covariance between additive, dominance and A x A values),
+#'   which holds for statistical coding at one base, not under LD. Fixed
+#'   effects shift the liability and are not included: the prevalence is for
+#'   records whose fixed effects are 0. A selected or line-specific
+#'   population also differs. For an exact fraction in a known population,
+#'   compute cutpoints from it and pass `thresholds`.
+#'
+#'   [add_phenotype()] refuses the threshold, before any draw or write, when
+#'   no stored target can describe the liability:
+#'   - a term not owned by `"generated"`. A generator
+#'     ([define_additive_effects()]) always calibrates its terms to the stored
+#'     target; terms written with [define_genome_effect_terms()] carry values
+#'     nothing checked against one;
+#'   - a kind of term with no stored target, or terms outside the three kinds
+#'     (an `indicator` surface, other interactions);
+#'   - generated variants for two parent-of-origin scopes at one line
+#'     (paternal-only plus maternal-only, or common plus a parent-only
+#'     fallback). Each was calibrated to the target alone; together they have
+#'     a different variance;
+#'   - a `gamma` random effect (its mean is `sqrt(variance)`);
+#'   - a residual with conditional strata (the marginal variance would depend
+#'     on the levels' frequencies);
+#'   - a total variance of 0, where no cutpoint gives a fraction.
+#'
+#'   Not valid for composite phenotypes (`components` or `formula_tgv`):
+#'   their genetic liability combines several traits and contributors, which
+#'   no stored variance describes. Give `thresholds` instead.
+#' @param thresholds Numeric vector of length K−1 for K ordered categories:
+#'   finite liability cutpoints in strictly ascending order. A record is in
+#'   category `k + 1` when its liability is strictly above cutpoint `k`; a
+#'   liability exactly on a cutpoint stays in the lower category. Mutually
+#'   exclusive with `prevalence`.
 #' @param cat_values Numeric vector of length K. Phenotype value stored in
 #'   `ind_phenotype` for each category. Defaults to `1, 2, ..., K`.
 #' @param cat_names Character vector of length K. Human-readable label per
@@ -134,7 +161,11 @@
 #'   that list, a `col` or `table` that is not a plain identifier, or a table
 #'   or column that does not exist yet — is an error here, before anything
 #'   is written. Mutually exclusive with `components`. Not valid with
-#'   `type = "derived_formula"`.
+#'   `type = "derived_formula"`. A constant expression gives every individual
+#'   that value. At [add_phenotype()], a result that is `Inf`, `-Inf` or
+#'   `NaN` (division by zero, overflow, a function outside its domain) is an
+#'   error naming the individuals, and nothing is written; a missing
+#'   contributor is `missing_component_action`'s business, as before.
 #' @param formula Character. Arithmetic expression evaluated over already-
 #'   recorded phenotype values to produce a derived phenotype (e.g.
 #'   `"ADFI / ADG"` for feed conversion ratio). Phenotype names reference
@@ -287,11 +318,27 @@ define_phenotype <- function(pop,
   missing_component_action <- match.arg(missing_component_action)
   condition_change_action  <- match.arg(condition_change_action)
 
+  if (is.null(mean) || length(mean) != 1L || !is.numeric(mean) ||
+      !is.finite(mean)) {
+    stop("`mean` for phenotype '", phenotype_name, "' must be one finite ",
+         "number (got ", if (is.null(mean)) "NULL" else
+           paste0("a length-", length(mean), " ", class(mean)[1L]), ").",
+         call. = FALSE)
+  }
+
   # ── Categorical validation ─────────────────────────────────────────────────
 
+  if (!is.null(thresholds) &&
+      (!is.numeric(thresholds) || length(thresholds) < 1L ||
+       any(!is.finite(thresholds)) || is.unsorted(thresholds, strictly = TRUE))) {
+    stop("`thresholds` must be finite numbers in strictly ascending order ",
+         "(one cutpoint fewer than the categories); got ",
+         paste(format(thresholds, trim = TRUE), collapse = ", "), ".",
+         call. = FALSE)
+  }
+
   if (type == "categorical") {
-    has_thresholds <- !is.null(thresholds) && length(thresholds) >= 1 &&
-                      !all(is.na(thresholds))
+    has_thresholds <- !is.null(thresholds)
     has_prevalence <- !is.null(prevalence) && !is.na(prevalence) &&
                       prevalence > 0 && prevalence < 1
 
@@ -513,6 +560,14 @@ define_phenotype <- function(pop,
                    condition_change_action = condition_change_action),
     caller  = "define_phenotype()")
 
+  # Every check is done. The replacement is one transaction, so a failure
+  # in any write leaves the old definition, its components and its residual
+  # block exactly as they were.
+  DBI::dbExecute(pop$db_conn, "BEGIN TRANSACTION")
+  committed <- FALSE
+  on.exit(if (!committed) try(DBI::dbExecute(pop$db_conn, "ROLLBACK"),
+                              silent = TRUE), add = TRUE)
+
   # Overwrite replaces the phenotype_meta row and its components. It leaves
   # phenotype_var_comp alone: the residual block is only ever rewritten through
   # `residual_var` (above) or define_residual_cov().
@@ -525,11 +580,8 @@ define_phenotype <- function(pop,
 
   # ── Serialize categorical fields ──────────────────────────────────────────
 
-  thresholds_str <- if (is.null(thresholds) || all(is.na(thresholds))) {
-    NA_character_
-  } else {
+  thresholds_str <- if (is.null(thresholds)) NA_character_ else
     paste(thresholds, collapse = ",")
-  }
 
   cat_values_str <- if (is.null(cat_values)) NA_character_
                     else paste(cat_values, collapse = ",")
@@ -538,14 +590,6 @@ define_phenotype <- function(pop,
                     else paste(cat_names, collapse = ",")
 
   # ── Insert into phenotype_meta ─────────────────────────────────────────────
-
-  if (is.null(mean) || length(mean) == 0) {
-    stop(
-      "`mean` for phenotype '", phenotype_name, "' is NULL or empty. ",
-      "Check that the config value is defined (e.g. config$general$wean_weight_mean).",
-      call. = FALSE
-    )
-  }
 
   new_id <- next_int_id(pop$db_conn, "phenotype_meta", "id_phenotype_meta")
 
@@ -574,12 +618,10 @@ define_phenotype <- function(pop,
   # ── Residual variance ──────────────────────────────────────────────────────
 
   if (!is.null(resid_matrix)) {
-    pop <- define_residual_cov(
-      pop,
-      phenotype_names  = phenotype_name,
-      cov_matrix       = resid_matrix,
-      condition_column = NULL
-    )
+    .pvc_write_block(pop$db_conn, "residual", phenotype_name, resid_matrix,
+                     condition_column = NULL, condition_table = NULL,
+                     condition_level = NULL,
+                     caller = "define_phenotype(residual_var = )")
   }
 
   # ── Components ────────────────────────────────────────────────────────────
@@ -624,6 +666,9 @@ define_phenotype <- function(pop,
 
     DBI::dbWriteTable(pop$db_conn, "phenotype_components", comp_rows, append = TRUE)
   }
+
+  DBI::dbExecute(pop$db_conn, "COMMIT")
+  committed <- TRUE
 
   msg_suffix <- ""
   if (!is.null(formula_tgv)) msg_suffix <- " [formula_tgv DSL]"

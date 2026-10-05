@@ -396,7 +396,8 @@ define_additive_effects <- function(tbl,
                call. = FALSE)
         }
         message("Trait '", t, "' has no QTL in this call; its target ",
-                "variance is 0, so it receives no effects.")
+                "variance is 0, so it receives no effects, and its generated ",
+                "effects at this scope are removed.")
       }
       mask[, t] <- active
     }
@@ -485,11 +486,14 @@ define_additive_effects <- function(tbl,
   drop  <- integer(0)
   for (t in trait_name) {
     rows <- mask[, t] & !is.na(B[, t])
-    if (!any(rows)) next
     scope_t <- .dae_scope(line_name, po[[t]])
+    # Every trait's old variant at this scope goes, including a zero-target
+    # "union" trait that receives no new terms: kept, it would go on
+    # delivering its old variance under the new target of 0.
     drop <- c(drop, .ge_resolve_deletes(
       model, t, GE_GENERATED_OWNER, "replace_scope",
       .ge_scope_from_origin(scope_t, "replace_scope"), TRUE))
+    if (!any(rows)) next
     built <- .dae_stack(built, .dae_build(conn, t, genome_order$locus_name[rows],
                                           B[rows, t], p_base[rows], scope_t))
   }
@@ -745,9 +749,12 @@ GE_GENERATED_OWNER <- "generated"
           ". Both stand — the qualified one applies to its parent's copies and ",
           "the other falls back for the rest — which is a legal fallback pair ",
           "but is rarely what re-running the same call with a new ",
-          "parent_origin was meant to do. Use mode replace_owner via ",
-          "define_genome_effect_terms(), or remove the unwanted variant, if you ",
-          "meant to replace it.", call. = FALSE)
+          "parent_origin was meant to do. To drop the unwanted variant, use ",
+          "remove_generated_effects(pop, trait_name, line_name = , ",
+          "parent_origin = ) with its scope. While both stand, ",
+          "define_phenotype(prevalence = ) refuses the trait (no stored ",
+          "target describes their combined variance); give it thresholds.",
+          call. = FALSE)
   invisible(NULL)
 }
 
@@ -943,6 +950,30 @@ QTL_REALISED_MAX_CELLS <- 2e7
          paste(ifelse(is.na(unique(rows$line_name)), "NULL",
                       unique(rows$line_name)), collapse = " and "),
          "). Filter it to one.", call. = FALSE)
+  }
+  # The explicit table chooses which effect and which traits, never which
+  # scope: every later reader (the prevalence threshold, the target-change
+  # refusals) finds a term's target from its own scope, by the same
+  # line -> NULL precedence, so the selected block must be that one.
+  if (explicit && nrow(rows) > 0L) {
+    want <- .tvc_resolve_line(conn, "additive", trait_name, line_name)
+    got  <- unique(rows$line_name)
+    if (!identical(if (is.na(got)) NULL else got, want)) {
+      lbl <- function(x) if (is.null(x) || is.na(x)) "population-wide"
+                         else paste0("line '", x, "'")
+      stop("`trait_var_comp_tbl` selects the ", lbl(got), " 'additive' block, ",
+           "but terms at this call's scope (",
+           .dae_scope_label(line_name, po[[trait_name[1L]]]), ") are ",
+           "described by the ", lbl(want), " block",
+           if (!is.null(line_name) && is.null(want))
+             paste0(" (line '", line_name, "' has no block of its own)")
+           else if (!is.null(line_name))
+             paste0(" (line '", line_name, "' has a block of its own)"),
+           ". Calibrating to another scope's target would leave the stored ",
+           "target describing terms that do not deliver it. Select the ",
+           lbl(want), " rows, or pass the call's `line_name` for the block ",
+           "you meant.", call. = FALSE)
+    }
   }
   if (nrow(rows) == 0L) {
     stop("No 'additive' target is stored for ", paste(trait_name, collapse = ", "),

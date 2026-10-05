@@ -1153,9 +1153,13 @@ NULL
 #' Errors, naming `define_phenotype(thresholds = )`, when any term is not
 #' `"generated"`, when the model has terms outside the three blocks (an
 #' `indicator` surface, any interaction other than additive-by-additive), or
-#' when it has terms of a kind with no stored target.
+#' when it has terms of a kind with no stored target. Also errors when one
+#' kind at one line scope has generated variants for more than one
+#' parent-of-origin scope: each variant is calibrated to the target alone, so
+#' "generated" proves a variant's calibration, not the whole trait's variance.
 #'
-#' The result is the *target* at the reference population, an approximation
+#' The sum of diagonals assumes orthogonal components (statistical coding at
+#' one HWE/LE base). The result is the *target* at the reference population, an approximation
 #' for a selected or line-scoped population, as the roxygen of
 #' [define_phenotype()] says.
 #'
@@ -1193,6 +1197,33 @@ NULL
          paste(sort(unique(terms$component_name[is.na(kind)])), collapse = ", "),
          "), whose variance no stored target describes.", fix, call. = FALSE)
   }
+  # One stored diagonal describes one calibrated variant per line scope. Two
+  # parent scopes at one line (paternal-only and maternal-only, or common
+  # plus a parent-only fallback) are each calibrated to the same target, but
+  # the trait's variance is their combination, which nothing calibrated.
+  parent <- .gev_term_parent(model)
+  line   <- .gev_term_line(model)
+  key    <- paste(kind, line)
+  multi  <- vapply(split(parent, key), function(x) length(unique(x)) > 1L,
+                   logical(1))
+  if (any(multi)) {
+    scopes <- vapply(names(multi)[multi], function(b) {
+      i  <- which(key == b)
+      sc <- sort(unique(parent[i]), na.last = FALSE)
+      paste0(kind[i[1L]], ", ",
+             if (is.na(line[i[1L]])) "all lines" else paste0("line ", line[i[1L]]),
+             ": ", paste(ifelse(is.na(sc), "both parents",
+                                paste0("parent_origin ", sc, " only")),
+                         collapse = " + "))
+    }, character(1))
+    stop("Phenotype '", t, "': the `prevalence` threshold uses one stored ",
+         "target per kind of term, but the trait has generated variants for ",
+         "more than one parent-of-origin scope (", paste(scopes, collapse = "; "),
+         "). Each variant was calibrated to the target on its own; their ",
+         "combination has a different variance (two disjoint parent scopes ",
+         "of variance V give 2V), which no stored target describes.", fix,
+         call. = FALSE)
+  }
   present <- intersect(GENETIC_EFFECT_NAMES, kind)
   v <- vapply(present, function(k) get_trait_var(pop, k, t), numeric(1))
   if (anyNA(v)) {
@@ -1203,6 +1234,63 @@ NULL
          call. = FALSE)
   }
   sum(v)
+}
+
+
+#' The named random-effect variance a prevalence threshold uses
+#'
+#' The liability carries every named random effect of the phenotype, so the
+#' threshold's variance includes their stored variances (each effect's
+#' diagonal in `phenotype_var_comp`). `normal` and `uniform` effects are
+#' centred with that variance and enter it; a `gamma` effect (shape 1) has
+#' mean `sqrt(variance)`, which no threshold from `mean` accounts for, and is
+#' refused.
+#'
+#' Also refuses a residual block with conditional strata: the unconditional
+#' stratum is then only the fallback for records whose level has no stratum
+#' of its own, not the population's marginal residual variance, which would
+#' need the levels' frequencies.
+#'
+#' @return The summed random-effect variance (a number, `0` with none).
+#' @keywords internal
+.ap_prevalence_env_var <- function(pop, t) {
+  conn <- pop$db_conn
+  fix  <- " Give explicit liability cutpoints with define_phenotype(thresholds = )."
+  strata <- DBI::dbGetQuery(conn,
+    "SELECT DISTINCT condition_column, condition_level FROM phenotype_var_comp
+     WHERE effect_name = 'residual' AND phenotype_name_1 = ?
+       AND condition_column IS NOT NULL", params = list(t))
+  if (nrow(strata) > 0L) {
+    stop("Phenotype '", t, "': the `prevalence` threshold needs the ",
+         "population's marginal residual variance, but its residual has ",
+         "conditional strata (", strata$condition_column[1L], "). The ",
+         "unconditional stratum is only the fallback for levels without one, ",
+         "and the marginal variance would depend on the levels' frequencies.",
+         fix, call. = FALSE)
+  }
+  re <- DBI::dbGetQuery(conn,
+    "SELECT e.effect_name, e.distribution, v.cov_value
+     FROM phenotype_effects e
+     LEFT JOIN phenotype_var_comp v
+       ON v.effect_name = e.effect_name AND v.phenotype_name_1 = e.phenotype_name
+      AND v.phenotype_name_2 = e.phenotype_name AND v.condition_column IS NULL
+     WHERE e.phenotype_name = ? AND e.effect_class = 'random'
+     ORDER BY e.effect_name", params = list(t))
+  if (nrow(re) == 0L) return(0)
+  dist <- ifelse(is.na(re$distribution), "normal", re$distribution)
+  if (any(dist == "gamma")) {
+    stop("Phenotype '", t, "': the `prevalence` threshold assumes centred ",
+         "random effects, but ", paste0("'", re$effect_name[dist == "gamma"],
+                                        "'", collapse = ", "),
+         " is a gamma effect, whose mean is sqrt(variance).", fix,
+         call. = FALSE)
+  }
+  if (anyNA(re$cov_value)) {
+    stop("Phenotype '", t, "': no variance is stored for random effect(s) ",
+         paste0("'", re$effect_name[is.na(re$cov_value)], "'", collapse = ", "),
+         ".", call. = FALSE)
+  }
+  sum(re$cov_value)
 }
 
 
@@ -1225,6 +1313,7 @@ NULL
     t <- m$phenotype_name
     if (composite[[i]]) stop(.prevalence_composite_msg(t), call. = FALSE)
     .ap_prevalence_genetic_var(pop, t)
+    .ap_prevalence_env_var(pop, t)
   }
   invisible(NULL)
 }
@@ -1244,9 +1333,11 @@ NULL
     if (has_thresh) {
       thresh_vec <- as.numeric(strsplit(m$thresholds, ",", fixed = TRUE)[[1]])
     } else {
-      # Prevalence threshold on the liability scale: mean + z * sqrt(Vg + Ve),
-      # with Vg the active model's stored genetic variance and Ve the
-      # unconditional (marginal) residual variance.
+      # Prevalence threshold on the liability scale, a Gaussian approximation:
+      # mean + z * sqrt(Vg + Vr + Ve), with Vg the active model's stored
+      # genetic variance, Vr the named random effects' variances and Ve the
+      # unconditional residual variance (the only stratum: conditional
+      # strata are refused in PLAN).
       if (is.na(r$var_unconditional)) {
         stop("Phenotype '", t, "': the prevalence threshold needs an ",
              "unconditional residual variance, but none is stored for it ",
@@ -1257,9 +1348,16 @@ NULL
              call. = FALSE)
       }
       pheno_mean <- if (is.na(m$mean)) 0 else m$mean
-      vg <- .ap_prevalence_genetic_var(pop, t)
-      thresh_vec <- pheno_mean +
-        stats::qnorm(1 - m$prevalence) * sqrt(vg + r$var_unconditional)
+      v_liab <- .ap_prevalence_genetic_var(pop, t) +
+        .ap_prevalence_env_var(pop, t) + r$var_unconditional
+      if (!(v_liab > 0)) {
+        stop("Phenotype '", t, "': the `prevalence` threshold needs a ",
+             "liability with positive variance, but its genetic, random ",
+             "and residual variances sum to 0; no cutpoint gives a fraction ",
+             "of a point mass. Give explicit liability cutpoints with ",
+             "define_phenotype(thresholds = ).", call. = FALSE)
+      }
+      thresh_vec <- pheno_mean + stats::qnorm(1 - m$prevalence) * sqrt(v_liab)
     }
     cat_idx <- liability_to_categorical(liability, thresh_vec)
     has_cv  <- !is.na(m$cat_values) && nzchar(m$cat_values)

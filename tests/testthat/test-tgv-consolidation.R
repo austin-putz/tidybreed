@@ -138,8 +138,11 @@ test_that("T7: true indices on the breeding value and on the total coexist", {
     dplyr::filter(locus_id >= 5L) |> define_additive_effects("U", warn_bounds = NULL))
   pop <- define_index(pop, "sel", c("T", "U"), index_wts = c(2, -1))
 
-  pop <- suppressMessages(pop |> get_table("ind_meta") |>
-    add_tgv(c("T", "U"), index_names = "sel"))
+  # T's hand-written indicator and interaction terms: the additive index
+  # warns that its 'additive' component is not the breeding value.
+  expect_warning(pop <- suppressMessages(pop |> get_table("ind_meta") |>
+    add_tgv(c("T", "U"), index_names = "sel")),
+    "'additive' component is not the breeding value")
   pop <- suppressMessages(pop |> get_table("ind_meta") |>
     add_tgv(c("T", "U"), index_names = "sel", component_name = "total"))
 

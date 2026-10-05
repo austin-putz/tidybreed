@@ -61,30 +61,61 @@ Default \code{FALSE}.}
 \code{NULL} means no limit.}
 
 \item{prevalence}{Numeric between 0 and 1. For categorical traits with one
-threshold (two categories), the fraction expected above the threshold.
-Mutually exclusive with \code{thresholds}. The liability carries the trait's
-total genetic value, so the threshold is placed from \code{mean}, the
-unconditional residual variance and the trait's stored genetic targets
-(\code{trait_var_comp}, population-wide rows): the sum of the \code{additive},
-\code{dominance} and \code{additive_by_additive} diagonals, each counted only if the
-trait's model has terms of that kind. \code{\link[=add_phenotype]{add_phenotype()}} errors when a kind
-of term the model has has no stored target, or when the model has terms
-outside those three kinds (an \code{indicator} surface, other interactions).
-The threshold uses the \emph{target} at the reference population, so the
-realised prevalence of a selected or line-specific population differs.
-Every term of the trait must be owned by \code{"generated"}: a generator
-(\code{\link[=define_additive_effects]{define_additive_effects()}}) always calibrates its terms to the stored
-target, so the target describes them. Terms written with
-\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} carry values nothing checked against a
-target, so \code{\link[=add_phenotype]{add_phenotype()}} errors for such a trait; give \code{thresholds}.
-Not valid for composite phenotypes (\code{components} or
-\code{formula_tgv}): their genetic liability combines several traits and
-contributors, which no stored variance describes. Give \code{thresholds}
-instead.}
+threshold (two categories), the fraction expected strictly above the
+threshold. Mutually exclusive with \code{thresholds}. The threshold is
+\code{mean + qnorm(1 - prevalence) * sqrt(V)}, where \code{V} is the variance of
+the whole liability:
+\itemize{
+\item the trait's stored genetic targets (\code{trait_var_comp}, population-wide
+rows): the sum of the \code{additive}, \code{dominance} and
+\code{additive_by_additive} diagonals, each counted only if the trait's
+model has terms of that kind;
+\item the stored variance of every named random effect
+(\code{\link[=define_effect_random]{define_effect_random()}}; \code{normal} and \code{uniform} are centred with that
+variance);
+\item the unconditional residual variance.
+}
 
-\item{thresholds}{Numeric vector of length K−1 for K ordered categories.
-Liability cutpoints in ascending order. Mutually exclusive with
-\code{prevalence}.}
+This is a \strong{Gaussian approximation} at a reference population in
+Hardy-Weinberg and linkage equilibrium. It is exact only when the
+liability is normal: a few large QTL make the genetic value discrete,
+and the realised prevalence then differs even in an infinite reference
+population. Summing the component targets also assumes they are
+orthogonal (no covariance between additive, dominance and A x A values),
+which holds for statistical coding at one base, not under LD. Fixed
+effects shift the liability and are not included: the prevalence is for
+records whose fixed effects are 0. A selected or line-specific
+population also differs. For an exact fraction in a known population,
+compute cutpoints from it and pass \code{thresholds}.
+
+\code{\link[=add_phenotype]{add_phenotype()}} refuses the threshold, before any draw or write, when
+no stored target can describe the liability:
+\itemize{
+\item a term not owned by \code{"generated"}. A generator
+(\code{\link[=define_additive_effects]{define_additive_effects()}}) always calibrates its terms to the stored
+target; terms written with \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} carry values
+nothing checked against one;
+\item a kind of term with no stored target, or terms outside the three kinds
+(an \code{indicator} surface, other interactions);
+\item generated variants for two parent-of-origin scopes at one line
+(paternal-only plus maternal-only, or common plus a parent-only
+fallback). Each was calibrated to the target alone; together they have
+a different variance;
+\item a \code{gamma} random effect (its mean is \code{sqrt(variance)});
+\item a residual with conditional strata (the marginal variance would depend
+on the levels' frequencies);
+\item a total variance of 0, where no cutpoint gives a fraction.
+}
+
+Not valid for composite phenotypes (\code{components} or \code{formula_tgv}):
+their genetic liability combines several traits and contributors, which
+no stored variance describes. Give \code{thresholds} instead.}
+
+\item{thresholds}{Numeric vector of length K−1 for K ordered categories:
+finite liability cutpoints in strictly ascending order. A record is in
+category \code{k + 1} when its liability is strictly above cutpoint \code{k}; a
+liability exactly on a cutpoint stays in the lower category. Mutually
+exclusive with \code{prevalence}.}
 
 \item{cat_values}{Numeric vector of length K. Phenotype value stored in
 \code{ind_phenotype} for each category. Defaults to \verb{1, 2, ..., K}.}
@@ -167,7 +198,11 @@ function, an unknown or positional extra argument, a component outside
 that list, a \code{col} or \code{table} that is not a plain identifier, or a table
 or column that does not exist yet — is an error here, before anything
 is written. Mutually exclusive with \code{components}. Not valid with
-\code{type = "derived_formula"}.}
+\code{type = "derived_formula"}. A constant expression gives every individual
+that value. At \code{\link[=add_phenotype]{add_phenotype()}}, a result that is \code{Inf}, \code{-Inf} or
+\code{NaN} (division by zero, overflow, a function outside its domain) is an
+error naming the individuals, and nothing is written; a missing
+contributor is \code{missing_component_action}'s business, as before.}
 
 \item{formula}{Character. Arithmetic expression evaluated over already-
 recorded phenotype values to produce a derived phenotype (e.g.

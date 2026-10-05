@@ -77,7 +77,7 @@ by `define_additive_effects()`.
 |------------------|---------|-----------------------------------------------------------|
 | id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
 | trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
-| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()` and means *calibrated to the stored target* (0.74.1: the generator always calibrates, and `define_phenotype(prevalence = )` requires every term to be `"generated"`), `"custom"` is the `define_genome_effect_terms()` default |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()` and means *calibrated to the stored target* (0.74.1: the generator always calibrates, and `define_phenotype(prevalence = )` requires every term to be `"generated"`); it proves each *variant* was calibrated to the block its scope reads, not that two parent-scope variants together deliver it (0.74.5). Generated rows are deleted only by a generator re-run of their scope or `remove_generated_effects()`. `"custom"` is the `define_genome_effect_terms()` default |
 | effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
 | genome_value     | DOUBLE  | The term's coefficient                                    |
 
@@ -109,7 +109,9 @@ allele copies. **No rows = the common scope**, which matches every copy.
 
 **Reserved**: all columns of all three. Row deletion is refused — effect
 definitions are configuration and are replaced through
-`define_genome_effect_terms(mode = ...)`, not row-deleted.
+`define_genome_effect_terms(mode = ...)` (user owners) or a generator re-run /
+`remove_generated_effects()` (the `"generated"` owner, one scope at a time),
+not row-deleted.
 
 **No foreign keys *inside* the set** (members → effects, origins → members),
 deliberately. DuckDB 1.5.5 refuses to delete a parent row inside an explicit
@@ -362,8 +364,8 @@ SGE ADG) appear only here.
 | expressed_sex            | VARCHAR | `"both"`, `"M"`, or `"F"`                                     |
 | repeatable               | BOOLEAN | Repeated records allowed?                                     |
 | min_value / max_value    | DOUBLE  | Clipping bounds for count traits                              |
-| prevalence               | DOUBLE  | For 2-category categorical traits                             |
-| thresholds               | VARCHAR | Comma-separated liability cutpoints for K-category traits     |
+| prevalence               | DOUBLE  | For 2-category categorical traits: the fraction strictly above the threshold (Gaussian approximation over genetic targets + named random effects + residual) |
+| thresholds               | VARCHAR | Comma-separated liability cutpoints for K-category traits; finite, strictly ascending. A liability on a cutpoint stays in the lower category |
 | cat_values               | VARCHAR | Comma-separated numeric phenotype values per category         |
 | cat_names                | VARCHAR | Comma-separated labels per category                           |
 | store_liability          | BOOLEAN | Write raw liability to `ind_phenotype.liability_value`        |

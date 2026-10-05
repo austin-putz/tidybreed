@@ -15,6 +15,9 @@ liability_to_categorical(liability, thresholds)
 Integer vector of category indices (1-based).
 }
 \description{
-Convert a liability vector to ordered integer categories
+A record is in category \code{k + 1} when its liability is strictly \strong{above}
+cutpoint \code{k}; a liability exactly on a cutpoint stays in the lower
+category. That is what \code{prevalence} ("the fraction above the threshold")
+means, and it matters for discrete genetic values with no residual.
 }
 \keyword{internal}

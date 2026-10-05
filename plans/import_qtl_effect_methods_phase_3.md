@@ -11,6 +11,8 @@
 | 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, owner rule, `define_effect_cov_matrix()` refusal | **done** 2026-10-04 |
 | 3b review | 0.74.2 | Fallback-line scope in the cov refusal; `G =` refuses/warns for stranded scopes | **done** 2026-10-04 |
 | 3c | 0.74.3 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =`, Stage 1 ids out of SQL | **done** 2026-10-04 |
+| 3c follow-ups | 0.74.4 | `mutate_derived()` ids out of SQL, constant warning dropped, case hints | **done** 2026-10-05 |
+| Codex review | 0.74.5 | Nine findings verified and fixed; `remove_generated_effects()`; additive true-index warning | **done** 2026-10-05 |
 
 ---
 
@@ -680,6 +682,112 @@ removed were the scalar-constant warning. The remaining six are pre-existing:
 - the composite covariate test.
 
 `pkgdown::check_pkgdown()` is clean.
+
+## Codex review of step 3 (0.74.5)
+
+**Review:** `plans/import_qtl_effect_methods_phase_3_codex_review.md` (of 0.74.4,
+`76aa0df`). **Date:** 2026-10-05.
+
+Every one of the nine findings was reproduced through the public API before
+it was fixed, with the review's own fixture (seed 3401, 12 loci, 30 + 30
+founders). The measured numbers matched the review exactly: genic 100 vs
+threshold variance 1 (F1); 6 surviving U terms delivering 1 under a target of
+0 (F2); 2 vs 1 (F3); affected fraction 0.3442, liability variance 10.127 (F4);
+60/60 non-finite records (F6); the `setNames()` length error (F7); 0 rows left
+(F8); 33 ties, 0.833 vs 0.283 (F9); an all-zero true index (F5). **All nine
+are agreed with; none was rejected.**
+
+The common thread: Q21's "every term is `generated`" proves that each
+*variant* was calibrated to *a* target. It does not prove that the stored
+target the threshold reads is the one used (F1, F2), that the variants
+together have that variance (F3), or that the genetic variance is the whole
+liability's (F4). The threshold now checks each of those, and refuses rather
+than approximate when a check cannot be made.
+
+### Fixes
+
+| # | Fix | Where |
+|---|---|---|
+| 1 | `trait_var_comp_tbl` must select the block the call's scope reads (`line → NULL`, `.tvc_resolve_line()`); it chooses effect and traits, never scope. Refused before the seed | `.dae_resolve_target()` |
+| 2 | Every trait's old variant at the scope is deleted, including a zero-target `union` trait that gets no new terms. The message says so. A trait left with no terms takes the ordinary "no genome effects" error downstream | `define_additive_effects()` step 7 |
+| 3 | The threshold refuses when one kind at one line scope has generated variants for more than one parent scope (reciprocal, or common + parent-only fallback). New `.gev_term_parent()` | `.ap_prevalence_genetic_var()` |
+| 4 | `V` includes every named random effect's stored variance (`normal`, `uniform`). Refused: a `gamma` effect (mean `sqrt(v)`), a residual with conditional strata (the unconditional row is only a fallback), and `V = 0`. Checked in PLAN | `.ap_prevalence_env_var()`, `.ap_liability_records()` |
+| 5 | *(user decision: warn)* An `"additive"` true index warns when an index trait has `indicator` terms or hand-written interactions. The index is still written; `"total"` is not offered as a breeding-value substitute | `.tgv_warn_structural_additive()` |
+| 6 | A non-finite `formula_tgv` result (`Inf`, `NaN`, not an `NA` from a missing contributor) is an error in PLAN naming the individuals; no draw, no record | `.eval_formula_tgv()` |
+| 7 | A constant `formula_tgv` is broadcast | `.eval_formula_tgv()` |
+| 8 | `mean` (one finite number) and `thresholds` are validated before anything is written, and the replacement (delete, insert, residual, components) is one transaction. The residual goes through the transaction-free `.pvc_write_block()` | `define_phenotype()` |
+| 9 | Strict exceedance: a liability on a cutpoint stays in the lower category (`findInterval(left.open = TRUE)`), matching "the fraction above" and PH7's oracle. `thresholds` must be finite and strictly ascending (`c(1, NA)` used to declare three categories and classify into two) | `liability_to_categorical()`, `define_phenotype()` |
+
+**The parent-fallback warning advertised routes that are refused** (the
+review's last qualification). *User decision:* a new exported
+`remove_generated_effects(pop, trait_name, line_name = NULL, parent_origin =
+NULL)` deletes the generated terms at exactly one scope, in one validated
+transaction, and errors (deleting nothing, all-or-nothing across traits) when a
+trait has none there. Targets and `ind_tgv` are untouched. The warning now
+names it, and says prevalence is refused while both variants stand.
+
+*Follow-up decision (2026-10-05, option A):* it removes **every kind** of
+generated term at the scope, not only additive ones, so step 5's jointly
+calibrated common-scope model is removed whole in one call, and never one
+component at a time. Alternatives considered and rejected: additive-only with
+a refusal for non-additive terms, and a per-kind argument (it would leave a
+joint calibration half-removed). This was already the code's behaviour; the
+roxygen, the error text and a gate (planted generated dominance and A×A at the
+common scope removed with the common additive terms, a line-A variant
+surviving) now say so.
+
+**Scientific qualifications**, now in the `define_phenotype(prevalence = )`
+roxygen and the helper's: the threshold is a Gaussian approximation at an
+HWE/LE reference (a few large QTL miss the prevalence even there); summing
+component targets assumes orthogonal components; fixed effects are not in `V`
+(the prevalence is for records whose fixed effects are 0); exact fractions in a
+known population come from `thresholds`. The review's other qualifications
+(deterministic summation is not exact arithmetic; cached true indices are
+caches) were already stated and needed no change.
+
+### Seeded output
+
+Unchanged for every model the suite exercises: ties occur only for discrete
+liabilities with no residual, and the new refusals and variance terms apply
+only to models the threshold used to get wrong. A categorical phenotype with
+`prevalence` **and** a named random effect now gets a different (correct)
+threshold.
+
+### Tests
+
+| File | Gates |
+|---|---|
+| `test-prevalence-threshold.R` (new) | F3 reciprocal (PLAN refusal: RNG and `ind_phenotype` untouched) and common + fallback, then the `remove_generated_effects()` route; F4 analytic cutoff `qnorm(0.9) * sqrt(10)` checked record by record, uniform counted, gamma and conditional strata refused; F9 ties at unit and end-to-end level; `V = 0` refused |
+| `test-define_additive_effects.R` | F1: common call with line rows, line call with another line's rows, line call with population rows despite its own block (RNG and terms untouched), same scope accepted and calibrated, line → population fallback accepted. F2: the review's state, asserted on the stored terms and an independent `Σ n p q a²`, not the call's masked `delivered` |
+| `test-formula_tgv_dsl.R` | F6: `T / 0`, overflow, `log` of a negative, and a categorical phenotype; F7: `"2"` and `"T + 2"` over 30 offspring |
+| `test-define_phenotype.R` | F8: three invalid `mean`s and an injected failure after the delete (mocked `next_int_id()`), each leaving `phenotype_meta`, `phenotype_components` and `phenotype_var_comp` identical; F9 threshold validation |
+| `test-add_tgv_index.R` | F5: the dosage surface warns and still writes 0; `"total"` and a generated-only trait do not warn |
+| `test-remove_generated_effects.R` (new) | one scope removed and nothing else; empty scope and bad input refused with nothing deleted; user-owner terms untouched; every kind at the scope removed together |
+| `test-tgv-consolidation.R` | T7's mixed fixture (hand-written indicator + interaction) now expects the F5 warning |
+
+### Verification
+
+- Every finding re-run through the review's probes after the fix: each now
+  refuses, or gives the right number (F4: affected fraction 0.1013 for a
+  requested 0.1 in 10,000).
+- **Mutation checks:** with the env-variance term zeroed, the parent-scope
+  check disabled, the inclusive classifier restored or the F5 warning
+  removed, the matching gates fail (2/2, 2/2, 1/1, 1/1 tests).
+- **Full suite** (`NOT_CRAN=true`): 0 failed, 0 errors, 0 skipped. The six
+  standing warnings are unchanged; two new ones from T7 were the F5 warning
+  on its mixed fixture, now asserted (and the warning no longer fires on a
+  call that skips every individual). The two touched files were re-run after
+  that change.
+- `devtools::document()` and `pkgdown::check_pkgdown()` are clean.
+
+### Plan bookkeeping
+
+- `plans/import_qtl_effect_methods.md`: §10's table and the Step 3 heading;
+  an "As built, step-3 review" paragraph; Q21 refined; requirements for steps 4
+  and 5.
+- Skills (`tidybreed-api`, `tidybreed-schema`), CLAUDE.md's "Generated means
+  calibrated" rule, `NEWS.md`, `DESCRIPTION`, `_pkgdown.yml`, regenerated
+  `man/`.
 
 ### Next
 

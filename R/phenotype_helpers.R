@@ -36,13 +36,17 @@ decode_levels_json <- function(s) {
 
 #' Convert a liability vector to ordered integer categories
 #'
+#' A record is in category `k + 1` when its liability is strictly **above**
+#' cutpoint `k`; a liability exactly on a cutpoint stays in the lower
+#' category. That is what `prevalence` ("the fraction above the threshold")
+#' means, and it matters for discrete genetic values with no residual.
+#'
 #' @param liability Numeric vector.
 #' @param thresholds Numeric vector of cutpoints (ascending).
 #' @return Integer vector of category indices (1-based).
 #' @keywords internal
 liability_to_categorical <- function(liability, thresholds) {
-  thresholds <- sort(thresholds)
-  findInterval(liability, thresholds) + 1L
+  findInterval(liability, sort(thresholds), left.open = TRUE) + 1L
 }
 
 

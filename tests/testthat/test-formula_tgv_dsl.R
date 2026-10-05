@@ -279,3 +279,41 @@ test_that("derived formula: only phenotype names, numbers, operators and math fu
   expect_identical(Sys.getenv("TB_PWNED"), "")
   expect_equal(nrow(dsl_records(pop, "D")), 0L)
 })
+
+
+# ── Step-3 review (findings 6, 7): what the accepted grammar evaluates to ────
+
+test_that("a non-finite formula_tgv result is an error and writes no record (finding 6)", {
+  pop <- dsl_pop("dsl_nonfinite")
+  on.exit(close_pop(pop), add = TRUE)
+  n_records <- function() DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM ind_phenotype")$n
+  for (f in c("T / 0", "exp(1000 * (T + 10))", "log(T - 1000)")) {
+    nm <- paste0("P", match(f, c("T / 0", "exp(1000 * (T + 10))", "log(T - 1000)")))
+    pop <- define_phenotype(pop, nm, residual_var = 0, formula_tgv = f)
+    seed_before <- .Random.seed
+    expect_error(suppressMessages(dsl_offspring(pop) |> add_phenotype(nm)),
+                 "non-finite genetic value.*Nothing was written")
+    expect_identical(.Random.seed, seed_before)
+    expect_equal(n_records(), 0)
+  }
+  # Categorical: an infinite liability would silently pick an extreme category.
+  pop <- define_phenotype(pop, "C", type = "categorical", thresholds = 0,
+                          residual_var = 1, formula_tgv = "T / 0")
+  expect_error(suppressMessages(dsl_offspring(pop) |> add_phenotype("C")),
+               "non-finite genetic value")
+  expect_equal(n_records(), 0)
+})
+
+test_that("a constant formula_tgv is broadcast to every individual (finding 7)", {
+  pop <- dsl_pop("dsl_constant")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_phenotype(pop, "K", residual_var = 0, formula_tgv = "2")
+  pop <- define_phenotype(pop, "KT", residual_var = 0, formula_tgv = "T + 2")
+  pop <- suppressMessages(dsl_offspring(pop) |> add_phenotype(c("K", "KT")))
+  k  <- dsl_records(pop, "K")
+  kt <- dsl_records(pop, "KT")
+  expect_equal(nrow(k), 30L)
+  expect_identical(k$pheno_value, rep(2, 30))
+  expect_equal(kt$pheno_value, dsl_value(pop, kt$id_ind) + 2, tolerance = 1e-12)
+})

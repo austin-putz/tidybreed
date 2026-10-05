@@ -228,7 +228,12 @@ this file was updated before.
   coefficients go through `define_genome_effect_terms()` under a user owner.
   `define_phenotype(prevalence = )` trusts the stored target only because of
   this (every term must be `"generated"`), and `define_effect_cov_matrix()`
-  refuses a target under generated terms of that kind and scope.
+  refuses a target under generated terms of that kind and scope. The owner
+  proves a *variant* was calibrated, nothing more: a generator calibrates
+  only to the block its own scope reads, deletes its old variant at the scope
+  even when it writes no new terms, and the threshold refuses two parent
+  scopes of one kind at one line. Generated terms are deleted only by
+  re-running their scope or `remove_generated_effects()`.
 - **One evaluator, one table of genetic values:** `add_tgv()` evaluates every
   term through `R/genome_effects_eval.R` into `ind_tgv`; never write a second
   implementation of the effect math or a second genetic-value table. The

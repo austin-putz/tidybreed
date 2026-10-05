@@ -140,6 +140,23 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
   }, character(1), USE.NAMES = FALSE)
 }
 
+#' The parent-of-origin scope of a term
+#'
+#' The sorted, comma-joined `parent_origin` values its origin rows name, or
+#' `NA` when none does (a term reading both parents' copies).
+#'
+#' @param model A `.gev_read_model()` result.
+#' @return Character, one per row of `model$terms`.
+#' @keywords internal
+#' @noRd
+.gev_term_parent <- function(model) {
+  vapply(model$terms$id_genome_effect, function(id) {
+    po <- unique(stats::na.omit(
+      model$origins$parent_origin[model$origins$id_genome_effect == id]))
+    if (length(po) == 0L) NA_character_ else paste(sort(po), collapse = ",")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Evaluation-unit kind for a member contrast
 #'
 #' `additive` matches per allele copy; `dominance` and `indicator` match the

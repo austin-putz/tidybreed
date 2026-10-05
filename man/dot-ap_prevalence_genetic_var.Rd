@@ -28,9 +28,13 @@ requested prevalence.
 Errors, naming \code{define_phenotype(thresholds = )}, when any term is not
 \code{"generated"}, when the model has terms outside the three blocks (an
 \code{indicator} surface, any interaction other than additive-by-additive), or
-when it has terms of a kind with no stored target.
+when it has terms of a kind with no stored target. Also errors when one
+kind at one line scope has generated variants for more than one
+parent-of-origin scope: each variant is calibrated to the target alone, so
+"generated" proves a variant's calibration, not the whole trait's variance.
 
-The result is the \emph{target} at the reference population, an approximation
+The sum of diagonals assumes orthogonal components (statistical coding at
+one HWE/LE base). The result is the \emph{target} at the reference population, an approximation
 for a selected or line-scoped population, as the roxygen of
 \code{\link[=define_phenotype]{define_phenotype()}} says.
 }

@@ -17,7 +17,11 @@
 }
 \value{
 Named numeric vector (names = id_ind). NA marks excluded individuals
-(a missing dam/sire genetic value, or NA group membership).
+(a missing dam/sire genetic value, or NA group membership). A
+constant expression is broadcast to every individual. An \code{Inf},
+\code{-Inf} or \code{NaN} from the arithmetic itself (division by zero,
+overflow, a domain error) is an error: it is a fault of the model,
+not a missing component.
 }
 \description{
 Orchestrates: parse → AST walk (references replaced by placeholders) →

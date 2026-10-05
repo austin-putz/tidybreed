@@ -433,3 +433,36 @@ test_that("add_tgv() writes scalar custom fields to ind_tgv", {
 
   close_pop(pop)
 })
+
+
+test_that("an additive true index warns when the model has hand-written surfaces (review finding 5)", {
+  set.seed(3401)
+  pop <- open_pop(pop_name = "ti_struct", db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 100) |>
+    define_founder_haplotypes(n_haplotypes = 100) |>
+    get_table("founder_haplotypes") |>
+    add_founders(n_males = 30, n_females = 30, line_name = "A")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- define_trait(pop, "T")
+  # A genetically additive 0/1/2 dosage surface with no additive rows.
+  pop <- define_genome_effect_terms(pop, "T",
+    genotype_terms(data.frame(Locus_1 = 0:2), c(0, 1, 2)))
+  pop <- suppressMessages(define_index(pop, "I", "T", 1))
+  expect_warning(pop <- suppressMessages(get_table(pop, "ind_meta") |>
+                   add_tgv("T", index_names = "I")),
+                 "'additive' component is not the breeding value")
+  # The index is still the documented structural product (all zero here).
+  ti <- dplyr::collect(get_table(pop, "ind_true_index"))
+  expect_true(all(ti$true_index_value == 0))
+  # The total is a different objective, chosen explicitly: no warning.
+  expect_no_warning(suppressMessages(get_table(pop, "ind_meta") |>
+    add_tgv("T", index_names = "I", component_name = "total")))
+
+  # Generated additive effects alone do not warn.
+  pop <- with_additive_target(pop, "G", 1)
+  pop <- suppressMessages(get_table(pop, "genome_meta") |>
+    define_additive_effects("G", seed = 1, warn_bounds = NULL))
+  pop <- suppressMessages(define_index(pop, "IG", "G", 1))
+  expect_no_warning(suppressMessages(get_table(pop, "ind_meta") |>
+    add_tgv("G", index_names = "IG")))
+})

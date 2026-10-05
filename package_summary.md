@@ -43,7 +43,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | Design docs (`plans/`) | 74 files, 31,296 lines |
 | Git commits | 232 |
 
-## Exported API (43 functions)
+## Exported API (44 functions)
 
 | Prefix | Functions |
 |---|---|
@@ -51,7 +51,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description`, `define_condition_change_action` |
 | `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
 | `mutate_` | `mutate_table`, `mutate_derived`, `mutate_group_seq`, `mutate_group_named`, `mutate_group_concatenate` |
-| `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `archive_replicate`, `extract_allele_freq` |
+| `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `remove_generated_effects`, `archive_replicate`, `extract_allele_freq` |
 | Term builders | `ad_terms`, `genotype_terms` |
 | Inspection | `get_table`, `schema`, `describe_table` |
 

@@ -54,6 +54,7 @@ reference:
   contents:
   - define_trait
   - define_additive_effects
+  - remove_generated_effects
   - define_genome_effect_terms
   - ad_terms
   - genotype_terms
