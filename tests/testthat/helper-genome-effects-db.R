@@ -4,19 +4,20 @@
 # origin truth table. This file is the other side — small utilities for tests
 # that go through the real tables.
 
-#' A flat view of the generated additive effects
+#' A flat view of the order-one additive effects
 #'
 #' Several suites want a one-row-per-(trait, locus, line) grain to assert
 #' against: it is the natural grain for "did this locus get this coefficient and
 #' this centre?". Reconstructing it from the three tables in a view keeps those
 #' assertions readable **and** keeps them honest — the view is derived from the
 #' real storage, so a change in the storage breaks it rather than silently
-#' passing. Restricted to the reserved owner, which is the only owner whose
-#' terms are guaranteed order-one additive.
+#' passing. Restricted to order-one `additive` terms, of any owner (since
+#' 0.74.1 known coefficients are written under `"custom"` by
+#' `with_additive_terms()`); `effect_owner` is a column for tests that care.
 ge_flat_view <- function(pop) {
   DBI::dbExecute(pop$db_conn, paste0(
     "CREATE OR REPLACE VIEW additive_flat AS ",
-    "SELECT e.trait_name, l.locus_name, m.locus_id, ",
+    "SELECT e.trait_name, e.effect_owner, l.locus_name, m.locus_id, ",
     "       m.center_value, e.genome_value, ",
     "       o.line_name, o.parent_origin ",
     "FROM genome_effects e ",
@@ -24,6 +25,8 @@ ge_flat_view <- function(pop) {
     "JOIN genome_effect_loci   l USING (id_genome_effect, member_slot) ",
     "LEFT JOIN genome_effect_member_origins o ",
     "  USING (id_genome_effect, member_slot) ",
-    "WHERE e.effect_owner = 'generated'"))
+    "WHERE m.contrast_name = 'additive' ",
+    "  AND (SELECT COUNT(*) FROM genome_effect_members m2 ",
+    "        WHERE m2.id_genome_effect = e.id_genome_effect) = 1"))
   pop
 }

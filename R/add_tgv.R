@@ -116,6 +116,17 @@
 #'   dplyr::filter(component_name == "additive") |> dplyr::collect()
 #' pop |> get_table("ind_tgv_total") |> dplyr::collect()
 #'
+#' # Known coefficients (a QTL map, GWAS estimates), line-specific, through
+#' # the writer rather than the generator; add_tgv() evaluates every owner.
+#' # center_value is filled from the Duroc founders' allele frequencies.
+#' pop <- define_genome_effect_terms(pop, "ADG",
+#'   data.frame(term_id = 1:2, locus_name = c("Locus_10", "Locus_44"),
+#'              contrast_name = "additive", genome_value = c(0.4, -0.2)),
+#'   origin = list(line_match_type = "exact", line_name = "Duroc"),
+#'   base_tbl = get_table(pop, "founder_haplotypes") |>
+#'     dplyr::filter(line_name == "Duroc"),
+#'   effect_owner = "qtl_map")
+#'
 #' # Genetic values + true index values (index and economic weights) on the
 #' # breeding values, written to ind_true_index
 #' pop <- pop |>

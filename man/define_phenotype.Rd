@@ -39,7 +39,16 @@ or \code{"derived_formula"}. \code{"derived_formula"} phenotypes are computed at
 recorded phenotype values for the same individuals; they have no TBV,
 no residual variance, and no QTL of their own.}
 
-\item{mean}{Numeric. Phenotypic population mean (intercept). Default \code{0}.}
+\item{mean}{Numeric. The intercept. Default \code{0}. A record is \code{mean} + the
+genetic value as stored + random effects + residual; nothing is added
+to make the realised mean hit \code{mean}. Generated effects have mean 0 in
+expectation at their base allele frequencies (Hardy-Weinberg and linkage
+equilibrium), so \code{mean} is the base phenotypic mean in expectation; a
+finite, selected or non-equilibrium base differs by its sample genetic
+mean, and hand-written functional terms by their implied mean (see
+\code{\link[=ad_terms]{ad_terms()}}). For a particular realised base mean, set \code{mean} to the
+target minus the base individuals' mean of \code{ind_tgv_total}, measured
+after \code{\link[=add_founders]{add_founders()}}.}
 
 \item{expressed_sex}{Character. Who receives a phenotype record: \code{"both"}
 (default), \code{"M"}, or \code{"F"}.}
@@ -63,12 +72,12 @@ of term the model has has no stored target, or when the model has terms
 outside those three kinds (an \code{indicator} surface, other interactions).
 The threshold uses the \emph{target} at the reference population, so the
 realised prevalence of a selected or line-specific population differs.
-The target is taken as given: if the trait's effects were written without
-being calibrated to it (manual \code{effects}, or \code{scale_to_target = FALSE} in
-\code{\link[=define_additive_effects]{define_additive_effects()}}, or terms from \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}),
-the threshold describes a variance the model does not deliver and the
-realised prevalence is wrong, with no error. Give \code{thresholds} for such a
-trait. Not valid for composite phenotypes (\code{components} or
+Every term of the trait must be owned by \code{"generated"}: a generator
+(\code{\link[=define_additive_effects]{define_additive_effects()}}) always calibrates its terms to the stored
+target, so the target describes them. Terms written with
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} carry values nothing checked against a
+target, so \code{\link[=add_phenotype]{add_phenotype()}} errors for such a trait; give \code{thresholds}.
+Not valid for composite phenotypes (\code{components} or
 \code{formula_tbv}): their genetic liability combines several traits and
 contributors, which no stored variance describes. Give \code{thresholds}
 instead.}

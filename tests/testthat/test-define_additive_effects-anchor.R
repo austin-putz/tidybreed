@@ -128,12 +128,14 @@ test_that("A6: 'realised' refuses pools, copies, scoped calls and no base", {
 test_that("A7: 'union' keeps per-trait QTL sets and warns 'approximate'", {
   pop <- anchor_pop("a7")
   on.exit(close_pop(pop))
-  # Per-trait sets, written unscaled (no target): T1 on 1-30, T2 on 20-50.
+  # Per-trait sets, planted uncalibrated (test-only; the generator has no
+  # unscaled mode since 0.74.1): T1 on 1-30, T2 on 20-50.
+  set.seed(1)
   quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
-    define_additive_effects("T1", scale_to_target = FALSE, seed = 1))
+    plant_generated_additive("T1", effects = stats::rnorm(30)))
   quiet(get_table(pop, "genome_meta") |>
     dplyr::filter(locus_id >= 20, locus_id <= 50) |>
-    define_additive_effects("T2", scale_to_target = FALSE, seed = 2))
+    plant_generated_additive("T2", effects = stats::rnorm(31)))
   w <- character()
   withCallingHandlers(
     suppressMessages(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 50) |>
@@ -346,8 +348,10 @@ test_that("A15: a stored block is never overwritten; the error's remove_rows() c
   expect_error(define_additive_effects(gm, c("T1", "T2"), G = G2,
     trait_var_comp_tbl = get_table(pop, "trait_var_comp") |>
       dplyr::filter(effect_name == "none")), "not both")
-  # define_effect_cov_matrix() refuses the same way.
-  expect_error(define_effect_cov_matrix(pop, "additive", G2), "already stored")
+  # define_effect_cov_matrix() refuses too: here first because the traits
+  # have generated terms calibrated to the stored block (0.74.1, Q21).
+  expect_error(define_effect_cov_matrix(pop, "additive", G2),
+               "already have generated 'additive' terms")
 
   # A scalar G with one trait is a 1 x 1 block.
   suppressMessages(define_trait(pop, "T3"))
@@ -459,26 +463,9 @@ test_that("A18: targets are stored at full precision and hit to 1e-12", {
   expect_identical(tvc_rows(pop), before)
 })
 
-test_that("A19: G with manual or unscaled effects is refused, pointing nowhere else", {
-  pop <- anchor_pop("a19")
-  on.exit(close_pop(pop))
-  gm <- get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 5)
-  e1 <- tryCatch(define_additive_effects(gm, "T1", G = 1, effects = rep(1, 5)),
-                 error = conditionMessage)
-  e2 <- tryCatch(define_additive_effects(gm, "T1", G = 1, scale_to_target = FALSE),
-                 error = conditionMessage)
-  for (e in c(e1, e2)) {
-    expect_match(e, "calibration target for sampled effects only")
-    expect_match(e, "take no target")
-    expect_no_match(e, "define_effect_cov_matrix")
-  }
-  expect_equal(nrow(tvc_rows(pop)), 0L)
-  expect_equal(nrow(ge_rows(pop)$terms), 0L)
-  # Manual effects with a stored target ignore it: no block checks at all.
-  quiet(define_effect_cov_matrix(pop, "dominance", 1, trait_name = "T1"))
-  quiet(define_additive_effects(gm, "T1", effects = c(1, 2, 3, 4, 5)))
-  expect_equal(unname(stored_B(pop, "T1")$B[, 1]), c(1, 2, 3, 4, 5))
-})
+# A19 (G with manual or unscaled effects refused) is moot since 0.74.1: the
+# generator has no manual or unscaled mode (Q21). test-define_additive_effects.R
+# pins that `effects =` and `scale_to_target =` are unused arguments.
 
 test_that("A20: reserved effect names are refused as input", {
   pop <- anchor_pop("a20")
@@ -521,8 +508,6 @@ test_that("A22: no refusal touches the RNG, with or without seed =", {
     before <- .Random.seed
     expect_error(define_additive_effects(gm, c("T1", "T2"),
                    G = matrix(c(1, 2, 2, 1), 2, 2), seed = s))          # bad target / overwrite
-    expect_error(define_additive_effects(gm, "T1", G = 1, effects = rep(1, 10),
-                                         seed = s))                     # G + effects
     expect_error(define_additive_effects(gm, "T1", seed = s))           # partial block
     expect_error(define_additive_effects(gm, c("T1", "T2"), G = G2, seed = s),
                  "already stored")                                      # overwrite
@@ -620,10 +605,11 @@ test_that("R3: a passed G never bypasses a stored non-additive target", {
 test_that("R5: union never calls a zero target covariance exact where QTL overlap", {
   pop <- anchor_pop("r5")
   on.exit(close_pop(pop))
+  set.seed(1)
   quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
-    define_additive_effects("T1", scale_to_target = FALSE, seed = 1))
+    plant_generated_additive("T1", effects = stats::rnorm(30)))
   quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id >= 20, locus_id <= 50) |>
-    define_additive_effects("T2", scale_to_target = FALSE, seed = 2))
+    plant_generated_additive("T2", effects = stats::rnorm(31)))
   G0 <- diag(2); dimnames(G0) <- list(c("T1", "T2"), c("T1", "T2"))
   expect_warning(suppressMessages(
     get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 50) |>
@@ -635,8 +621,9 @@ test_that("R5: union never calls a zero target covariance exact where QTL overla
 test_that("R5: union with no QTL for a zero-variance trait says so and stores the target", {
   pop <- anchor_pop("r5b")
   on.exit(close_pop(pop))
+  set.seed(1)
   quiet(get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 30) |>
-    define_additive_effects("T1", scale_to_target = FALSE, seed = 1))
+    plant_generated_additive("T1", effects = stats::rnorm(30)))
   Gz <- matrix(c(1, 0, 0, 0), 2, dimnames = list(c("T1", "T2"), c("T1", "T2")))
   expect_message(
     get_table(pop, "genome_meta") |> dplyr::filter(locus_id <= 50) |>

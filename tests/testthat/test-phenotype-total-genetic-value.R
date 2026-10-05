@@ -228,9 +228,11 @@ test_that("PH6: a trait with only user-owner terms records phenotypes", {
                "No genome effects found for phenotype 'EMPTY'")
 })
 
-# PH7, the parts that need no owner rule (that is step 3b). The rule: the
-# threshold sums the stored population-wide diagonals of the kinds of terms
-# the model has, and refuses kinds no target describes.
+# PH7. The rule: the threshold sums the stored population-wide diagonals of
+# the kinds of terms the model has, refuses kinds no target describes, and
+# (3b, Q21) refuses any term not owned by "generated". Kind fixtures are
+# planted under the reserved owner (test-only), so the owner rule does not
+# mask the kind rule.
 test_that("PH7: the prevalence threshold uses the active blocks only", {
   pop <- ph_pop("ph7_blocks")
   on.exit(close_pop(pop), add = TRUE)
@@ -278,8 +280,14 @@ test_that("PH7: the prevalence threshold uses the active blocks only", {
 })
 
 test_that("PH7: kinds no stored target describes are refused, naming thresholds", {
-  pop <- ph_pop("ph7_refuse", mixed = TRUE)
+  pop <- ph_pop("ph7_refuse")
   on.exit(close_pop(pop), add = TRUE)
+  loci <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::arrange(.data$locus_id) |> dplyr::pull("locus_name")
+  pop <- .ge_write_terms(pop, "T",
+    genotype_terms(stats::setNames(data.frame(c(0L, 2L)), loci[11]),
+                   value = c(-0.5, 0.8)),
+    effect_owner = GE_GENERATED_OWNER, allow_reserved_owner = TRUE)
   pop <- define_phenotype(pop, "T", type = "categorical", prevalence = 0.1,
                           residual_var = 1)
   # The mixed model has an indicator surface: no target can describe it.
@@ -301,9 +309,129 @@ test_that("PH7: kinds no stored target describes are refused, naming thresholds"
   on.exit(close_pop(pop2), add = TRUE)
   loci <- pop2 |> get_table("genome_meta") |> dplyr::collect() |>
     dplyr::arrange(.data$locus_id) |> dplyr::pull("locus_name")
-  pop2 <- define_genome_effect_terms(pop2, "T",
+  pop2 <- .ge_write_terms(pop2, "T",
     ad_terms(loci[2], a = 0, d = 0.5, p = 0.3, coding = "cockerham",
-             report = FALSE), effect_owner = "dom")
+             report = FALSE),
+    effect_owner = GE_GENERATED_OWNER, allow_reserved_owner = TRUE)
   expect_error(.ap_prevalence_genetic_var(pop2, "T"),
                "no population-wide row for 'dominance'.*thresholds")
+})
+
+# ── PH7, 3b (0.74.1, Q21): generated means calibrated ──────────────────────
+
+test_that("PH7: Codex finding 1 -- huge hand-written effects under a small target are refused", {
+  # Target 1, but ten loci of effect 10 through the writer: the realised
+  # genetic variance is ~ 10 * 2pq * 100, two orders above the target, so a
+  # threshold from the target would miss the prevalence badly. Before 0.74.1
+  # it ran silently.
+  set.seed(3402)
+  pop <- open_pop(pop_name = "ph7_codex", db_name = ":memory:") |>
+    define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 50) |>
+    define_founder_haplotypes(n_haplotypes = 60, method = "beta")
+  on.exit(close_pop(pop), add = TRUE)
+  pop <- pop |> get_table("founder_haplotypes") |>
+    add_founders(n_males = 20L, n_females = 20L, line_name = "A")
+  pop <- with_additive_target(pop, "T", 1)
+  loci <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::arrange(.data$locus_id) |> dplyr::pull("locus_name")
+  p <- extract_allele_freq(get_table(pop, "founder_haplotypes"))
+  pop <- define_genome_effect_terms(pop, "T",
+    ad_terms(loci[1:10], a = 10, d = 0,
+             p = p$allele_freq[match(loci[1:10], p$locus_name)],
+             coding = "cockerham", report = FALSE))
+  pop <- define_phenotype(pop, "T", type = "categorical", prevalence = 0.1,
+                          residual_var = 1)
+
+  seed_before <- .Random.seed
+  expect_error(pop |> get_table("ind_meta") |> add_phenotype("T"),
+               "owner 'custom'.*nothing checked against a target.*thresholds")
+  expect_identical(.Random.seed, seed_before)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_phenotype"))), 0L)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "phenotype_random_effects"))), 0L)
+  expect_equal(nrow(dplyr::collect(get_table(pop, "ind_tgv"))), 0L)
+
+  # thresholds = is the route, and works.
+  pop <- define_phenotype(pop, "T", type = "categorical", thresholds = 0,
+                          residual_var = 1, overwrite = TRUE)
+  pop <- suppressMessages(pop |> get_table("ind_meta") |> add_phenotype("T"))
+  expect_equal(nrow(ph_records(pop, "T")), 40L)
+})
+
+test_that("PH7: a stored target with any non-generated term is refused", {
+  # Generated additive terms that match the target, plus one user term: the
+  # target no longer describes the model, whatever the term's size.
+  pop <- ph_pop("ph7_owner")
+  on.exit(close_pop(pop), add = TRUE)
+  expect_equal(.ap_prevalence_genetic_var(pop, "T"), 1)
+  loci <- pop |> get_table("genome_meta") |> dplyr::collect() |>
+    dplyr::arrange(.data$locus_id) |> dplyr::pull("locus_name")
+  pop <- define_genome_effect_terms(pop, "T", data.frame(
+    locus_name = loci[12], contrast_name = "additive", center_value = 0.5,
+    genome_value = 0.01), effect_owner = "qtl_map")
+  expect_error(.ap_prevalence_genetic_var(pop, "T"),
+               "1 term\\(s\\) written by define_genome_effect_terms\\(\\) \\(owner 'qtl_map'\\)")
+})
+
+test_that("PH7: define_effect_cov_matrix() refuses a target under generated terms", {
+  pop <- ph_pop("ph7_cov")
+  on.exit(close_pop(pop), add = TRUE)
+  # The stored block is there: refused, naming the remove-and-regenerate route.
+  err <- tryCatch(define_effect_cov_matrix(pop, "additive", 2, trait_name = "T"),
+                  error = conditionMessage)
+  expect_match(err, "already have generated 'additive' terms \\(population-wide\\)")
+  expect_match(err, "remove_rows\\(\\)")
+  expect_match(err, "define_additive_effects\\(\\.\\.\\., G = \\)")
+
+  # Still refused after the old block is removed: the terms were calibrated to
+  # the old target, and a new one would not describe them.
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
+  err <- tryCatch(define_effect_cov_matrix(pop, "additive", 2, trait_name = "T"),
+                  error = conditionMessage)
+  expect_match(err, "already have generated 'additive' terms")
+  expect_no_match(err, "remove the stored block")
+  expect_equal(nrow(dplyr::collect(get_table(pop, "trait_var_comp"))), 0L)
+
+  # Another kind is not blocked by additive terms: no dominance terms exist.
+  expect_no_error(suppressMessages(
+    define_effect_cov_matrix(pop, "dominance", 0.2, trait_name = "T")))
+
+  # The generator refuses G next to the stored dominance target, and with
+  # generated additive terms present it must not send the user to
+  # define_effect_cov_matrix() (refused above): it names the working route.
+  gm  <- pop |> get_table("genome_meta") |> dplyr::filter(locus_id <= 8L)
+  err <- tryCatch(define_additive_effects(gm, "T", G = 2), error = conditionMessage)
+  expect_match(err, "cannot be stored first.*re-run this call, then store it again")
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    dplyr::filter(effect_name == "dominance") |> remove_rows(confirm_all = TRUE))
+
+  # The route the error names: the generator writes target and terms together.
+  pop <- suppressMessages(gm |>
+    define_additive_effects("T", G = 2, warn_bounds = NULL, seed = 1))
+  expect_equal(get_trait_var(pop, "additive", "T"), 2)
+  expect_equal(.ap_prevalence_genetic_var(pop, "T"), 2)
+  expect_no_error(suppressMessages(
+    define_effect_cov_matrix(pop, "dominance", 0.2, trait_name = "T")))
+})
+
+test_that("PH7: a line's target is accepted before that line's effects, refused after", {
+  pop <- ph_pop("ph7_line")
+  on.exit(close_pop(pop), add = TRUE)
+  # Population-wide generated terms do not block a line-A target (A17).
+  expect_no_error(suppressMessages(
+    define_effect_cov_matrix(pop, "additive", 0.5, trait_name = "T",
+                             line_name = "A")))
+  pop <- suppressMessages(pop |> get_table("genome_meta") |>
+    dplyr::filter(locus_id <= 8L) |>
+    define_additive_effects("T", line_name = "A", warn_bounds = NULL, seed = 1))
+  # Line-A terms now exist: a line-A target is refused, after removal too.
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    dplyr::filter(line_name == "A") |> remove_rows(confirm_all = TRUE))
+  expect_error(define_effect_cov_matrix(pop, "additive", 0.7, trait_name = "T",
+                                        line_name = "A"),
+               "generated 'additive' terms \\(line 'A'\\).*line_name = \"A\"")
+  # A line-B target is still free.
+  expect_no_error(suppressMessages(
+    define_effect_cov_matrix(pop, "additive", 0.7, trait_name = "T",
+                             line_name = "B")))
 })

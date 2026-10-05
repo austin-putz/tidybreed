@@ -10,7 +10,7 @@
 #
 # tbv.rds was re-captured in 0.68.0; the other four still date from the Stage-1
 # capture. The IMP (paternal-only) values moved by exactly sqrt(2) at every
-# individual, because 0.66.0 made scale_to_target origin-aware:
+# individual, because 0.66.0 made the variance calibration origin-aware:
 # V_A = sum_j n_eligible,j * p_j q_j a_j^2 with n_eligible = 1 for a
 # parent-qualified copy rather than 2. The old golden therefore recorded a
 # paternal-only trait carrying half its requested additive variance. ADG,

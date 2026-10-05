@@ -77,7 +77,7 @@ test_that("id_ind tables: frequency depends on which individuals, not how many r
   # Repeated rows per animal: five phenotype records each. Must not weight.
   pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), line_name = "Duroc")
+    with_additive_terms("ADG", effects = rep(1, 6), line_name = "Duroc")
   pop <- define_phenotype(pop, "ADG", mean = 0, residual_var = 1,
                           repeatable = TRUE)
   for (i in 1:5) {
@@ -248,7 +248,7 @@ test_that("with F1s present, line_origin selects copies and ind_meta.line_name s
   on.exit(close_pop(pop))
   pop <- with_additive_target(pop, "ADG", 1)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6),
+    with_additive_terms("ADG", effects = rep(1, 6),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   f1 <- tibble::tibble(id_parent_1 = c("Duroc_1", "Duroc_2"),
                        id_parent_2 = c("Landrace_3", "Landrace_4"),

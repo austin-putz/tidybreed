@@ -913,7 +913,6 @@ pop %>%
   define_additive_effects(
     trait_name      = "AP", 
     distribution    = "normal", 
-    scale_to_target = TRUE, 
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
@@ -1152,7 +1151,6 @@ pop %>%
   define_additive_effects(
     trait_name      = "ADG",        # trait name
     distribution    = "normal",     # distribution of QTL effects
-    scale_to_target = TRUE,         # scale to meet additive variance target
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
@@ -1233,7 +1231,6 @@ pop %>%
   define_additive_effects(
     trait_name      = "BF",        # trait name
     distribution    = "normal",     # distribution of QTL effects
-    scale_to_target = TRUE,         # scale to meet additive variance target
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
@@ -1305,7 +1302,6 @@ pop %>%
   define_additive_effects(
     trait_name      = "ADFI",        # trait name
     distribution    = "normal",     # distribution of QTL effects
-    scale_to_target = TRUE,         # scale to meet additive variance target
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
@@ -1431,7 +1427,6 @@ pop %>%
   define_additive_effects(
     trait_name      = c("WWD", "WWM"), # trait names
     distribution    = "normal",        # distribution of QTL effects
-    scale_to_target = TRUE,            # scale to meet additive variance target
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 
@@ -1499,7 +1494,6 @@ pop %>%
   define_additive_effects(
     trait_name      = "NW",        # trait name
     distribution    = "normal",     # distribution of QTL effects
-    scale_to_target = TRUE,         # scale to meet additive variance target
     base_tbl        = get_table(pop, "ind_meta") # all animals currently in pop define p
   )
 

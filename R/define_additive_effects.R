@@ -12,9 +12,8 @@
 #'
 #' @details
 #' **When the result is exact.** The requested covariance `G` is delivered
-#' exactly, `B' M B = G` to machine precision, **only** for sampled effects
-#' with `method = "shared"` and `scale_to_target = TRUE`, when the rank is
-#' feasible: `rank(G) <= rank(M)` (the anchor has enough independent
+#' exactly, `B' M B = G` to machine precision, for one trait or for several
+#' with `method = "shared"`, when the rank is feasible: `rank(G) <= rank(M)` (the anchor has enough independent
 #' segregating directions at the selected loci) and `rank(G) <=
 #' rank(B0' M B0)` (the drawn architecture does too). Each infeasibility is its
 #' own error. Rank and positive semidefiniteness are judged on the target's
@@ -90,10 +89,15 @@
 #' With `line_name = "C"` the default reads line C's block when one exists and
 #' otherwise the population-wide one.
 #'
-#' Manual `effects` are written unchanged and take no target; so do sampled
-#' effects with `scale_to_target = FALSE` (which for several traits still use
-#' the stored `G` as the draw's covariance). `G` with either is an error:
-#' nothing would be calibrated to it.
+#' @section Generated means calibrated:
+#' The generator always samples **and** calibrates: every term it writes
+#' under the `"generated"` owner delivers its stored target. That is what lets
+#' [define_phenotype()]`(prevalence = )` trust the stored target. It has no
+#' option to write fixed or unscaled effects. Exact coefficients (GWAS
+#' estimates, a published QTL map, a hand-built test) go through
+#' [define_genome_effect_terms()] with [ad_terms()] under a user owner;
+#' [add_tgv()] evaluates them like any other term, and a liability phenotype
+#' on such a trait then needs `thresholds =` instead of `prevalence =`.
 #'
 #' @section Which population centers the effects:
 #' Base allele frequencies center the true breeding value (the Falconer
@@ -161,9 +165,6 @@
 #' @param trait_name Character scalar **or** vector. Name(s) of existing traits
 #'   in `trait_meta`. When length >= 2, the architecture is drawn jointly from
 #'   `MVN(0, G)` and `method` becomes active.
-#' @param effects Optional numeric vector of length `n_qtl` (manual mode, single
-#'   trait only), in ascending `locus_id` order, written unchanged. Error if
-#'   `length(trait_name) > 1` or with `G`.
 #' @param distribution Character. `"normal"` (default) or `"gamma"`, the
 #'   single-trait architecture. Ignored for multi-trait (always MVN).
 #' @param G Optional additive-genetic (co)variance target: a `k x k` matrix
@@ -204,8 +205,6 @@
 #'   is not supported yet). Define differently-scoped traits in separate
 #'   calls. For imprinting that varies locus by locus, write the terms with
 #'   [define_genome_effect_terms()].
-#' @param scale_to_target Logical. `TRUE` (default) calibrates sampled effects
-#'   to the target. `FALSE` writes the draw unscaled and takes no target.
 #' @param warn_bounds Numeric length 2, `c(lower, upper)` with
 #'   `0 < lower <= upper`, or `NULL` to turn the comparison off. Outside
 #'   the bounds, an observed or genic-limit comparison warns; a founder-pool
@@ -263,7 +262,6 @@
 #' @export
 define_additive_effects <- function(tbl,
                                     trait_name,
-                                    effects            = NULL,
                                     distribution       = c("normal", "gamma"),
                                     G                  = NULL,
                                     trait_var_comp_tbl = NULL,
@@ -272,7 +270,6 @@ define_additive_effects <- function(tbl,
                                     base_tbl           = NULL,
                                     line_name          = NULL,
                                     parent_origin      = NULL,
-                                    scale_to_target    = TRUE,
                                     warn_bounds        = c(0.8, 1.25),
                                     seed               = NULL) {
 
@@ -311,26 +308,11 @@ define_additive_effects <- function(tbl,
   if (!is.null(line_name)) validate_sql_identifier(line_name, what = "line name")
   po <- .dae_parent_origin(parent_origin, trait_name)
   .qtl_validate_warn_bounds(warn_bounds)
-  if (!is.logical(scale_to_target) || length(scale_to_target) != 1L ||
-      is.na(scale_to_target)) {
-    stop("`scale_to_target` must be TRUE or FALSE.", call. = FALSE)
-  }
   if (!is.null(seed)) .qtl_validate_scalar(seed, "seed", integral = TRUE)
 
-  if (!is.null(G) && (!is.null(effects) || !scale_to_target)) {
-    stop("`G` is a calibration target for sampled effects only: ",
-         if (!is.null(effects)) "manual `effects` are written unchanged"
-         else "`scale_to_target = FALSE` writes the draw unscaled",
-         ", so nothing would be calibrated to it and trait_var_comp would ",
-         "record a target the model does not deliver. Such effects take no ",
-         "target: drop `G`.", call. = FALSE)
-  }
   if (!is.null(G) && !is.null(trait_var_comp_tbl)) {
     stop("Pass `G` (a new target) or `trait_var_comp_tbl` (stored rows), ",
          "not both.", call. = FALSE)
-  }
-  if (k > 1L && !is.null(effects)) {
-    stop("'effects' cannot be used when 'trait_name' has length > 1.", call. = FALSE)
   }
   if (k > 1L && distribution != "normal") {
     warning("'distribution' is ignored for multi-trait; effects are always drawn from MVN.",
@@ -363,15 +345,11 @@ define_additive_effects <- function(tbl,
   }
   n_elig <- .dae_n_eligible(po[[trait_name[1L]]])
 
-  if (anchor == "realised") .dae_check_realised(base_tbl, line_name, po,
-                                                effects, scale_to_target)
+  if (anchor == "realised") .dae_check_realised(base_tbl, line_name, po)
 
   # ── 2. The target (§6C). ──────────────────────────────────────────────────
-  need <- if (!is.null(effects)) "none"
-          else if (!scale_to_target) (if (k > 1L) "sigma" else "none")
-          else "target"
   tgt <- .dae_resolve_target(pop, trait_name, line_name, G,
-                             trait_var_comp_tbl, need)
+                             trait_var_comp_tbl)
   G <- tgt$G
 
   # ── 3. Loci, base, and the anchor's data. ─────────────────────────────────
@@ -402,21 +380,15 @@ define_additive_effects <- function(tbl,
       if (!any(active)) {
         # A positive target with no QTL to carry it would be stored (or kept)
         # as a target the model does not deliver.
-        if (need == "target" && G[t, t] > 0) {
+        if (G[t, t] > 0) {
           stop("Trait '", t, "' has no existing generated additive effects at ",
                "this scope within the candidate loci, so method = \"union\" ",
                "cannot deliver its target variance ", format(G[t, t]), ". ",
                "Define its QTL first, or use method = \"shared\".",
                call. = FALSE)
         }
-        if (need == "target") {
-          message("Trait '", t, "' has no QTL in this call; its target ",
-                  "variance is 0, so it receives no effects.")
-        } else {
-          warning("Trait '", t, "' has no existing generated additive effects ",
-                  "at this scope within the candidate loci; it will receive no ",
-                  "effects from this call.", call. = FALSE)
-        }
+        message("Trait '", t, "' has no QTL in this call; its target ",
+                "variance is 0, so it receives no effects.")
       }
       mask[, t] <- active
     }
@@ -432,16 +404,7 @@ define_additive_effects <- function(tbl,
     .dae_require_base_at(p_base, mask[, t], genome_order$locus_name,
                          trait = if (k > 1L) t)
   }
-  if (!is.null(effects)) {
-    if (!is.numeric(effects)) stop("`effects` must be numeric.", call. = FALSE)
-    if (length(effects) != sum(candidate)) {
-      stop("`effects` length (", length(effects), ") must equal number of selected loci (",
-           sum(candidate), ").", call. = FALSE)
-    }
-  }
-  if (need == "target") {
-    assert_qtl_autosomal(conn, genome_order$locus_name[any_qtl])
-  }
+  assert_qtl_autosomal(conn, genome_order$locus_name[any_qtl])
   design <- if (anchor == "realised")
     .dae_collect_dosages(pop, base$tbl, genome_order$locus_id[any_qtl])
 
@@ -456,42 +419,31 @@ define_additive_effects <- function(tbl,
 
   # Anchor feasibility depends on the base alone, so it is refused before the
   # seed: only an architecture-rank failure (step 5) depends on the draw.
-  std <- if (need == "target") .qtl_target_std(G)
-  if (need == "target") {
-    if (k == 1L || method == "shared") {
-      .qtl_anchor_rank_check(anchor_at(mask[, 1L])$rank(1e-10), std$rank)
-    } else {
-      for (t in trait_name) {
-        if (G[t, t] > 0) .qtl_anchor_rank_check(anchor_at(mask[, t])$rank(1e-10), 1L)
-      }
+  std <- .qtl_target_std(G)
+  if (k == 1L || method == "shared") {
+    .qtl_anchor_rank_check(anchor_at(mask[, 1L])$rank(1e-10), std$rank)
+  } else {
+    for (t in trait_name) {
+      if (G[t, t] > 0) .qtl_anchor_rank_check(anchor_at(mask[, t])$rank(1e-10), 1L)
     }
   }
 
   # ── 4. Seed, then draw. No RNG use before this line. ──────────────────────
   if (!is.null(seed)) set.seed(seed)
-  B <- if (!is.null(effects)) {
-    out <- matrix(NA_real_, n_loci, 1L, dimnames = list(NULL, trait_name))
-    out[candidate, 1L] <- as.numeric(effects)
-    out
-  } else {
-    .draw_additive_architecture(mask, distribution, G)
-  }
+  B <- .draw_additive_architecture(mask, distribution, G)
 
   # ── 5. Calibrate, verified against the target as stored. ─────────────────
-  exact <- NA
-  if (need == "target") {
-    if (k == 1L || method == "shared") {
-      rows <- mask[, 1L]
-      B[rows, ] <- .qtl_calibrate(B[rows, , drop = FALSE], std,
-                                  anchor_at(rows))$B
-    } else {
-      for (t in trait_name) {
-        rows <- mask[, t]
-        if (!any(rows)) next
-        B[rows, t] <- .qtl_calibrate(B[rows, t, drop = FALSE],
-                                     .qtl_target_std(G[t, t, drop = FALSE]),
-                                     anchor_at(rows))$B
-      }
+  if (k == 1L || method == "shared") {
+    rows <- mask[, 1L]
+    B[rows, ] <- .qtl_calibrate(B[rows, , drop = FALSE], std,
+                                anchor_at(rows))$B
+  } else {
+    for (t in trait_name) {
+      rows <- mask[, t]
+      if (!any(rows)) next
+      B[rows, t] <- .qtl_calibrate(B[rows, t, drop = FALSE],
+                                   .qtl_target_std(G[t, t, drop = FALSE]),
+                                   anchor_at(rows))$B
     }
   }
 
@@ -502,10 +454,8 @@ define_additive_effects <- function(tbl,
   B_any[is.na(B_any)] <- 0
   delivered <- anchor_at(any_qtl)$cov(B_any)
   dimnames(delivered) <- list(trait_name, trait_name)
-  if (need == "target") {
-    exact <- .qtl_target_error(delivered, std) <= QTL_CALIBRATION_TOL
-  }
-  if (need == "target" && isFALSE(exact)) {
+  exact <- .qtl_target_error(delivered, std) <= QTL_CALIBRATION_TOL
+  if (!exact) {
     warning("method = \"union\" is approximate: each trait keeps its own QTL ",
             "set and is scaled by its own variance only, so the covariances ",
             "are not calibrated. Delivered covariance ", .dae_format_cov(delivered),
@@ -516,7 +466,7 @@ define_additive_effects <- function(tbl,
   # ── 6. Diagnostics: what another population sees (§7.4). Computed before
   # the commit, so a failure here leaves the database untouched; reported
   # after it. Nothing stored.
-  diag_res <- if (need == "target" && !is.null(warn_bounds) &&
+  diag_res <- if (!is.null(warn_bounds) &&
                   is.null(line_name) && is.null(po[[trait_name[1L]]])) {
     .dae_diagnostics(pop, base$tbl, anchor, genome_order, any_qtl, B_any, std,
                      p_base)
@@ -544,12 +494,8 @@ define_additive_effects <- function(tbl,
   if (!is.null(diag_res)) .dae_report_diagnostics(diag_res, anchor, warn_bounds)
 
   # ── 8. Messages. ──────────────────────────────────────────────────────────
-  calib <- if (need != "target") {
-    "effects written unchanged (not calibrated)"
-  } else {
-    paste0(if (isTRUE(exact)) "exact" else "approximate", " under the ",
-           anchor, " anchor; delivered ", .dae_format_cov(delivered))
-  }
+  calib <- paste0(if (exact) "exact" else "approximate", " under the ",
+                  anchor, " anchor; delivered ", .dae_format_cov(delivered))
   scope_lbl <- .dae_scope_label(line_name, po[[trait_name[1L]]])
   if (k == 1L) {
     message("Set additive effects for ", sum(mask[, 1L]), " QTL on trait '",
@@ -638,9 +584,8 @@ GE_GENERATED_OWNER <- "generated"
 #' for a parent-qualified one — a parent-qualified term reads a single copy, so
 #' an imprinted model asked for an additive target `V` would otherwise land at
 #' `V/2`. The enumeration is complete only because `assert_qtl_autosomal()`
-#' refuses `scale_to_target = TRUE` at any locus that is not `(1,1)` for both
-#' offspring sexes; without that guard a hemizygous locus would need a third
-#' value and a sex ratio.
+#' refuses any locus that is not `(1,1)` for both offspring sexes; without
+#' that guard a hemizygous locus would need a third value and a sex ratio.
 #'
 #' @keywords internal
 #' @noRd
@@ -814,13 +759,7 @@ QTL_REALISED_MAX_CELLS <- 2e7
 #' Refuse what `anchor = "realised"` does not support (gate A6)
 #' @keywords internal
 #' @noRd
-.dae_check_realised <- function(base_tbl, line_name, po, effects,
-                                scale_to_target) {
-  if (!is.null(effects) || !scale_to_target) {
-    stop("`anchor` chooses what the calibration is exact for; manual ",
-         "`effects` and `scale_to_target = FALSE` are not calibrated. Use the ",
-         "default anchor.", call. = FALSE)
-  }
+.dae_check_realised <- function(base_tbl, line_name, po) {
   if (is.null(base_tbl)) {
     stop("anchor = \"realised\" needs `base_tbl` selecting the individuals ",
          "whose genotype covariance is the anchor, e.g. ",
@@ -848,24 +787,13 @@ QTL_REALISED_MAX_CELLS <- 2e7
 
 #' Resolve the call's additive target (§6C)
 #'
-#' @param need `"target"` (calibrate), `"sigma"` (k >= 2 unscaled draw: the
-#'   stored block is the draw covariance), or `"none"` (manual or unscaled
-#'   single-trait effects: no target is read or required, and the block
-#'   checks are skipped).
 #' @return list(G = named k x k matrix or NULL, write = TRUE when `G` was
 #'   passed and must be written with the terms).
 #' @keywords internal
 #' @noRd
 .dae_resolve_target <- function(pop, trait_name, line_name, G,
-                                trait_var_comp_tbl, need) {
+                                trait_var_comp_tbl) {
   conn <- pop$db_conn
-  if (need == "none") {
-    if (!is.null(trait_var_comp_tbl)) {
-      stop("`trait_var_comp_tbl` chooses a target to calibrate to, but these ",
-           "effects are not calibrated.", call. = FALSE)
-    }
-    return(list(G = NULL, write = FALSE))
-  }
 
   if (!is.null(G)) {
     G <- .check_cov_dimnames(G, trait_name, "G")
@@ -882,6 +810,23 @@ QTL_REALISED_MAX_CELLS <- 2e7
       stored$trait_name_1 %in% trait_name | stored$trait_name_2 %in% trait_name]),
       "additive")
     if (length(other)) {
+      # Storing `G` first is refused once generated additive terms exist at
+      # this scope (define_effect_cov_matrix(), Q21), so that route is only
+      # offered when it works.
+      regen <- .tvc_generated_traits(conn, "additive", trait_name, line_name)
+      if (length(regen)) {
+        stop("A stored '", paste(other, collapse = "', '"), "' target exists ",
+             "for ", paste(trait_name, collapse = ", "), ". ",
+             "define_additive_effects() calibrates the additive block only and ",
+             "never silently ignores a stored target. ",
+             paste(regen, collapse = ", "), " already ",
+             if (length(regen) == 1L) "has" else "have",
+             " generated additive terms, so `G` cannot be stored first with ",
+             "define_effect_cov_matrix(). Remove the stored '",
+             paste(other, collapse = "', '"), "' block with remove_rows(), ",
+             "re-run this call, then store it again with ",
+             "define_effect_cov_matrix().", call. = FALSE)
+      }
       stop("A stored '", paste(other, collapse = "', '"), "' target exists for ",
            paste(trait_name, collapse = ", "), ". define_additive_effects() ",
            "calibrates the additive block only and never silently ignores a ",
@@ -905,8 +850,9 @@ QTL_REALISED_MAX_CELLS <- 2e7
            else paste0(" (line '", line_name, "')"),
            ". Stored targets are never overwritten, even by an identical ",
            "matrix. Drop `G` to calibrate to the stored block, or remove it ",
-           "first:\n", .tvc_removal_call("additive", line_name, block),
-           call. = FALSE)
+           "and re-run this call, which writes the new target and re-draws ",
+           "the terms in one transaction. To remove it first:\n",
+           .tvc_removal_call("additive", line_name, block), call. = FALSE)
     }
     return(list(G = (G + t(G)) / 2, write = TRUE))
   }

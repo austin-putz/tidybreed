@@ -6,7 +6,7 @@
 - Gates T1–T9 and PH1–PH8 (§11).
 
 **Versions:** 0.74.0 (3a), 0.74.1 (3b), 0.74.2 (3c).
-**Status:** 3a built 2026-10-04 (0.74.0; as-built notes in the main plan's Step 3). 3b and 3c planned.
+**Status:** 3a built 2026-10-04 (0.74.0), 3b built 2026-10-04 (0.74.1); as-built notes in the main plan's Step 3. 3c planned.
 **Starting point:** 0.73.2 (`be43687`).
 
 Step 3 makes `ind_tgv` the only table of true genetic values. Every phenotype sees the
@@ -357,6 +357,16 @@ Outside `tests/`:
   "validated at `add_phenotype()` time" message goes.
 - `.build_tgv_env()` passes `component` to `.tgv_by_id()` / `.group_mate_tgv()`.
 - The `formula_tgv` roxygen documents `component =` and `table =`.
+
+### 3c.2b Stage 1 ids out of SQL text *(added 2026-10-04, user decision)*
+- `.ap_materialize_tbvs()` (to be `.ap_materialize_tgvs()`) builds its contributor
+  subset with `get_table("ind_meta") |> filter(id_ind %in% ids)`, which renders the
+  ids into SQL text, against CLAUDE.md's hard rule. Register the ids as a view
+  (as `.tgv_read()` does) and pass a `tidybreed_table` over that view, or give
+  `add_tgv()` an internal id-vector entry point. Pre-existing since before step 3;
+  found in 3a.
+- Gate: a contributor set with an id containing a quote character, and a large set
+  (no SQL-length dependence), give the same `ind_tgv` rows as an `ind_meta` filter.
 
 ### 3c.3 Gates (3c)
 - **PH2 in full:**

@@ -354,8 +354,8 @@ get_chr_rules_map <- function(conn, line_name = NULL) {
 #' silently overstate the variance contribution of any QTL on a hemizygous locus
 #' (a single-copy Bernoulli(p) draw has genic variance `p*(1-p)*a^2`, not
 #' `2*p*(1-p)*a^2`). Rather than generalizing the formula,
-#' `define_additive_effects()` fails loudly when `scale_to_target = TRUE` and any
-#' selected locus is sex-linked/organelle.
+#' `define_additive_effects()` fails loudly when any selected locus is
+#' sex-linked/organelle.
 #'
 #' A chromosome is diploid-autosomal iff its **resolved** inheritance is
 #' `from_parent_1 = 1, from_parent_2 = 1` for **both** offspring sexes (line-
@@ -386,13 +386,13 @@ assert_qtl_autosomal <- function(conn, locus_names) {
   if (nrow(bad) > 0) {
     example <- bad[1, ]
     stop(
-      "Falconer variance scaling (scale_to_target = TRUE) assumes diploid/",
-      "autosomal QTL; locus '", example$locus_name, "' is on chromosome '",
+      "define_additive_effects() calibrates with genic weights that assume ",
+      "diploid/autosomal QTL; locus '", example$locus_name, "' is on chromosome '",
       example$chr_name, "', which is not diploid-autosomal (chr_inheritance is ",
       "not from_parent_1 = 1, from_parent_2 = 1 for both sexes; ", nrow(bad),
-      " affected locus/loci total). Pass scale_to_target = FALSE and supply ",
-      "`effects` manually for sex-linked/organelle QTL, or exclude these loci ",
-      "from the QTL set.",
+      " affected locus/loci total). Exclude these loci from the QTL set, or ",
+      "write sex-linked/organelle effects with known values through ",
+      "define_genome_effect_terms() (e.g. with ad_terms()).",
       call. = FALSE
     )
   }

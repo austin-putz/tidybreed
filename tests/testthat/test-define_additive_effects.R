@@ -152,22 +152,20 @@ test_that("base = 'current_pop' via base_tbl argument works", {
 })
 
 
-test_that("define_additive_effects() accepts manual effects", {
+test_that("the generator has no manual or unscaled mode (Q21)", {
+  # 0.74.1: generated means calibrated. Known coefficients go through
+  # define_genome_effect_terms(); there is no `effects =` or
+  # `scale_to_target =` to bypass the calibration.
   pop <- make_effects_pop("eff_manual")
+  on.exit(close_pop(pop), add = TRUE)
   pop <- with_additive_target(pop, "ADG", 1)
-  sel <- pop |> get_table("genome_meta") |> dplyr::collect() |>
-    dplyr::slice_sample(n = 10) |> dplyr::pull(locus_name)
-  pop <- pop |>
-    get_table("genome_meta") |>
-    dplyr::filter(locus_name %in% sel) |>
-    define_additive_effects("ADG", effects = rep(2.0, 10))
-
-  eff <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM additive_flat WHERE trait_name = 'ADG'")
-  expect_equal(nrow(eff), 10)
-  expect_true(all(eff$genome_value == 2.0))
-
-  close_pop(pop)
+  gm  <- pop |> get_table("genome_meta")
+  expect_error(gm |> define_additive_effects("ADG", effects = rep(2.0, 10)),
+               "unused argument \\(effects")
+  expect_error(gm |> define_additive_effects("ADG", scale_to_target = FALSE),
+               "unused argument \\(scale_to_target")
+  expect_equal(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_effects")$n, 0)
 })
 
 
@@ -180,7 +178,7 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel) |>
-    define_additive_effects("ADG", effects = rep(1.0, 20))
+    define_additive_effects("ADG", seed = 1)
 
   n_before <- DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM additive_flat WHERE trait_name = 'ADG'")$n
@@ -192,14 +190,15 @@ test_that("re-calling define_additive_effects() replaces existing rows", {
   pop <- pop |>
     get_table("genome_meta") |>
     dplyr::filter(locus_name %in% sel2) |>
-    define_additive_effects("ADG", effects = rep(3.0, 30))
+    define_additive_effects("ADG", seed = 2)
 
   n_after <- DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM additive_flat WHERE trait_name = 'ADG'")$n
   expect_equal(n_after, 30L)
-  eff_vals <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT genome_value FROM additive_flat WHERE trait_name = 'ADG'")$genome_value
-  expect_true(all(eff_vals == 3.0))
+  # Exactly the second call's loci remain.
+  got <- DBI::dbGetQuery(pop$db_conn,
+    "SELECT locus_name FROM additive_flat WHERE trait_name = 'ADG'")$locus_name
+  expect_setequal(got, sel2)
 
   close_pop(pop)
 })
@@ -277,7 +276,7 @@ test_that("define_additive_effects() errors when filter returns zero rows", {
 
 
 # ---------------------------------------------------------------------------
-# scale_to_target guard for sex-linked/organelle QTL (Stage 4)
+# Calibration guard for sex-linked/organelle QTL (Stage 4)
 # ---------------------------------------------------------------------------
 
 make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20) {
@@ -291,19 +290,19 @@ make_effects_pop_with_x <- function(pop_name = "eff_x", n_ind = 20, n_loci = 20)
   ge_flat_view(pop)
 }
 
-test_that("scale_to_target = TRUE errors when QTL set includes a sex-linked locus", {
+test_that("the generator errors when the QTL set includes a sex-linked locus", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
   pop <- with_additive_target(pop, "ADG", 1)
 
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
-      define_additive_effects("ADG", scale_to_target = TRUE),
-    "Falconer variance scaling"
+      define_additive_effects("ADG"),
+    "assume diploid/autosomal QTL.*define_genome_effect_terms"
   )
 })
 
-test_that("scale_to_target = FALSE with manual effects works fine for sex-linked QTL", {
+test_that("sex-linked QTL with known values go through the writer", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
   pop <- with_additive_target(pop, "ADG", 1)
@@ -313,18 +312,18 @@ test_that("scale_to_target = FALSE with manual effects works fine for sex-linked
 
   expect_no_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
-      define_additive_effects("ADG", effects = rep(1, n_x))
+      with_additive_terms("ADG", effects = rep(1, n_x))
   )
 })
 
-test_that("scale_to_target = TRUE still works for purely autosomal QTL on a genome that also has a sex chromosome", {
+test_that("the generator still works for purely autosomal QTL on a genome that also has a sex chromosome", {
   pop <- make_effects_pop_with_x()
   on.exit(close_pop(pop), add = TRUE)
   pop <- with_additive_target(pop, "ADG", 1)
 
   expect_no_error(
     pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1") |>
-      define_additive_effects("ADG", scale_to_target = TRUE)
+      define_additive_effects("ADG")
   )
 })
 
@@ -364,15 +363,19 @@ stored_center <- function(pop, ln) {
     if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'")))$center_value
 }
 
+# Each line of make_two_line_pop() is fixed (p = 0 or 1), where no variance
+# can be calibrated, so the line-scoped centring checks write known values with
+# with_additive_terms(); it resolves the base through the generator's own
+# .dae_resolve_base(). The pooled (p = 0.5) calls use the generator itself.
 test_that("default base is the effect's own line pool; population-wide pools and warns", {
   pop <- make_two_line_pop("bt_inherit")
   on.exit(close_pop(pop), add = TRUE)
   pop <- with_additive_target(pop, "ADG", 1)
 
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
+    with_additive_terms("ADG", effects = rep(1, 40), line_name = "A")
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 40), line_name = "B")
+    with_additive_terms("ADG", effects = rep(1, 40), line_name = "B")
 
   # Line A is fixed at allele 0, line B at allele 1 -- each sees its own.
   expect_equal(stored_center(pop, "A"), 0)
@@ -383,7 +386,7 @@ test_that("default base is the effect's own line pool; population-wide pools and
   # base -- and warns, because pooling was not asked for.
   expect_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40)),
+      define_additive_effects("ADG", seed = 1),
     "pooled across")
   expect_equal(stored_center(pop, NULL), 0.5)
 })
@@ -396,14 +399,14 @@ test_that("an explicit whole founder table pools on purpose and never warns", {
   # Line-specific effect deliberately centered on the pooled base.
   expect_no_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40), line_name = "A",
+      define_additive_effects("ADG", line_name = "A", seed = 1,
                               base_tbl = get_table(pop, "founder_haplotypes")))
   expect_equal(stored_center(pop, "A"), 0.5)
 
   # Population-wide effect, explicit pooled base: same numbers, no warning.
   expect_no_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40),
+      define_additive_effects("ADG", seed = 1,
                               base_tbl = get_table(pop, "founder_haplotypes")))
   expect_equal(stored_center(pop, NULL), 0.5)
 })
@@ -414,7 +417,7 @@ test_that("default resolution: line pool -> shared pool -> error", {
   pop <- with_additive_target(pop, "ADG", 1)
   expect_no_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40), line_name = "A"))
+      with_additive_terms("ADG", effects = rep(1, 40), line_name = "A"))
   expect_equal(stored_center(pop, "A"), 1)   # the NA-line pool is allele 1
 
   # (c) both exist: the named pool wins.
@@ -425,13 +428,13 @@ test_that("default resolution: line pool -> shared pool -> error", {
       each = 20),
     allele = 0L, stringsAsFactors = FALSE), append = TRUE)
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
+    with_additive_terms("ADG", effects = rep(1, 40), line_name = "A")
   expect_equal(stored_center(pop, "A"), 0)
 
   # Population-wide on the default path now sees two pools (NULL counts).
   expect_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40)),
+      define_additive_effects("ADG", seed = 1),
     "holds 2 pools")
   close_pop(pop)
 
@@ -442,7 +445,7 @@ test_that("default resolution: line pool -> shared pool -> error", {
   pop <- with_additive_target(pop, "ADG", 1)
   expect_no_warning(
     pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40), line_name = "B"))
+      with_additive_terms("ADG", effects = rep(1, 40), line_name = "B"))
   expect_equal(stored_center(pop, "B"), 1)         # the NA-line pool is allele 1
 
   # (d) neither: loud, listing what exists.
@@ -451,7 +454,7 @@ test_that("default resolution: line pool -> shared pool -> error", {
   pop2 <- with_additive_target(pop2, "ADG", 1)
   expect_error(
     pop2 |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 40), line_name = "NOPE"),
+      define_additive_effects("ADG", line_name = "NOPE"),
     "No founder_haplotypes rows for line 'NOPE'. Available: 'A', 'B'")
 })
 
@@ -521,20 +524,19 @@ test_that("base_tbl is validated: class, same pop, and column projection", {
   pop <- with_additive_target(pop, "ADG", 1)
   gm  <- pop |> get_table("genome_meta")
 
-  expect_error(gm |> define_additive_effects("ADG", effects = rep(1, 40),
-                                             base_tbl = "A"),
+  expect_error(gm |> define_additive_effects("ADG", base_tbl = "A"),
                "must be a tidybreed_table")
   other <- make_two_line_pop("bt_other")
   on.exit(close_pop(other), add = TRUE)
-  expect_error(gm |> define_additive_effects("ADG", effects = rep(1, 40),
+  expect_error(gm |> define_additive_effects("ADG",
                  base_tbl = get_table(other, "founder_haplotypes")),
                "same pop as 'tbl'")
-  expect_error(gm |> define_additive_effects("ADG", effects = rep(1, 40),
+  expect_error(gm |> define_additive_effects("ADG",
                  base_tbl = get_table(pop, "founder_haplotypes") |>
                    dplyr::select(line_name)),
                "missing column\\(s\\) locus_name, allele")
   # A line name that is not a valid identifier is still refused up front.
-  expect_error(gm |> define_additive_effects("ADG", effects = rep(1, 40),
+  expect_error(gm |> define_additive_effects("ADG",
                  line_name = "A'; DROP TABLE genome_meta; --"),
                "Invalid line name")
   expect_true(DBI::dbExistsTable(pop$db_conn, "genome_meta"))
@@ -559,14 +561,15 @@ test_that("a selected QTL with no base copies errors, per trait under union", {
   # naming them, before any effect is written.
   expect_error(
     pop |> get_table("genome_meta") |> dplyr::filter(locus_id %in% 3:6) |>
-      define_additive_effects("ADG", effects = rep(1, 4), base_tbl = half),
+      define_additive_effects("ADG", G = 1, base_tbl = half),
     "no allele copies at 2 selected QTL \\(Locus_5, Locus_6\\)")
   expect_equal(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) n FROM genome_effects")$n, 0)
 
-  # Fully covered selection is fine.
+  # Fully covered selection is fine. Planted (uncalibrated, test-only) so the
+  # union call below meets ADG's existing generated QTL and no stored target.
   pop |> get_table("genome_meta") |> dplyr::filter(locus_id %in% 1:4) |>
-    define_additive_effects("ADG", effects = rep(1, 4), base_tbl = half)
+    plant_generated_additive("ADG", effects = rep(1, 4), base_tbl = half)
 
   # Union: ADG's existing QTL are 1-4 (covered); BW has none at this scope, so
   # its positive target variance cannot be delivered and nothing is stored.
@@ -608,26 +611,30 @@ test_that("defining effects for one line does not clobber another line's rows", 
   pop <- make_two_line_pop("bln_clobber")
   pop <- with_additive_target(pop, "ADG", 1)
 
+  # Pooled base (p = 0.5): the lines alone are fixed and carry no variance.
+  pooled <- get_table(pop, "founder_haplotypes")
+  vals <- function(ln) DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT locus_name, genome_value FROM additive_flat WHERE trait_name = 'ADG' ",
+    "AND line_name ", if (is.null(ln)) "IS NULL" else paste0("= '", ln, "'"),
+    " ORDER BY locus_name"))
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 40), line_name = "A")
+    define_additive_effects("ADG", line_name = "A", base_tbl = pooled, seed = 1)
+  a1 <- vals("A")
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(2, 40), line_name = "B")
-  expect_warning(
-    pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(3, 40)),
-    "pooled across"
-  )
+    define_additive_effects("ADG", line_name = "B", base_tbl = pooled, seed = 2)
+  pop |> get_table("genome_meta") |>
+    define_additive_effects("ADG", base_tbl = pooled, seed = 3)
 
   counts <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT line_name, COUNT(*) AS n, MIN(genome_value) AS v
+    "SELECT line_name, COUNT(*) AS n
        FROM additive_flat WHERE trait_name = 'ADG'
        GROUP BY line_name ORDER BY line_name NULLS LAST")
 
   expect_equal(nrow(counts), 3L)
   expect_true(all(counts$n == 40L))
-  expect_equal(counts$v[counts$line_name == "A" & !is.na(counts$line_name)], 1)
-  expect_equal(counts$v[counts$line_name == "B" & !is.na(counts$line_name)], 2)
-  expect_equal(counts$v[is.na(counts$line_name)], 3)
+  # Line A's variant is untouched by the line-B and common calls.
+  expect_identical(vals("A"), a1)
+  expect_false(isTRUE(all.equal(vals("B")$genome_value, a1$genome_value)))
 
   close_pop(pop)
 })
@@ -636,7 +643,7 @@ test_that("defining effects for one line does not clobber another line's rows", 
 test_that("centres and effects follow locus_id whatever order or projection tbl has", {
   # The written members are in locus_id order and p_base is indexed the same
   # way. A QTL table arranged descending and stripped of locus_id must not
-  # shift a locus's centre (or a manual effect) onto its neighbour.
+  # shift a locus's centre onto its neighbour.
   pop <- open_pop(pop_name = "bt_order", db_name = ":memory:") |>
     define_genome(n_loci = 12, n_chr = 1, chr_len_Mb = 12)
   on.exit(close_pop(pop), add = TRUE)
@@ -655,15 +662,14 @@ test_that("centres and effects follow locus_id whatever order or projection tbl 
   expect_false("locus_id" %in% colnames(qtl$tbl))
 
   want <- p[p$locus_id %% 2L == 0L, ]           # locus_id order
-  qtl |> define_additive_effects("ADG", effects = want$locus_id, line_name = "A")
+  qtl |> define_additive_effects("ADG", line_name = "A", seed = 1)
 
   got <- DBI::dbGetQuery(pop$db_conn, "
-    SELECT gm.locus_id, m.center_value, e.genome_value
+    SELECT gm.locus_id, m.center_value
       FROM genome_effect_members m
       JOIN genome_effects e USING (id_genome_effect)
       JOIN genome_meta gm USING (locus_id)
      WHERE e.trait_name = 'ADG' ORDER BY gm.locus_id")
   expect_equal(got$locus_id, want$locus_id)
   expect_equal(got$center_value, want$allele_freq)
-  expect_equal(got$genome_value, as.numeric(want$locus_id))
 })

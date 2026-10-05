@@ -8,7 +8,7 @@
 | Part | Version | Content | Status |
 |---|---|---|---|
 | 3a | 0.74.0 | Consolidation (P1) + phenotypes read the total (P2) + value names + active-block prevalence rule | **done** 2026-10-04 |
-| 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, owner rule, `define_effect_cov_matrix()` refusal | planned |
+| 3b | 0.74.1 | Q21: `effects` / `scale_to_target` removed, owner rule, `define_effect_cov_matrix()` refusal | **done** 2026-10-04 |
 | 3c | 0.74.2 | Q18: `formula_tbv` → `formula_tgv`, DSL `component =` / `table =` | planned |
 
 ---
@@ -233,8 +233,176 @@ error stops an unfiltered multi-component table from being summed.
 - `plans/import_qtl_effect_methods_phase_3_plan.md`: status line, and the
   3a.4 note on the view.
 
+---
+
+## 3b — Q21: generated means calibrated (0.74.1)
+
+**Status:** complete.
+- Full suite (`NOT_CRAN=true`): 70 files, 1024 tests, 3827 expectations; 0 failed, 0 errors, 0 skipped. 11 warnings, all pre-existing (unchanged from 3a).
+- After 3a: 70 files, 1021 tests, 3817 expectations.
+- **Date:** 2026-10-04.
+
+Before 3b, `"generated"` meant "written by a generator", not "calibrated". Manual
+`effects =` and `scale_to_target = FALSE` wrote generator-owned terms that matched
+no target, and the prevalence threshold trusted the target anyway. Now the
+generator always calibrates, the threshold accepts only generated terms, and a
+target cannot be written under terms calibrated to a different one.
+
+### What shipped
+
+**`define_additive_effects()` loses `effects` and `scale_to_target`.**
+- Every call samples and calibrates. Removed: the manual branch, the
+  `need = "none" / "sigma"` modes of `.dae_resolve_target()`, the A19 refusal,
+  the unscaled union warning, the "not calibrated" message and the matching
+  branch of `.dae_check_realised()`.
+- Known coefficients go through `define_genome_effect_terms()` under a user
+  owner. The roxygen gains a *Generated means calibrated* section, and
+  `add_tgv()` gains a writer example (line-specific known effects with
+  `base_tbl` filling the centres).
+- The sex-linked QTL error (`assert_qtl_autosomal()`) no longer says
+  "pass `scale_to_target = FALSE`". It points at the writer.
+- Seeded output of calibrated calls is unchanged: their code path is the same.
+
+**The owner rule** (`.ap_prevalence_genetic_var()`).
+- A trait with any term not owned by `"generated"` is refused for
+  `prevalence =`, naming the owners and `thresholds =`.
+- It runs before the kind check, in PLAN (no write, no draw) and in the
+  liability stage, through the same helper.
+- The `define_phenotype(prevalence = )` roxygen replaces the 0.72.3 caveat
+  with the rule. `mean =` is documented as an intercept, with the recipe for a
+  realised base mean (§6A "Mean").
+
+**`define_effect_cov_matrix()` refuses a target under generated terms**
+(`.tvc_refuse_under_generated()`).
+- It refuses a genetic block when any trait of the block has `"generated"`
+  terms of that kind at the block's scope: population-wide terms (common or
+  parent-only) for `line_name = NULL`, and line-C terms for `"C"`.
+- It is still refused after the old block is removed.
+- The error gives the route: `remove_rows()` (when a block is stored), then
+  `define_additive_effects(G = )`.
+- A line's target before that line's effects is accepted (A17).
+- Only the exported function checks. A generator's `G =` writes through
+  `.tvc_write_block()` with its terms, as before.
+- The term classification is shared with the threshold:
+  - `.gev_target_kind()` maps a term to the `trait_var_comp` block that
+    describes it;
+  - `.gev_term_line()` gives its line scope.
+
+**Reworded errors.**
+- `.tvc_write_block()`'s "already stored" error gives the full sequence
+  (remove, then re-run the generator).
+- So does `define_additive_effects(G = )`'s version. The text before the
+  `remove_rows()` call still ends "remove it first:", which A15 parses.
+
+### Files
+
+- **R:**
+  - `define_additive_effects.R` (the removal; the roxygen);
+  - `add_phenotype_stages.R` (the owner rule);
+  - `define_effect_cov_matrix.R` (the refusal, its helpers, the reworded error);
+  - `genome_effects_eval.R` (`.gev_target_kind()`, `.gev_term_line()`);
+  - `chr_meta_helpers.R` (the error text);
+  - `define_phenotype.R` and `add_tgv.R` (roxygen).
+- **Tests:**
+  - new helpers `with_additive_terms()` and `plant_generated_additive()`
+    (`helper-pop.R`);
+  - `additive_flat` (`helper-genome-effects-db.R`) now covers every owner's
+    order-one additive terms and has an `effect_owner` column;
+  - migrated: `test-add_tgv_breeding_value.R`, `test-genome-effects-eval.R`,
+    `test-extract_allele_freq.R`, `test-add_tgv_index.R`,
+    `test-define_additive_effects.R`, `test-define_additive_effects-anchor.R`,
+    `test-genome-effects-writer.R`, `test-add_phenotype.R` and
+    `test-parity.R` (a comment);
+  - new gates in `test-phenotype-total-genetic-value.R`.
+- **Docs:**
+  - `CLAUDE.md` gains a "Generated means calibrated" hard rule;
+  - both skills;
+  - `README.md`, where the stale `base = "current_pop"` became `base_tbl`;
+  - the swine script, `dev/benchmarks/benchmark_tgv_scale.R` and
+    `benchmark_phenotype_scale.R`;
+  - `NEWS.md`, `DESCRIPTION` and regenerated `man/`.
+
+### Tests
+
+**Call-site census.** At the start of 3b, 99 non-comment lines in 8 test files
+matched `effects =` / `scale_to_target =`. That is about the plan's 93 calls:
+some calls span two matching lines, and a few test names mention the argument.
+They moved by category:
+
+| Category | Files | Migration |
+|---|---|---|
+| (a) known values for a breeding-value oracle (40) | `add_tgv_breeding_value` 20, `genome-effects-eval` 17, `extract_allele_freq` 2, `add_tgv_index` 1 (Y loci) | `with_additive_terms()`, same arguments; no assertion changed |
+| (d) filler while testing the generator (~38) | `define_additive_effects`, `genome-effects-writer` | the generator, calibrated and seeded; tests assert on scopes, centres and loci, not values |
+| (b) union per-trait sets (3) | `define_additive_effects-anchor` A7, R5, R5b; one union fixture in `define_additive_effects` | `plant_generated_additive()` |
+| (c) tests of the removed arguments | A19, A22's `G + effects` line, "accepts manual effects" | deleted; one "unused argument" test for both arguments |
+
+**Notes on the migration:**
+- The breeding-value oracle (`independent_tbv()`) and `additive_flat` read
+  every owner now, matching `add_tgv()`.
+- `make_two_line_pop()` fixes each line at `p = 0` or `1`, where no variance can
+  be calibrated. Its line-scoped centring checks use the helper, which runs the
+  generator's own `.dae_resolve_base()`. Its pooled checks (`p = 0.5`) still
+  call the generator, including the Wahlund warnings.
+- Gate 42 needs one segregating locus per one-locus call, so it now uses a
+  30-locus fixture and picks loci with `0 < p < 1` in pool A.
+- A15: the `define_effect_cov_matrix()` call after generation now hits the new
+  refusal, not "already stored".
+- PH7's kind refusals (indicator surface; dominance with no target) plant their
+  terms under `"generated"`, so the owner rule does not mask them.
+- `test-add_phenotype.R`'s "no stored target" case is now a real user path:
+  generate with `G`, then `remove_rows()` the target.
+
+**New gates (PH7, 3b part):**
+
+| Gate | What it checks |
+|---|---|
+| Codex finding 1 | target 1, ten `ad_terms()` effects of 10, `prevalence = 0.1` → error; RNG, `ind_phenotype`, `phenotype_random_effects` and `ind_tgv` untouched; `thresholds =` works |
+| owner rule | generated terms matching the target plus one tiny user term → error naming the owner |
+| cov refusal | refused with a stored block (message names `remove_rows()` and `define_additive_effects(G = )`); refused after removal; another kind not blocked; the stated route succeeds and the threshold follows the new target |
+| line scope | a line-A target before line-A effects is accepted; after line-A generation it is refused, even after removal; line B is still free |
+| unused arguments | `effects =` and `scale_to_target =` are unused-argument errors, and nothing is written |
+
+### Found while building
+
+- **The store-then-select route was a dead end under existing terms.** When a
+  `dominance` or `additive_by_additive` target is stored,
+  `define_additive_effects(G = )` refused, and told the user to store `G` with
+  `define_effect_cov_matrix()` and then select it with `trait_var_comp_tbl`.
+  Once the trait has generated additive terms, that store is now refused, so the
+  advice led nowhere. The error now checks the state. If generated additive
+  terms exist, it says: remove the non-additive block, re-run with `G`, then
+  store the block again. The cov-refusal gate pins this. Only the message
+  changed; the 2026-10-04 "no new argument" decision stands.
+- **Pre-existing, still open:** Stage 1 builds its contributor subset with
+  `filter(id_ind %in% ids)`, which puts ids in SQL text. It was not touched in
+  3b (it is unrelated to Q21). Scheduled for 3c (user decision, 2026-10-04;
+  plan 3c.2b).
+
+### Verification
+
+- Every migrated file passes on its own after the change.
+- **Mutation check:** with the owner check removed (in memory), the Codex
+  finding-1 gate fails (5 failures). With the check restored, it passes.
+- The introduction vignette, purled and sourced under `load_all()`, runs to the
+  end; its one warning is the old `farm` notice. The swine script parses.
+- `devtools::document()` and `pkgdown::check_pkgdown()` are clean.
+- Both migrated benchmarks run: `benchmark_phenotype_scale.R --check` and
+  `benchmark_tgv_scale.R` at n = 200.
+- Grep: `scale_to_target` and `effects =` on the generator survive only in the
+  unused-argument test, past NEWS, closed plans and `tools/quarto/legacy/`.
+
+### Plan bookkeeping
+
+- `plans/import_qtl_effect_methods.md`:
+  - §7.1's signature is marked as built;
+  - A19 is marked moot;
+  - the §10 table marks 3b done;
+  - the Q21 step-list bullet records the closed route;
+  - an "As built, 3b" paragraph is added.
+- `plans/import_qtl_effect_methods_phase_3_plan.md`: the status line.
+
 ### Next
 
-3b (0.74.1): remove `effects` / `scale_to_target` and migrate the 93 call sites;
-add the owner rule; add the `define_effect_cov_matrix()` refusal; reword the
-"already stored" error.
+3c (0.74.2): `formula_tbv` → `formula_tgv`; the DSL's named-only `component =` /
+`table =` with identifier validation; the duplicate-ref fix; Stage 1's ids out of
+SQL text; the PH8 grep.

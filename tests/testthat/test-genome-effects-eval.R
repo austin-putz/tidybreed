@@ -211,7 +211,7 @@ test_that("gate 14: an injected dominance term changes the genetic value", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
 
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -234,7 +234,7 @@ test_that("gate 14: an injected interaction changes the genetic value", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   before <- DBI::dbGetQuery(pop$db_conn,
@@ -257,7 +257,7 @@ test_that("gate 21: each term maps to one component, and the components sum to t
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(0.7, length(loci)),
+    with_additive_terms("ADG", effects = rep(0.7, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "dominance",
@@ -291,7 +291,7 @@ test_that("gate 22: add_tgv() is idempotent per (id_ind, trait_name, component_n
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
 
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -309,7 +309,7 @@ test_that("a component that leaves the model leaves ind_tgv with it", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = loci[1], contrast_name = "dominance",
@@ -330,7 +330,7 @@ test_that("gates 32-33: an indicator surface and an interaction leave the additi
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
   tbv0 <- DBI::dbGetQuery(pop$db_conn,
@@ -373,7 +373,7 @@ test_that("T5: a custom-owner additive term appears in the additive row", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- suppressMessages(pop |> get_table("ind_meta") |> add_tgv("ADG"))
   before <- tgv_additive(pop, "ADG")
@@ -492,9 +492,9 @@ test_that("gate 45: a paternally qualified X term contributes 0 beside a matchin
   # Autosomal term, common scope; X term, paternal copies only. Males inherit
   # no paternal X (from_parent_1 = 0), so the X term matches nothing for them.
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "A1") |>
-    define_additive_effects("ADG", effects = c(1.0, 1.0))
+    with_additive_terms("ADG", effects = c(1.0, 1.0))
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
-    define_additive_effects("ADG", effects = c(2.0, 2.0), parent_origin = 1)
+    with_additive_terms("ADG", effects = c(2.0, 2.0), parent_origin = 1)
 
   ids <- DBI::dbGetQuery(pop$db_conn,
     "SELECT id_ind, sex FROM ind_meta ORDER BY id_ind")
@@ -524,7 +524,7 @@ test_that("gate 45: the X term alone errors for males, who have no paternal X co
   pop <- gev_sex_pop("gev_x_alone")
   on.exit(close_pop(pop), add = TRUE)
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "X") |>
-    define_additive_effects("ADG", effects = c(2.0, 2.0), parent_origin = 1)
+    with_additive_terms("ADG", effects = c(2.0, 2.0), parent_origin = 1)
 
   expect_error(pop |> get_table("ind_meta") |> add_tgv("ADG"),
                "No allele copy matched any effect")
@@ -587,7 +587,7 @@ test_that("the preflight is silent at the default thresholds", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   expect_silent(gev_totals(pop, ids))
@@ -640,13 +640,13 @@ gev_scale_pop <- function(name, n_ind) {
   pop <- with_additive_target(pop, "ADG", 1.0)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(2.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(2.0, length(loci)),
                             line_name = "A")
   pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(3.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(3.0, length(loci)),
                             line_name = "B")
 }
 
@@ -756,10 +756,10 @@ test_that("add_tgv() defaults to every trait in trait_meta", {
   pop <- with_additive_target(pop, "BW", 1.0)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("BW", effects = rep(0.5, length(loci)),
+    with_additive_terms("BW", effects = rep(0.5, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("ind_meta") |> add_tgv()
   got <- DBI::dbGetQuery(pop$db_conn,
@@ -772,7 +772,7 @@ test_that("add_tgv() honours a filtered subset", {
   on.exit(close_pop(pop), add = TRUE)
   loci <- gev_loci(pop)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("ind_meta") |> dplyr::filter(line_name == "A") |>
     add_tgv("ADG")

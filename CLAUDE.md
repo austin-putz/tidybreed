@@ -222,6 +222,13 @@ this file was updated before.
   that set: DuckDB 1.5.5 cannot delete parent and child rows in one transaction,
   so `validate_genome_effects()` checks orphans before every `COMMIT` instead
   (pinned in `tests/testthat/test-genome-effects-schema.R`).
+- **Generated means calibrated (Q21):** only generators write the reserved
+  owner `"generated"`, and they always sample **and** calibrate to the stored
+  target — never add a manual or unscaled mode to a generator; known
+  coefficients go through `define_genome_effect_terms()` under a user owner.
+  `define_phenotype(prevalence = )` trusts the stored target only because of
+  this (every term must be `"generated"`), and `define_effect_cov_matrix()`
+  refuses a target under generated terms of that kind and scope.
 - **One evaluator, one table of genetic values:** `add_tgv()` evaluates every
   term through `R/genome_effects_eval.R` into `ind_tgv`; never write a second
   implementation of the effect math or a second genetic-value table. The

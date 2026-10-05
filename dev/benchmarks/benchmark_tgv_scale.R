@@ -59,13 +59,15 @@ build_pop <- function(n_ind, shape) {
     arrange(locus_id) |> slice_head(n = n_qtl) |> pull(locus_name)
   qtl_tbl <- function() get_table(pop, "genome_meta") |> filter(locus_name %in% !!qtl)
 
-  pop <- suppressWarnings(
-    qtl_tbl() |> define_additive_effects("ADG", effects = rep(1.0, n_qtl)))
+  # Calibrated, seeded effects (the generator has no manual mode since 0.74.1);
+  # the values do not matter to the timing, only the term shapes do.
+  pop <- suppressMessages(qtl_tbl() |> define_additive_effects("ADG", seed = 1,
+    base_tbl = get_table(pop, "founder_haplotypes"), warn_bounds = NULL))
   if (shape == "lines") {
-    pop <- qtl_tbl() |> define_additive_effects("ADG", effects = rep(2.0, n_qtl),
-                                                line_name = "A")
-    pop <- qtl_tbl() |> define_additive_effects("ADG", effects = rep(3.0, n_qtl),
-                                                line_name = "B")
+    pop <- suppressMessages(qtl_tbl() |> define_additive_effects("ADG", seed = 2,
+                                                line_name = "A"))
+    pop <- suppressMessages(qtl_tbl() |> define_additive_effects("ADG", seed = 3,
+                                                line_name = "B"))
   }
   if (shape == "dominance") {
     pop <- define_genome_effect_terms(pop, "ADG", data.frame(

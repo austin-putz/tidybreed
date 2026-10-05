@@ -747,21 +747,19 @@ pop |>
   get_table("genome_meta") |>
     filter(is_9k != TRUE) |>           # QTL are non-SNP-chip loci
   define_additive_effects(
-    trait_name      = "ADG",
-    distribution    = "normal",      # mostly set to normal for now until I can figure out other ways to sample multivariate
-    scale_to_target = TRUE,          # scale to target additive variance
-    base            = "current_pop"  # standardize to current animals
-  )
+    trait_name   = "ADG",
+    distribution = "normal",      # mostly set to normal for now until I can figure out other ways to sample multivariate
+    base_tbl     = get_table(pop, "ind_meta")   # centre on the current animals' allele frequencies
+  )                               # always calibrated to the stored additive target
 
 # Multiple correlated traits in one call (draws from MVN with G matrix)
 pop |>
   get_table("genome_meta") |>
     filter(is_9k != TRUE) |>
   define_additive_effects(
-    trait_name      = c("WWD", "WWM"),   # need to add together since they are genetically correlated
-    distribution    = "normal",
-    scale_to_target = TRUE,
-    base            = "current_pop"
+    trait_name   = c("WWD", "WWM"),   # need to add together since they are genetically correlated
+    distribution = "normal",
+    base_tbl     = get_table(pop, "ind_meta")
   )
 ```
 

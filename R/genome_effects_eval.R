@@ -97,6 +97,49 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
   out
 }
 
+#' The stored-target block each term belongs to
+#'
+#' Maps a term to the `trait_var_comp` `effect_name` whose target describes it:
+#' an order-one `additive` or `dominance` term to that name, an order-two term
+#' over two `additive` members to `additive_by_additive`, and anything else (an
+#' `indicator` surface, other interactions) to `NA`, because no stored target
+#' describes it. Used by the prevalence threshold and by the
+#' [define_effect_cov_matrix()] refusal, so the two agree on what a target
+#' covers.
+#'
+#' @param model A `.gev_read_model()` result.
+#' @return Character, one per row of `model$terms`.
+#' @keywords internal
+#' @noRd
+.gev_target_kind <- function(model) {
+  vapply(model$terms$id_genome_effect, function(id) {
+    contr <- model$members$contrast_name[model$members$id_genome_effect == id]
+    if (length(contr) == 1L && contr %in% c("additive", "dominance")) return(contr)
+    if (length(contr) == 2L && all(contr == "additive")) {
+      return("additive_by_additive")
+    }
+    NA_character_
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' The line a term is scoped to, or `NA` for a population-wide term
+#'
+#' A term is line-scoped when any of its origin rows names a line; a common or
+#' parent-only term (no origin rows, or `'any'` / `'unknown'` rows) is
+#' population-wide and is described by the `line_name IS NULL` target.
+#'
+#' @param model A `.gev_read_model()` result.
+#' @return Character, one per row of `model$terms`.
+#' @keywords internal
+#' @noRd
+.gev_term_line <- function(model) {
+  vapply(model$terms$id_genome_effect, function(id) {
+    ln <- unique(stats::na.omit(
+      model$origins$line_name[model$origins$id_genome_effect == id]))
+    if (length(ln) == 0L) NA_character_ else paste(sort(ln), collapse = ",")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Evaluation-unit kind for a member contrast
 #'
 #' `additive` matches per allele copy; `dominance` and `indicator` match the

@@ -15,7 +15,7 @@ make_lines_pop <- function(pop_name, n_loci = 10, n_chr = 1) {
 # Independently recompute expected TBV from the stored rows, per allele copy.
 # Deliberately *not* a call into the package evaluator and not a copy of its
 # SQL: this walks ind_haplotype one copy at a time, finds the order-one additive
-# terms at that locus under the reserved owner, keeps those whose origin row
+# terms at that locus (any owner: add_tgv() reads them all), keeps those whose origin row
 # matches the copy's (line_origin, parent_origin) label, and takes the most
 # specific one. The containment order is re-derived here rather than imported,
 # so an error in .ge_pred_leq() cannot make both sides agree.
@@ -32,7 +32,6 @@ independent_tbv <- function(pop, trait, ids) {
     "LEFT JOIN genome_effect_member_origins o ",
     "  USING (id_genome_effect, member_slot) ",
     "WHERE e.trait_name = '", trait, "' ",
-    "  AND e.effect_owner = 'generated' ",
     "  AND m.contrast_name = 'additive' ",
     "  AND (SELECT COUNT(*) FROM genome_effect_members m2 ",
     "        WHERE m2.id_genome_effect = e.id_genome_effect) = 1"))
@@ -85,10 +84,10 @@ test_that("add_tgv() computes correct F1 crossbred TBV with line-specific effect
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
 
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = seq(0.1, 1.0, length.out = length(loci)),
+    with_additive_terms("ADG", effects = seq(0.1, 1.0, length.out = length(loci)),
                             line_name = "Duroc")
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = seq(-0.5, 0.5, length.out = length(loci)),
+    with_additive_terms("ADG", effects = seq(-0.5, 0.5, length.out = length(loci)),
                             line_name = "Landrace")
 
   matings <- tibble::tibble(id_parent_1 = "Duroc_1", id_parent_2 = "Landrace_3",
@@ -129,7 +128,7 @@ test_that("add_tgv() falls back to population-wide effect when line_origin is NU
   # Pooled on purpose: the population-wide fallback is what's under test, so
   # the whole two-line founder table is named explicitly (and does not warn).
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
 
   # Simulate untracked line origin for this individual's haplotypes.
@@ -160,11 +159,11 @@ test_that("add_tgv() prefers line-specific effect over population-wide for the s
   # Pooled on purpose: the population-wide fallback is what's under test, so
   # the whole two-line founder table is named explicitly (and does not warn).
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   # ... and a DIFFERENT line-specific effect at the SAME loci for "Duroc".
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(5.0, length(loci)), line_name = "Duroc")
+    with_additive_terms("ADG", effects = rep(5.0, length(loci)), line_name = "Duroc")
 
   n_eff_rows <- DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'ADG'")$n
@@ -202,10 +201,10 @@ test_that("add_tgv() falls back per-locus when a line has effects at only some l
   # Pooled on purpose: the population-wide fallback is what's under test, so
   # the whole two-line founder table is named explicitly (and does not warn).
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1.0, length(all_loci)),
+    with_additive_terms("ADG", effects = rep(1.0, length(all_loci)),
                             base_tbl = get_table(pop, "founder_haplotypes"))
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(locus_name %in% half_loci) |>
-    define_additive_effects("ADG", effects = rep(3.0, length(half_loci)), line_name = "Duroc")
+    with_additive_terms("ADG", effects = rep(3.0, length(half_loci)), line_name = "Duroc")
 
   pop <- pop |> get_table("ind_meta") |> dplyr::filter(id_ind == "Duroc_1") |> add_tgv("ADG")
 
@@ -234,10 +233,10 @@ test_that("add_tgv() centers each allele with its own line's center_value", {
   landrace_tbl <- get_table(pop, "ind_meta") |> dplyr::filter(line_name == "Landrace")
 
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(2.0, length(loci)), line_name = "Duroc",
+    with_additive_terms("ADG", effects = rep(2.0, length(loci)), line_name = "Duroc",
                             base_tbl = duroc_tbl)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(2.0, length(loci)), line_name = "Landrace",
+    with_additive_terms("ADG", effects = rep(2.0, length(loci)), line_name = "Landrace",
                             base_tbl = landrace_tbl)
 
   base_duroc <- DBI::dbGetQuery(pop$db_conn,
@@ -277,10 +276,10 @@ test_that("crossbreeding end to end with default bases: common + two line varian
   gm  <- pop |> get_table("genome_meta")
 
   expect_no_warning(
-    pop <- gm |> define_additive_effects("ADG", effects = rep(0.5, 8),
+    pop <- gm |> with_additive_terms("ADG", effects = rep(0.5, 8),
              base_tbl = get_table(pop, "founder_haplotypes")))
-  pop <- gm |> define_additive_effects("ADG", effects = rep(2.0, 8), line_name = "Duroc")
-  pop <- gm |> define_additive_effects("ADG", effects = rep(3.0, 8), line_name = "Landrace")
+  pop <- gm |> with_additive_terms("ADG", effects = rep(2.0, 8), line_name = "Duroc")
+  pop <- gm |> with_additive_terms("ADG", effects = rep(3.0, 8), line_name = "Landrace")
 
   # Three variants, three centres: the pooled one and each line's own.
   centres <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -329,10 +328,10 @@ test_that("add_tgv() respects parent_origin scope with line-specific imprinted e
   # stamping a bare ('any', 1) on both would collapse them onto one scope and
   # the second call would replace the first.
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("IMP", effects = rep(1.0, length(loci)),
+    with_additive_terms("IMP", effects = rep(1.0, length(loci)),
                             line_name = "Duroc", parent_origin = 1)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("IMP", effects = rep(4.0, length(loci)),
+    with_additive_terms("IMP", effects = rep(4.0, length(loci)),
                             line_name = "Landrace", parent_origin = 1)
 
   scopes <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -387,10 +386,10 @@ test_that("add_tgv() correctly follows line_origin through F2 recombination", {
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
   set.seed(4002)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = stats::rnorm(length(loci)), line_name = "Duroc")
+    with_additive_terms("ADG", effects = stats::rnorm(length(loci)), line_name = "Duroc")
   set.seed(4003)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = stats::rnorm(length(loci)), line_name = "Landrace")
+    with_additive_terms("ADG", effects = stats::rnorm(length(loci)), line_name = "Landrace")
 
   matings_f1 <- tibble::tibble(
     id_parent_1 = c("Duroc_1", "Duroc_2"),
@@ -438,10 +437,10 @@ test_that("add_tgv() correctly computes a backcross (F1 x parental line) TBV", {
     dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
   set.seed(6002)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = stats::rnorm(length(loci)), line_name = "Duroc")
+    with_additive_terms("ADG", effects = stats::rnorm(length(loci)), line_name = "Duroc")
   set.seed(6003)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = stats::rnorm(length(loci)), line_name = "Landrace")
+    with_additive_terms("ADG", effects = stats::rnorm(length(loci)), line_name = "Landrace")
 
   matings_f1 <- tibble::tibble(
     id_parent_1 = "Duroc_1", id_parent_2 = "Landrace_5",
@@ -484,7 +483,7 @@ test_that("add_tgv() computes correct TBV for a hemizygous (X-linked) QTL, no co
   all_loci <- pop |> get_table("genome_meta") |>
     dplyr::collect() |> dplyr::arrange(.data$locus_id) |> dplyr::pull(locus_name)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = seq_len(length(all_loci)))
+    with_additive_terms("ADG", effects = seq_len(length(all_loci)))
 
   all_ids <- DBI::dbGetQuery(pop$db_conn, "SELECT id_ind FROM ind_meta")$id_ind
   pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
@@ -514,7 +513,7 @@ test_that("base allele frequency is correct (row-count-agnostic) for a mixed aut
 
   pop <- define_trait(pop, "ADG")
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 8),
+    with_additive_terms("ADG", effects = rep(1, 8),
                             base_tbl = get_table(pop, "ind_meta"))
 
   p_from_effects <- DBI::dbGetQuery(pop$db_conn,

@@ -102,10 +102,10 @@ build_pop <- function(n_ind, shape) {
   qtl <- pop |> get_table("genome_meta") |> collect() |>
     arrange(locus_id) |> slice_head(n = n_qtl) |> pull(locus_name)
   for (t in c("A", "B")) {
-    pop <- define_trait(pop, t)   # manual effects below take no target
-    pop <- suppressWarnings(
+    pop <- define_trait(pop, t)
+    pop <- suppressMessages(
       pop |> get_table("genome_meta") |> filter(locus_name %in% !!qtl) |>
-        define_additive_effects(t, effects = rep(1.0, n_qtl)))
+        define_additive_effects(t, G = 1, warn_bounds = NULL))
   }
 
   # A condition column and a pen column, both with a realistic number of

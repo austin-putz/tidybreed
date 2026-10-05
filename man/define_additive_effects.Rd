@@ -7,7 +7,6 @@
 define_additive_effects(
   tbl,
   trait_name,
-  effects = NULL,
   distribution = c("normal", "gamma"),
   G = NULL,
   trait_var_comp_tbl = NULL,
@@ -16,7 +15,6 @@ define_additive_effects(
   base_tbl = NULL,
   line_name = NULL,
   parent_origin = NULL,
-  scale_to_target = TRUE,
   warn_bounds = c(0.8, 1.25),
   seed = NULL
 )
@@ -28,10 +26,6 @@ optional \code{\link[dplyr:filter]{dplyr::filter()}}). The filtered rows determi
 \item{trait_name}{Character scalar \strong{or} vector. Name(s) of existing traits
 in \code{trait_meta}. When length >= 2, the architecture is drawn jointly from
 \code{MVN(0, G)} and \code{method} becomes active.}
-
-\item{effects}{Optional numeric vector of length \code{n_qtl} (manual mode, single
-trait only), in ascending \code{locus_id} order, written unchanged. Error if
-\code{length(trait_name) > 1} or with \code{G}.}
 
 \item{distribution}{Character. \code{"normal"} (default) or \code{"gamma"}, the
 single-trait architecture. Ignored for multi-trait (always MVN).}
@@ -81,9 +75,6 @@ is not supported yet). Define differently-scoped traits in separate
 calls. For imprinting that varies locus by locus, write the terms with
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}.}
 
-\item{scale_to_target}{Logical. \code{TRUE} (default) calibrates sampled effects
-to the target. \code{FALSE} writes the draw unscaled and takes no target.}
-
 \item{warn_bounds}{Numeric length 2, \code{c(lower, upper)} with
 \verb{0 < lower <= upper}, or \code{NULL} to turn the comparison off. Outside
 the bounds, an observed or genic-limit comparison warns; a founder-pool
@@ -112,9 +103,8 @@ component is the breeding value.
 }
 \details{
 \strong{When the result is exact.} The requested covariance \code{G} is delivered
-exactly, \verb{B' M B = G} to machine precision, \strong{only} for sampled effects
-with \code{method = "shared"} and \code{scale_to_target = TRUE}, when the rank is
-feasible: \code{rank(G) <= rank(M)} (the anchor has enough independent
+exactly, \verb{B' M B = G} to machine precision, for one trait or for several
+with \code{method = "shared"}, when the rank is feasible: \code{rank(G) <= rank(M)} (the anchor has enough independent
 segregating directions at the selected loci) and \verb{rank(G) <= rank(B0' M B0)} (the drawn architecture does too). Each infeasibility is its
 own error. Rank and positive semidefiniteness are judged on the target's
 \strong{correlation} scale, so a trait recorded in small units is never
@@ -191,11 +181,18 @@ never silently ignores a stored target. Filter them away with
 
 With \code{line_name = "C"} the default reads line C's block when one exists and
 otherwise the population-wide one.
+}
 
-Manual \code{effects} are written unchanged and take no target; so do sampled
-effects with \code{scale_to_target = FALSE} (which for several traits still use
-the stored \code{G} as the draw's covariance). \code{G} with either is an error:
-nothing would be calibrated to it.
+\section{Generated means calibrated}{
+
+The generator always samples \strong{and} calibrates: every term it writes
+under the \code{"generated"} owner delivers its stored target. That is what lets
+\code{\link[=define_phenotype]{define_phenotype()}}\verb{(prevalence = )} trust the stored target. It has no
+option to write fixed or unscaled effects. Exact coefficients (GWAS
+estimates, a published QTL map, a hand-built test) go through
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} with \code{\link[=ad_terms]{ad_terms()}} under a user owner;
+\code{\link[=add_tgv]{add_tgv()}} evaluates them like any other term, and a liability phenotype
+on such a trait then needs \verb{thresholds =} instead of \verb{prevalence =}.
 }
 
 \section{Which population centers the effects}{

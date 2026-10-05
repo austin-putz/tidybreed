@@ -21,7 +21,16 @@
 #'   [add_phenotype()] time by evaluating the `formula` expression over already-
 #'   recorded phenotype values for the same individuals; they have no TBV,
 #'   no residual variance, and no QTL of their own.
-#' @param mean Numeric. Phenotypic population mean (intercept). Default `0`.
+#' @param mean Numeric. The intercept. Default `0`. A record is `mean` + the
+#'   genetic value as stored + random effects + residual; nothing is added
+#'   to make the realised mean hit `mean`. Generated effects have mean 0 in
+#'   expectation at their base allele frequencies (Hardy-Weinberg and linkage
+#'   equilibrium), so `mean` is the base phenotypic mean in expectation; a
+#'   finite, selected or non-equilibrium base differs by its sample genetic
+#'   mean, and hand-written functional terms by their implied mean (see
+#'   [ad_terms()]). For a particular realised base mean, set `mean` to the
+#'   target minus the base individuals' mean of `ind_tgv_total`, measured
+#'   after [add_founders()].
 #' @param expressed_sex Character. Who receives a phenotype record: `"both"`
 #'   (default), `"M"`, or `"F"`.
 #' @param repeatable Logical. Whether an individual can have multiple records
@@ -41,12 +50,12 @@
 #'   outside those three kinds (an `indicator` surface, other interactions).
 #'   The threshold uses the *target* at the reference population, so the
 #'   realised prevalence of a selected or line-specific population differs.
-#'   The target is taken as given: if the trait's effects were written without
-#'   being calibrated to it (manual `effects`, or `scale_to_target = FALSE` in
-#'   [define_additive_effects()], or terms from [define_genome_effect_terms()]),
-#'   the threshold describes a variance the model does not deliver and the
-#'   realised prevalence is wrong, with no error. Give `thresholds` for such a
-#'   trait. Not valid for composite phenotypes (`components` or
+#'   Every term of the trait must be owned by `"generated"`: a generator
+#'   ([define_additive_effects()]) always calibrates its terms to the stored
+#'   target, so the target describes them. Terms written with
+#'   [define_genome_effect_terms()] carry values nothing checked against a
+#'   target, so [add_phenotype()] errors for such a trait; give `thresholds`.
+#'   Not valid for composite phenotypes (`components` or
 #'   `formula_tbv`): their genetic liability combines several traits and
 #'   contributors, which no stored variance describes. Give `thresholds`
 #'   instead.

@@ -311,27 +311,32 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 - `define_additive_effects()` — accepts a `tidybreed_table` from
   `get_table("genome_meta")` (optionally filtered) as its **first argument**.
   `trait_name` accepts a scalar **or vector** of trait names. One flow for
-  k = 1 and k >= 2 (0.73.0):
+  k = 1 and k >= 2 (0.73.0). **Generated means calibrated** (0.74.1, Q21):
+  there is no `effects =` or `scale_to_target =`; every call samples and
+  calibrates, so a `"generated"` term always delivers its stored target.
+  Known coefficients (GWAS estimates, a QTL map, test oracles) go through
+  `define_genome_effect_terms()` + `ad_terms()` under a user owner.
   1. **Validate** everything; no RNG use before the draw (`seed` is applied
      after every input check and the anchor-rank check; only the
      architecture-rank and verification failures come after it).
-     `parent_origin` must be exactly `1`/`2` before coercion. `G` with manual
-     `effects` or `scale_to_target = FALSE`
-     is refused (nothing would be calibrated to it). `anchor = "realised"`
-     needs an individuals `base_tbl` and the common scope.
+     `parent_origin` must be exactly `1`/`2` before coercion.
+     `anchor = "realised"` needs an individuals `base_tbl` and the common
+     scope. Sex-linked / organelle QTL are refused (`assert_qtl_autosomal()`;
+     the error points at the writer).
   2. **Target** (`.dae_resolve_target()`, plan §6C): a passed `G` (matrix, or a
      number for one trait; dimnames checked, never relabelled; PSD) is written
      with the terms and refused over any stored block (whole-table check, even
-     identical; the error gives a working `remove_rows()` call). `G = NULL`
+     identical; the error gives a working `remove_rows()` call and says to
+     re-run the same call). `G = NULL`
      reads the stored rows (line block, else population-wide), or
      `trait_var_comp_tbl` rows. Refused: a stored block pairing a call trait
      with an outside trait; a stored `dominance` / `additive_by_additive` block
-     for the traits (**with or without** a passed `G`); a partial block; two
-     candidate sets. Targets are validated by `.qtl_target_std()`: rank and
+     for the traits (**with or without** a passed `G`; with `G` and generated
+     additive terms already present, the error routes through removing the
+     non-additive block, since `define_effect_cov_matrix()` would be
+     refused); a partial block; two candidate sets. Targets are validated by `.qtl_target_std()`: rank and
      PSD on the **correlation scale**, never relative to `G`'s largest
-     eigenvalue (that depends on the traits' units). Manual effects take
-     no target and skip these checks; unscaled k >= 2 draws read it only as
-     the draw's Sigma.
+     eigenvalue (that depends on the traits' units).
   3. **Draw** the architecture with `.draw_additive_architecture()` (today's
      draws: rnorm / signed gamma for k = 1, `MASS::mvrnorm(G)` rows for k >= 2,
      masked per trait under `"union"`). The same seed gives the same `B0`.
@@ -362,7 +367,7 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      comparison is always a `message()` (sampling LD, Q22), adding the
      realised-anchor hint outside `warn_bounds`; the other two warn outside
      `warn_bounds` (default `c(0.8, 1.25)`, `NULL` = off).
-  7. **Message** says "exact" / "approximate" / "not calibrated" with the
+  7. **Message** says "exact" / "approximate" with the
      delivered covariance; a line-scoped call adds the line-mean message.
 
   Writes one order-one `additive` term per locus under the reserved effect
@@ -389,7 +394,7 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   zero: paternal-only vs maternal-only is zero under random mating, but
   both-parents vs paternal-only is `pq` per locus.
 
-  `scale_to_target` is origin-aware:
+  The calibration is origin-aware:
   `V_A = Σ_j n_eligible,j · p_j q_j a_j²`, `n_eligible` = 2 unparented, 1
   parent-qualified.
 
@@ -549,7 +554,14 @@ pop |> define_genome_effect_terms(
   `"additive_by_additive"`) → `trait_var_comp` through `.tvc_write_block()`
   (PSD, `%.17g` full precision, one transaction, **never overwrites** a stored
   block for the same `effect_name` × any trait × `line_name`; `line_name` is
-  genetic-only);
+  genetic-only). The exported function also **refuses a genetic block when a
+  trait already has `"generated"` terms of that kind at the block's scope**
+  (`.tvc_refuse_under_generated()`, 0.74.1, Q21): population-wide terms for
+  `line_name = NULL`, line-C terms for `"C"`; still refused after the old
+  block is removed. The route is `remove_rows()` then
+  `define_additive_effects(G = )`, which writes target and terms together. A
+  line's target before that line's effects is accepted; a generator's `G =`
+  goes through `.tvc_write_block()` and is never refused here;
   `"residual"` → `define_residual_cov()` → `phenotype_var_comp`;
   any other name → `phenotype_var_comp` with that `effect_name`.
   `GENETIC_EFFECT_NAMES_FUTURE` (`additive_by_dominance`,
@@ -607,11 +619,14 @@ pop |> define_genome_effect_terms(
     `mean + qnorm(1 - prevalence) * sqrt(Vg + Ve)`, with `Vg` the active-block
     sum (`.ap_prevalence_genetic_var()`): the trait's stored population-wide
     `additive`, `dominance` and `additive_by_additive` diagonals, each counted
-    only if the model has terms of that kind. Refused with `components` /
+    only if the model has terms of that kind, and **every term must be owned
+    by `"generated"`** (the owner rule, 0.74.1, Q21: only generator terms are
+    known to deliver the stored target). Refused with `components` /
     `formula_tbv` (no stored variance describes a composite liability: use
     `thresholds`). `add_phenotype()` errors in PLAN (`.ap_check_prevalence()`,
-    before any write or draw) when a kind of term has no stored target or the
-    model has terms outside the three kinds; there is no silent `Vg = 0`.
+    before any write or draw) when any term is not `"generated"`, a kind of
+    term has no stored target, or the model has terms outside the three
+    kinds; there is no silent `Vg = 0`.
     Skipped for `user_values` calls, which place no threshold.
   - `missing_component_action` — `"skip"` (default) or `"error"`. Stored in
     `phenotype_meta` and applied uniformly by `add_phenotype()` for **any**
@@ -707,9 +722,9 @@ Both functions accept a `tidybreed_table` (from `get_table()` + optional
   `prevalence` threshold uses the active-block rule
   (`.ap_prevalence_genetic_var()`): the sum of the population-wide stored
   diagonals of `additive`, `dominance` and `additive_by_additive`, each only if
-  the model has terms of that kind; an `indicator` surface or another
-  interaction, or a kind with no stored target, is an error naming
-  `thresholds =`.
+  the model has terms of that kind; a term not owned by `"generated"`, an
+  `indicator` surface or another interaction, or a kind with no stored
+  target, is an error naming `thresholds =`.
 - `add_tgv(tbl, trait_name = NULL, index_names = NULL, weight_type =
   c("index", "economic", "both"), component_name = "additive",
   overwrite_index = FALSE, ...)` — the one table of true genetic values.

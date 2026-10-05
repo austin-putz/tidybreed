@@ -489,8 +489,7 @@ test_that("gate 34: rerunning define_additive_effects() cannot delete custom ter
 
   for (i in 1:3) {
     pop <- pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(i, 6),
-                              base_tbl = gew_base_A(pop))
+      define_additive_effects("ADG", seed = i, base_tbl = gew_base_A(pop))
   }
 
   owners <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -509,7 +508,7 @@ test_that("replace_trait refuses to take the reserved owner with it", {
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), base_tbl = gew_base_A(pop))
+    define_additive_effects("ADG", seed = 1, base_tbl = gew_base_A(pop))
 
   expect_error(define_genome_effect_terms(pop, "ADG", data.frame(
     locus_name = "Locus_1", contrast_name = "dominance", center_value = 0.4,
@@ -520,7 +519,7 @@ test_that("replace_trait refuses to take the reserved owner with it", {
 })
 
 test_that("gate 42: all four wrapper scopes round-trip, and replace_scope isolates them", {
-  pop <- gew_lines_pop()
+  pop <- gew_lines_pop(n_loci = 30)
   on.exit(close_pop(pop), add = TRUE)
 
   # Each scope gets its own locus, so each lands in its own fallback family.
@@ -529,40 +528,50 @@ test_that("gate 42: all four wrapper scopes round-trip, and replace_scope isolat
   # matches both -- and the validator refuses that pair by design. Family
   # separation is what lets all four coexist here; replace_scope's isolation is
   # per scope within (trait, owner), not per locus, so the test is still real.
-  eff <- function(v, locus, ...) {
+  # The generator calibrates every call, so each one-locus call needs a locus
+  # that segregates in the base (pool A).
+  p   <- extract_allele_freq(gew_base_A(pop))
+  seg <- p$locus_name[p$allele_freq > 0 & p$allele_freq < 1][1:5]
+  expect_false(anyNA(seg))
+  eff <- function(seed, i, ...) {
+    locus <- seg[i]
     pop <<- pop |> get_table("genome_meta") |>
       dplyr::filter(locus_name == !!locus) |>
-      define_additive_effects("ADG", effects = v, base_tbl = gew_base_A(pop), ...)
+      define_additive_effects("ADG", seed = seed, base_tbl = gew_base_A(pop), ...)
   }
-  eff(1, "Locus_1")                                      # NULL / NULL
-  eff(2, "Locus_2", line_name = "A")                     # "A"  / NULL
-  eff(3, "Locus_3", parent_origin = 1)                   # NULL / 1
-  eff(4, "Locus_4", line_name = "A", parent_origin = 2)  # "A"  / 2
+  eff(1, 1)                                      # NULL / NULL
+  eff(2, 2, line_name = "A")                     # "A"  / NULL
+  eff(3, 3, parent_origin = 1)                   # NULL / 1
+  eff(4, 4, line_name = "A", parent_origin = 2)  # "A"  / 2
 
-  scopes <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT genome_value, scope_description FROM genome_effect_terms ",
-    "ORDER BY genome_value"))
-  expect_equal(scopes$genome_value, c(1, 2, 3, 4))
+  by_locus <- function() DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT l.locus_name, t.genome_value, t.scope_description ",
+    "FROM genome_effect_terms t ",
+    "JOIN genome_effect_loci l USING (id_genome_effect) ORDER BY l.locus_name"))
+  scopes <- by_locus()
+  expect_equal(scopes$locus_name, sort(seg[1:4]))
   expect_equal(scopes$scope_description,
                c("common", "1:exact(A)x1", "1:any@p1x1", "1:exact(A)@p2x1"))
 
   # Every scope carries exactly the origin rows the mapping table promises: one
   # row in every scoped case, none at all for the common one.
   n_org <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT e.genome_value, COUNT(o.origin_slot) n FROM genome_effects e ",
+    "SELECT l.locus_name, COUNT(o.origin_slot) n FROM genome_effects e ",
+    "JOIN genome_effect_loci l USING (id_genome_effect) ",
     "LEFT JOIN genome_effect_member_origins o USING (id_genome_effect) ",
     "GROUP BY 1 ORDER BY 1"))
   expect_equal(n_org$n, c(0, 1, 1, 1))
 
   # Replacing the ('exact' A, parent ANY) scope leaves the other three exactly
   # as they were, including the one that differs from it only by a parent.
-  eff(99, "Locus_5", line_name = "A")
-  after <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT genome_value, scope_description FROM genome_effect_terms ",
-    "ORDER BY genome_value"))
-  expect_equal(after$genome_value, c(1, 3, 4, 99))
-  expect_equal(after$scope_description,
+  eff(5, 5, line_name = "A")
+  after <- by_locus()
+  expect_setequal(after$locus_name, seg[c(1, 3, 4, 5)])
+  expect_equal(after$scope_description[match(seg[c(1, 3, 4, 5)], after$locus_name)],
                c("common", "1:any@p1x1", "1:exact(A)@p2x1", "1:exact(A)x1"))
+  expect_identical(after[after$locus_name != seg[5], ],
+                   scopes[scopes$locus_name != seg[2], ],
+                   ignore_attr = TRUE)
 })
 
 test_that("two scopes that overlap without nesting are refused, whichever order", {
@@ -573,10 +582,10 @@ test_that("two scopes that overlap without nesting are refused, whichever order"
     first  <- if (is.na(order[1])) list(line_name = "A") else list(parent_origin = order[1])
     second <- if (is.na(order[2])) list(line_name = "A") else list(parent_origin = order[2])
     pop <- do.call(define_additive_effects, c(
-      list(pop |> get_table("genome_meta"), "ADG", effects = rep(1, 6),
+      list(pop |> get_table("genome_meta"), "ADG", seed = 1,
            base_tbl = gew_base_A(pop)), first))
     expect_error(do.call(define_additive_effects, c(
-      list(pop |> get_table("genome_meta"), "ADG", effects = rep(2, 6),
+      list(pop |> get_table("genome_meta"), "ADG", seed = 2,
            base_tbl = gew_base_A(pop)), second)),
       "overlapping but incomparable")
     expect_equal(DBI::dbGetQuery(pop$db_conn,
@@ -591,11 +600,11 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
   for (a in list(list(1, NULL), list(2, "A"), list(3, "B"))) {
     pop <- if (is.null(a[[2]])) {
       pop |> get_table("genome_meta") |>
-        define_additive_effects("ADG", effects = rep(a[[1]], 6),
+        define_additive_effects("ADG", seed = a[[1]],
                                 base_tbl = gew_base_A(pop))
     } else {
       pop |> get_table("genome_meta") |>
-        define_additive_effects("ADG", effects = rep(a[[1]], 6),
+        define_additive_effects("ADG", seed = a[[1]],
                                 line_name = a[[2]])
     }
   }
@@ -605,10 +614,9 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
     "SELECT l.locus_name, t.scope_description, t.genome_value ",
     "FROM genome_effect_terms t ",
     "JOIN genome_effect_loci l USING (id_genome_effect) ",
-    "WHERE l.locus_name = 'Locus_1' ORDER BY t.genome_value"))
-  expect_equal(got$genome_value, c(1, 2, 3))
+    "WHERE l.locus_name = 'Locus_1' ORDER BY t.scope_description"))
   expect_equal(got$scope_description,
-               c("common", "1:exact(A)x1", "1:exact(B)x1"))
+               c("1:exact(A)x1", "1:exact(B)x1", "common"))
 
   # All three compete rather than sum: same family, different scopes. That is
   # the whole point -- separate owners would sum and give no common fallback.
@@ -621,7 +629,7 @@ test_that("gate 35: successive common, A and B calls all stand, in one family", 
   # Re-running the common call drops loci absent from the new set -- the whole
   # scope is replaced, not merged into.
   pop <- pop |> get_table("genome_meta") |> dplyr::filter(locus_id <= 3) |>
-    define_additive_effects("ADG", effects = rep(8, 3), base_tbl = gew_base_A(pop))
+    define_additive_effects("ADG", seed = 8, base_tbl = gew_base_A(pop))
   by_scope <- DBI::dbGetQuery(pop$db_conn, paste0(
     "SELECT scope_description, COUNT(*) n FROM genome_effect_terms ",
     "GROUP BY 1 ORDER BY 1"))
@@ -637,19 +645,19 @@ test_that("gate 50: a parent-only re-run warns, and the fallback pair still stan
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(2, 6), line_name = "A")
+    define_additive_effects("ADG", seed = 2, line_name = "A")
 
   expect_warning(
     pop <- pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(5, 6), line_name = "A",
+      define_additive_effects("ADG", seed = 5, line_name = "A",
                               parent_origin = 1),
     "differ only in the parent dimension")
 
   got <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT DISTINCT genome_value, scope_description FROM genome_effect_terms ",
-    "ORDER BY genome_value"))
-  expect_equal(got$genome_value, c(2, 5))
-  expect_equal(got$scope_description, c("1:exact(A)x1", "1:exact(A)@p1x1"))
+    "SELECT scope_description, COUNT(*) n FROM genome_effect_terms ",
+    "GROUP BY 1 ORDER BY 1"))
+  expect_equal(got$scope_description, c("1:exact(A)@p1x1", "1:exact(A)x1"))
+  expect_equal(got$n, c(6, 6))
 })
 
 test_that("gate 50: the common/A/B sequence and a reciprocal pair stay silent", {
@@ -658,14 +666,14 @@ test_that("gate 50: the common/A/B sequence and a reciprocal pair stay silent", 
 
   # Members differ in *line*, not in parent: never the confusable case.
   pop <- pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), base_tbl = gew_base_A(pop))
+    define_additive_effects("ADG", seed = 1, base_tbl = gew_base_A(pop))
   expect_warning(
     pop <- pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(2, 6), line_name = "A"),
+      define_additive_effects("ADG", seed = 2, line_name = "A"),
     NA)
   expect_warning(
     pop <- pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(3, 6), line_name = "B"),
+      define_additive_effects("ADG", seed = 3, line_name = "B"),
     NA)
 
   # A reciprocal pair has disjoint parents rather than nested ones, so neither
@@ -673,11 +681,11 @@ test_that("gate 50: the common/A/B sequence and a reciprocal pair stay silent", 
   pop2 <- gew_lines_pop()
   on.exit(close_pop(pop2), add = TRUE)
   pop2 <- pop2 |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), line_name = "A",
+    define_additive_effects("ADG", seed = 1, line_name = "A",
                             parent_origin = 1)
   expect_warning(
     pop2 <- pop2 |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(2, 6), line_name = "A",
+      define_additive_effects("ADG", seed = 2, line_name = "A",
                               parent_origin = 2),
     NA)
   expect_equal(DBI::dbGetQuery(pop2$db_conn,
@@ -687,7 +695,7 @@ test_that("gate 50: the common/A/B sequence and a reciprocal pair stay silent", 
 
 # ── Gates 43, 44: variance target and the multi-trait origin contract ──────
 
-test_that("gate 43: scale_to_target lands on V for parent-qualified effects too", {
+test_that("gate 43: the calibration lands on V for parent-qualified effects too", {
   realized <- function(po) {
     pop <- gew_lines_pop(n_loci = 30)
     on.exit(close_pop(pop), add = TRUE)
@@ -720,7 +728,7 @@ test_that("gate 44: parent_origin resolves per trait, in all three input forms",
       remove_rows(confirm_all = TRUE))
     pop <- suppressWarnings(
       pop |> get_table("genome_meta") |>
-        define_additive_effects(c("ADG", "BW"), effects = NULL,
+        define_additive_effects(c("ADG", "BW"),
                                 G = diag(2), parent_origin = po,
                                 base_tbl = gew_base_A(pop)))
     out <- DBI::dbGetQuery(pop$db_conn, paste0(
@@ -765,15 +773,15 @@ test_that("parent_origin rejects values that are not 1 or 2", {
   pop <- gew_lines_pop()
   on.exit(close_pop(pop), add = TRUE)
   expect_error(pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), parent_origin = 3),
+    define_additive_effects("ADG", parent_origin = 3),
     "must be 1 .*or 2")
   expect_error(pop |> get_table("genome_meta") |>
-    define_additive_effects("ADG", effects = rep(1, 6), parent_origin = "sire"),
+    define_additive_effects("ADG", parent_origin = "sire"),
     "must be 1 .*2 .*or NULL")
   # Checked before any coercion: as.integer(1.9) would be a paternal effect.
   for (bad in list(1.9, 2.5, Inf, NA_real_, numeric(0))) {
     expect_error(pop |> get_table("genome_meta") |>
-      define_additive_effects("ADG", effects = rep(1, 6), parent_origin = bad),
+      define_additive_effects("ADG", parent_origin = bad),
       "must be 1 .*or 2")
   }
   expect_error(.dae_parent_origin(c(ADG = 1, ADG = 2), c("ADG", "BW")),

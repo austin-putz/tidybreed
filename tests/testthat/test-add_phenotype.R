@@ -317,9 +317,13 @@ test_that("prevalence without a stored additive target errors before any write o
   pop <- make_pheno_pop("ph_prev_notarget", n_ind = 40, n_loci = 200)
   on.exit(close_pop(pop), add = TRUE)
   pop <- define_trait(pop, "mort")
+  # Generated with a target, which is then removed: the terms stay, the
+  # target they were calibrated to is gone.
   pop <- suppressMessages(pop |> get_table("genome_meta") |>
     dplyr::filter(locus_id <= 30L) |>
-    define_additive_effects("mort", scale_to_target = FALSE))
+    define_additive_effects("mort", G = 1))
+  pop <- suppressMessages(get_table(pop, "trait_var_comp") |>
+    remove_rows(confirm_all = TRUE))
   pop <- define_phenotype(pop, "mort", type = "categorical",
                           prevalence = 0.1, residual_var = 1)
 

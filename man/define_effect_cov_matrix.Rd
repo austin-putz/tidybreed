@@ -88,6 +88,19 @@ identical. The error gives the \code{\link[=remove_rows]{remove_rows()}} call th
 block. \code{trait_var_comp} is the single source of generation targets; the
 effect generators read it and never overwrite it either.
 
+\strong{A target is written before its effects are generated, or with them.} A
+genetic block is refused when any of its traits already has terms of that
+kind written by a generator (owner \code{"generated"}) at the block's scope:
+population-wide terms for \code{line_name = NULL}, line-\code{"C"} terms for
+\code{line_name = "C"}. Those terms were calibrated to the target they were
+generated with, and a new target would not describe them; the prevalence
+threshold of \code{\link[=define_phenotype]{define_phenotype()}} trusts the stored target for exactly that
+reason. The refusal holds after the old block is removed too. To change
+the target, remove the old block and call \code{\link[=define_additive_effects]{define_additive_effects()}} with
+\verb{G =}, which writes the new target and re-draws the terms in one
+transaction. A line's target written before that line's effects are
+generated is accepted.
+
 \code{"additive_by_dominance"} and \code{"dominance_by_dominance"} are reserved for
 future generators and refused. \code{"total"}, \code{"unpartitioned"} and
 \code{"between_components"} are output names of the variance extractor and

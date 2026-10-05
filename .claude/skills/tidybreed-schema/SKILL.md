@@ -77,7 +77,7 @@ by `define_additive_effects()`.
 |------------------|---------|-----------------------------------------------------------|
 | id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
 | trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
-| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()`, `"custom"` is the `define_genome_effect_terms()` default |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()` and means *calibrated to the stored target* (0.74.1: the generator always calibrates, and `define_phenotype(prevalence = )` requires every term to be `"generated"`), `"custom"` is the `define_genome_effect_terms()` default |
 | effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
 | genome_value     | DOUBLE  | The term's coefficient                                    |
 

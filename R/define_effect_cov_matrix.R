@@ -51,6 +51,19 @@
 #' block. `trait_var_comp` is the single source of generation targets; the
 #' effect generators read it and never overwrite it either.
 #'
+#' **A target is written before its effects are generated, or with them.** A
+#' genetic block is refused when any of its traits already has terms of that
+#' kind written by a generator (owner `"generated"`) at the block's scope:
+#' population-wide terms for `line_name = NULL`, line-`"C"` terms for
+#' `line_name = "C"`. Those terms were calibrated to the target they were
+#' generated with, and a new target would not describe them; the prevalence
+#' threshold of [define_phenotype()] trusts the stored target for exactly that
+#' reason. The refusal holds after the old block is removed too. To change
+#' the target, remove the old block and call [define_additive_effects()] with
+#' `G =`, which writes the new target and re-draws the terms in one
+#' transaction. A line's target written before that line's effects are
+#' generated is accepted.
+#'
 #' `"additive_by_dominance"` and `"dominance_by_dominance"` are reserved for
 #' future generators and refused. `"total"`, `"unpartitioned"` and
 #' `"between_components"` are output names of the variance extractor and
@@ -141,6 +154,7 @@ define_effect_cov_matrix <- function(pop,
     committed <- FALSE
     on.exit(if (!committed) try(DBI::dbExecute(conn, "ROLLBACK"), silent = TRUE),
             add = TRUE)
+    .tvc_refuse_under_generated(conn, effect_name, trait_name, line_name)
     .tvc_write_block(conn, effect_name, cov_matrix, line_name)
     DBI::dbExecute(conn, "COMMIT")
     committed <- TRUE
@@ -351,7 +365,14 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
          else paste0(" (line '", line_name, "')"),
          ". Stored targets are never overwritten, even by an identical matrix. ",
          "To replace it, remove it first:\n",
-         .tvc_removal_call(effect_name, line_name, block), call. = FALSE)
+         .tvc_removal_call(effect_name, line_name, block),
+         "\nthen write the new one",
+         if (effect_name == "additive") paste0(
+           " with define_additive_effects(..., G = ), which writes the target ",
+           "and re-draws the generated terms in one transaction, or with ",
+           "define_effect_cov_matrix() if no generated terms exist at this ",
+           "scope yet") else " with define_effect_cov_matrix()",
+         ".", call. = FALSE)
   }
 
   n     <- length(traits)
@@ -369,6 +390,54 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
     "trait_name_1, trait_name_2, cov_value) VALUES ",
     paste(vals, collapse = ", ")))
   invisible(traits)
+}
+
+#' The traits with generated terms of one kind at one target scope
+#'
+#' A `line_name = NULL` target covers the population-wide terms (common or
+#' parent-only); a `line_name = "C"` target covers line-C terms.
+#' @return Sorted character vector of trait names (empty when none).
+#' @keywords internal
+.tvc_generated_traits <- function(conn, effect_name, traits, line_name) {
+  model <- .gev_read_model(conn, traits, effect_owner = GE_GENERATED_OWNER)
+  if (nrow(model$terms) == 0L) return(character(0))
+  kind <- .gev_target_kind(model)
+  tl   <- .gev_term_line(model)
+  at   <- if (is.null(line_name)) is.na(tl) else (!is.na(tl) & tl == line_name)
+  hit  <- !is.na(kind) & kind == effect_name & at
+  sort(unique(model$terms$trait_name[hit]))
+}
+
+#' Refuse a genetic target under terms a generator calibrated (Q21)
+#'
+#' A `"generated"` term is calibrated to the target it was generated with, and
+#' the prevalence threshold trusts the stored target for that reason. Writing a
+#' target under such terms (even after removing the old one) would break that.
+#' Only the exported [define_effect_cov_matrix()] calls this; a generator's
+#' `G =` writes through `.tvc_write_block()` together with the terms it
+#' calibrates, so it is never refused here.
+#'
+#' Scope as in `.tvc_generated_traits()`.
+#' @keywords internal
+.tvc_refuse_under_generated <- function(conn, effect_name, traits, line_name) {
+  hit_traits <- .tvc_generated_traits(conn, effect_name, traits, line_name)
+  if (length(hit_traits) == 0L) return(invisible(NULL))
+  scope <- if (is.null(line_name)) "population-wide" else
+    paste0("line '", line_name, "'")
+  block <- .tvc_block_traits(conn, effect_name, line_name, traits)
+  remove <- if (length(block)) paste0(
+    "remove the stored block:\n",
+    .tvc_removal_call(effect_name, line_name, block), "\nthen ")
+  regenerate <- if (effect_name == "additive") paste0(
+    "call define_additive_effects(..., G = ) with the new matrix",
+    if (!is.null(line_name)) paste0(' and line_name = "', line_name, '"'),
+    ", which writes the target and re-draws the terms in one transaction.")
+  else paste0("re-run the generator that wrote them with the new target.")
+  stop("Trait(s) ", paste(hit_traits, collapse = ", "), " already have ",
+       "generated '", effect_name, "' terms (", scope, "), calibrated to ",
+       "the target they were generated with. A target written now would not ",
+       "describe them, and define_phenotype(prevalence = ) trusts the stored ",
+       "target. To change it, ", remove, regenerate, call. = FALSE)
 }
 
 #' The `line_name` whose rows a reader should use

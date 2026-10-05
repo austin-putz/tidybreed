@@ -395,12 +395,11 @@ test_that("add_tgv() errors, naming chromosome inheritance, when an individual c
     dplyr::filter(chr_name == "Y") |> dplyr::pull(locus_name)
   expect_gt(length(y_loci), 0)
 
-  # QTL on Y only. scale_to_target = FALSE is required: assert_qtl_autosomal()
-  # rejects non-autosomal QTL on the rescaling path.
+  # QTL on Y only, with known values through the writer: the generator
+  # (assert_qtl_autosomal()) refuses non-autosomal QTL.
   pop <- pop |> get_table("genome_meta") |>
     dplyr::filter(locus_name %in% y_loci) |>
-    define_additive_effects("YTRAIT", effects = rep(1.0, length(y_loci)),
-                            scale_to_target = FALSE)
+    with_additive_terms("YTRAIT", effects = rep(1.0, length(y_loci)))
 
   # Females carry no Y at all -> zero ind_haplotype rows at every QTL.
   n_f_rows <- DBI::dbGetQuery(pop$db_conn, paste0(

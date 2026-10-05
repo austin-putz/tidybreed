@@ -53,3 +53,61 @@ tgv_additive <- function(pop, trait_name = NULL) {
   out <- out[order(out$trait_name, out$id_ind), c("id_ind", "trait_name", "tgv_value")]
   tibble::as_tibble(out)
 }
+
+#' Write additive terms with known values, centred like the generator
+#'
+#' Test-only stand-in for the manual `effects =` that `define_additive_effects()`
+#' had before 0.74.1 (Q21: the generator now always samples and calibrates).
+#' Writes one order-one `additive` term per selected locus through
+#' `define_genome_effect_terms()`, with the generator's conventions: values in
+#' ascending `locus_id` order, `center_value` = the base allele frequency
+#' resolved exactly as the generator resolves it (`base_tbl = NULL` is the
+#' founder pool of the line the effect applies to, with the Wahlund warning),
+#' the generator's scope for (`line_name`, `parent_origin`), and
+#' `mode = "replace_scope"`, so a re-run replaces only its own scope.
+#'
+#' The owner is `"custom"`: these values were not calibrated to any target,
+#' which is exactly what the owner records. `add_tgv()` evaluates every owner,
+#' so breeding-value oracles are unchanged.
+#'
+#' @param tbl `get_table(pop, "genome_meta")`, optionally filtered.
+#' @param effects Numeric, one per selected locus, in `locus_id` order.
+#' @return The `tidybreed_pop`, invisibly.
+with_additive_terms <- function(tbl, trait_name, effects, line_name = NULL,
+                                parent_origin = NULL, base_tbl = NULL,
+                                effect_owner = "custom") {
+  pop  <- tbl$pop
+  conn <- pop$db_conn
+  sel  <- dplyr::collect(tbl)$locus_name
+  go   <- DBI::dbGetQuery(conn,
+    "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")
+  rows <- go$locus_name %in% sel
+  if (length(effects) != sum(rows)) {
+    stop("`effects` length (", length(effects), ") must equal the number of ",
+         "selected loci (", sum(rows), ").", call. = FALSE)
+  }
+  base <- .dae_resolve_base(pop, base_tbl, line_name)
+  .dae_require_base_at(base$p_base, rows, go$locus_name)
+  terms <- data.frame(term_id       = go$locus_name[rows],
+                      locus_name    = go$locus_name[rows],
+                      contrast_name = "additive",
+                      center_value  = base$p_base[rows],
+                      genome_value  = as.numeric(effects),
+                      stringsAsFactors = FALSE)
+  .ge_write_terms(pop, trait_name, terms, effect_owner, "replace_scope",
+                  .dae_scope(line_name, parent_origin), NULL, FALSE,
+                  allow_reserved_owner = identical(effect_owner, "generated"))
+  invisible(pop)
+}
+
+#' Plant uncalibrated terms under the reserved `"generated"` owner
+#'
+#' Test-only, through the internal writer (`allow_reserved_owner = TRUE`), as
+#' the generator == writer test in `test-genome-effects-writer.R` does. Used
+#' where a test needs generator-owned terms with chosen loci or values that no
+#' calibrated call produces: per-trait QTL sets for `method = "union"`, or
+#' fixtures for the owner rule. These terms are **not** calibrated, so they
+#' break the package's "generated means calibrated" invariant on purpose.
+plant_generated_additive <- function(tbl, trait_name, effects, ...) {
+  with_additive_terms(tbl, trait_name, effects, ..., effect_owner = "generated")
+}
