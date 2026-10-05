@@ -6,8 +6,8 @@ status, then one section each for the **genome** (loci, chromosomes,
 physical/genetic length, founder haplotype pool), the **model**
 (genetic-component traits, observed phenotypes, selection indices,
 causal loci), the **individuals** (total, broken down by sex and by
-line), and the **records** written so far (phenotypes, TBVs, EBVs, index
-values).
+line), and the **records** written so far (phenotypes, genetic values,
+EBVs, index values).
 
 Sections are shown only when their underlying data exists, so a freshly
 opened population collapses to just the header, the database line, and a

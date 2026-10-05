@@ -43,13 +43,15 @@ values per individual per trait in `ind_tgv` (through
   sum of contributor genetic values (self, dam, sire, or group): the
   total by default, or the components each row lists in
   `component_names` — see
-  [`.assemble_composite_tbv()`](https://austin-putz.github.io/tidybreed/reference/dot-assemble_composite_tbv.md).
+  [`.assemble_composite_tgv()`](https://austin-putz.github.io/tidybreed/reference/dot-assemble_composite_tgv.md).
 
-- For **`formula_tbv`** composite phenotypes
-  (`phenotype_meta.formula_tbv` set, written by
-  `define_phenotype(..., formula_tbv = ...)`), `G_i` is evaluated from a
-  small DSL expression referencing self/dam/sire/group total genetic
-  values instead of a `phenotype_components` data frame.
+- For **`formula_tgv`** composite phenotypes
+  (`phenotype_meta.formula_tgv` set, written by
+  `define_phenotype(..., formula_tgv = ...)`), `G_i` is evaluated from a
+  small DSL expression referencing self/dam/sire/group genetic values
+  instead of a `phenotype_components` data frame: the total by default,
+  or the one component a reference names with `component =` (see
+  [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)).
 
 - `e_i` is the residual, drawn from the phenotype's residual covariance
   block in `phenotype_var_comp` (see
@@ -83,11 +85,11 @@ values per individual per trait in `ind_tgv` (through
 above.** When `phenotype_meta.type == "derived_formula"`
 (`phenotype_meta.formula` set), the phenotype value is computed directly
 as an arithmetic expression over other individuals' already-written
-`ind_phenotype` records — there is no TBV, no mean/fixed/random
-contribution, and no residual draw for that phenotype. When a call mixes
-`derived_formula` phenotypes with others that feed them, the phenotypes
-are topologically sorted first so dependencies are written before the
-formulas that consume them.
+`ind_phenotype` records — there is no genetic value, no
+mean/fixed/random contribution, and no residual draw for that phenotype.
+When a call mixes `derived_formula` phenotypes with others that feed
+them, the phenotypes are topologically sorted first so dependencies are
+written before the formulas that consume them.
 
 **Subset selection**: pipe a `tidybreed_table` (from
 [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
@@ -164,13 +166,13 @@ add_phenotype(
 - user_residual:
 
   Optional residuals to use instead of drawing them (the mean, covariate
-  and TBV contributions are still computed and added). When exactly one
-  phenotype in the call is generated from the model, a plain numeric
-  vector matched **by position** to that phenotype's planned records —
-  sorted `id_ind` order after sex expression, the repeatable guard and
-  any exclusion, so its length must equal the planned record count,
-  which may be smaller than the filtered `tbl`. Otherwise a named list
-  keyed by `phenotype_name` that may name **any subset** of the
+  and genetic-value contributions are still computed and added). When
+  exactly one phenotype in the call is generated from the model, a plain
+  numeric vector matched **by position** to that phenotype's planned
+  records — sorted `id_ind` order after sex expression, the repeatable
+  guard and any exclusion, so its length must equal the planned record
+  count, which may be smaller than the filtered `tbl`. Otherwise a named
+  list keyed by `phenotype_name` that may name **any subset** of the
   model-generated phenotypes, each element following the same positional
   rule; the phenotypes not named are drawn conditional on the supplied
   values. Supplied residuals are stored in `residual_value` like drawn
@@ -251,7 +253,7 @@ pop <- pop |>
 # Unfiltered ind_ebv means "every animal that has an EBV", not everyone
 pop <- pop |> get_table("ind_ebv") |> add_phenotype("ADG")
 
-# Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,
+# Composite (maternal) phenotype: WW = direct (self) + maternal (dam) genetic value,
 # registered once via define_phenotype(components = ...)
 pop <- pop |>
   define_phenotype("WW", type = "continuous", mean = 230, residual_var = 180,
@@ -301,7 +303,7 @@ pop <- pop |>
 #   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45
 
 # Escape hatch: supply phenotype values directly (skips the model, but
-# still computes and stores TBVs); named vector matches by id_ind
+# still computes and stores genetic values); named vector matches by id_ind
 pop <- pop |>
   get_table("ind_meta") |>
   dplyr::filter(gen == 0L, sex == "M") |>

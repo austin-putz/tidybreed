@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpE9Lje1/duckdb
+#> ℹ /tmp/RtmpgeWx26/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -609,12 +609,12 @@ pop |> get_table("ind_tgv") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1    107 A_121  ADG        additive          0.168 
-#> 2    108 A_196  ADG        additive          0.135 
-#> 3    109 A_262  ADG        additive          0.424 
-#> 4    110 A_472  ADG        additive         -0.0489
-#> 5    111 A_207  ADG        additive          0.0887
-#> 6    112 A_442  ADG        additive         -0.229
+#> 1    250 A_273  ADG        additive          0.423 
+#> 2    251 A_450  ADG        additive          0.253 
+#> 3    252 A_303  ADG        additive          0.364 
+#> 4    253 A_321  ADG        additive         -0.0380
+#> 5    254 A_378  ADG        additive         -0.875 
+#> 6    255 A_463  ADG        additive         -0.291
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -854,8 +854,8 @@ pop |> get_table("genome_meta") |> count(is_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   is_50K     n
 #>   <lgl>  <dbl>
-#> 1 TRUE     300
-#> 2 FALSE    200
+#> 1 FALSE    200
+#> 2 TRUE     300
 ```
 
 [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)

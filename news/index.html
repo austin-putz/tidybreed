@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,31 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.74.3" id="tidybreed-0743-2026-10-04">tidybreed 0.74.3 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0743-2026-10-04"></a></h2>
+<p>Step 3c of <code>plans/import_qtl_effect_methods.md</code> (Q18; plan in <code>plans/import_qtl_effect_methods_phase_3_plan.md</code>). <strong>Breaking.</strong> This completes step 3. Seeded output is unchanged.</p>
+<ul><li>
+<strong><code>define_phenotype(formula_tbv = )</code> is now <code>formula_tgv =</code></strong>, and the <code>phenotype_meta.formula_tbv</code> column is <code>formula_tgv</code>. There is no alias. <code><a href="../reference/restore_pop.html">restore_pop()</a></code> refuses a file with the old column.</li>
+<li>
+<strong>The <code>formula_tgv</code> DSL takes a named <code>component =</code>.</strong> <code>dam(WWM, component = "additive")</code> reads the dam’s breeding value; the default, <code>"total"</code>, reads the total genetic value as before. <code>group_sum()</code> / <code>group_mean()</code> also take <code>component =</code>, and their <code>table =</code> must now be named: the positional third argument is gone.</li>
+<li>
+<strong><code><a href="../reference/define_phenotype.html">define_phenotype()</a></code> validates the whole formula before writing.</strong>
+<ul><li>Each DSL call must have exactly its positional arguments (<code>trait</code>, or <code>trait, col</code>) plus the named ones it accepts.</li>
+<li>
+<code>col</code> and <code>table</code> must be plain identifiers, and the table must exist, with <code>id_ind</code> and the column. A missing group column used to fail only at <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code>.</li>
+<li>Only <code>+ - * / ^</code>, parentheses, numbers and the math whitelist may appear outside a contributor call. Before, any function name passed the check and was <code><a href="https://rdrr.io/r/base/eval.html" class="external-link">eval()</a></code>ed at <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> time, so a stored formula could run arbitrary R code.</li>
+</ul></li>
+<li>
+<strong>One pass replaces the walk-then-match parser.</strong> The old substitution ignored <code>table</code> when it matched a call to its reference. It was still correct, because both passes visited references in the same order (checked against 0.74.2). Each reference now gets its placeholder as it is validated, so that correctness holds by construction. A test pins two group terms that differ only in <code>table =</code>.</li>
+<li>
+<strong><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> no longer writes individual ids into SQL text.</strong> Stage 1 used to read the phenotyped individuals, and build its set of dams, sires and group-mates, with an <code>ind_meta</code> <code>filter(id_ind %in% ids)</code>, which rendered every id into the query. Both now go through a registered view, as every other id lookup already did. A test records every statement DuckDB receives during <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> and finds no id in any of them.</li>
+<li>
+<strong>Derived formulas have a closed grammar too (security).</strong> <code>define_phenotype(type = "derived_formula", formula = )</code> used to check only the names in the formula, never the calls, and evaluated it inside the package environment. A stored <code>formula</code> could therefore run arbitrary R at every <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code>, a hole that predates 3c.
+<ul><li>Only phenotype names, numbers, <code>+ - * / ^</code>, parentheses and the math whitelist are accepted. Anything else is refused in <code><a href="../reference/define_phenotype.html">define_phenotype()</a></code>.</li>
+<li>The formula is checked again before every evaluation, and evaluated with <code><a href="https://rdrr.io/r/base/environment.html" class="external-link">baseenv()</a></code> as its enclosure. A formula written straight into the database is therefore refused too.</li>
+</ul></li>
+<li>Internal names follow the rename. <code>R/contributor_tbv.R</code> is now <code>R/contributor_tgv.R</code>. The plan entry’s <code>tbv</code> field is now <code>tgv</code> (the total). “Composite TBV” in docs and messages is now “composite genetic value”.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.2" id="tidybreed-0742-2026-10-04">tidybreed 0.74.2 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0742-2026-10-04"></a></h2>
 <p>Review fixes for step 3b (<code>plans/import_qtl_effect_methods_phase_3.md</code>, “3b review”). Both close a way to leave generated terms describing a target other than the stored one, which the prevalence threshold would then trust.</p>

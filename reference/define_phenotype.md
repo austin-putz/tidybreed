@@ -35,7 +35,7 @@ define_phenotype(
   store_liability = FALSE,
   residual_var = NULL,
   components = NULL,
-  formula_tbv = NULL,
+  formula_tgv = NULL,
   formula = NULL,
   missing_component_action = c("skip", "error"),
   condition_change_action = c("error", "independent"),
@@ -60,8 +60,8 @@ define_phenotype(
   `"derived_formula"`. `"derived_formula"` phenotypes are computed at
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   time by evaluating the `formula` expression over already- recorded
-  phenotype values for the same individuals; they have no TBV, no
-  residual variance, and no QTL of their own.
+  phenotype values for the same individuals; they have no genetic value,
+  no residual variance, and no QTL of their own.
 
 - mean:
 
@@ -117,7 +117,7 @@ define_phenotype(
   carry values nothing checked against a target, so
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
   errors for such a trait; give `thresholds`. Not valid for composite
-  phenotypes (`components` or `formula_tbv`): their genetic liability
+  phenotypes (`components` or `formula_tgv`): their genetic liability
   combines several traits and contributors, which no stored variance
   describes. Give `thresholds` instead.
 
@@ -203,21 +203,39 @@ define_phenotype(
     group contributors.
 
   `NULL` (default) → simple single-self trait; `phenotype_components`
-  not written. Mutually exclusive with `formula_tbv`.
+  not written. Mutually exclusive with `formula_tgv`.
 
-- formula_tbv:
+- formula_tgv:
 
   Character. DSL shorthand for assembling a composite genetic value from
-  component traits already in `trait_meta`. Every reference reads the
-  contributor's **total** genetic value (`ind_tgv_total`). A bare trait
-  symbol (e.g. `"WWD"`) means the individual's own (`"self"`) value;
-  contributor roles can also be given explicitly as function calls:
-  `self(trait)`, `dam(trait)`, `sire(trait)`, `group_sum(trait, col)`,
-  and `group_mean(trait, col)` (`col` = grouping column in `ind_meta`,
-  e.g. pen or litter). These are combined with the arithmetic operators
-  `+`, `-`, `*`, `/`, and parentheses (e.g. `"WWD + dam(WWM)"`,
-  `"ADG_direct + group_sum(ADG_social, pen_id)"`). Mutually exclusive
-  with `components`. Not valid with `type = "derived_formula"`.
+  component traits already in `trait_meta`. A bare trait symbol (e.g.
+  `"WWD"`) is the individual's own (`"self"`) value; contributor roles
+  are given as calls:
+
+  - `self(trait)`, `dam(trait)`, `sire(trait)`: one positional trait;
+
+  - `group_sum(trait, col)`, `group_mean(trait, col)`: the sum or mean
+    over the individual's group-mates (the *other* individuals with the
+    same value of `col`; a group of one gives `0`).
+
+  Every call takes an optional named `component =`: which genetic value
+  of the contributor to read from `ind_tgv` — `"total"` (the default,
+  the `ind_tgv_total` view: additive, dominance and every other
+  component), or one component, `"additive"` (the breeding value for
+  generated effects), `"dominance"`, `"indicator"` or `"interaction"`; a
+  component the trait's model has no terms for reads 0. The group calls
+  also take a named `table =` (default `"ind_meta"`): the table holding
+  `col`, with exactly one row per individual. Both must be named, e.g.
+  `"WWD + dam(WWM, component = \"additive\")"` or
+  `"ADG_direct + group_sum(ADG_social, pen, table = \"pens\")"`.
+
+  References combine with `+`, `-`, `*`, `/`, `^`, parentheses, numbers
+  and the math functions listed under `formula`. Anything else — another
+  function, an unknown or positional extra argument, a component outside
+  that list, a `col` or `table` that is not a plain identifier, or a
+  table or column that does not exist yet — is an error here, before
+  anything is written. Mutually exclusive with `components`. Not valid
+  with `type = "derived_formula"`.
 
 - formula:
 
@@ -338,13 +356,13 @@ pop <- pop |>
       "WWM",              "dam"
     ))
 
-# ── Maternal composite via formula_tbv shorthand (equivalent to above) ──
+# ── Maternal composite via formula_tgv shorthand (equivalent to above) ──
 pop <- pop |>
   define_phenotype("WW2",
     type         = "continuous",
     mean         = 230,
     residual_var = 180,
-    formula_tbv  = "WWD + dam(WWM)")
+    formula_tgv  = "WWD + dam(WWM)")
 
 # ── SGE (social genetic effects): ADG = direct (self) + social group sum ──
 pop <- pop |>
@@ -352,10 +370,10 @@ pop <- pop |>
     type         = "continuous",
     mean         = 850,
     residual_var = 100,
-    formula_tbv  = "ADG_direct + group_sum(ADG_social, pen_id)")
+    formula_tgv  = "ADG_direct + group_sum(ADG_social, pen_id)")
 
 # ── Derived formula: FCR computed from already-recorded ADFI and ADG ────
-# (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)
+# (Define ADFI and ADG first, then derive FCR — no genetic value or residual needed)
 pop <- pop |>
   define_phenotype("FCR",
     type    = "derived_formula",

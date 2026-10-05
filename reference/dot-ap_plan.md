@@ -44,9 +44,9 @@ list with `pop` (after
   The planned records, `id_ind`-ordered. `pheno_number` is the value
   Stage 3 writes.
 
-- `tbv`:
+- `tgv`:
 
-  Numeric per record (`"model"` path only).
+  Total genetic value per record (`"model"` path only).
 
 - `fixed`:
 

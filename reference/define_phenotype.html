@@ -25,7 +25,7 @@ per component to phenotype_components.'><meta property="og:image" content="https
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,7 +84,7 @@ per component to <code>phenotype_components</code>.</p>
 <span>  store_liability <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  residual_var <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  components <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  formula_tbv <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  formula_tgv <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  formula <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  missing_component_action <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"skip"</span>, <span class="st">"error"</span><span class="op">)</span>,</span>
 <span>  condition_change_action <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"error"</span>, <span class="st">"independent"</span><span class="op">)</span>,</span>
@@ -109,8 +109,8 @@ per component to <code>phenotype_components</code>.</p>
 <dd><p>Character. One of <code>"continuous"</code>, <code>"count"</code>, <code>"categorical"</code>,
 or <code>"derived_formula"</code>. <code>"derived_formula"</code> phenotypes are computed at
 <code><a href="add_phenotype.html">add_phenotype()</a></code> time by evaluating the <code>formula</code> expression over already-
-recorded phenotype values for the same individuals; they have no TBV,
-no residual variance, and no QTL of their own.</p></dd>
+recorded phenotype values for the same individuals; they have no genetic
+value, no residual variance, and no QTL of their own.</p></dd>
 
 
 <dt id="arg-mean">mean<a class="anchor" aria-label="anchor" href="#arg-mean"></a></dt>
@@ -161,7 +161,7 @@ target, so the target describes them. Terms written with
 <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> carry values nothing checked against a
 target, so <code><a href="add_phenotype.html">add_phenotype()</a></code> errors for such a trait; give <code>thresholds</code>.
 Not valid for composite phenotypes (<code>components</code> or
-<code>formula_tbv</code>): their genetic liability combines several traits and
+<code>formula_tgv</code>): their genetic liability combines several traits and
 contributors, which no stored variance describes. Give <code>thresholds</code>
 instead.</p></dd>
 
@@ -228,22 +228,34 @@ else, <code>"total"</code> mixed with other names, or a duplicate is an error.</
 <li><p><code>aggregation</code> (optional, default <code>"sum"</code>): <code>"sum"</code> or <code>"mean"</code> for
 group contributors.</p></li>
 </ul><p><code>NULL</code> (default) → simple single-self trait; <code>phenotype_components</code> not
-written. Mutually exclusive with <code>formula_tbv</code>.</p></dd>
+written. Mutually exclusive with <code>formula_tgv</code>.</p></dd>
 
 
-<dt id="arg-formula-tbv">formula_tbv<a class="anchor" aria-label="anchor" href="#arg-formula-tbv"></a></dt>
+<dt id="arg-formula-tgv">formula_tgv<a class="anchor" aria-label="anchor" href="#arg-formula-tgv"></a></dt>
 <dd><p>Character. DSL shorthand for assembling a composite
-genetic value from component traits already in <code>trait_meta</code>. Every
-reference reads the contributor's <strong>total</strong> genetic value
-(<code>ind_tgv_total</code>). A bare trait symbol (e.g. <code>"WWD"</code>) means the
-individual's own (<code>"self"</code>) value; contributor
-roles can also be given explicitly as function calls: <code>self(trait)</code>,
-<code>dam(trait)</code>, <code>sire(trait)</code>, <code>group_sum(trait, col)</code>, and
-<code>group_mean(trait, col)</code> (<code>col</code> = grouping column in <code>ind_meta</code>, e.g.
-pen or litter). These are combined with the arithmetic operators <code>+</code>,
-<code>-</code>, <code>*</code>, <code>/</code>, and parentheses (e.g. <code>"WWD + dam(WWM)"</code>,
-<code>"ADG_direct + group_sum(ADG_social, pen_id)"</code>). Mutually exclusive with
-<code>components</code>. Not valid with <code>type = "derived_formula"</code>.</p></dd>
+genetic value from component traits already in <code>trait_meta</code>. A bare
+trait symbol (e.g. <code>"WWD"</code>) is the individual's own (<code>"self"</code>) value;
+contributor roles are given as calls:</p><ul><li><p><code>self(trait)</code>, <code>dam(trait)</code>, <code>sire(trait)</code>: one positional trait;</p></li>
+<li><p><code>group_sum(trait, col)</code>, <code>group_mean(trait, col)</code>: the sum or mean
+over the individual's group-mates (the <em>other</em> individuals with the
+same value of <code>col</code>; a group of one gives <code>0</code>).</p></li>
+</ul><p>Every call takes an optional named <code>component =</code>: which genetic value
+of the contributor to read from <code>ind_tgv</code> — <code>"total"</code> (the default, the
+<code>ind_tgv_total</code> view: additive, dominance and every other component),
+or one component, <code>"additive"</code> (the breeding value for generated
+effects), <code>"dominance"</code>, <code>"indicator"</code> or <code>"interaction"</code>; a component
+the trait's model has no terms for reads 0. The group calls also take
+a named <code>table =</code> (default <code>"ind_meta"</code>): the table holding <code>col</code>, with
+exactly one row per individual. Both must be named, e.g.
+<code>"WWD + dam(WWM, component = \"additive\")"</code> or
+<code>"ADG_direct + group_sum(ADG_social, pen, table = \"pens\")"</code>.</p>
+<p>References combine with <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>^</code>, parentheses, numbers
+and the math functions listed under <code>formula</code>. Anything else — another
+function, an unknown or positional extra argument, a component outside
+that list, a <code>col</code> or <code>table</code> that is not a plain identifier, or a table
+or column that does not exist yet — is an error here, before anything
+is written. Mutually exclusive with <code>components</code>. Not valid with
+<code>type = "derived_formula"</code>.</p></dd>
 
 
 <dt id="arg-formula">formula<a class="anchor" aria-label="anchor" href="#arg-formula"></a></dt>
@@ -356,13 +368,13 @@ already exists, replace its rows in <code>phenotype_meta</code> and
 <span class="r-in"><span>      <span class="st">"WWM"</span>,              <span class="st">"dam"</span></span></span>
 <span class="r-in"><span>    <span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># ── Maternal composite via formula_tbv shorthand (equivalent to above) ──</span></span></span>
+<span class="r-in"><span><span class="co"># ── Maternal composite via formula_tgv shorthand (equivalent to above) ──</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">define_phenotype</span><span class="op">(</span><span class="st">"WW2"</span>,</span></span>
 <span class="r-in"><span>    type         <span class="op">=</span> <span class="st">"continuous"</span>,</span></span>
 <span class="r-in"><span>    mean         <span class="op">=</span> <span class="fl">230</span>,</span></span>
 <span class="r-in"><span>    residual_var <span class="op">=</span> <span class="fl">180</span>,</span></span>
-<span class="r-in"><span>    formula_tbv  <span class="op">=</span> <span class="st">"WWD + dam(WWM)"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>    formula_tgv  <span class="op">=</span> <span class="st">"WWD + dam(WWM)"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># ── SGE (social genetic effects): ADG = direct (self) + social group sum ──</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
@@ -370,10 +382,10 @@ already exists, replace its rows in <code>phenotype_meta</code> and
 <span class="r-in"><span>    type         <span class="op">=</span> <span class="st">"continuous"</span>,</span></span>
 <span class="r-in"><span>    mean         <span class="op">=</span> <span class="fl">850</span>,</span></span>
 <span class="r-in"><span>    residual_var <span class="op">=</span> <span class="fl">100</span>,</span></span>
-<span class="r-in"><span>    formula_tbv  <span class="op">=</span> <span class="st">"ADG_direct + group_sum(ADG_social, pen_id)"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>    formula_tgv  <span class="op">=</span> <span class="st">"ADG_direct + group_sum(ADG_social, pen_id)"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># ── Derived formula: FCR computed from already-recorded ADFI and ADG ────</span></span></span>
-<span class="r-in"><span><span class="co"># (Define ADFI and ADG first, then derive FCR — no TBV or residual needed)</span></span></span>
+<span class="r-in"><span><span class="co"># (Define ADFI and ADG first, then derive FCR — no genetic value or residual needed)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">define_phenotype</span><span class="op">(</span><span class="st">"FCR"</span>,</span></span>
 <span class="r-in"><span>    type    <span class="op">=</span> <span class="st">"derived_formula"</span>,</span></span>

@@ -1,8 +1,8 @@
 # Plan the records of one phenotype
 
-Applies the covariate skip and the TBV exclusions, reads the TBV, and
-assigns `pheno_number`. Emits the same warnings and messages the
-exclusions always have. No RNG, no writes.
+Applies the covariate skip and the genetic-value exclusions, reads the
+genetic value, and assigns `pheno_number`. Emits the same warnings and
+messages the exclusions always have. No RNG, no writes.
 
 ## Usage
 
@@ -13,8 +13,8 @@ exclusions always have. No RNG, no writes.
   m,
   subset_df,
   path,
-  tbv_kind,
-  formula_tbv,
+  tgv_kind,
+  formula_tgv,
   formula,
   comp_rows,
   user_values,

@@ -21,4 +21,4 @@ no stored diagonal describes.
 
 - composite:
 
-  Logical, per row: has `phenotype_components` or `formula_tbv`.
+  Logical, per row: has `phenotype_components` or `formula_tgv`.

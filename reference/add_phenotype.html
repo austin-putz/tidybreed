@@ -30,11 +30,13 @@ For composite phenotypes (rows in phenotype_components, written by
 define_phenotype(..., components = ...)), G_i is the weighted sum of
 contributor genetic values (self, dam, sire, or group): the total by
 default, or the components each row lists in component_names — see
-.assemble_composite_tbv().
-For formula_tbv composite phenotypes (phenotype_meta.formula_tbv
-set, written by define_phenotype(..., formula_tbv = ...)), G_i is
+.assemble_composite_tgv().
+For formula_tgv composite phenotypes (phenotype_meta.formula_tgv
+set, written by define_phenotype(..., formula_tgv = ...)), G_i is
 evaluated from a small DSL expression referencing self/dam/sire/group
-total genetic values instead of a phenotype_components data frame.
+genetic values instead of a phenotype_components data frame: the
+total by default, or the one component a reference names with
+component = (see define_phenotype()).
 e_i is the residual, drawn from the phenotype's residual covariance
 block in phenotype_var_comp (see define_residual_cov()). Within a
 block, residuals are correlated across phenotypes and sequential in
@@ -66,7 +68,7 @@ derived_formula phenotypes are the one exception to the model above.
 When phenotype_meta.type == &quot;derived_formula&quot; (phenotype_meta.formula
 set), the phenotype value is computed directly as an arithmetic expression
 over other individuals' already-written ind_phenotype records — there is
-no TBV, no mean/fixed/random contribution, and no residual draw for that
+no genetic value, no mean/fixed/random contribution, and no residual draw for that
 phenotype. When a call mixes derived_formula phenotypes with others that
 feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.
@@ -128,11 +130,13 @@ For composite phenotypes (rows in phenotype_components, written by
 define_phenotype(..., components = ...)), G_i is the weighted sum of
 contributor genetic values (self, dam, sire, or group): the total by
 default, or the components each row lists in component_names — see
-.assemble_composite_tbv().
-For formula_tbv composite phenotypes (phenotype_meta.formula_tbv
-set, written by define_phenotype(..., formula_tbv = ...)), G_i is
+.assemble_composite_tgv().
+For formula_tgv composite phenotypes (phenotype_meta.formula_tgv
+set, written by define_phenotype(..., formula_tgv = ...)), G_i is
 evaluated from a small DSL expression referencing self/dam/sire/group
-total genetic values instead of a phenotype_components data frame.
+genetic values instead of a phenotype_components data frame: the
+total by default, or the one component a reference names with
+component = (see define_phenotype()).
 e_i is the residual, drawn from the phenotype's residual covariance
 block in phenotype_var_comp (see define_residual_cov()). Within a
 block, residuals are correlated across phenotypes and sequential in
@@ -164,7 +168,7 @@ derived_formula phenotypes are the one exception to the model above.
 When phenotype_meta.type == &quot;derived_formula&quot; (phenotype_meta.formula
 set), the phenotype value is computed directly as an arithmetic expression
 over other individuals' already-written ind_phenotype records — there is
-no TBV, no mean/fixed/random contribution, and no residual draw for that
+no genetic value, no mean/fixed/random contribution, and no residual draw for that
 phenotype. When a call mixes derived_formula phenotypes with others that
 feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.
@@ -203,7 +207,7 @@ of drawing them; the rest are drawn conditional on the supplied values.
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -261,11 +265,13 @@ function calls internally for every source trait it needs.</p></li>
 <code>define_phenotype(..., components = ...)</code>), <code>G_i</code> is the weighted sum of
 contributor genetic values (self, dam, sire, or group): the total by
 default, or the components each row lists in <code>component_names</code> — see
-<code><a href="dot-assemble_composite_tbv.html">.assemble_composite_tbv()</a></code>.</p></li>
-<li><p>For <strong><code>formula_tbv</code></strong> composite phenotypes (<code>phenotype_meta.formula_tbv</code>
-set, written by <code>define_phenotype(..., formula_tbv = ...)</code>), <code>G_i</code> is
+<code><a href="dot-assemble_composite_tgv.html">.assemble_composite_tgv()</a></code>.</p></li>
+<li><p>For <strong><code>formula_tgv</code></strong> composite phenotypes (<code>phenotype_meta.formula_tgv</code>
+set, written by <code>define_phenotype(..., formula_tgv = ...)</code>), <code>G_i</code> is
 evaluated from a small DSL expression referencing self/dam/sire/group
-total genetic values instead of a <code>phenotype_components</code> data frame.</p></li>
+genetic values instead of a <code>phenotype_components</code> data frame: the
+total by default, or the one component a reference names with
+<code>component =</code> (see <code><a href="define_phenotype.html">define_phenotype()</a></code>).</p></li>
 <li><p><code>e_i</code> is the residual, drawn from the phenotype's residual covariance
 block in <code>phenotype_var_comp</code> (see <code><a href="define_residual_cov.html">define_residual_cov()</a></code>). Within a
 block, residuals are <strong>correlated across phenotypes and sequential in
@@ -295,7 +301,7 @@ random effect for within-animal covariance).</p></li>
 When <code>phenotype_meta.type == "derived_formula"</code> (<code>phenotype_meta.formula</code>
 set), the phenotype value is computed directly as an arithmetic expression
 over other individuals' already-written <code>ind_phenotype</code> records — there is
-no TBV, no mean/fixed/random contribution, and no residual draw for that
+no genetic value, no mean/fixed/random contribution, and no residual draw for that
 phenotype. When a call mixes <code>derived_formula</code> phenotypes with others that
 feed them, the phenotypes are topologically sorted first so dependencies
 are written before the formulas that consume them.</p>
@@ -359,7 +365,7 @@ individuals that have rows there. A table without <code>id_ind</code> is an erro
 
 <dt id="arg-user-residual">user_residual<a class="anchor" aria-label="anchor" href="#arg-user-residual"></a></dt>
 <dd><p>Optional residuals to use instead of drawing them
-(the mean, covariate and TBV contributions are still computed and
+(the mean, covariate and genetic-value contributions are still computed and
 added). When exactly one phenotype in the call is generated from the
 model, a plain numeric vector matched <strong>by position</strong> to that
 phenotype's planned records — sorted <code>id_ind</code> order after sex
@@ -442,7 +448,7 @@ named list keyed by <code>phenotype_name</code>, each element following the same
 <span class="r-in"><span><span class="co"># Unfiltered ind_ebv means "every animal that has an EBV", not everyone</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_ebv"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">add_phenotype</span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Composite (maternal) phenotype: WW = direct (self) + maternal (dam) TBV,</span></span></span>
+<span class="r-in"><span><span class="co"># Composite (maternal) phenotype: WW = direct (self) + maternal (dam) genetic value,</span></span></span>
 <span class="r-in"><span><span class="co"># registered once via define_phenotype(components = ...)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="define_phenotype.html">define_phenotype</a></span><span class="op">(</span><span class="st">"WW"</span>, type <span class="op">=</span> <span class="st">"continuous"</span>, mean <span class="op">=</span> <span class="fl">230</span>, residual_var <span class="op">=</span> <span class="fl">180</span>,</span></span>
@@ -492,7 +498,7 @@ named list keyed by <code>phenotype_name</code>, each element following the same
 <span class="r-in"><span><span class="co">#   coef(lm(residual_B ~ residual_A))[2]  ==  18 / 40  ==  0.45</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Escape hatch: supply phenotype values directly (skips the model, but</span></span></span>
-<span class="r-in"><span><span class="co"># still computes and stores TBVs); named vector matches by id_ind</span></span></span>
+<span class="r-in"><span><span class="co"># still computes and stores genetic values); named vector matches by id_ind</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">0L</span>, <span class="va">sex</span> <span class="op">==</span> <span class="st">"M"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>

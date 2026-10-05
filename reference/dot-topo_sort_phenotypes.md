@@ -1,7 +1,7 @@
 # Topologically sort phenotypes for safe evaluation order.
 
 Derived formula phenotypes depend on other phenotypes being present in
-ind_phenotype first. formula_tbv and components phenotypes have no
+ind_phenotype first. formula_tgv and components phenotypes have no
 inter-phenotype dependencies (they depend on trait_meta, not
 phenotype_meta).
 

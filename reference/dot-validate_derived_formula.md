@@ -1,5 +1,7 @@
 # Validate a derived formula string at define_phenotype() time.
 
+The grammar is checked strictly
+([`.check_derived_formula()`](https://austin-putz.github.io/tidybreed/reference/dot-check_derived_formula.md)).
 Symbols that are not in phenotype_meta generate a warning (not an
 error), allowing config-first workflows where components are defined
 before their dependents. A hard error at add_phenotype() time fires if

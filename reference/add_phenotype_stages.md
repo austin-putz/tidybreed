@@ -7,11 +7,12 @@ runs in three stages with a strict boundary between them:
   ([`.ap_plan()`](https://austin-putz.github.io/tidybreed/reference/dot-ap_plan.md)):
   decide the final record list for every phenotype. Sex expression, the
   repeatable guard, fixed-effect contributions and
-  `null_class_action = "skip"`, formula/composite TBV evaluation and
-  `missing_component_action`, path classification, `pheno_number`
-  assignment, the residual condition value of every record, and the
-  random-effect level every record touches. **No random number is drawn
-  and nothing is written** (the one prerequisite write is
+  `null_class_action = "skip"`, formula/composite genetic-value
+  evaluation and `missing_component_action`, path classification,
+  `pheno_number` assignment, the residual condition value of every
+  record, and the random-effect level every record touches. **No random
+  number is drawn and nothing is written** (the one prerequisite write
+  is
   [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
   which materializes the genetic values the plan reads and is
   RNG-neutral).

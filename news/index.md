@@ -1,5 +1,68 @@
 # Changelog
 
+## tidybreed 0.74.3 (2026-10-04)
+
+Step 3c of `plans/import_qtl_effect_methods.md` (Q18; plan in
+`plans/import_qtl_effect_methods_phase_3_plan.md`). **Breaking.** This
+completes step 3. Seeded output is unchanged.
+
+- **`define_phenotype(formula_tbv = )` is now `formula_tgv =`**, and the
+  `phenotype_meta.formula_tbv` column is `formula_tgv`. There is no
+  alias.
+  [`restore_pop()`](https://austin-putz.github.io/tidybreed/reference/restore_pop.md)
+  refuses a file with the old column.
+- **The `formula_tgv` DSL takes a named `component =`.**
+  `dam(WWM, component = "additive")` reads the dam’s breeding value; the
+  default, `"total"`, reads the total genetic value as before.
+  `group_sum()` / `group_mean()` also take `component =`, and their
+  `table =` must now be named: the positional third argument is gone.
+- **[`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
+  validates the whole formula before writing.**
+  - Each DSL call must have exactly its positional arguments (`trait`,
+    or `trait, col`) plus the named ones it accepts.
+  - `col` and `table` must be plain identifiers, and the table must
+    exist, with `id_ind` and the column. A missing group column used to
+    fail only at
+    [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md).
+  - Only `+ - * / ^`, parentheses, numbers and the math whitelist may
+    appear outside a contributor call. Before, any function name passed
+    the check and was [`eval()`](https://rdrr.io/r/base/eval.html)ed at
+    [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+    time, so a stored formula could run arbitrary R code.
+- **One pass replaces the walk-then-match parser.** The old substitution
+  ignored `table` when it matched a call to its reference. It was still
+  correct, because both passes visited references in the same order
+  (checked against 0.74.2). Each reference now gets its placeholder as
+  it is validated, so that correctness holds by construction. A test
+  pins two group terms that differ only in `table =`.
+- **[`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  no longer writes individual ids into SQL text.** Stage 1 used to read
+  the phenotyped individuals, and build its set of dams, sires and
+  group-mates, with an `ind_meta` `filter(id_ind %in% ids)`, which
+  rendered every id into the query. Both now go through a registered
+  view, as every other id lookup already did. A test records every
+  statement DuckDB receives during
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  and finds no id in any of them.
+- **Derived formulas have a closed grammar too (security).**
+  `define_phenotype(type = "derived_formula", formula = )` used to check
+  only the names in the formula, never the calls, and evaluated it
+  inside the package environment. A stored `formula` could therefore run
+  arbitrary R at every
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+  a hole that predates 3c.
+  - Only phenotype names, numbers, `+ - * / ^`, parentheses and the math
+    whitelist are accepted. Anything else is refused in
+    [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md).
+  - The formula is checked again before every evaluation, and evaluated
+    with [`baseenv()`](https://rdrr.io/r/base/environment.html) as its
+    enclosure. A formula written straight into the database is therefore
+    refused too.
+- Internal names follow the rename. `R/contributor_tbv.R` is now
+  `R/contributor_tgv.R`. The plan entry’s `tbv` field is now `tgv` (the
+  total). “Composite TBV” in docs and messages is now “composite genetic
+  value”.
+
 ## tidybreed 0.74.2 (2026-10-04)
 
 Review fixes for step 3b (`plans/import_qtl_effect_methods_phase_3.md`,
