@@ -1,6 +1,9 @@
 # Convert a liability vector to ordered integer categories
 
-Convert a liability vector to ordered integer categories
+A record is in category `k + 1` when its liability is strictly **above**
+cutpoint `k`; a liability exactly on a cutpoint stays in the lower
+category. That is what `prevalence` ("the fraction above the threshold")
+means, and it matters for discrete genetic values with no residual.
 
 ## Usage
 

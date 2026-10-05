@@ -30,4 +30,7 @@ genetic-value pre-fetch → eval().
 ## Value
 
 Named numeric vector (names = id_ind). NA marks excluded individuals (a
-missing dam/sire genetic value, or NA group membership).
+missing dam/sire genetic value, or NA group membership). A constant
+expression is broadcast to every individual. An `Inf`, `-Inf` or `NaN`
+from the arithmetic itself (division by zero, overflow, a domain error)
+is an error: it is a fault of the model, not a missing component.

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,28 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.74.5" id="tidybreed-0745-2026-10-05">tidybreed 0.74.5 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0745-2026-10-05"></a></h2>
+<p>Fixes from the Codex review of step 3 (<code>plans/import_qtl_effect_methods_phase_3_codex_review.md</code>; results in <code>plans/import_qtl_effect_methods_phase_3.md</code>, “Codex review of step 3”). All nine findings were reproduced and fixed. <strong>Breaking</strong> where a call used to succeed with a wrong result.</p>
+<ul><li>
+<strong>The <code>prevalence</code> threshold uses the whole liability’s variance.</strong> It now adds every named random effect’s stored variance (<code>normal</code>, <code>uniform</code>) to the genetic targets and the residual. A permanent-environment effect of 9 with residual 1 used to give a prevalence of 0.34 for a requested 0.1. Refused, naming <code>thresholds =</code>: a <code>gamma</code> random effect (its mean is <code>sqrt(variance)</code>), a residual with conditional strata, and a total variance of 0. The roxygen states that the threshold is a Gaussian approximation at an HWE/LE reference with orthogonal components, and that fixed effects are not in it.</li>
+<li>
+<strong><code>prevalence</code> refuses generated variants for two parent scopes</strong> of one kind at one line (paternal-only + maternal-only, or common + a parent-only fallback). Each variant is calibrated to the target alone; together they deliver a different variance.</li>
+<li>
+<strong><code>define_additive_effects(trait_var_comp_tbl = )</code> must select the block the call’s scope reads</strong> (the line’s own block, else population-wide). Selecting another scope’s block calibrated the terms to a target no reader associates with them.</li>
+<li>
+<strong>A zero-target trait in <code>method = "union"</code> loses its old generated terms</strong> at the scope, like every other trait of the call. They used to survive and deliver their old variance under a stored target of 0.</li>
+<li>
+<strong>New <code>remove_generated_effects(pop, trait_name, line_name, parent_origin)</code></strong> deletes the generated terms at exactly one scope, of every kind (a calibrated model is removed whole, never one component). It is the only route besides re-running that scope: the parent-fallback warning used to recommend operations that refuse the reserved owner.</li>
+<li>
+<strong><code>add_tgv(index_names = )</code> warns</strong> when an <code>"additive"</code> true index is computed for a trait with <code>indicator</code> terms or hand-written interactions, whose additive value the structural <code>additive</code> component misses.</li>
+<li>
+<strong>Categorical classification is strict exceedance:</strong> a liability exactly on a cutpoint stays in the lower category, as “the fraction above the threshold” says. Seeded output changes only for liabilities that land exactly on a cutpoint (discrete genetic values with no residual).</li>
+<li>
+<strong><code><a href="../reference/define_phenotype.html">define_phenotype()</a></code></strong>: <code>thresholds</code> must be finite and strictly ascending (<code>c(1, NA)</code> declared three categories and classified into two); <code>mean</code> must be one finite number and is checked before anything is written; the replacement of an existing definition is one transaction, so a refused <code>overwrite = TRUE</code> no longer deletes the old row.</li>
+<li>
+<strong><code>formula_tgv</code></strong>: a result that is <code>Inf</code> or <code>NaN</code> (division by zero, overflow, a domain error) is an error before any draw; a constant expression is broadcast instead of failing.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.4" id="tidybreed-0744-2026-10-05">tidybreed 0.74.4 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0744-2026-10-05"></a></h2>
 <p>Follow-ups from the step 3c review (<code>plans/import_qtl_effect_methods_phase_3.md</code>, “3c review”).</p>

@@ -9,7 +9,7 @@ genetic-value pre-fetch → eval()."><meta property="og:image" content="https://
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,11 @@ genetic-value pre-fetch → eval().</p>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Named numeric vector (names = id_ind). NA marks excluded individuals
-(a missing dam/sire genetic value, or NA group membership).</p>
+(a missing dam/sire genetic value, or NA group membership). A
+constant expression is broadcast to every individual. An <code>Inf</code>,
+<code>-Inf</code> or <code>NaN</code> from the arithmetic itself (division by zero,
+overflow, a domain error) is an error: it is a fault of the model,
+not a missing component.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

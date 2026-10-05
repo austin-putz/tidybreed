@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmp2tqFuG/duckdb
+#> ℹ /tmp/RtmpzRCfdR/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -463,8 +463,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 M     AI_Stud   250
-#> 2 F     Iowa      250
+#> 1 F     Iowa      250
+#> 2 M     AI_Stud   250
 ```
 
 The warning above is deliberate:
@@ -609,12 +609,12 @@ pop |> get_table("ind_tgv") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1      1 A_385  ADG        additive          0.453 
-#> 2      2 A_483  ADG        additive         -0.649 
-#> 3      3 A_88   ADG        additive          0.392 
-#> 4      4 A_323  ADG        additive          0.639 
-#> 5      5 A_394  ADG        additive         -0.0317
-#> 6      6 A_172  ADG        additive          0.359
+#> 1    233 A_184  ADG        additive         -0.854 
+#> 2    234 A_318  ADG        additive         -0.0702
+#> 3    235 A_496  ADG        additive          0.163 
+#> 4    236 A_90   ADG        additive         -0.435 
+#> 5    237 A_131  ADG        additive         -0.0124
+#> 6    238 A_492  ADG        additive         -0.656
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
@@ -854,8 +854,8 @@ pop |> get_table("genome_meta") |> count(is_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   is_50K     n
 #>   <lgl>  <dbl>
-#> 1 TRUE     300
-#> 2 FALSE    200
+#> 1 FALSE    200
+#> 2 TRUE     300
 ```
 
 [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md)
@@ -873,8 +873,8 @@ pop |> get_table("ind_meta") |> count(has_50K) |> collect()
 #> # A tibble: 2 × 2
 #>   has_50K     n
 #>   <lgl>   <dbl>
-#> 1 FALSE     500
-#> 2 TRUE       20
+#> 1 TRUE       20
+#> 2 FALSE     500
 ```
 
 [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)

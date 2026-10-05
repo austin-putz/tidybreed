@@ -17,7 +17,7 @@ the model lacks — one a generator was told to leave out — does not enter."><
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,8 +74,12 @@ requested prevalence.</p>
 <p>Errors, naming <code>define_phenotype(thresholds = )</code>, when any term is not
 <code>"generated"</code>, when the model has terms outside the three blocks (an
 <code>indicator</code> surface, any interaction other than additive-by-additive), or
-when it has terms of a kind with no stored target.</p>
-<p>The result is the <em>target</em> at the reference population, an approximation
+when it has terms of a kind with no stored target. Also errors when one
+kind at one line scope has generated variants for more than one
+parent-of-origin scope: each variant is calibrated to the target alone, so
+"generated" proves a variant's calibration, not the whole trait's variance.</p>
+<p>The sum of diagonals assumes orthogonal components (statistical coding at
+one HWE/LE base). The result is the <em>target</em> at the reference population, an approximation
 for a selected or line-scoped population, as the roxygen of
 <code><a href="define_phenotype.html">define_phenotype()</a></code> says.</p>
     </div>

@@ -31,9 +31,15 @@ the threshold would silently miss the requested prevalence.
 Errors, naming `define_phenotype(thresholds = )`, when any term is not
 `"generated"`, when the model has terms outside the three blocks (an
 `indicator` surface, any interaction other than additive-by-additive),
-or when it has terms of a kind with no stored target.
+or when it has terms of a kind with no stored target. Also errors when
+one kind at one line scope has generated variants for more than one
+parent-of-origin scope: each variant is calibrated to the target alone,
+so "generated" proves a variant's calibration, not the whole trait's
+variance.
 
-The result is the *target* at the reference population, an approximation
-for a selected or line-scoped population, as the roxygen of
+The sum of diagonals assumes orthogonal components (statistical coding
+at one HWE/LE base). The result is the *target* at the reference
+population, an approximation for a selected or line-scoped population,
+as the roxygen of
 [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
 says.

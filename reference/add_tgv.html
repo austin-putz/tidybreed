@@ -26,7 +26,12 @@ functional terms (ad_terms() with coding = &quot;functional&quot;, or an
 indicator surface) additive is the functional additive effect, not the
 breeding value: under functional coding the average effect is
 \(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
-and on LD.
+and on LD. A true index on &quot;additive&quot; therefore warns when an index
+trait has indicator terms or hand-written interaction terms: a 0/1/2
+dosage surface entered with genotype_terms() is genetically additive but
+has no additive rows, and its additive index is 0. &quot;total&quot; is a
+different objective (selection on genetic value), not a breeding-value
+projection.
 ind_tgv stores the raw sum of the stored terms — no mean is added. A
 pure Cockerham model yields centered deviations; a raw indicator surface
 yields absolute genotypic values with a non-zero mean by construction, and is
@@ -76,7 +81,12 @@ functional terms (ad_terms() with coding = &quot;functional&quot;, or an
 indicator surface) additive is the functional additive effect, not the
 breeding value: under functional coding the average effect is
 \(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
-and on LD.
+and on LD. A true index on &quot;additive&quot; therefore warns when an index
+trait has indicator terms or hand-written interaction terms: a 0/1/2
+dosage surface entered with genotype_terms() is genetically additive but
+has no additive rows, and its additive index is 0. &quot;total&quot; is a
+different objective (selection on genetic value), not a breeding-value
+projection.
 ind_tgv stores the raw sum of the stored terms — no mean is added. A
 pure Cockerham model yields centered deviations; a raw indicator surface
 yields absolute genotypic values with a non-zero mean by construction, and is
@@ -107,7 +117,7 @@ unlike add_phenotype(), no sex-expression rule is applied here
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -153,7 +163,12 @@ functional terms (<code><a href="ad_terms.html">ad_terms()</a></code> with <code
 <code>indicator</code> surface) <code>additive</code> is the functional additive effect, not the
 breeding value: under functional coding the average effect is
 \(\alpha = a + d(q - p)\), and under epistasis it depends on other loci
-and on LD.</p>
+and on LD. A true index on <code>"additive"</code> therefore <strong>warns</strong> when an index
+trait has <code>indicator</code> terms or hand-written interaction terms: a 0/1/2
+dosage surface entered with <code><a href="genotype_terms.html">genotype_terms()</a></code> is genetically additive but
+has no <code>additive</code> rows, and its additive index is 0. <code>"total"</code> is a
+different objective (selection on genetic value), not a breeding-value
+projection.</p>
 <p><code>ind_tgv</code> stores the <strong>raw sum of the stored terms — no mean is added.</strong> A
 pure Cockerham model yields centered deviations; a raw <code>indicator</code> surface
 yields absolute genotypic values with a non-zero mean by construction, and is

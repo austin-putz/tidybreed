@@ -77,6 +77,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_phenotyped_ids.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_plan.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_plan_phenotype.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_prevalence_env_var.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_prevalence_genetic_var.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_read_by_id.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-ap_residual_block.html</loc></url>
@@ -198,6 +199,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/print.tidybreed_table_desc.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/pull.tidybreed_table.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/register_schema_meta.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/remove_rows.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/resolve_batch_size.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/resolve_correlated_draws.html</loc></url>

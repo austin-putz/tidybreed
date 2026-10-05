@@ -31,7 +31,14 @@ write. For hand-written functional terms
 with `coding = "functional"`, or an `indicator` surface) `additive` is
 the functional additive effect, not the breeding value: under functional
 coding the average effect is \\\alpha = a + d(q - p)\\, and under
-epistasis it depends on other loci and on LD.
+epistasis it depends on other loci and on LD. A true index on
+`"additive"` therefore **warns** when an index trait has `indicator`
+terms or hand-written interaction terms: a 0/1/2 dosage surface entered
+with
+[`genotype_terms()`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md)
+is genetically additive but has no `additive` rows, and its additive
+index is 0. `"total"` is a different objective (selection on genetic
+value), not a breeding-value projection.
 
 `ind_tgv` stores the **raw sum of the stored terms — no mean is added.**
 A pure Cockerham model yields centered deviations; a raw `indicator`

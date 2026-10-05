@@ -96,35 +96,70 @@ define_phenotype(
 - prevalence:
 
   Numeric between 0 and 1. For categorical traits with one threshold
-  (two categories), the fraction expected above the threshold. Mutually
-  exclusive with `thresholds`. The liability carries the trait's total
-  genetic value, so the threshold is placed from `mean`, the
-  unconditional residual variance and the trait's stored genetic targets
-  (`trait_var_comp`, population-wide rows): the sum of the `additive`,
-  `dominance` and `additive_by_additive` diagonals, each counted only if
-  the trait's model has terms of that kind.
+  (two categories), the fraction expected strictly above the threshold.
+  Mutually exclusive with `thresholds`. The threshold is
+  `mean + qnorm(1 - prevalence) * sqrt(V)`, where `V` is the variance of
+  the whole liability:
+
+  - the trait's stored genetic targets (`trait_var_comp`,
+    population-wide rows): the sum of the `additive`, `dominance` and
+    `additive_by_additive` diagonals, each counted only if the trait's
+    model has terms of that kind;
+
+  - the stored variance of every named random effect
+    ([`define_effect_random()`](https://austin-putz.github.io/tidybreed/reference/define_effect_random.md);
+    `normal` and `uniform` are centred with that variance);
+
+  - the unconditional residual variance.
+
+  This is a **Gaussian approximation** at a reference population in
+  Hardy-Weinberg and linkage equilibrium. It is exact only when the
+  liability is normal: a few large QTL make the genetic value discrete,
+  and the realised prevalence then differs even in an infinite reference
+  population. Summing the component targets also assumes they are
+  orthogonal (no covariance between additive, dominance and A x A
+  values), which holds for statistical coding at one base, not under LD.
+  Fixed effects shift the liability and are not included: the prevalence
+  is for records whose fixed effects are 0. A selected or line-specific
+  population also differs. For an exact fraction in a known population,
+  compute cutpoints from it and pass `thresholds`.
+
   [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-  errors when a kind of term the model has has no stored target, or when
-  the model has terms outside those three kinds (an `indicator` surface,
-  other interactions). The threshold uses the *target* at the reference
-  population, so the realised prevalence of a selected or line-specific
-  population differs. Every term of the trait must be owned by
-  `"generated"`: a generator
-  ([`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md))
-  always calibrates its terms to the stored target, so the target
-  describes them. Terms written with
-  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
-  carry values nothing checked against a target, so
-  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
-  errors for such a trait; give `thresholds`. Not valid for composite
-  phenotypes (`components` or `formula_tgv`): their genetic liability
-  combines several traits and contributors, which no stored variance
-  describes. Give `thresholds` instead.
+  refuses the threshold, before any draw or write, when no stored target
+  can describe the liability:
+
+  - a term not owned by `"generated"`. A generator
+    ([`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md))
+    always calibrates its terms to the stored target; terms written with
+    [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+    carry values nothing checked against one;
+
+  - a kind of term with no stored target, or terms outside the three
+    kinds (an `indicator` surface, other interactions);
+
+  - generated variants for two parent-of-origin scopes at one line
+    (paternal-only plus maternal-only, or common plus a parent-only
+    fallback). Each was calibrated to the target alone; together they
+    have a different variance;
+
+  - a `gamma` random effect (its mean is `sqrt(variance)`);
+
+  - a residual with conditional strata (the marginal variance would
+    depend on the levels' frequencies);
+
+  - a total variance of 0, where no cutpoint gives a fraction.
+
+  Not valid for composite phenotypes (`components` or `formula_tgv`):
+  their genetic liability combines several traits and contributors,
+  which no stored variance describes. Give `thresholds` instead.
 
 - thresholds:
 
-  Numeric vector of length K−1 for K ordered categories. Liability
-  cutpoints in ascending order. Mutually exclusive with `prevalence`.
+  Numeric vector of length K−1 for K ordered categories: finite
+  liability cutpoints in strictly ascending order. A record is in
+  category `k + 1` when its liability is strictly above cutpoint `k`; a
+  liability exactly on a cutpoint stays in the lower category. Mutually
+  exclusive with `prevalence`.
 
 - cat_values:
 
@@ -235,7 +270,13 @@ define_phenotype(
   that list, a `col` or `table` that is not a plain identifier, or a
   table or column that does not exist yet — is an error here, before
   anything is written. Mutually exclusive with `components`. Not valid
-  with `type = "derived_formula"`.
+  with `type = "derived_formula"`. A constant expression gives every
+  individual that value. At
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+  a result that is `Inf`, `-Inf` or `NaN` (division by zero, overflow, a
+  function outside its domain) is an error naming the individuals, and
+  nothing is written; a missing contributor is
+  `missing_component_action`'s business, as before.
 
 - formula:
 
