@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -232,7 +232,7 @@ real run you would omit <code>db_name</code> and get a
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"demo"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; duckdb keeps downloaded extensions and secrets in a temporary directory:</span></span>
-<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/RtmpboqnHd/duckdb</span></span>
+<span><span class="co">#&gt; <span style="color: #0000BB;">ℹ</span> /tmp/Rtmpu63ezL/duckdb</span></span>
 <span><span class="co">#&gt; This is removed when the R session ends.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> Secrets are lost.</span></span>
@@ -696,12 +696,12 @@ view.</p>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 5</span></span></span>
 <span><span class="co">#&gt;   id_tgv id_ind trait_name component_name tgv_value</span></span>
 <span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      1 A_153  ADG        additive         -<span style="color: #BB0000;">0.915</span> </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      2 A_231  ADG        additive          0.064<span style="text-decoration: underline;">2</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      3 A_365  ADG        additive          0.642 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      4 A_37   ADG        additive          0.298 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      5 A_72   ADG        additive          0.409 </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>      6 A_320  ADG        additive          0.015<span style="text-decoration: underline;">5</span></span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>      1 A_35   ADG        additive         -<span style="color: #BB0000;">0.073</span><span style="color: #BB0000; text-decoration: underline;">0</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>      2 A_98   ADG        additive          0.131 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>      3 A_179  ADG        additive         -<span style="color: #BB0000;">0.256</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>      4 A_254  ADG        additive          0.750 </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>      5 A_59   ADG        additive         -<span style="color: #BB0000;">0.229</span> </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>      6 A_266  ADG        additive          0.461</span></span></code></pre></div>
 <p><code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> builds the observed record: intercept,
 plus fixed and random effects, plus the total genetic value, plus a
 sampled residual. It calls <code><a href="../reference/add_tgv.html">add_tgv()</a></code> internally, so you can

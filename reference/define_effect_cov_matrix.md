@@ -68,6 +68,22 @@ call that clears the stored block. `trait_var_comp` is the single source
 of generation targets; the effect generators read it and never overwrite
 it either.
 
+**A target is written before its effects are generated, or with them.**
+A genetic block is refused when any of its traits already has terms of
+that kind written by a generator (owner `"generated"`) at the block's
+scope: population-wide terms for `line_name = NULL`, line-`"C"` terms
+for `line_name = "C"`. Those terms were calibrated to the target they
+were generated with, and a new target would not describe them; the
+prevalence threshold of
+[`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)
+trusts the stored target for exactly that reason. The refusal holds
+after the old block is removed too. To change the target, remove the old
+block and call
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+with `G =`, which writes the new target and re-draws the terms in one
+transaction. A line's target written before that line's effects are
+generated is accepted.
+
 `"additive_by_dominance"` and `"dominance_by_dominance"` are reserved
 for future generators and refused. `"total"`, `"unpartitioned"` and
 `"between_components"` are output names of the variance extractor and

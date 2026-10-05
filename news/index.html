@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,19 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.74.1" id="tidybreed-0741-2026-10-04">tidybreed 0.74.1 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0741-2026-10-04"></a></h2>
+<p>Step 3b of <code>plans/import_qtl_effect_methods.md</code> (Q21: <em>generated</em> means <em>calibrated</em>; plan in <code>plans/import_qtl_effect_methods_phase_3_plan.md</code>). <strong>Breaking.</strong> Seeded output of calibrated calls is unchanged.</p>
+<ul><li>
+<strong><code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> loses <code>effects =</code> and <code>scale_to_target =</code>.</strong> The generator always samples and calibrates, so every term under the reserved owner <code>"generated"</code> delivers its stored target. Known coefficients (GWAS estimates, a published QTL map, a hand-built test) go through <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code> (with <code><a href="../reference/ad_terms.html">ad_terms()</a></code>, or a <code>data.frame</code> plus <code>base_tbl</code> to fill the centres) under a user owner; <code><a href="../reference/add_tgv.html">add_tgv()</a></code> evaluates them like any other term. Sex-linked or organelle QTL, which the generator cannot calibrate, are written the same way; the generator’s error now says so.</li>
+<li>
+<strong>Prevalence thresholds need generated terms (the owner rule).</strong> <code>define_phenotype(prevalence = )</code> places its threshold from the stored targets, which are known to describe only terms a generator calibrated to them. <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> now refuses (in PLAN, before any write or draw) a trait with any term not owned by <code>"generated"</code>, naming <code>define_phenotype(thresholds = )</code>. Before, ten hand-written effects of 10 under a target of 1 placed a threshold two orders of magnitude off, silently.</li>
+<li>
+<strong><code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> refuses a genetic target under generated terms</strong> of that kind at the block’s scope (population-wide terms for <code>line_name = NULL</code>, line-C terms for <code>line_name = "C"</code>), also after the old block is removed: those terms were calibrated to the old target and a new one would not describe them. The error gives the route: <code><a href="../reference/remove_rows.html">remove_rows()</a></code> the old block, then <code>define_additive_effects(G = )</code>, which writes the target and re-draws the terms in one transaction. A line’s target written before that line’s effects are generated is still accepted.</li>
+<li>The “already stored” errors of <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> and <code>define_additive_effects(G = )</code> now give the full sequence (remove, then re-run the generator), not only the <code><a href="../reference/remove_rows.html">remove_rows()</a></code> call. With generated additive terms present and a stored <code>dominance</code> / <code>additive_by_additive</code> target, <code>define_additive_effects(G = )</code> no longer suggests storing <code>G</code> with <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> first (that is now refused); it names the route that works.</li>
+<li>
+<code>define_phenotype(mean = )</code> is documented as an intercept, with the recipe for a particular realised base mean.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.0" id="tidybreed-0740-2026-10-04">tidybreed 0.74.0 (2026-10-04)<a class="anchor" aria-label="anchor" href="#tidybreed-0740-2026-10-04"></a></h2>
 <p>Step 3a of <code>plans/import_qtl_effect_methods.md</code> (consolidation and P2; plan in <code>plans/import_qtl_effect_methods_phase_3_plan.md</code>). <strong>Breaking.</strong> Databases written by earlier versions are not readable: <code><a href="../reference/restore_pop.html">restore_pop()</a></code> refuses a file with an <code>ind_tbv</code> table, an <code>ind_true_index</code> without <code>component_name</code>, or <code>order1_*</code> component names (pre-1.0, no migration).</p>

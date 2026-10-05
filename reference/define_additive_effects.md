@@ -18,7 +18,6 @@ evaluates both; its `additive` component is the breeding value.
 define_additive_effects(
   tbl,
   trait_name,
-  effects = NULL,
   distribution = c("normal", "gamma"),
   G = NULL,
   trait_var_comp_tbl = NULL,
@@ -27,7 +26,6 @@ define_additive_effects(
   base_tbl = NULL,
   line_name = NULL,
   parent_origin = NULL,
-  scale_to_target = TRUE,
   warn_bounds = c(0.8, 1.25),
   seed = NULL
 )
@@ -48,12 +46,6 @@ define_additive_effects(
   Character scalar **or** vector. Name(s) of existing traits in
   `trait_meta`. When length \>= 2, the architecture is drawn jointly
   from `MVN(0, G)` and `method` becomes active.
-
-- effects:
-
-  Optional numeric vector of length `n_qtl` (manual mode, single trait
-  only), in ascending `locus_id` order, written unchanged. Error if
-  `length(trait_name) > 1` or with `G`.
 
 - distribution:
 
@@ -122,11 +114,6 @@ define_additive_effects(
   terms with
   [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md).
 
-- scale_to_target:
-
-  Logical. `TRUE` (default) calibrates sampled effects to the target.
-  `FALSE` writes the draw unscaled and takes no target.
-
 - warn_bounds:
 
   Numeric length 2, `c(lower, upper)` with `0 < lower <= upper`, or
@@ -152,19 +139,19 @@ The modified `tidybreed_pop` (invisibly).
 ## Details
 
 **When the result is exact.** The requested covariance `G` is delivered
-exactly, `B' M B = G` to machine precision, **only** for sampled effects
-with `method = "shared"` and `scale_to_target = TRUE`, when the rank is
-feasible: `rank(G) <= rank(M)` (the anchor has enough independent
-segregating directions at the selected loci) and
-`rank(G) <= rank(B0' M B0)` (the drawn architecture does too). Each
-infeasibility is its own error. Rank and positive semidefiniteness are
-judged on the target's **correlation** scale, so a trait recorded in
-small units is never truncated away. "Exact" is checked, not assumed:
-the delivered `B' M B` is compared with `G` as stored, entry by entry,
-to a relative tolerance of `1e-8` on the correlation scale; a
-calibration that misses it (a numerically ill-conditioned architecture)
-is an error before anything is written. The closing message says "exact"
-or "approximate" and gives the delivered covariance under the anchor.
+exactly, `B' M B = G` to machine precision, for one trait or for several
+with `method = "shared"`, when the rank is feasible:
+`rank(G) <= rank(M)` (the anchor has enough independent segregating
+directions at the selected loci) and `rank(G) <= rank(B0' M B0)` (the
+drawn architecture does too). Each infeasibility is its own error. Rank
+and positive semidefiniteness are judged on the target's **correlation**
+scale, so a trait recorded in small units is never truncated away.
+"Exact" is checked, not assumed: the delivered `B' M B` is compared with
+`G` as stored, entry by entry, to a relative tolerance of `1e-8` on the
+correlation scale; a calibration that misses it (a numerically
+ill-conditioned architecture) is an error before anything is written.
+The closing message says "exact" or "approximate" and gives the
+delivered covariance under the anchor.
 
 **How.** Effects are drawn as today (one draw per QTL for one trait;
 joint `MVN(0, G)` rows for several), and that draw is only the
@@ -238,10 +225,22 @@ The target is the population-wide (or line) `additive` block of
 With `line_name = "C"` the default reads line C's block when one exists
 and otherwise the population-wide one.
 
-Manual `effects` are written unchanged and take no target; so do sampled
-effects with `scale_to_target = FALSE` (which for several traits still
-use the stored `G` as the draw's covariance). `G` with either is an
-error: nothing would be calibrated to it.
+## Generated means calibrated
+
+The generator always samples **and** calibrates: every term it writes
+under the `"generated"` owner delivers its stored target. That is what
+lets
+[`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md)`(prevalence = )`
+trust the stored target. It has no option to write fixed or unscaled
+effects. Exact coefficients (GWAS estimates, a published QTL map, a
+hand-built test) go through
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+with
+[`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
+under a user owner;
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+evaluates them like any other term, and a liability phenotype on such a
+trait then needs `thresholds =` instead of `prevalence =`.
 
 ## Which population centers the effects
 

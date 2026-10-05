@@ -1,5 +1,58 @@
 # Changelog
 
+## tidybreed 0.74.1 (2026-10-04)
+
+Step 3b of `plans/import_qtl_effect_methods.md` (Q21: *generated* means
+*calibrated*; plan in
+`plans/import_qtl_effect_methods_phase_3_plan.md`). **Breaking.** Seeded
+output of calibrated calls is unchanged.
+
+- **[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  loses `effects =` and `scale_to_target =`.** The generator always
+  samples and calibrates, so every term under the reserved owner
+  `"generated"` delivers its stored target. Known coefficients (GWAS
+  estimates, a published QTL map, a hand-built test) go through
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  (with
+  [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md),
+  or a `data.frame` plus `base_tbl` to fill the centres) under a user
+  owner;
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  evaluates them like any other term. Sex-linked or organelle QTL, which
+  the generator cannot calibrate, are written the same way; the
+  generator’s error now says so.
+- **Prevalence thresholds need generated terms (the owner rule).**
+  `define_phenotype(prevalence = )` places its threshold from the stored
+  targets, which are known to describe only terms a generator calibrated
+  to them.
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  now refuses (in PLAN, before any write or draw) a trait with any term
+  not owned by `"generated"`, naming `define_phenotype(thresholds = )`.
+  Before, ten hand-written effects of 10 under a target of 1 placed a
+  threshold two orders of magnitude off, silently.
+- **[`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  refuses a genetic target under generated terms** of that kind at the
+  block’s scope (population-wide terms for `line_name = NULL`, line-C
+  terms for `line_name = "C"`), also after the old block is removed:
+  those terms were calibrated to the old target and a new one would not
+  describe them. The error gives the route:
+  [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  the old block, then `define_additive_effects(G = )`, which writes the
+  target and re-draws the terms in one transaction. A line’s target
+  written before that line’s effects are generated is still accepted.
+- The “already stored” errors of
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  and `define_additive_effects(G = )` now give the full sequence
+  (remove, then re-run the generator), not only the
+  [`remove_rows()`](https://austin-putz.github.io/tidybreed/reference/remove_rows.md)
+  call. With generated additive terms present and a stored `dominance` /
+  `additive_by_additive` target, `define_additive_effects(G = )` no
+  longer suggests storing `G` with
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  first (that is now refused); it names the route that works.
+- `define_phenotype(mean = )` is documented as an intercept, with the
+  recipe for a particular realised base mean.
+
 ## tidybreed 0.74.0 (2026-10-04)
 
 Step 3a of `plans/import_qtl_effect_methods.md` (consolidation and P2;

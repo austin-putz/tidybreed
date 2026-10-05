@@ -65,7 +65,18 @@ define_phenotype(
 
 - mean:
 
-  Numeric. Phenotypic population mean (intercept). Default `0`.
+  Numeric. The intercept. Default `0`. A record is `mean` + the genetic
+  value as stored + random effects + residual; nothing is added to make
+  the realised mean hit `mean`. Generated effects have mean 0 in
+  expectation at their base allele frequencies (Hardy-Weinberg and
+  linkage equilibrium), so `mean` is the base phenotypic mean in
+  expectation; a finite, selected or non-equilibrium base differs by its
+  sample genetic mean, and hand-written functional terms by their
+  implied mean (see
+  [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)).
+  For a particular realised base mean, set `mean` to the target minus
+  the base individuals' mean of `ind_tgv_total`, measured after
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md).
 
 - expressed_sex:
 
@@ -97,18 +108,18 @@ define_phenotype(
   the model has terms outside those three kinds (an `indicator` surface,
   other interactions). The threshold uses the *target* at the reference
   population, so the realised prevalence of a selected or line-specific
-  population differs. The target is taken as given: if the trait's
-  effects were written without being calibrated to it (manual `effects`,
-  or `scale_to_target = FALSE` in
-  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
-  or terms from
-  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)),
-  the threshold describes a variance the model does not deliver and the
-  realised prevalence is wrong, with no error. Give `thresholds` for
-  such a trait. Not valid for composite phenotypes (`components` or
-  `formula_tbv`): their genetic liability combines several traits and
-  contributors, which no stored variance describes. Give `thresholds`
-  instead.
+  population differs. Every term of the trait must be owned by
+  `"generated"`: a generator
+  ([`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md))
+  always calibrates its terms to the stored target, so the target
+  describes them. Terms written with
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  carry values nothing checked against a target, so
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  errors for such a trait; give `thresholds`. Not valid for composite
+  phenotypes (`components` or `formula_tbv`): their genetic liability
+  combines several traits and contributors, which no stored variance
+  describes. Give `thresholds` instead.
 
 - thresholds:
 

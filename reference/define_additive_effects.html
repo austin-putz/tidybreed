@@ -21,7 +21,7 @@ component is the breeding value.'><meta property="og:image" content="https://aus
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,6 @@ component is the breeding value.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">define_additive_effects</span><span class="op">(</span></span>
 <span>  <span class="va">tbl</span>,</span>
 <span>  <span class="va">trait_name</span>,</span>
-<span>  effects <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  distribution <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"normal"</span>, <span class="st">"gamma"</span><span class="op">)</span>,</span>
 <span>  G <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  trait_var_comp_tbl <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -74,7 +73,6 @@ component is the breeding value.</p>
 <span>  base_tbl <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  line_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parent_origin <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  scale_to_target <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  warn_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.8</span>, <span class="fl">1.25</span><span class="op">)</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -93,12 +91,6 @@ optional <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class
 <dd><p>Character scalar <strong>or</strong> vector. Name(s) of existing traits
 in <code>trait_meta</code>. When length &gt;= 2, the architecture is drawn jointly from
 <code>MVN(0, G)</code> and <code>method</code> becomes active.</p></dd>
-
-
-<dt id="arg-effects">effects<a class="anchor" aria-label="anchor" href="#arg-effects"></a></dt>
-<dd><p>Optional numeric vector of length <code>n_qtl</code> (manual mode, single
-trait only), in ascending <code>locus_id</code> order, written unchanged. Error if
-<code>length(trait_name) &gt; 1</code> or with <code>G</code>.</p></dd>
 
 
 <dt id="arg-distribution">distribution<a class="anchor" aria-label="anchor" href="#arg-distribution"></a></dt>
@@ -165,11 +157,6 @@ calls. For imprinting that varies locus by locus, write the terms with
 <code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>.</p></dd>
 
 
-<dt id="arg-scale-to-target">scale_to_target<a class="anchor" aria-label="anchor" href="#arg-scale-to-target"></a></dt>
-<dd><p>Logical. <code>TRUE</code> (default) calibrates sampled effects
-to the target. <code>FALSE</code> writes the draw unscaled and takes no target.</p></dd>
-
-
 <dt id="arg-warn-bounds">warn_bounds<a class="anchor" aria-label="anchor" href="#arg-warn-bounds"></a></dt>
 <dd><p>Numeric length 2, <code>c(lower, upper)</code> with
 <code>0 &lt; lower &lt;= upper</code>, or <code>NULL</code> to turn the comparison off. Outside
@@ -194,9 +181,8 @@ consumed RNG draws.</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><strong>When the result is exact.</strong> The requested covariance <code>G</code> is delivered
-exactly, <code>B' M B = G</code> to machine precision, <strong>only</strong> for sampled effects
-with <code>method = "shared"</code> and <code>scale_to_target = TRUE</code>, when the rank is
-feasible: <code>rank(G) &lt;= rank(M)</code> (the anchor has enough independent
+exactly, <code>B' M B = G</code> to machine precision, for one trait or for several
+with <code>method = "shared"</code>, when the rank is feasible: <code>rank(G) &lt;= rank(M)</code> (the anchor has enough independent
 segregating directions at the selected loci) and <code>rank(G) &lt;= rank(B0' M B0)</code> (the drawn architecture does too). Each infeasibility is its
 own error. Rank and positive semidefiniteness are judged on the target's
 <strong>correlation</strong> scale, so a trait recorded in small units is never
@@ -264,10 +250,19 @@ never silently ignores a stored target. Filter them away with
 <code>trait_var_comp_tbl</code> to say so explicitly.</p></li>
 </ul><p>With <code>line_name = "C"</code> the default reads line C's block when one exists and
 otherwise the population-wide one.</p>
-<p>Manual <code>effects</code> are written unchanged and take no target; so do sampled
-effects with <code>scale_to_target = FALSE</code> (which for several traits still use
-the stored <code>G</code> as the draw's covariance). <code>G</code> with either is an error:
-nothing would be calibrated to it.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="generated-means-calibrated">Generated means calibrated<a class="anchor" aria-label="anchor" href="#generated-means-calibrated"></a></h2>
+
+
+<p>The generator always samples <strong>and</strong> calibrates: every term it writes
+under the <code>"generated"</code> owner delivers its stored target. That is what lets
+<code><a href="define_phenotype.html">define_phenotype()</a></code><code>(prevalence = )</code> trust the stored target. It has no
+option to write fixed or unscaled effects. Exact coefficients (GWAS
+estimates, a published QTL map, a hand-built test) go through
+<code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> with <code><a href="ad_terms.html">ad_terms()</a></code> under a user owner;
+<code><a href="add_tgv.html">add_tgv()</a></code> evaluates them like any other term, and a liability phenotype
+on such a trait then needs <code>thresholds =</code> instead of <code>prevalence =</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="which-population-centers-the-effects">Which population centers the effects<a class="anchor" aria-label="anchor" href="#which-population-centers-the-effects"></a></h2>
