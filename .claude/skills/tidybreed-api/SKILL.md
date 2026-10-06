@@ -533,8 +533,20 @@ base had no copies at that locus. One `base_tbl` gives one `p` per locus per
 call, so line-scoped surfaces are written one line at a time with
 `mode = "append"`.
 
-Two builders produce `terms`, because a surface is rows, not a second
-representation:
+Three builders produce `terms`, because a surface is rows, not a second
+representation. **All three return one fixed column set** (0.75.0, gate C16):
+`term_id, locus_name, contrast_name, center_value, copy_count_value,
+dosage_value, genome_value, effect_name` — character, character, character,
+double, integer, integer, double, character — with a typed `NA` where a column
+does not apply (built by the internal `.terms_frame()`), so their outputs
+`rbind()` in any combination. **`term_id`s are collision-free** (`.term_id()`):
+a builder prefix plus length-prefixed locus names plus a suffix, e.g.
+`"ad:2:L1#a"`, `"aa:1:A|3:BxC"`, `"geno:1:A|1:B#4"`. Joining names with a
+delimiter is not enough — `c("A","B")` and the single locus `"AxB"` would
+share an id and the writer would merge two surfaces into one product term.
+Bound outputs share a `term_id` only when they describe the same term on the
+same loci; overlapping definitions are then refused by the writer's family
+rule, never merged.
 
 - `ad_terms(locus_name, a, d, p, coding = c("functional", "cockerham"))` —
   expands an (a, d) pair. Functional coding is `additive`@`0.5` plus
@@ -542,9 +554,30 @@ representation:
   **reports** the implied genetic mean `μ = a(p − q) + 2pq·d` and writes it
   nowhere — putting it in `phenotype_meta.mean` would double-count once
   non-additive genetic values reach the phenotype layer.
+- `aa_terms(locus_name_1, locus_name_2, e, p_1, p_2, coding, effect_name,
+  report)` — two `additive` members per pair, one coefficient; centres 0.5
+  (functional) or `p_1`, `p_2` (Cockerham). Pair order is canonicalised
+  (C-locale radix; each `p` moves with its locus); a self-pair or a repeated
+  pair is refused; inputs are validated **before** `e = 0` pairs are dropped;
+  all-zero `e` is an error. Functional coding reports each pair's share of μ,
+  `e(2p_1 − 1)(2p_2 − 1)`. Cockerham `ad_terms()` takes α, and functional `a`
+  is not α once pairs exist — feeding it changes genotypic values, not just the
+  component split.
 - `genotype_terms(genotypes, value, copy_count = NULL, drop_zero = TRUE)` —
   turns a genotype-by-value table into `indicator` terms, one term per row and
   one member per locus column.
+
+**The NOIA conversion pair** (internal, same file; plan Q13):
+`.stored_to_functional(terms, members)` converts covered common-scope terms
+(order-one `additive` / `dominance` / diploid `indicator` in any of the three
+states, two-member `additive × additive`) to functional `(a, d, e)` keyed by
+`locus_id`, plus `kappa` (**stored = functional + kappa**). `.noia_to_stored(a,
+d, pairs, p)` is the forward map (`α = a + (q − p)d + Σ e(2p_l − 1)`, `μ` the
+functional HWE/LE mean; **functional = statistical + μ**, so a round trip gives
+`kappa = −μ`); it returns coefficient data, and `.noia_terms()` turns it into a
+writer frame. `ad_terms()` is not rewired through them; its no-pair μ is
+asserted equal. Gates N1–N3 in `tests/testthat/test-genome-effect-terms-builders.R`
+check every conversion row against the real evaluator.
 
 ```r
 # One dominance term, Cockerham coding at p = 0.3

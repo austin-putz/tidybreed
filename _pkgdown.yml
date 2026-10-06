@@ -57,6 +57,7 @@ reference:
   - remove_generated_effects
   - define_genome_effect_terms
   - ad_terms
+  - aa_terms
   - genotype_terms
   - define_effect_cov_matrix
   - extract_allele_freq

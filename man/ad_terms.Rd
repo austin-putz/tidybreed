@@ -31,8 +31,10 @@ ad_terms(
 \item{report}{Logical; print the implied genetic mean. Default \code{TRUE}.}
 }
 \value{
-A \code{terms} data frame: two rows per locus with a non-zero
-coefficient, \code{term_id} \code{"<locus>_a"} / \code{"<locus>_d"}.
+A \code{terms} data frame with the fixed builder column set (see
+\code{\link[=aa_terms]{aa_terms()}}): one row per non-zero coefficient. \code{term_id} encodes the
+builder, the locus and \code{a} / \code{d}, so it never collides with another
+builder's ids when outputs are \code{rbind()}-ed.
 }
 \description{
 Expands one locus's additive and dominance coefficients into the two member
@@ -68,5 +70,5 @@ pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
 }
 }
 \seealso{
-\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=genotype_terms]{genotype_terms()}}.
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=aa_terms]{aa_terms()}}, \code{\link[=genotype_terms]{genotype_terms()}}.
 }

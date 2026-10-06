@@ -1,3 +1,35 @@
+# tidybreed 0.75.0 (2026-10-05)
+
+Step 4a of the import plan (`plans/import_qtl_effect_methods_phase_4_plan.md`):
+the builder pieces that `extract_genetic_variance()` (4b) and the step-5
+generator need. Nothing here writes to the database on its own; no DDL.
+
+* **New `aa_terms()`**: builds additive-by-additive pair terms (two `additive`
+  members, one coefficient) under functional (centres 0.5) or Cockerham
+  (centres `p_1`, `p_2`) coding. Pair order is canonicalised, each `p` moving
+  with its locus; a self-pair or a repeated pair is refused; every input is
+  validated before pairs with `e = 0` are dropped; all-zero `e` is an error.
+  Functional coding reports each pair's share of the implied mean,
+  `e(2p_1 - 1)(2p_2 - 1)`, written to no table.
+* **One column set for every term builder.** `ad_terms()`, `aa_terms()` and
+  `genotype_terms()` return exactly `term_id, locus_name, contrast_name,
+  center_value, copy_count_value, dosage_value, genome_value, effect_name`,
+  with typed `NA`s, so their outputs `rbind()` in any combination (a
+  functional and a Cockerham `ad_terms()` used not to).
+* **Breaking: builder `term_id`s are now collision-free strings.**
+  `genotype_terms()` numbered its terms `1, 2, ...`, so two surfaces bound
+  together silently shared ids. Every builder now encodes its prefix and the
+  term's loci with length-prefixed names (`"ad:2:L1#a"`, `"aa:1:A|3:BxC"`,
+  `"geno:1:A|1:B#4"`). Simply joining names (`"AxB_1"`) was rejected in review:
+  the surfaces on `c("A", "B")` and on a locus named `"AxB"` would share an id,
+  and the writer would merge them into one product term. `term_id` is never
+  stored, so only builder output changes.
+* `ad_terms()` and `aa_terms()` require finite coefficients and frequencies.
+* Internal: the NOIA conversion pair `.stored_to_functional()` /
+  `.noia_to_stored()` (plus `.noia_terms()`), with sign conventions
+  "stored = functional + kappa" and "functional = statistical + mu". Every
+  conversion row is checked against the real evaluator (gates N1-N3).
+
 # tidybreed 0.74.5 (2026-10-05)
 
 Fixes from the Codex review of step 3

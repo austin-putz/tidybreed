@@ -1311,9 +1311,12 @@ extract_genetic_variance(tbl, trait_name = NULL,
   call's traits, the call errors, giving the count per trait and asking for a narrower
   `tbl`. It never silently switches to per-trait or pairwise-complete subsets. So `n_ind`
   is one number for the whole result. Fewer than two individuals is an error (a sample
-  covariance needs two). A locus with zero observed variance in the cohort contributes
-  nothing to any realised block: its regression $b_j$ is set to 0 rather than divided
-  by zero, and the same holds for a pair with a monomorphic member.
+  covariance needs two). A locus with zero observed variance in the cohort gets
+  regression $b_j = 0$ rather than a division by zero, and the centred A×A column of a
+  pair with a monomorphic member is zero. That pair's **induced additive effect**
+  $e\,c$ on its partner is still kept (canonicalisation adds it to $\alpha$ before
+  zero-variance columns are handled), because a fixed partner turns the interaction into
+  a real main effect.
 
 **Two anchors, two definitions.**
 
@@ -1372,13 +1375,18 @@ specified. So `anchor = "genic"` on a case 2 or case 3 model errors. The error s
 `total`, `unpartitioned` and `between_components` (realised only, §8 above).
 `inner_join(targets, realised, by = c("effect_name", "trait_name_1", "trait_name_2"))`
 is then the whole target-vs-delivered check, which is the test loop this work will be
-verified with. **A block row is returned only when the model has terms of that kind**, so
-a stored target the generator was told to leave out (§6C, "available targets") drops out
+verified with. **A block row is returned only when the canonical model supports that
+block** (decided after canonicalisation, not from stored term kinds: a one-locus indicator
+surface equal to dosage is all additive; dominance and A×A induce additive coefficients;
+see the Phase 4 plan, 4b.4). `additive` is always reported for a covered trait, so a
+stored target the generator was told to leave out (§6C, "available targets") drops out
 of the `inner_join` instead of being compared with a block the model never had; an
 `anti_join()` lists such targets. The comparison is a like-for-like check only when the
-trait's model is the `generated` owner alone. Custom-owner terms sum with generated ones
-(§5), and the extractor measures the whole model, so with custom terms present a mismatch
-is expected and is not an error. Say so in the roxygen; no owner filter is added. (`unpartitioned` is not `residual`: in this package that word means
+trait's model is the `generated` owner alone **and** the anchor, reference selection,
+measured model and calibrated scope match the generation call (a line variant competes
+with common fallback terms; a later-edited founder pool is not the generation base).
+Custom-owner terms sum with generated ones (§5), and the extractor measures the whole
+model, so with custom terms present a mismatch is expected and is not an error. Say so in the roxygen; no owner filter is added. (`unpartitioned` is not `residual`: in this package that word means
 environmental noise in `phenotype_var_comp`.)
 
 It is the measurement AlphaSimR gets wrong under epistasis: `calcGenParamE` has a
@@ -1532,8 +1540,12 @@ instead of reaching for `genotype_terms()`. Exported.
 - **One caveat, stated in its roxygen.** `ad_terms(coding = "cockerham")` takes $\alpha$,
   not the functional $a$: $\alpha_j=a_j+(q_j-p_j)d_j$ already whenever $d\ne0$. With pairs,
   $\alpha_j$ also needs $\sum_l e_{jl}c_l$, which `ad_terms()` never sees. So functional
-  $a$ fed to the Cockerham branch is **not** the statistical form of the model. The total is still right up to a constant; only
-  the `additive` / `interaction` split changes. A manual Cockerham path is Q17.
+  $a$ fed to the Cockerham branch is **not** the statistical form of the model, and it
+  changes the **genotypic values**, not merely the `additive` / `interaction` split. The
+  total differs only by a constant *after* the required α conversion. Example: $a=0$,
+  $d=1$, $p=0.3$: the heterozygote indicator is not the centred dominance contrast alone;
+  it also needs an additive coefficient $q-p=0.4$ (corrected after the Phase 4 Codex
+  review). A manual Cockerham path is Q17.
 
 **Worked manual A + D + A×A** (the §9 roxygen and the vignette use this). It uses
 functional coding, so the total is exact, and the components are the functional ones, not
@@ -1975,6 +1987,15 @@ for the rest of this plan:
   gate C16). They move here from Part C because B2 and B10 build A + D + A×A fixtures by
   hand through `define_genome_effect_terms()`.
 
+**As built (4a, 0.75.0).** `aa_terms()`, the fixed builder column set (`.terms_frame()`),
+collision-free builder `term_id`s (`.term_id()`: builder prefix + length-prefixed locus
+names; the `x`-joined form of the first Phase 4 plan collided and was rejected in review),
+and the internal NOIA conversion pair `.stored_to_functional()` / `.noia_to_stored()` plus
+`.noia_terms()`. **Plan change (Q13):** `ad_terms()` is not rewired through the pair; its
+functional branch computes only the no-pair μ, which a test asserts equal to
+`.noia_to_stored()`'s. Q13's "`ad_terms()` calls it" assumed a Cockerham `(a, d) → α` path
+that Q17 (a) never created. Results: `plans/import_qtl_effect_methods_phase_4.md`.
+
 ### Step 5 — Part C (0.76.0)
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
@@ -2047,11 +2068,11 @@ for the rest of this plan:
 - B5. A hand-written indicator surface gives a correct `total` (equal to `var()` of `ind_tgv_total` computed in the test), an `unpartitioned` row holding that surface's own variance only, and `decomposition = "partial"`, and no error.
 - B6. A line-scoped additive crossbreeding model (common + line-A + line-B variants) on F1s: `additive` equals the variance of the evaluated `additive` exactly, with no `unpartitioned` row.
 - B7. Read-only: `ind_tgv` and every other persistent table are unchanged after the call.
-- B8. Output joins to `trait_var_comp` on `(effect_name, trait_name_1, trait_name_2)` with no renaming. A model with no `dominance` terms returns no `dominance` row, so a stored `dominance` target that the generator was told to leave out (§6C) is absent from the `inner_join` and present in the `anti_join()`.
+- B8. Output joins to `trait_var_comp` on `(effect_name, trait_name_1, trait_name_2)` with no renaming. A model with no dominance **support** (no locus with canonical $d_j \ne 0$; decided after canonicalisation, not from stored contrast names — Phase 4 plan, 4b.4) returns no `dominance` row, so a stored `dominance` target that the generator was told to leave out (§6C) is absent from the `inner_join` and present in the `anti_join()`.
 - B9. Determinism: two calls, and a call after `restore_pop()`, give `expect_identical()` output. The realised path above the size limit errors with $n$, $m$ and the limit.
 - B10. Coding and anchor scope: the same A + D + A×A model written once in functional coding (§9.3 example) and once in Cockerham coding gives the same report under both anchors (1e-10). `anchor = "genic"` on a case 2 or case 3 model errors and names `"realised"`. A non-`NULL` `base_tbl` with `anchor = "realised"` errors.
-- B11. `decomposition` is `"full"` for a common-scope A + D + A×A model (case 1), `"additive_only"` for a scoped additive model (case 2), and `"partial"` for one with an indicator surface (case 3).
-- B12. Cohort (§8): a `tbl` that selects an individual with no value for one of the call's traits errors, giving the count. A `tbl` selecting one individual errors. Every output row carries the same `n_ind`. A locus that is monomorphic in the cohort gives finite output, equal to the same model without that locus.
+- B11. `decomposition` is `"full"` for a common-scope A + D + A×A model (case 1), `"additive_only"` for a scoped additive model (case 2), and `"partial"` for one with a multi-locus indicator surface (case 3; a one-locus diploid surface is case 1, Phase 4 D2).
+- B12. Cohort (§8): a `tbl` that selects an individual with no value for one of the call's traits errors, giving the count. A `tbl` selecting one individual errors. Every output row carries the same `n_ind`. A locus that is monomorphic in the cohort gives finite output, equal to a reduced model that drops it **and carries each of its pairs' induced main effect** $e\,c$ onto the partner (fixed at dosage 2 or 0 that effect is $\pm e$; fixed heterozygote, none). Dropping the locus outright is wrong: $e(g_1-1)(g_2-1) = e(g_1-1)$ when $g_2 \equiv 2$ (Phase 4 Codex review, finding 3).
 
 **Part C**
 
@@ -2291,8 +2312,9 @@ already do.
 
 **Decision: (a).** One `between_components` row per trait pair, as specified in §8. The
 output keeps `trait_var_comp`'s shape, so the target-vs-delivered check stays one
-`inner_join`. The reasoning: cross-block covariances are 0 in expectation under random
-mating and noticeable mainly under inbreeding or strong recent selection, so the breakdown
+`inner_join`. The reasoning: cross-block covariances are 0 under the **HWE + LE** genic
+model (random mating alone restores single-locus HWE but can leave LD, so it does not by
+itself guarantee zero) and noticeable mainly under LD, inbreeding or strong recent selection, so the breakdown
 is diagnostic detail. If someone needs the individual pairs later, that is a **separate
 function** (e.g. `extract_genetic_covariance()`, option (b)'s shape), not an argument here:
 an argument that changes the output shape is two functions (§8, `per_ind`). Adding it would

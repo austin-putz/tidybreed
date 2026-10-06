@@ -30,8 +30,11 @@ contribute nothing. Default \code{TRUE}.}
 \item{effect_name}{Optional label carried onto every term.}
 }
 \value{
-A \code{terms} data frame with \code{nrow(genotypes) * ncol(genotypes)} rows
-(before \code{drop_zero}).
+A \code{terms} data frame with the fixed builder column set (see
+\code{\link[=aa_terms]{aa_terms()}}) and \code{nrow(genotypes) * ncol(genotypes)} rows (before
+\code{drop_zero}). Each row of \code{genotypes} is one term; its \code{term_id} encodes
+the surface's loci and the row number, so surfaces over different loci
+never share a \code{term_id} when bound together.
 }
 \description{
 Turns a genotype-by-value table into \code{indicator} terms: one term per row of
@@ -53,5 +56,5 @@ pop <- pop |> define_genome_effect_terms(
 }
 }
 \seealso{
-\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}.
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}, \code{\link[=aa_terms]{aa_terms()}}.
 }
