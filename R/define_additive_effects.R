@@ -1099,50 +1099,25 @@ QTL_REALISED_MAX_CELLS <- 2e7
 
 #' Collect the base individuals' dosages at the QTL, `id_ind` then `locus_id`
 #'
-#' Integer sums only (exact). Refuses an empty or single-individual base, a
-#' base above `QTL_REALISED_MAX_CELLS`, and any individual without both
-#' copies at every QTL: `extract_genotypes()` would read a missing copy as 0,
-#' and `Cov(X)` of partial genotypes is not a population covariance.
+#' The generator's caller of the shared `.collect_dosages()`: refuses an empty
+#' or single-individual base, a base above `QTL_REALISED_MAX_CELLS`, and any
+#' individual without both copies at every QTL (`extract_genotypes()` would
+#' read a missing copy as 0, and `Cov(X)` of partial genotypes is not a
+#' population covariance), each with the generator's own fix.
 #' @return list(X = n x m integer-valued matrix, id_ind, locus_id).
 #' @keywords internal
 #' @noRd
 .dae_collect_dosages <- function(pop, base_tbl, locus_ids) {
-  conn <- pop$db_conn
-  sub  <- as.character(dbplyr::sql_render(base_tbl$tbl))
-  ids_sql <- paste0("SELECT DISTINCT id_ind FROM (", sub, ") b")
-  n <- DBI::dbGetQuery(conn, paste0("SELECT COUNT(*) AS n FROM (", ids_sql, ")"))$n
-  m <- length(locus_ids)
-  if (n < 2L) {
-    stop("anchor = \"realised\" needs at least 2 individuals in `base_tbl`; ",
-         "it selects ", n, ".", call. = FALSE)
-  }
-  if (as.numeric(n) * m > QTL_REALISED_MAX_CELLS) {
-    stop("anchor = \"realised\" would collect a ", n, " x ", m,
-         " genotype matrix (", format(as.numeric(n) * m, big.mark = ","),
-         " cells), above the limit of ",
-         format(QTL_REALISED_MAX_CELLS, big.mark = ",", scientific = FALSE),
-         ". Use anchor = \"genic\", or a smaller `base_tbl` or QTL set.",
-         call. = FALSE)
-  }
-  lst <- paste(as.integer(locus_ids), collapse = ", ")
-  d <- DBI::dbGetQuery(conn, paste0(
-    "SELECT h.id_ind, h.locus_id, CAST(SUM(h.allele) AS INTEGER) AS dosage, ",
-    "COUNT(*) AS n_copies FROM ind_haplotype h ",
-    "JOIN (", ids_sql, ") ids USING (id_ind) ",
-    "WHERE h.locus_id IN (", lst, ") ",
-    "GROUP BY h.id_ind, h.locus_id ORDER BY h.id_ind, h.locus_id"))
-  per_ind <- table(factor(d$id_ind))
-  ids <- sort(unique(d$id_ind))
-  bad <- length(ids) < n || any(per_ind != m) || any(d$n_copies != 2L)
-  if (bad) {
-    stop("anchor = \"realised\": some individuals in `base_tbl` lack both ",
-         "allele copies at every QTL (e.g. crossbreds selected by line, or ",
-         "individuals without haplotypes). Cov(X) of partial genotypes is not ",
-         "a population covariance. Use anchor = \"genic\".", call. = FALSE)
-  }
-  X <- matrix(as.numeric(d$dosage), nrow = length(ids), ncol = m, byrow = TRUE,
-              dimnames = list(ids, NULL))
-  list(X = X, id_ind = ids, locus_id = sort(as.integer(locus_ids)))
+  sub <- as.character(dbplyr::sql_render(base_tbl$tbl))
+  .collect_dosages(
+    pop$db_conn, paste0("SELECT DISTINCT id_ind FROM (", sub, ") b"), locus_ids,
+    who = "anchor = \"realised\"", where = "`base_tbl`",
+    size_fix = "Use anchor = \"genic\", or a smaller `base_tbl` or QTL set.",
+    incomplete = paste0(
+      "some individuals in `base_tbl` lack both allele copies at every QTL ",
+      "(e.g. crossbreds selected by line, or individuals without ",
+      "haplotypes). Cov(X) of partial genotypes is not a population ",
+      "covariance. Use anchor = \"genic\"."))
 }
 
 #' Compare the delivered covariance with what another population sees (§7.4)

@@ -543,3 +543,74 @@ validate_genome_effects <- function(conn, labels = NULL) {
   }
   unique(v)
 }
+
+
+# ── Dosage collection ───────────────────────────────────────────────────────
+
+#' Refuse an `n x m` dosage matrix above `QTL_REALISED_MAX_CELLS`
+#'
+#' Separate from the collector so a caller can check a knowable size before
+#' any expensive work (`extract_genetic_variance()` checks before evaluating).
+#'
+#' @keywords internal
+#' @noRd
+.dosage_guard <- function(n, m, who, size_fix) {
+  if (as.numeric(n) * m > QTL_REALISED_MAX_CELLS) {
+    stop(who, " would collect a ", n, " x ", m, " genotype matrix (",
+         format(as.numeric(n) * m, big.mark = ","), " cells), above the ",
+         "limit of ", format(QTL_REALISED_MAX_CELLS, big.mark = ",",
+                             scientific = FALSE), ". ", size_fix,
+         call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+#' Collect dosages, `id_ind` then `locus_id`, for a set of individuals
+#'
+#' Integer sums only (exact). One implementation for every caller that needs
+#' an in-memory genotype matrix (the realised anchor of
+#' `define_additive_effects()`, `extract_genetic_variance()`); each caller
+#' passes its own wording and fix. Refuses fewer than 2 individuals, a matrix
+#' above `QTL_REALISED_MAX_CELLS`, and any individual without both allele
+#' copies at every requested locus.
+#'
+#' @param conn A DBI connection.
+#' @param ids_sql SQL returning one column `id_ind` (distinct individuals).
+#'   Individual ids never appear in it as literals.
+#' @param locus_ids Integer locus ids.
+#' @param who,where,size_fix,incomplete Message pieces: the caller, what
+#'   selected the individuals, the fix for a too-large matrix, and the whole
+#'   explanation for incomplete genotypes.
+#' @return list(X = n x m matrix with `id_ind` row names, id_ind, locus_id),
+#'   rows in `id_ind` order and columns in `locus_id` order.
+#' @keywords internal
+#' @noRd
+.collect_dosages <- function(conn, ids_sql, locus_ids, who, where, size_fix,
+                             incomplete) {
+  n <- DBI::dbGetQuery(conn, paste0("SELECT COUNT(*) AS n FROM (", ids_sql,
+                                    ")"))$n
+  m <- length(locus_ids)
+  if (n < 2L) {
+    stop(who, " needs at least 2 individuals in ", where, "; it selects ", n,
+         ".", call. = FALSE)
+  }
+  .dosage_guard(n, m, who, size_fix)
+  locus_ids <- sort(as.integer(locus_ids))
+  lst <- paste(locus_ids, collapse = ", ")
+  d <- DBI::dbGetQuery(conn, paste0(
+    "SELECT h.id_ind, h.locus_id, CAST(SUM(h.allele) AS INTEGER) AS dosage, ",
+    "COUNT(*) AS n_copies FROM ind_haplotype h ",
+    "JOIN (", ids_sql, ") ids USING (id_ind) ",
+    "WHERE h.locus_id IN (", lst, ") ",
+    "GROUP BY h.id_ind, h.locus_id ORDER BY h.id_ind, h.locus_id"))
+  per_ind <- table(factor(d$id_ind))
+  # The SQL order, not R's sort(): row names must name the rows they label,
+  # whatever the session's collation.
+  ids <- unique(d$id_ind)
+  if (length(ids) < n || any(per_ind != m) || any(d$n_copies != 2L)) {
+    stop(who, ": ", incomplete, call. = FALSE)
+  }
+  X <- matrix(as.numeric(d$dosage), nrow = length(ids), ncol = m, byrow = TRUE,
+              dimnames = list(ids, NULL))
+  list(X = X, id_ind = ids, locus_id = locus_ids)
+}

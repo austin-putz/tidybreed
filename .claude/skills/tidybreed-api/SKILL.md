@@ -1,6 +1,6 @@
 ---
 name: tidybreed-api
-description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tgv and the evaluator, index functions. Load before changing or explaining any exported function.
+description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tgv and the evaluator, extract_genetic_variance, index functions. Load before changing or explaining any exported function.
 ---
 
 # tidybreed Implemented Functions
@@ -483,6 +483,67 @@ an error if no locus is covered at all. One SQL statement with the filter
 rendered as a subquery via `dbplyr::sql_render()`; nothing else is collected.
 Never warns, never writes. Users call it to obtain `p` for `ad_terms()`. Also
 holds `.validate_base_tbl()`, shared by both genome-effect writers.
+
+### `extract_genetic_variance()`
+
+`R/extract_genetic_variance.R` (0.75.1). `extract_genetic_variance(tbl,
+trait_name = NULL, base_tbl = NULL, anchor = c("realised", "genic"))` — the
+measuring instrument. **Read-only**: values come from `.gev_evaluate()`, which
+writes nothing; `ind_tgv` is not touched.
+
+- `tbl` selects the cohort through `resolve_subset_ids(all_if_null = TRUE)`;
+  fewer than 2 individuals is an error.
+- `trait_name = NULL` is every trait **with stored terms**, in `id_trait` order
+  (`.egv_traits()`; deliberately not `.gev_resolve_traits(NULL)`, which returns
+  every trait and which `add_tgv()` relies on). A named trait without terms
+  errors.
+- `base_tbl` is genic only (non-`NULL` with `"realised"` errors). `NULL` is the
+  cohort's **whole-genotype** frequencies via a registered id view, whatever
+  table selected the cohort (an `ind_haplotype` filter picks individuals, not
+  copies). An explicit `base_tbl` uses `extract_allele_freq()` semantics. A
+  decomposed locus with no copies in the base errors, naming it.
+- **Output**: tibble `effect_name, trait_name_1, trait_name_2, cov_value,
+  n_ind, decomposition, anchor`; full square per block, effect order
+  `additive, dominance, additive_by_additive, unpartitioned,
+  between_components, total`. The A×A name is `additive_by_additive`
+  (`trait_var_comp` vocabulary), not the `ind_tgv` component `interaction`.
+  A `message()` names the population (decision D1); the tibble carries only
+  `anchor`.
+- **Classification** (`.egv_classify()`): a term is covered when it is
+  order-one `additive` / `dominance` / diploid `indicator` (any state) or
+  two-member `additive × additive`, has no origin rows, and every member locus
+  is `1, 1` for both sexes in every line (`.egv_diploid_loci()`). A family
+  (`family_key`) is covered only as a whole (**family rule**: scope variants
+  compete). Cases per trait: `full` (all covered), `additive_only` (every term
+  order-one additive, not full: the evaluated `additive` component),
+  `partial` (covered part projected, the rest evaluated alone into
+  `unpartitioned`, absent individuals 0). Off-diagonals carry the less
+  complete label. `"genic"` on a non-full trait errors naming `"realised"`.
+- **Computation**: covered terms per trait → `.stored_to_functional()` (owners
+  summed after classification) → coefficient matrices on the covered-locus
+  index (`.egv_coefficients()`). Realised: the source's
+  `nonadd_covariates()` algebra without its dense anchor matrices — cohort
+  `p`, observed regression `b` (0 at monomorphic loci), `alpha = a + b d +
+  sum e c` (the induced `e·c` of a pair with a fixed member is **kept**), value
+  matrices `Z_A alpha`, `Z_D d`, and A×A accumulated in deterministic pair
+  chunks (`.egv_aa_values()`, chunk `QTL_REALISED_MAX_CELLS / n`, no `n × r`
+  matrix). Covariances divisor `n − 1`. `between_components` = sum of
+  `Cov(b_t1, b'_t2)` over every ordered pair of different blocks
+  (`unpartitioned` included), computed directly. An internal assertion
+  requires the centred blocks to sum to the centred evaluated total (mixed
+  tolerance) or errors. Genic: closed forms at the base `p`, `b = q − p`; no
+  `between_components`.
+- **Block availability** follows the canonical model, never stored contrast
+  names: `additive` for every trait with a covered term; `dominance` iff some
+  canonical `d ≠ 0`; `additive_by_additive` iff some canonical `e ≠ 0`; an
+  off-diagonal block row only when both traits have the block. A supported
+  block of variance 0 is reported as 0.
+- **Resources**: the `n × m` dosage guard (`.dosage_guard()`) runs before any
+  evaluation; dosages come from the shared `.collect_dosages()` in
+  `R/genome_effects_helpers.R` (also behind `define_additive_effects(anchor =
+  "realised")`, each caller with its own message pieces).
+- Gates B1–B18 in `tests/testthat/test-extract_genetic_variance.R`; the source
+  oracle is copied verbatim in `tests/testthat/helper-nonadd-oracle.R`.
 
 **How the two writers relate.** `define_genome_effect_terms()` writes any effect
 you supply; `define_*_effects()` functions sample effects of one shape and

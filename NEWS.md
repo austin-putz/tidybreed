@@ -1,3 +1,40 @@
+# tidybreed 0.75.1 (2026-10-05)
+
+Step 4b of the import plan (`plans/import_qtl_effect_methods_phase_4_plan.md`):
+the measuring instrument. Read-only; no DDL.
+
+* **New `extract_genetic_variance(tbl, trait_name, base_tbl, anchor)`.**
+  Reports the genetic covariance blocks of the individuals `tbl` selects, in
+  `trait_var_comp`'s shape (`effect_name, trait_name_1, trait_name_2,
+  cov_value`, every trait pair in both orientations, plus `n_ind`,
+  `decomposition`, `anchor`), so target vs measured is one `inner_join()`.
+  - `anchor = "realised"` (default): sample covariances of the cohort's
+    `additive`, `dominance`, `additive_by_additive` and `unpartitioned` block
+    values, `between_components` (every ordered cross-block covariance) and
+    the evaluated `total`; the rows sum exactly to `total`.
+  - `anchor = "genic"`: the HWE + linkage-equilibrium closed forms at
+    `base_tbl`'s frequencies (default: the selected individuals'
+    whole-genotype frequencies, whatever table selected them).
+  - Three cases per trait: `"full"` (common-scope additive, dominance,
+    one-locus diploid indicator and additive x additive terms, re-projected on
+    NOIA at the cohort's frequencies, so both codings give one report),
+    `"additive_only"` (scoped additive models: the evaluated additive
+    variance), `"partial"` (the rest goes to `unpartitioned`). A term family
+    with any scoped variant is uncovered as a whole.
+  - Rows follow the statistical decomposition: `additive` for every
+    decomposed trait (a dosage-only genotype surface is all additive), and
+    `dominance` / `additive_by_additive` only when a converted coefficient is
+    non-zero. A fixed pair member's induced additive effect is kept.
+  - A x A values are accumulated in pair chunks (no `n x r` matrix, no dense
+    anchor matrices); sizes are checked before any evaluation. Output is
+    bit-identical on repeat, across DuckDB thread counts and after
+    `restore_pop()`.
+  - Checked against the source project's `nonadd_decompose()`, copied
+    verbatim as a test oracle (`tests/testthat/helper-nonadd-oracle.R`).
+* Internal: the dosage collector behind `define_additive_effects(anchor =
+  "realised")` is now the shared `.collect_dosages()` (same checks and
+  messages); its row names follow the SQL order rather than R's collation.
+
 # tidybreed 0.75.0 (2026-10-05)
 
 Step 4a of the import plan (`plans/import_qtl_effect_methods_phase_4_plan.md`):

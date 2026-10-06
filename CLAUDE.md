@@ -78,7 +78,9 @@ compatibility policy. Until then: design first, break as needed.
 4. **Pipe-friendly** — most exported functions accept a `tidybreed_pop` and
    return a `tidybreed_pop`; action functions (`add_phenotype`, `add_tgv`,
    `add_genotypes`, `extract_genotypes`, `define_chip`, `define_additive_effects`)
-   accept a `tidybreed_table` from `get_table()` and return `tidybreed_pop`
+   accept a `tidybreed_table` from `get_table()` and return `tidybreed_pop`;
+   `extract_genetic_variance` takes a `tidybreed_table` too and returns a
+   tibble (it writes nothing)
 5. **Type-safe** — all table columns have explicit DuckDB types; user-added
    columns are inferred via `infer_duckdb_type()`
 6. **Disdain and intolerance for storing metadata** - storing data such as

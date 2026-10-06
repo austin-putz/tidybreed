@@ -1341,10 +1341,15 @@ extract_genetic_variance(tbl, trait_name = NULL,
 
 1. **Common-scope diploid A + D + A×A**, generated or hand-written, no line or origin
    scope. Accepted term shapes, at any centre: order-one `additive`; order-one
-   `dominance`; order-one `indicator` on the diploid heterozygote
-   (`copy_count_value = 2`, `dosage_value = 1`, which is what
-   `ad_terms(coding = "functional")` writes for $d$); two-member `additive × additive`.
-   Several owners are summed first. These canonicalise to functional $(a, d, e)$ (the
+   `dominance`; order-one diploid `indicator` in any of its three states
+   (`copy_count_value = 2`, `dosage_value` 0, 1 or 2 — the heterozygote is what
+   `ad_terms(coding = "functional")` writes for $d$; the two homozygotes are exact
+   $(a, d)$ plus a constant, Phase 4 D2); two-member `additive × additive`.
+   Several owners are summed after each owner's families are classified.
+   **Family rule** (Phase 4): scope variants of one family compete, so a family
+   (`family_key`) with any line- or origin-scoped variant is uncovered as a whole,
+   its common variant included; projecting the common variant apart from its scoped
+   siblings would count a scoped copy twice. These canonicalise to functional $(a, d, e)$ (the
    inverse of §3, Q13) and are re-projected on NOIA (realised: observed $b$; genic:
    $q-p$ at `base_tbl`'s frequencies). Both codings of the same model therefore give the
    same report.
@@ -1370,7 +1375,10 @@ specified. So `anchor = "genic"` on a case 2 or case 3 model errors. The error s
 `"realised"` is available, and that a common-scope additive-only model is case 1 and works.
 
 **Output.** A tibble shaped like `trait_var_comp`:
-`(effect_name, trait_name_1, trait_name_2, cov_value, n_ind, decomposition)`. The
+`(effect_name, trait_name_1, trait_name_2, cov_value, n_ind, decomposition, anchor)`
+(`anchor` per Phase 4 D1; a `message()` names the cohort or base). The A×A block is
+named `additive_by_additive`, the `trait_var_comp` name, not the `ind_tgv` component
+`interaction`. The
 `effect_name` values come from the **same vocabulary** as `trait_var_comp` (§6B), plus
 `total`, `unpartitioned` and `between_components` (realised only, §8 above).
 `inner_join(targets, realised, by = c("effect_name", "trait_name_1", "trait_name_2"))`
@@ -1996,6 +2004,17 @@ functional branch computes only the no-pair μ, which a test asserts equal to
 `.noia_to_stored()`'s. Q13's "`ad_terms()` calls it" assumed a Cockerham `(a, d) → α` path
 that Q17 (a) never created. Results: `plans/import_qtl_effect_methods_phase_4.md`.
 
+**As built (4b, 0.75.1).** `extract_genetic_variance()` in
+`R/extract_genetic_variance.R`, as §8 and the Phase 4 plan (revised after its Codex
+review) specify: the family rule, three cases, block availability decided on the
+canonical coefficients, the induced `e·c` of a fixed pair member kept, A×A accumulated in
+pair chunks without the source's dense anchor matrices, the size guard before any
+evaluation, the `anchor` column and population message, whole-genotype default
+frequencies, and the trait default restricted to traits with terms. The source's
+`nonadd_covariates()` / `nonadd_decompose()` are a verbatim test oracle
+(`tests/testthat/helper-nonadd-oracle.R`). The dosage collector is shared
+(`.collect_dosages()`). Gates B1–B18 pass. Results: `plans/import_qtl_effect_methods_phase_4.md`.
+
 ### Step 5 — Part C (0.76.0)
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
@@ -2073,6 +2092,12 @@ that Q17 (a) never created. Results: `plans/import_qtl_effect_methods_phase_4.md
 - B10. Coding and anchor scope: the same A + D + A×A model written once in functional coding (§9.3 example) and once in Cockerham coding gives the same report under both anchors (1e-10). `anchor = "genic"` on a case 2 or case 3 model errors and names `"realised"`. A non-`NULL` `base_tbl` with `anchor = "realised"` errors.
 - B11. `decomposition` is `"full"` for a common-scope A + D + A×A model (case 1), `"additive_only"` for a scoped additive model (case 2), and `"partial"` for one with a multi-locus indicator surface (case 3; a one-locus diploid surface is case 1, Phase 4 D2).
 - B12. Cohort (§8): a `tbl` that selects an individual with no value for one of the call's traits errors, giving the count. A `tbl` selecting one individual errors. Every output row carries the same `n_ind`. A locus that is monomorphic in the cohort gives finite output, equal to a reduced model that drops it **and carries each of its pairs' induced main effect** $e\,c$ onto the partner (fixed at dosage 2 or 0 that effect is $\pm e$; fixed heterozygote, none). Dropping the locus outright is wrong: $e(g_1-1)(g_2-1) = e(g_1-1)$ when $g_2 \equiv 2$ (Phase 4 Codex review, finding 3).
+- B13. Family rule: a model with common + line-A additive variants and a common dominance term is case 3; `total` equals `var()` of `ind_tgv_total`, the additive families are in `unpartitioned`, and the B3 identity holds.
+- B14. A one-locus `genotype_terms()` surface is case 1, and its report equals the same model written with `ad_terms(coding = "functional")` to 1e-10, under both anchors.
+- B15. Every row's `anchor` matches the call; the message names the cohort size (realised) or the base (genic), and says whether frequencies are the cohort's or an explicit copy/pool base.
+- B16. Block availability follows the canonical decomposition (dosage-only surface: additive only; heterozygote-only: additive and dominance; functional and drifted-Cockerham pair-only: additive and A×A; two traits with different support: no off-diagonal row for the block one lacks).
+- B17. A×A values are accumulated in pair chunks and match the dense form and the oracle; the dosage guard fires before any evaluation.
+- B18. `base_tbl = NULL` gives the same genic output whether the cohort is selected through `ind_meta`, paternal `ind_haplotype` rows or repeated phenotype records; an explicit copy base differs; a base with no copies at a decomposed locus errors naming it; `trait_name = NULL` skips traits without terms.
 
 **Part C**
 

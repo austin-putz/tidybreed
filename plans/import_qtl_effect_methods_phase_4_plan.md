@@ -8,7 +8,7 @@
 **Versions:** 0.75.0 (4a), 0.75.1 (4b). The main plan gives step 4 one version (0.75.0). This
 plan splits it in two (decision D6).
 **Status:** planned 2026-10-05, revised the same day after the
-[Codex review](import_qtl_effect_methods_phase_4_codex_review.md); not started.
+[Codex review](import_qtl_effect_methods_phase_4_codex_review.md); implemented 2026-10-05 (0.75.0, 0.75.1), results in [import_qtl_effect_methods_phase_4.md](import_qtl_effect_methods_phase_4.md).
 **Starting point:** 0.74.5 (`7c6e2b7`).
 
 **Changes after the Codex review (all eight findings accepted):**

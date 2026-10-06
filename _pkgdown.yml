@@ -61,6 +61,7 @@ reference:
   - genotype_terms
   - define_effect_cov_matrix
   - extract_allele_freq
+  - extract_genetic_variance
 
 - title: Phenotypes — observation layer
   desc: >
