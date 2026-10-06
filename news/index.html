@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,8 +35,24 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.75.1" id="tidybreed-0751-2026-10-05">tidybreed 0.75.1 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0751-2026-10-05"></a></h2>
+<p>Step 4b of the import plan (<code>plans/import_qtl_effect_methods_phase_4_plan.md</code>): the measuring instrument. Read-only; no DDL.</p>
+<ul><li>
+<strong>New <code>extract_genetic_variance(tbl, trait_name, base_tbl, anchor)</code>.</strong> Reports the genetic covariance blocks of the individuals <code>tbl</code> selects, in <code>trait_var_comp</code>’s shape (<code>effect_name, trait_name_1, trait_name_2, cov_value</code>, every trait pair in both orientations, plus <code>n_ind</code>, <code>decomposition</code>, <code>anchor</code>), so target vs measured is one <code><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">inner_join()</a></code>.
+<ul><li>
+<code>anchor = "realised"</code> (default): sample covariances of the cohort’s <code>additive</code>, <code>dominance</code>, <code>additive_by_additive</code> and <code>unpartitioned</code> block values, <code>between_components</code> (every ordered cross-block covariance) and the evaluated <code>total</code>; the rows sum exactly to <code>total</code>.</li>
+<li>
+<code>anchor = "genic"</code>: the HWE + linkage-equilibrium closed forms at <code>base_tbl</code>‘s frequencies (default: the selected individuals’ whole-genotype frequencies, whatever table selected them).</li>
+<li>Three cases per trait: <code>"full"</code> (common-scope additive, dominance, one-locus diploid indicator and additive x additive terms, re-projected on NOIA at the cohort’s frequencies, so both codings give one report), <code>"additive_only"</code> (scoped additive models: the evaluated additive variance), <code>"partial"</code> (the rest goes to <code>unpartitioned</code>). A term family with any scoped variant is uncovered as a whole.</li>
+<li>Rows follow the statistical decomposition: <code>additive</code> for every decomposed trait (a dosage-only genotype surface is all additive), and <code>dominance</code> / <code>additive_by_additive</code> only when a converted coefficient is non-zero. A fixed pair member’s induced additive effect is kept.</li>
+<li>A x A values are accumulated in pair chunks (no <code>n x r</code> matrix, no dense anchor matrices); sizes are checked before any evaluation. Output is bit-identical on repeat, across DuckDB thread counts and after <code><a href="../reference/restore_pop.html">restore_pop()</a></code>.</li>
+<li>Checked against the source project’s <code>nonadd_decompose()</code>, copied verbatim as a test oracle (<code>tests/testthat/helper-nonadd-oracle.R</code>).</li>
+</ul></li>
+<li>Internal: the dosage collector behind <code>define_additive_effects(anchor = "realised")</code> is now the shared <code>.collect_dosages()</code> (same checks and messages); its row names follow the SQL order rather than R’s collation.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.75.0" id="tidybreed-0750-2026-10-05">tidybreed 0.75.0 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0750-2026-10-05"></a></h2>
-<p>Step 4a of the import plan (<code>plans/import_qtl_effect_methods_phase_4_plan.md</code>): the builder pieces that <code>extract_genetic_variance()</code> (4b) and the step-5 generator need. Nothing here writes to the database on its own; no DDL.</p>
+<p>Step 4a of the import plan (<code>plans/import_qtl_effect_methods_phase_4_plan.md</code>): the builder pieces that <code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code> (4b) and the step-5 generator need. Nothing here writes to the database on its own; no DDL.</p>
 <ul><li>
 <strong>New <code><a href="../reference/aa_terms.html">aa_terms()</a></code></strong>: builds additive-by-additive pair terms (two <code>additive</code> members, one coefficient) under functional (centres 0.5) or Cockerham (centres <code>p_1</code>, <code>p_2</code>) coding. Pair order is canonicalised, each <code>p</code> moving with its locus; a self-pair or a repeated pair is refused; every input is validated before pairs with <code>e = 0</code> are dropped; all-zero <code>e</code> is an error. Functional coding reports each pair’s share of the implied mean, <code>e(2p_1 - 1)(2p_2 - 1)</code>, written to no table.</li>
 <li>

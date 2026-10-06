@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpqZuzUL/duckdb
+#> ℹ /tmp/RtmpPx7mT4/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -609,12 +609,12 @@ pop |> get_table("ind_tgv") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1    250 A_89   ADG        additive          0.549 
-#> 2    251 A_99   ADG        additive          0.167 
-#> 3    252 A_321  ADG        additive         -0.0380
-#> 4    253 A_446  ADG        additive          0.0593
-#> 5    254 A_248  ADG        additive         -1.01  
-#> 6    255 A_472  ADG        additive         -0.0489
+#> 1    358 A_451  ADG        additive           0.186
+#> 2    359 A_492  ADG        additive          -0.656
+#> 3    360 A_106  ADG        additive          -0.881
+#> 4    361 A_7    ADG        additive           0.661
+#> 5    362 A_110  ADG        additive           0.536
+#> 6    363 A_424  ADG        additive          -0.194
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)

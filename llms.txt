@@ -1375,6 +1375,9 @@ an observation.
 - [`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
   : Extract per-locus allele frequencies from a filtered table
 
+- [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+  : Measure the genetic covariance blocks of a cohort
+
 ## Phenotypes — observation layer
 
 Define what is actually recorded on an animal: distribution, mean,
