@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,19 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.75.0" id="tidybreed-0750-2026-10-05">tidybreed 0.75.0 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0750-2026-10-05"></a></h2>
+<p>Step 4a of the import plan (<code>plans/import_qtl_effect_methods_phase_4_plan.md</code>): the builder pieces that <code>extract_genetic_variance()</code> (4b) and the step-5 generator need. Nothing here writes to the database on its own; no DDL.</p>
+<ul><li>
+<strong>New <code><a href="../reference/aa_terms.html">aa_terms()</a></code></strong>: builds additive-by-additive pair terms (two <code>additive</code> members, one coefficient) under functional (centres 0.5) or Cockerham (centres <code>p_1</code>, <code>p_2</code>) coding. Pair order is canonicalised, each <code>p</code> moving with its locus; a self-pair or a repeated pair is refused; every input is validated before pairs with <code>e = 0</code> are dropped; all-zero <code>e</code> is an error. Functional coding reports each pair’s share of the implied mean, <code>e(2p_1 - 1)(2p_2 - 1)</code>, written to no table.</li>
+<li>
+<strong>One column set for every term builder.</strong> <code><a href="../reference/ad_terms.html">ad_terms()</a></code>, <code><a href="../reference/aa_terms.html">aa_terms()</a></code> and <code><a href="../reference/genotype_terms.html">genotype_terms()</a></code> return exactly <code>term_id, locus_name, contrast_name, center_value, copy_count_value, dosage_value, genome_value, effect_name</code>, with typed <code>NA</code>s, so their outputs <code><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind()</a></code> in any combination (a functional and a Cockerham <code><a href="../reference/ad_terms.html">ad_terms()</a></code> used not to).</li>
+<li>
+<strong>Breaking: builder <code>term_id</code>s are now collision-free strings.</strong> <code><a href="../reference/genotype_terms.html">genotype_terms()</a></code> numbered its terms <code>1, 2, ...</code>, so two surfaces bound together silently shared ids. Every builder now encodes its prefix and the term’s loci with length-prefixed names (<code>"ad:2:L1#a"</code>, <code>"aa:1:A|3:BxC"</code>, <code>"geno:1:A|1:B#4"</code>). Simply joining names (<code>"AxB_1"</code>) was rejected in review: the surfaces on <code>c("A", "B")</code> and on a locus named <code>"AxB"</code> would share an id, and the writer would merge them into one product term. <code>term_id</code> is never stored, so only builder output changes.</li>
+<li>
+<code><a href="../reference/ad_terms.html">ad_terms()</a></code> and <code><a href="../reference/aa_terms.html">aa_terms()</a></code> require finite coefficients and frequencies.</li>
+<li>Internal: the NOIA conversion pair <code>.stored_to_functional()</code> / <code>.noia_to_stored()</code> (plus <code>.noia_terms()</code>), with sign conventions “stored = functional + kappa” and “functional = statistical + mu”. Every conversion row is checked against the real evaluator (gates N1-N3).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.74.5" id="tidybreed-0745-2026-10-05">tidybreed 0.74.5 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0745-2026-10-05"></a></h2>
 <p>Fixes from the Codex review of step 3 (<code>plans/import_qtl_effect_methods_phase_3_codex_review.md</code>; results in <code>plans/import_qtl_effect_methods_phase_3.md</code>, “Codex review of step 3”). All nine findings were reproduced and fixed. <strong>Breaking</strong> where a call used to succeed with a wrong result.</p>

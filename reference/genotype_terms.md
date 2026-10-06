@@ -53,13 +53,18 @@ genotype_terms(
 
 ## Value
 
-A `terms` data frame with `nrow(genotypes) * ncol(genotypes)` rows
-(before `drop_zero`).
+A `terms` data frame with the fixed builder column set (see
+[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md))
+and `nrow(genotypes) * ncol(genotypes)` rows (before `drop_zero`). Each
+row of `genotypes` is one term; its `term_id` encodes the surface's loci
+and the row number, so surfaces over different loci never share a
+`term_id` when bound together.
 
 ## See also
 
 [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
-[`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md).
+[`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md),
+[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md).
 
 ## Examples
 

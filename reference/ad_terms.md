@@ -64,8 +64,11 @@ ad_terms(
 
 ## Value
 
-A `terms` data frame: two rows per locus with a non-zero coefficient,
-`term_id` `"<locus>_a"` / `"<locus>_d"`.
+A `terms` data frame with the fixed builder column set (see
+[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md)):
+one row per non-zero coefficient. `term_id` encodes the builder, the
+locus and `a` / `d`, so it never collides with another builder's ids
+when outputs are [`rbind()`](https://rdrr.io/r/base/cbind.html)-ed.
 
 ## The reported mean is not written anywhere
 
@@ -81,6 +84,7 @@ expectation depends on joint genotype frequencies and LD.
 ## See also
 
 [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md),
 [`genotype_terms()`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md).
 
 ## Examples

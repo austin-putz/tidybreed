@@ -21,7 +21,7 @@ then demands every reachable (copy_count, dosage) state."><meta property="og:ima
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,12 +103,15 @@ contribute nothing. Default <code>TRUE</code>.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>terms</code> data frame with <code>nrow(genotypes) * ncol(genotypes)</code> rows
-(before <code>drop_zero</code>).</p>
+    <p>A <code>terms</code> data frame with the fixed builder column set (see
+<code><a href="aa_terms.html">aa_terms()</a></code>) and <code>nrow(genotypes) * ncol(genotypes)</code> rows (before
+<code>drop_zero</code>). Each row of <code>genotypes</code> is one term; its <code>term_id</code> encodes
+the surface's loci and the row number, so surfaces over different loci
+never share a <code>term_id</code> when bound together.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code>, <code><a href="aa_terms.html">aa_terms()</a></code>.</p></div>
     </div>
 
     <div class="section level2">

@@ -12,7 +12,7 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 |  |  |
 |----|----|
-| Exported functions | 43 (+17 S3 methods; 356 functions total incl. internals) |
+| Exported functions | 45 (+17 S3 methods; 356 functions total incl. internals) |
 | R source | 62 files, ~23,600 lines (~6,900 of which are roxygen docs) |
 | C++ (Rcpp) | 2 files, ~220 lines (gamete/recombination kernel) |
 | Documentation | 213 man pages, 1 vignette, 1,160-line README |
@@ -25,7 +25,7 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 | Metric | Count |
 |----|---:|
-| Exported functions (`NAMESPACE`) | 43 |
+| Exported functions (`NAMESPACE`) | 45 |
 | S3 methods registered | 17 |
 | Total R function definitions | 356 |
 | R source files (`R/`) | 62 |
@@ -44,7 +44,7 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 | Design docs (`plans/`) | 74 files, 31,296 lines |
 | Git commits | 232 |
 
-## Exported API (44 functions)
+## Exported API (45 functions)
 
 | Prefix | Functions |
 |----|----|
@@ -53,7 +53,7 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 | `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
 | `mutate_` | `mutate_table`, `mutate_derived`, `mutate_group_seq`, `mutate_group_named`, `mutate_group_concatenate` |
 | `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `remove_generated_effects`, `archive_replicate`, `extract_allele_freq` |
-| Term builders | `ad_terms`, `genotype_terms` |
+| Term builders | `ad_terms`, `aa_terms`, `genotype_terms` |
 | Inspection | `get_table`, `schema`, `describe_table` |
 
 ## Largest Source Files

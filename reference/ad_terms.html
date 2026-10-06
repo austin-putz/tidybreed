@@ -31,7 +31,7 @@ dominance deviation delta on the HWE-orthogonal contrast
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.74.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -120,8 +120,10 @@ dominance deviation <code>delta</code> on the HWE-orthogonal contrast
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>terms</code> data frame: two rows per locus with a non-zero
-coefficient, <code>term_id</code> <code>"&lt;locus&gt;_a"</code> / <code>"&lt;locus&gt;_d"</code>.</p>
+    <p>A <code>terms</code> data frame with the fixed builder column set (see
+<code><a href="aa_terms.html">aa_terms()</a></code>): one row per non-zero coefficient. <code>term_id</code> encodes the
+builder, the locus and <code>a</code> / <code>d</code>, so it never collides with another
+builder's ids when outputs are <code><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind()</a></code>-ed.</p>
     </div>
     <div class="section level2">
     <h2 id="the-reported-mean-is-not-written-anywhere">The reported mean is not written anywhere<a class="anchor" aria-label="anchor" href="#the-reported-mean-is-not-written-anywhere"></a></h2>
@@ -138,7 +140,7 @@ frequencies and LD.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="genotype_terms.html">genotype_terms()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="aa_terms.html">aa_terms()</a></code>, <code><a href="genotype_terms.html">genotype_terms()</a></code>.</p></div>
     </div>
 
     <div class="section level2">

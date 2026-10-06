@@ -1359,6 +1359,11 @@ an observation.
 
   Build `terms` rows for a functional or Cockerham (a, d) pair
 
+- [`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md)
+  :
+
+  Build `terms` rows for additive-by-additive pairs
+
 - [`genotype_terms()`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md)
   :
 
