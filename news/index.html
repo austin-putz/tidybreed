@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,18 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.75.2" id="tidybreed-0752-2026-10-05">tidybreed 0.75.2 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0752-2026-10-05"></a></h2>
+<p>Follow-up to the Codex review of the built Phase 4 (<code>plans/import_qtl_effect_methods_phase_4_codex_review.md</code>).</p>
+<ul><li>
+<code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code> documents what its realised blocks are under linkage disequilibrium: covariances of the NOIA contrast components, not the cohort’s joint least-squares additive projection. <code>decomposition = "full"</code> means every term has a supported shape, not that the breeding-value variance has been recovered.</li>
+<li>Block availability no longer depends on floating-point residue: a dominance or pair coefficient whose stored contributions cancel to within their rounding bound is exactly 0, so one linear genotype surface written in any row order reports the same rows as <code>ad_terms(d = 0)</code>. A small coefficient that is not a cancellation is kept.</li>
+<li>Internal <code>.noia_to_stored()</code> accepts sparse models (a missing main effect is
+<ol start="0" style="list-style-type: decimal"><li>and spans every pair locus, so a pair-only model keeps its induced additive effects; <code>.noia_terms()</code> refuses misaligned coefficients instead of writing an incomplete model.</li>
+</ol></li>
+<li>
+<code><a href="../reference/genotype_terms.html">genotype_terms()</a></code> refuses a fractional or negative <code>copy_count</code> instead of truncating it into a different genotype state.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.75.1" id="tidybreed-0751-2026-10-05">tidybreed 0.75.1 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0751-2026-10-05"></a></h2>
 <p>Step 4b of the import plan (<code>plans/import_qtl_effect_methods_phase_4_plan.md</code>): the measuring instrument. Read-only; no DDL.</p>

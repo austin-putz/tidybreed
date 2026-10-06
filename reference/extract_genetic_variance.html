@@ -23,7 +23,7 @@ ind_ebv, ...).'><meta property="og:image" content="https://austin-putz.github.io
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -132,6 +132,26 @@ generation target; and it is genic only (a non-<code>NULL</code> <code>base_tbl<
 copies. To compare with a generation target, pass the generation base.</p>
     </div>
     <div class="section level2">
+    <h2 id="what-the-realised-blocks-are-under-ld">What the realised blocks are, under LD<a class="anchor" aria-label="anchor" href="#what-the-realised-blocks-are-under-ld"></a></h2>
+
+
+<p>The realised blocks are the sample covariances of the NOIA <strong>contrast
+components</strong> at the cohort's frequencies (the source project's
+<code>nonadd_decompose()</code>): each locus' heterozygosity is regressed on its own
+dosage only, and the additive block is <code>(X - 2p) alpha</code> with
+<code>alpha_j = a_j + b_j d_j + sum_l e_jl (2 p_l - 1)</code>. Under LE these are the
+orthogonal least-squares components. Under LD they are not: dominance at
+another locus, or a pair product, can still regress on the dosages, so the
+<code>additive</code> row is <strong>not</strong> the variance of the cohort's joint least-squares
+additive projection (the breeding values a regression of the genetic value
+on all dosages would give), and <code>between_components = 0</code> does not certify
+that it is. For example, one pair <code>e (g_1 - 1)(g_2 - 1)</code> on a cohort with
+both loci at <code>p = 0.5</code> and HWE margins but in LD reports <code>additive = 0</code>,
+while <code>lm(g ~ g_1 + g_2)</code> explains part of its variance. <code>"full"</code> means
+every stored term has a supported shape, not that the cohort's additive
+breeding-value variance has been recovered.</p>
+    </div>
+    <div class="section level2">
     <h2 id="what-the-function-can-decompose">What the function can decompose<a class="anchor" aria-label="anchor" href="#what-the-function-can-decompose"></a></h2>
 
 
@@ -150,8 +170,9 @@ the evaluated additive component, not a re-projection.</p></li>
 <li><p><code>"partial"</code>: anything else. The covered terms are decomposed as in case
 1; everything else goes to <code>unpartitioned</code>, the variance of those terms'
 value alone (not <code>residual</code>, which in this package is environmental
-noise). In this case the <code>additive</code> row is the additive projection of the
-covered terms, not the breeding value of the whole model.</p></li>
+noise). In this case the <code>additive</code> row is the additive contrast
+component of the covered terms, not the breeding value of the whole
+model.</p></li>
 </ol><p>Scope variants of one term compete (the most specific matching scope
 wins), so a term family with any scoped variant is uncovered as a whole.
 An off-diagonal row of two traits in different cases carries the less
@@ -166,7 +187,10 @@ complete label.</p>
 genotype surface equal to the dosage is all additive; dominance and
 interaction terms induce additive effects too). <code>dominance</code> appears when
 the converted model has a non-zero dominance coefficient,
-<code>additive_by_additive</code> when it has a non-zero pair. A block whose variance
+<code>additive_by_additive</code> when it has a non-zero pair. A coefficient whose
+stored contributions cancel to within their floating-point rounding (a
+genotype surface that is exactly linear, written in any row order) counts
+as zero. A block whose variance
 is 0 in this cohort is reported as 0; a missing row means the model has no
 such block, so a stored target for it falls out of the <code>inner_join()</code> and
 into the <code><a href="https://dplyr.tidyverse.org/reference/filter-joins.html" class="external-link">dplyr::anti_join()</a></code>. An off-diagonal block row appears only when
