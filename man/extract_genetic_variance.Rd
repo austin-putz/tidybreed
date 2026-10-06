@@ -71,6 +71,25 @@ generation target; and it is genic only (a non-\code{NULL} \code{base_tbl} with
 copies. To compare with a generation target, pass the generation base.
 }
 
+\section{What the realised blocks are, under LD}{
+
+The realised blocks are the sample covariances of the NOIA \strong{contrast
+components} at the cohort's frequencies (the source project's
+\code{nonadd_decompose()}): each locus' heterozygosity is regressed on its own
+dosage only, and the additive block is \verb{(X - 2p) alpha} with
+\verb{alpha_j = a_j + b_j d_j + sum_l e_jl (2 p_l - 1)}. Under LE these are the
+orthogonal least-squares components. Under LD they are not: dominance at
+another locus, or a pair product, can still regress on the dosages, so the
+\code{additive} row is \strong{not} the variance of the cohort's joint least-squares
+additive projection (the breeding values a regression of the genetic value
+on all dosages would give), and \code{between_components = 0} does not certify
+that it is. For example, one pair \code{e (g_1 - 1)(g_2 - 1)} on a cohort with
+both loci at \code{p = 0.5} and HWE margins but in LD reports \code{additive = 0},
+while \code{lm(g ~ g_1 + g_2)} explains part of its variance. \code{"full"} means
+every stored term has a supported shape, not that the cohort's additive
+breeding-value variance has been recovered.
+}
+
 \section{What the function can decompose}{
 
 Each trait's stored model falls in one of three cases, reported in the
@@ -90,8 +109,9 @@ the evaluated additive component, not a re-projection.
 \item \code{"partial"}: anything else. The covered terms are decomposed as in case
 1; everything else goes to \code{unpartitioned}, the variance of those terms'
 value alone (not \code{residual}, which in this package is environmental
-noise). In this case the \code{additive} row is the additive projection of the
-covered terms, not the breeding value of the whole model.
+noise). In this case the \code{additive} row is the additive contrast
+component of the covered terms, not the breeding value of the whole
+model.
 }
 
 Scope variants of one term compete (the most specific matching scope
@@ -107,7 +127,10 @@ Rows follow the statistical decomposition, not the stored term kinds.
 genotype surface equal to the dosage is all additive; dominance and
 interaction terms induce additive effects too). \code{dominance} appears when
 the converted model has a non-zero dominance coefficient,
-\code{additive_by_additive} when it has a non-zero pair. A block whose variance
+\code{additive_by_additive} when it has a non-zero pair. A coefficient whose
+stored contributions cancel to within their floating-point rounding (a
+genotype surface that is exactly linear, written in any row order) counts
+as zero. A block whose variance
 is 0 in this cohort is reported as 0; a missing row means the model has no
 such block, so a stored target for it falls out of the \code{inner_join()} and
 into the \code{\link[dplyr:anti_join]{dplyr::anti_join()}}. An off-diagonal block row appears only when

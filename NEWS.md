@@ -1,3 +1,25 @@
+# tidybreed 0.75.2 (2026-10-05)
+
+Follow-up to the Codex review of the built Phase 4
+(`plans/import_qtl_effect_methods_phase_4_codex_review.md`).
+
+* `extract_genetic_variance()` documents what its realised blocks are under
+  linkage disequilibrium: covariances of the NOIA contrast components, not the
+  cohort's joint least-squares additive projection. `decomposition = "full"`
+  means every term has a supported shape, not that the breeding-value variance
+  has been recovered.
+* Block availability no longer depends on floating-point residue: a dominance
+  or pair coefficient whose stored contributions cancel to within their
+  rounding bound is exactly 0, so one linear genotype surface written in any
+  row order reports the same rows as `ad_terms(d = 0)`. A small coefficient
+  that is not a cancellation is kept.
+* Internal `.noia_to_stored()` accepts sparse models (a missing main effect is
+  0) and spans every pair locus, so a pair-only model keeps its induced
+  additive effects; `.noia_terms()` refuses misaligned coefficients instead of
+  writing an incomplete model.
+* `genotype_terms()` refuses a fractional or negative `copy_count` instead of
+  truncating it into a different genotype state.
+
 # tidybreed 0.75.1 (2026-10-05)
 
 Step 4b of the import plan (`plans/import_qtl_effect_methods_phase_4_plan.md`):

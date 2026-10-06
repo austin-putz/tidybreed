@@ -537,7 +537,17 @@ writes nothing; `ind_tgv` is not touched.
   names: `additive` for every trait with a covered term; `dominance` iff some
   canonical `d ≠ 0`; `additive_by_additive` iff some canonical `e ≠ 0`; an
   off-diagonal block row only when both traits have the block. A supported
-  block of variance 0 is reported as 0.
+  block of variance 0 is reported as 0. `.stored_to_functional()` sets a `d`
+  or `e` to exactly 0 when it is cancellation residue, `|x| ≤ n·eps·Σ|contrib|`
+  (`.cancelled()`), so a linear surface in any row order has no dominance row;
+  a single small contribution is kept.
+- **Meaning under LD** (Codex implementation review finding 1): the realised
+  blocks are covariances of the NOIA *contrast components* (each locus'
+  heterozygosity regressed on its own dosage only), not the cohort's joint
+  least-squares additive projection. Under LD `additive` can differ from
+  `var(fitted(lm(g ~ dosages)))` even with `between_components = 0`; `full`
+  means supported term shapes, not recovered breeding-value variance. Any
+  breeding-value export must state which of the two it is.
 - **Resources**: the `n × m` dosage guard (`.dosage_guard()`) runs before any
   evaluation; dosages come from the shared `.collect_dosages()` in
   `R/genome_effects_helpers.R` (also behind `define_additive_effects(anchor =
@@ -626,7 +636,9 @@ rule, never merged.
   component split.
 - `genotype_terms(genotypes, value, copy_count = NULL, drop_zero = TRUE)` —
   turns a genotype-by-value table into `indicator` terms, one term per row and
-  one member per locus column.
+  one member per locus column. Dosages and `copy_count` must be non-negative
+  whole numbers, checked before `as.integer()` and before zero rows drop
+  (a `2.9` would otherwise truncate into a different, valid state).
 
 **The NOIA conversion pair** (internal, same file; plan Q13):
 `.stored_to_functional(terms, members)` converts covered common-scope terms
@@ -636,7 +648,10 @@ states, two-member `additive × additive`) to functional `(a, d, e)` keyed by
 d, pairs, p)` is the forward map (`α = a + (q − p)d + Σ e(2p_l − 1)`, `μ` the
 functional HWE/LE mean; **functional = statistical + μ**, so a round trip gives
 `kappa = −μ`); it returns coefficient data, and `.noia_terms()` turns it into a
-writer frame. `ad_terms()` is not rewired through them; its no-pair μ is
+writer frame. The input is sparse: a locus missing from `a` or `d` has that
+coefficient 0, and the result spans every locus the model names, pair-only
+loci included (a pair induces α at both loci). `.noia_terms()` refuses
+`alpha`/`d`/`p` that are not named alike or miss a pair locus. `ad_terms()` is not rewired through them; its no-pair μ is
 asserted equal. Gates N1–N3 in `tests/testthat/test-genome-effect-terms-builders.R`
 check every conversion row against the real evaluator.
 

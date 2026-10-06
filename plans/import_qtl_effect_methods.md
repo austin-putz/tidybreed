@@ -506,7 +506,15 @@ $\mathbf G_{AA}$ diag 0.5 / 0.4, $n=1500$:
    generation t* is a re-projection at generation-t frequencies. It belongs in a later
    `extract_breeding_values()` (§8), not in `ind_tgv`. It is defined for the common-scope
    diploid class only. This is the manuscript's "the anchor names a population" point, one
-   level up.
+   level up. **Under LD "re-projection" must name its estimator** (Codex Phase 4
+   implementation review, finding 1): the NOIA contrast component $\mathbf Z_A\boldsymbol\alpha$,
+   whose $b_j$ regresses heterozygosity on its own dosage only, is the least-squares
+   breeding value under LE but not under LD, where other loci's dominance and the pair
+   products still regress on the dosages. A one-pair counterexample with exact HWE margins
+   at $p=0.5$ gives contrast `additive` $=0$ but $\mathrm{Var}(\hat g)=0.021$ from
+   `lm(g ~ g_1 + g_2)`. `extract_breeding_values()` must state which it returns (contrast
+   component, or a joint regression on all dosages, which needs its own specification and
+   oracle); agreement with `nonadd_decompose()` validates only the former.
 4. **Inbreeding depression is correct under either coding.** Under inbreeding $F$,
    $E[x_D]=-2Fpq$, which equals the functional $2pq(1-F)d$ minus its base value. The mean
    contract (v4.9 §Mean contract: raw sum, no mean added) is unchanged. Under statistical
@@ -1300,7 +1308,8 @@ extract_genetic_variance(tbl, trait_name = NULL,
   `extract_*` function must not change simulation state.
 - **No `per_ind`.** A switch that sometimes returns covariance rows and sometimes
   individual values is two functions. The generation-t breeding value (§4.3.3) becomes a
-  separate, later `extract_breeding_values()`, defined for supported case 1 only. A
+  separate, later `extract_breeding_values()`, defined for supported case 1 only, and
+  naming its estimator under LD (§4.3.3). A
   generation-t breeding value for a scoped model needs its own reference-population
   projection, which nobody has specified.
 - **Size guard** as in §7.1: the realised path collects genotypes, so it has the same
@@ -2014,6 +2023,16 @@ frequencies, and the trait default restricted to traits with terms. The source's
 `nonadd_covariates()` / `nonadd_decompose()` are a verbatim test oracle
 (`tests/testthat/helper-nonadd-oracle.R`). The dosage collector is shared
 (`.collect_dosages()`). Gates B1–B18 pass. Results: `plans/import_qtl_effect_methods_phase_4.md`.
+
+**Implementation-review follow-up (0.75.2).** The Codex review of the built Phase 4
+(`plans/import_qtl_effect_methods_phase_4_codex_review.md`) was accepted in full:
+(1) the realised blocks are documented as NOIA contrast components, not the cohort's joint
+additive regression under LD (§4.3.3, roxygen, an `lm()` fixture); (2) a `d` or pair `e`
+that is cancellation residue (`|x| ≤ n·eps·Σ|contrib|`) is set to 0 in
+`.stored_to_functional()`, so equivalent surfaces in any row order report the same blocks;
+(3) `.noia_to_stored()` is sparse (a missing main effect is 0, every pair locus present)
+and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (4)
+`genotype_terms()` refuses a fractional or negative `copy_count` before `as.integer()`.
 
 ### Step 5 — Part C (0.76.0)
 

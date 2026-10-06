@@ -1,3 +1,188 @@
+# Review of import QTL-effect methods — Phase 4 implementation
+
+**Date:** 2026-10-05.
+
+**Reviewed version:** tidybreed 0.75.1, commit `3cde9d1`.
+
+**Implementation commits:** `aa76666` (4a) and `3cde9d1` (4b), compared with `7c6e2b7`.
+
+**Scope:** all changes belonging to [the Phase 4 implementation](import_qtl_effect_methods_phase_4.md), including the builders, conversion helpers, extractor, shared dosage collector and its additive-generator caller, tests/oracle, benchmark, exports, generated documentation, and related plan/API documentation. The existing evaluator, writer, inheritance resolver, allele-frequency extractor and cohort resolver were inspected as integration dependencies.
+
+**This is an implementation review for Claude. No package code was changed.** The earlier pre-implementation plan review is preserved below under “Historical plan review”; its findings describe the old baseline and should not be mistaken for outstanding implementation defects.
+
+## Assessment
+
+The implemented algebra largely follows the revised plan correctly. The genic formulas, inverse contrast mappings, constant sign conventions, monomorphic-partner main effects, family-level scope handling, and ordered cross-component covariance accounting are sound under the stated component definitions. The focused existing checks passed: **446 expectations, 0 failures, 0 warnings, 0 skips**.
+
+I found three implementation/validation issues and one scientific interpretation issue. The latter is inherited from the source/plan rather than a failure to port their algebra: under LD, the reported `additive` block is not necessarily the cohort's least-squares additive projection. That distinction needs to be explicit before these measurements are interpreted as breeding-value variance or used to justify the later breeding-value export.
+
+| # | Priority | Finding | Provenance |
+|---|---|---|---|
+| 1 | High scientific concern | Under LD, “additive projection” overstates what the marginal-contrast decomposition measures | Source/plan interpretation, carried into new documentation |
+| 2 | Medium | Roundoff changes block availability for equivalent one-locus surfaces | New canonicalisation/support logic |
+| 3 | Medium | Pair loci absent from `a`/`d` produce `NA` coefficients; an empty-main-effect model then silently loses induced main effects | New forward conversion and writer-frame helper |
+| 4 | Medium | Fractional copy counts are silently truncated into different genotype states | Retained defect in the modified `genotype_terms()` builder; already present in `7c6e2b7` |
+
+## 1. Qualify the realised additive block's meaning under LD
+
+**Locations:** `R/extract_genetic_variance.R:44–55`, `.egv_alpha()` and `.egv_realised()` at `R/extract_genetic_variance.R:479–483`; related breeding-value claims in the main plan.
+
+**Classification:** scientific interpretation/documentation concern, not a disagreement with the implemented accounting identity or the requested source port.
+
+The implementation computes
+
+```text
+alpha_j = a_j + b_j d_j + sum_l e_jl (2 p_l - 1)
+A = centred_dosages %*% alpha
+```
+
+Here `b_j` only orthogonalises heterozygosity against dosage **at the same locus**. It does not project the complete genetic value onto the joint dosage space. Under LD, dominance at another locus or the centred pair products can still have an additive regression on those dosages. Adding their cross-block covariances back into `total` proves exact reconstruction, but does not turn `A` into that joint additive projection.
+
+**Reproduced counterexample with HWE at both loci.** Use one functional pair with `e = 1`, no main effects, and these 32 observed two-locus genotypes:
+
+| Dosage at L1 / L2 | 0 | 1 | 2 |
+|---|---:|---:|---:|
+| 0 | 3 | 2 | 3 |
+| 1 | 3 | 9 | 4 |
+| 2 | 2 | 5 | 1 |
+
+Each locus has counts `(8, 16, 8)`, hence exact HWE margins and `p = 0.5`. The joint distribution is not LE. The independent regression is reproducible without a database:
+
+```r
+cells <- expand.grid(L1 = 0:2, L2 = 0:2)
+X <- cells[rep(1:9, c(3, 3, 2, 2, 9, 5, 3, 4, 1)), ]
+g <- (X$L1 - 1) * (X$L2 - 1)
+var(fitted(lm(g ~ L1 + L2, data = X)))  # 0.02099937
+```
+
+After assigning those dosages to the in-memory population and writing the functional pair through `aa_terms()`, the actual extractor reports:
+
+```text
+additive               0
+additive_by_additive    0.28931452
+between_components     0
+total                  0.28931452
+decomposition          full
+```
+
+However, `lm(g ~ L1 + L2)` gives dosage slopes approximately `(-0.07450980, -0.19215686)` and sample variance of fitted values **0.02099937**. Thus, even zero `between_components` does not certify that the additive block equals the cohort's additive regression variance. This is an interpretive counterexample, not a request to replace the existing source oracle with `lm()` for every block.
+
+The literature distinguishes the marginal NOIA construction under LE from a multilocus regression under LD. The NOIA extension described by [Álvarez-Castro and Yang (2011)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3247674/) assumes LE for its multilocus orthogonality. [Álvarez-Castro and Crujeiras (2019), “Mean and Additive Component” and “Regression Procedures”](https://www.frontiersin.org/journals/genetics/articles/10.3389/fgene.2019.00054/full) explains why marginal regressions do not suffice for an orthogonal decomposition under LD. The numerical comparison above is my independent inference/check of this implementation against the joint additive regression definition.
+
+**Recommendation for Claude:** preserve the planned marginal-contrast accounting if that is the intended estimator, but explicitly describe the realised rows as covariances of those contrast components. State that `full` means all stored term shapes are supported, not that the cohort's additive breeding-value projection has been recovered. Qualify “additive projection” for both full and partial models under LD, and carry that qualification into the later breeding-value plan. If the intended scientific quantity is instead the cohort's joint regression breeding value, that requires a separately specified projection; agreement with `nonadd_decompose()` alone cannot validate that interpretation.
+
+**Regression gate:** retain the above HWE-margin/LD panel as an independent interpretation fixture. Test the documented distinction explicitly, rather than requiring the current estimator to match a different estimator without changing its contract.
+
+## 2. Exact-zero support checks make equivalent surfaces report different blocks
+
+**Locations:** `R/genome_effect_terms_builders.R:491–535` (`.stored_to_functional()` accumulation), `R/extract_genetic_variance.R:485–486` and `578–579` (availability).
+
+The converter incrementally accumulates `d`, then both anchors decide dominance support using the exact test `co$D != 0`. Cancellation of decimal coefficients can leave a floating-point residue. This affects **which rows exist**, not just their last numerical digits.
+
+Using the existing extractor test fixtures, I wrote:
+
+```r
+genotype_terms(data.frame(L1 = 0:2), c(0.3, 0.2, 0.1))
+genotype_terms(data.frame(L1 = c(0, 2, 1)), c(0.3, 0.1, 0.2))
+ad_terms("L1", a = -0.1, d = 0, p = 0.5, report = FALSE)
+```
+
+These specify the same linear one-locus surface, up to the last builder's irrelevant constant. The first conversion yields `d = 1.387779e-17` and reports a dominance row (observed variance approximately `4.24e-35`). The reordered surface yields `d = 0` and omits that row, as does `ad_terms()`. I reproduced this through the real writer and extractor; reversing all surface rows also changes the small residual.
+
+This violates the new report's structural coding-invariance promise. A dominance target can join a spurious “measured” row for one surface representation while falling into the `anti_join()` for another. Existing B14/B16 use values whose cancellations happen to be exact, so they miss this case.
+
+**Recommendation:** make canonical support detection robust to accumulation error. Use a local error bound based on the contributions being cancelled, or another justified canonicalisation rule. Avoid a fixed absolute cutoff that would erase a legitimately small uncancelled effect merely because of the trait's units. Make support decisions consistently for `d` and pair coefficients and for both anchors.
+
+**Regression gate:** the three representations above, including multiple surface-row permutations, should have identical block availability under both anchors. Include a small but genuinely nonzero coefficient to ensure the chosen rule preserves it.
+
+## 3. The forward converter can silently drop pair-induced additive effects
+
+**Locations:** `R/genome_effect_terms_builders.R:574–595` (`.noia_to_stored()`) and `606–612` (`.noia_terms()`).
+
+The frequency validator explicitly considers the union of main-effect and pair loci, but `alpha`, `d`, and returned `p` are initialised only on `names(a)`. If a pair names a locus absent from `a`/`d`, `alpha[k] <- alpha[k] + ...` starts with `NA`. The function returns malformed coefficient data instead of expanding the zero main effects or rejecting the input.
+
+The pair-only case is worse than an error:
+
+```r
+z <- setNames(numeric(), character())
+s <- .noia_to_stored(
+  a = z, d = z,
+  pairs = data.frame(locus_1 = "L1", locus_2 = "L2", e = 1),
+  p = c(L1 = 0.3, L2 = 0.6)
+)
+# s$alpha: L1 = NA, L2 = NA
+# s$d and s$p: named numeric(0)
+tt <- .noia_terms(s)
+# Returns only the Cockerham pair; no additive main effects.
+```
+
+In `.noia_terms()`, `stat$alpha != 0 | stat$d != 0` becomes `logical(0)` because `d` is empty. The additive branch is skipped, and the pair is written successfully. The correct induced additive coefficients are **L1 = 0.2, L2 = -0.4**, with `mu = -0.08`. In the real evaluator probe, the functional model minus the returned statistical model ranged from **-0.32 to 0.68**, rather than being the constant `-0.08`.
+
+**Impact:** this internal helper is a planned foundation for step 5. Existing N2 always provides explicit main-effect entries for every pair locus, so its round trip does not exercise this input. The current public extractor uses the inverse helper and is not directly affected by this forward-conversion defect.
+
+**Recommendation:** initialise aligned main-effect vectors on the full locus union, treating omitted main coefficients as zero if sparse input is supported. Alternatively, enforce and document that every pair locus must be explicitly present in both vectors, and reject missing keys before performing arithmetic. In either policy, `.noia_terms()` should reject missing coefficients or inconsistent vector dimensions rather than silently emitting an incomplete model.
+
+**Regression gate:** a pair-only functional model at unequal, non-0.5 frequencies; a pair with only one endpoint in the main vectors; and permuted named vectors. Assert that converted and functional evaluator values differ by `mu` alone, or that unsupported input is rejected at the converter boundary.
+
+## 4. `genotype_terms()` truncates fractional copy counts before the writer can reject them
+
+**Locations:** `R/genome_effect_terms_builders.R:212–215` and `232`.
+
+**Provenance:** confirmed present in the baseline builder as well; this is a retained bug in code refactored by phase 4, not a newly introduced regression.
+
+```r
+tt <- genotype_terms(
+  data.frame(L1 = 1), value = 1,
+  copy_count = c(L1 = 2.9)
+)
+# tt$copy_count_value is 2L, without an error or warning.
+```
+
+`.ad_recycle()` checks finite numeric input, but not integrality or non-negativity. The builder calls `as.integer()` before handing the rows to `define_genome_effect_terms()`. Consequently, the writer's whole-number validation sees `2`, accepts the model, and the extractor classifies it as a fully supported diploid heterozygote term. A supplied copy count of `-0.5` similarly becomes `0L`; with dosage 0 it can become a valid copy-absence indicator.
+
+**Recommendation:** validate raw copy-count values as non-negative whole numbers before integer conversion, before dropping zero-valued rows. Retain missing/inferred counts only where the builder's existing contract permits them. The writer cannot recover the original invalid value after coercion.
+
+**Regression gate:** refuse `2.9`, `-0.5`, and malformed copy counts on a row whose coefficient is zero; continue to accept genuine `0`, `1`, and `2` states where the inheritance model supports them.
+
+## Checks that held up
+
+- The stored additive, dominance, all three diploid indicator, and A×A inverse identities have the correct coefficients and constant signs. `kappa = -mu` for a matching forward/inverse conversion is correct.
+- The genic weights `2pq`, `(2pq)^2`, and `4p_kq_kp_lq_l`, with the induced additive coefficients, are correct for the stated HWE+LE reference. They measure that expectation, not the observed cohort variance.
+- Fixed pair partners retain their induced main effect; a fixed heterozygote and fixed homozygotes are handled differently as required.
+- The realised decomposition uses sample covariance with divisor `n - 1`. The divisor used in the within-locus regression cancels appropriately.
+- Cross-component accounting includes D–A×A, both trait orientations, and uncovered values. Family classification precedes owner pooling, preserving scoped fallback competition.
+- Default genic frequencies use the resolved individuals' whole genotypes, while an explicit copy-filtered base keeps allele-copy semantics. Genic extraction intentionally does not require an evaluated genetic value for each selected individual; that follows the revised plan and is not a missing-value defect.
+- The shared dosage collector preserves the additive generator's completeness and size guards. Its SQL-order row labels correctly avoid the previous R/SQL collation mismatch.
+- Pair chunking avoids unbounded pair-value/anchor matrices. The reported benchmark honestly uses 19,900 pairs rather than the planned 124,750. The existing writer bottleneck remains a step-5 scalability limitation, not an additional extractor correctness finding.
+
+## Verification and limits
+
+Ran the existing focused suites with `NOT_CRAN=true` and failure stopping enabled:
+
+```r
+testthat::test_local(
+  ".",
+  filter = "^(extract_genetic_variance|genome-effect-terms-builders|define_additive_effects-anchor|genome-effects-determinism|extract_allele_freq)$",
+  stop_on_failure = TRUE
+)
+```
+
+Result: **446 passed; 0 failed, warned, or skipped; exit status 0**. Also ran independent in-memory probes through the actual writer/evaluator/extractor for the findings above, and inspected the source project's measurement functions directly. The LD counterexample uses every two-locus dosage combination and exact single-locus HWE margins, so it does not depend on a missing genotype state or HWE departure.
+
+I did not rerun the full package suite, the large benchmark, documentation generation, or mutation tests. The implementation results' reported full-suite/mutation/benchmark outcomes remain author-reported evidence; the focused results and counterexamples above were independently run for this review.
+
+Temporary reproducibility artifacts for this session:
+
+- `/tmp/tidybreed_phase4_implementation_probes.R`
+- `/tmp/tidybreed_phase4_implementation_probes.log`
+- `/tmp/tidybreed_phase4_implementation_tests.log`
+
+**Claude follow-up:** resolve the scientific estimator wording/contract first, then add the cancellation and sparse-conversion gates before step 5 builds on these helpers. Fix the retained copy-count validation bug in the builder. No implementation changes have been made by this review.
+
+---
+
+## Historical plan review
+
 # Review of import QTL-effect methods — Phase 4 plan
 
 **Date:** 2026-10-05.  

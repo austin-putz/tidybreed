@@ -342,6 +342,54 @@ test_that(".noia_to_stored() and .stored_to_functional() round-trip (N2)", {
                tolerance = 1e-10)
 })
 
+test_that(".noia_to_stored() treats a missing main effect as 0, pair loci included", {
+  pop <- tb_pop(loci = c("A", "B", "C", "D"), n_ind = 150, seed = 13)
+  on.exit(close_pop(pop), add = TRUE)
+  p <- c(A = 0.3, B = 0.6, C = 0.75, D = 0.2)
+  z <- stats::setNames(numeric(0), character(0))
+  check <- function(trait, a, d, pairs) {
+    stat <- .noia_to_stored(a, d, pairs, p)
+    s_tot <- tb_total(pop, paste0(trait, "_S"), .noia_terms(stat))
+    full <- function(x) { o <- c(A = 0, B = 0, C = 0, D = 0); o[names(x)] <- x; o }
+    af <- full(a); df <- full(d)
+    fun <- aa_terms(pairs$locus_1, pairs$locus_2, e = pairs$e,
+                    p_1 = 0.5, p_2 = 0.5, report = FALSE)
+    if (any(af != 0 | df != 0)) {
+      fun <- rbind(suppressMessages(ad_terms(names(p), a = unname(af),
+                                             d = unname(df), p = 0.5)), fun)
+    }
+    f_tot <- tb_total(pop, paste0(trait, "_F"), fun)
+    expect_equal(unname(f_tot - s_tot), rep(stat$mu, length(f_tot)),
+                 tolerance = 1e-10, info = trait)
+    stat
+  }
+  # Pair only, unequal non-0.5 frequencies: alpha L1 = e(2p_2 - 1), L2 = e(2p_1 - 1).
+  pr <- data.frame(locus_1 = "A", locus_2 = "B", e = 1)
+  st <- check("PONLY", z, z, pr)
+  expect_equal(unname(st$alpha[c("A", "B")]), c(0.2, -0.4), tolerance = 1e-15)
+  expect_equal(st$mu, -0.08, tolerance = 1e-15)
+  # One pair endpoint (C) absent from the main effects.
+  check("ONE", c(A = 0.4), c(A = -0.2),
+        data.frame(locus_1 = "A", locus_2 = "C", e = 0.7))
+  # Permuted, and different, names in a and d.
+  check("PERM", c(D = 0.3, A = -0.5), c(C = 0.25, D = 0.1),
+        data.frame(locus_1 = c("B", "A"), locus_2 = c("C", "D"), e = c(-0.6, 0.9)))
+})
+
+test_that(".noia_terms() refuses misaligned or incomplete coefficients", {
+  ok <- .noia_to_stored(c(A = 0.1), c(A = 0.2),
+                        data.frame(locus_1 = "A", locus_2 = "B", e = 1),
+                        c(A = 0.3, B = 0.6))
+  bad <- ok; bad$d <- bad$d[1]
+  expect_error(.noia_terms(bad), "named by the same loci")
+  bad <- ok; bad$alpha[2] <- NA
+  expect_error(.noia_terms(bad), "without NA")
+  bad <- ok; bad$pairs$locus_2 <- "Z"
+  expect_error(.noia_terms(bad), "covering every pair locus")
+  expect_error(.noia_to_stored(c(0.1), c(A = 0.2), ok$pairs[, 1:3],
+                               c(A = 0.3, B = 0.6)), "named numeric")
+})
+
 test_that("ad_terms()' reported mu equals .noia_to_stored()'s with no pairs", {
   a <- c(A = 0.4, B = -0.3); d <- c(A = 0.2, B = 0.5); p <- c(A = 0.3, B = 0.8)
   stat <- .noia_to_stored(a, d, data.frame(locus_1 = character(0),
@@ -373,4 +421,24 @@ test_that("Cockerham aa_terms() writes centres p and evaluates e(g_k-2p_k)(g_l-2
   want <- 0.9 * (G[, "A"] - 2 * 0.27) * (G[, "B"] - 2 * 0.62)
   expect_equal(got, as.numeric(want[names(got)]) |>
                  stats::setNames(names(got)), tolerance = 1e-12)
+})
+
+
+# -- genotype_terms() copy counts (Codex implementation review finding 4) -----
+
+test_that("genotype_terms() refuses a fractional or negative copy count before truncating", {
+  expect_error(genotype_terms(data.frame(L1 = 1), 1, copy_count = c(L1 = 2.9)),
+               "non-negative whole copy counts")
+  expect_error(genotype_terms(data.frame(L1 = 0), 1, copy_count = c(L1 = -0.5)),
+               "non-negative whole copy counts")
+  # Checked before zero rows are dropped.
+  expect_error(genotype_terms(data.frame(L1 = 0:1), c(1, 0),
+                              copy_count = list(L1 = c(2, 1.5))),
+               "non-negative whole copy counts")
+  expect_error(genotype_terms(data.frame(L1 = 1), 1, copy_count = c(L1 = NA)),
+               "finite")
+  for (cc in 0:2) {
+    tt <- genotype_terms(data.frame(L1 = 0L), 1, copy_count = c(L1 = cc))
+    expect_identical(tt$copy_count_value, as.integer(cc))
+  }
 })

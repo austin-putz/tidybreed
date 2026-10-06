@@ -210,8 +210,14 @@ genotype_terms <- function(genotypes, value, copy_count = NULL,
            ", which is not a column of 'genotypes'.", call. = FALSE)
     }
     for (nm in names(copy_count)) {
-      cc[[nm]] <- .ad_recycle(copy_count[[nm]], nrow(genotypes),
-                              paste0("copy_count$", nm))
+      x <- .ad_recycle(copy_count[[nm]], nrow(genotypes),
+                       paste0("copy_count$", nm))
+      # Checked before as.integer() truncates it into a different state.
+      if (any(x < 0) || any(x != trunc(x))) {
+        stop("'copy_count$", nm, "' must hold non-negative whole copy ",
+             "counts.", call. = FALSE)
+      }
+      cc[[nm]] <- x
     }
   }
 
@@ -476,6 +482,13 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 #' | `indicator (2, 0)` v | a -= v/2; d -= v/2 | v/2 |
 #' | `additive x additive` v, c_k, c_l | e += v; a_k += v (1 - 2c_l); a_l += v (1 - 2c_k) | v (1 - 2c_k)(1 - 2c_l) |
 #'
+#' A `d` or pair `e` built from several contributions that cancel is set to
+#' exactly 0 when it is within the floating-point error bound of its own sum,
+#' `n * eps * sum(|contribution|)`, so two codings of one surface agree on
+#' which blocks exist (`.egv_coefficients()` decides availability from these
+#' zeros). The bound is relative to the cancelled contributions, never an
+#' absolute cutoff: a small coefficient that is not a cancellation is kept.
+#'
 #' @param terms,members The `terms` and `members` of a `.gev_read_model()`
 #'   result, restricted to covered terms (every term one of the shapes above).
 #' @return `list(a, d, pairs, kappa)`: `a`, `d` named numeric vectors (names
@@ -487,6 +500,13 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 .stored_to_functional <- function(terms, members) {
   loci <- as.character(sort(unique(members$locus_id)))
   a <- d <- stats::setNames(numeric(length(loci)), loci)
+  # Sum of |contributions| and their count per d, for the cancellation bound.
+  d_abs <- d; d_n <- d
+  add_d <- function(l, x) {
+    d[l]     <<- d[l] + x
+    d_abs[l] <<- d_abs[l] + abs(x)
+    d_n[l]   <<- d_n[l] + 1
+  }
   kappa <- 0
   pk <- character(0); pe <- numeric(0)
   mem_by <- split(members, members$id_genome_effect)
@@ -503,7 +523,7 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
           kappa <- kappa + v * (1 - 2 * c)
         },
         dominance = {
-          d[l] <- d[l] + v
+          add_d(l, v)
           a[l] <- a[l] - v * (1 - 2 * c)
           kappa <- kappa - v * (c^2 + (1 - c)^2)
         },
@@ -513,10 +533,10 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
                  "that is not a diploid state.", call. = FALSE)
           }
           switch(as.character(mm$dosage_value),
-            "1" = { d[l] <- d[l] + v },
-            "2" = { a[l] <- a[l] + v / 2; d[l] <- d[l] - v / 2
+            "1" = { add_d(l, v) },
+            "2" = { a[l] <- a[l] + v / 2; add_d(l, -v / 2)
                     kappa <- kappa + v / 2 },
-            "0" = { a[l] <- a[l] - v / 2; d[l] <- d[l] - v / 2
+            "0" = { a[l] <- a[l] - v / 2; add_d(l, -v / 2)
                     kappa <- kappa + v / 2 })
         })
     } else if (nrow(mm) == 2L && all(mm$contrast_name == "additive")) {
@@ -531,11 +551,13 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
            "covered shapes.", call. = FALSE)
     }
   }
+  d[.cancelled(d, d_abs, d_n)] <- 0
   pairs <- data.frame(locus_id_1 = integer(0), locus_id_2 = integer(0),
                       e = numeric(0))
   if (length(pk) > 0L) {
     # Owners (and duplicate variants) sum into one coefficient per pair.
     e  <- tapply(pe, pk, sum)
+    e[.cancelled(e, tapply(abs(pe), pk, sum), tapply(pe, pk, length))] <- 0
     ks <- strsplit(names(e), " ", fixed = TRUE)
     pairs <- data.frame(
       locus_id_1 = as.integer(vapply(ks, `[`, "", 1)),
@@ -545,6 +567,17 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
     rownames(pairs) <- NULL
   }
   list(a = a, d = d, pairs = pairs, kappa = kappa)
+}
+
+#' Which sums are cancellation residue: `|x| <= n * eps * sum(|terms|)`
+#'
+#' `x` summed `n` terms whose absolute values sum to `x_abs`. A sum of one
+#' term is never residue.
+#'
+#' @keywords internal
+#' @noRd
+.cancelled <- function(x, x_abs, n) {
+  n > 1 & abs(x) <= n * .Machine$double.eps * x_abs
 }
 
 #' Functional (a, d, e) -> statistical (NOIA) coefficients at frequencies p
@@ -559,24 +592,42 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 #' Returns coefficient data, not a writer frame; `.noia_terms()` builds the
 #' frame.
 #'
-#' @param a,d Named numeric vectors (same names, any locus key).
+#' The model is sparse: a locus missing from `a` or `d` has that coefficient
+#' 0, so a pair-only model is `a = d = numeric(0)` plus `pairs`. The result is
+#' laid out on every locus the model names (those of `a`, then of `d`, then
+#' of `pairs`, in first appearance), because a pair induces an additive
+#' coefficient at both of its loci.
+#'
+#' @param a,d Named numeric vectors (any locus key; each name once).
 #' @param pairs Data frame `locus_1`, `locus_2`, `e` using the same keys.
 #' @param p Named numeric vector of allele-1 frequencies covering every key.
-#' @return `list(alpha, d, p, pairs, mu)`; `pairs` gains `p_1`, `p_2`.
+#' @return `list(alpha, d, p, pairs, mu)`, `alpha`, `d`, `p` named alike;
+#'   `pairs` gains `p_1`, `p_2`.
 #' @keywords internal
 #' @noRd
 .noia_to_stored <- function(a, d, pairs, p) {
-  keys <- names(a)
-  if (is.null(keys) || !identical(sort(keys), sort(names(d)))) {
-    stop("Internal error: 'a' and 'd' must be named by the same loci.",
-         call. = FALSE)
+  for (x in list(a, d)) {
+    if (!is.numeric(x) || (length(x) > 0L && is.null(names(x))) ||
+        anyDuplicated(names(x)) || anyNA(x)) {
+      stop("Internal error: 'a' and 'd' must be named numeric vectors, each ",
+           "locus once, without NA.", call. = FALSE)
+    }
   }
-  need <- unique(c(keys, as.character(pairs$locus_1),
+  if (anyNA(pairs$e)) {
+    stop("Internal error: a pair coefficient is NA.", call. = FALSE)
+  }
+  keys <- unique(c(names(a), names(d), as.character(pairs$locus_1),
                    as.character(pairs$locus_2)))
-  if (!all(need %in% names(p)) || anyNA(p[need])) {
+  if (!all(keys %in% names(p)) || anyNA(p[keys])) {
     stop("Internal error: 'p' must cover every locus.", call. = FALSE)
   }
-  d <- d[keys]
+  full <- function(x) {
+    out <- stats::setNames(numeric(length(keys)), keys)
+    out[names(x)] <- x
+    out
+  }
+  a <- full(a)
+  d <- full(d)
   pk <- p[keys]
   alpha <- a + (1 - 2 * pk) * d
   mu <- sum(a * (2 * pk - 1) + 2 * pk * (1 - pk) * d)
@@ -604,6 +655,15 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 #' @keywords internal
 #' @noRd
 .noia_terms <- function(stat) {
+  keys <- names(stat$alpha)
+  if (is.null(keys) || !identical(names(stat$d), keys) ||
+      !identical(names(stat$p), keys) || anyNA(stat$alpha) ||
+      anyNA(stat$d) || anyNA(stat$p) ||
+      !all(c(stat$pairs$locus_1, stat$pairs$locus_2) %in% keys)) {
+    stop("Internal error: .noia_terms() needs 'alpha', 'd' and 'p' named by ",
+         "the same loci, covering every pair locus, without NA.",
+         call. = FALSE)
+  }
   out <- list()
   keep <- stat$alpha != 0 | stat$d != 0
   if (any(keep)) {

@@ -663,3 +663,86 @@ test_that("B18: trait_name = NULL skips traits without terms; naming one errors"
   expect_error(egv(get_table(pop, "ind_meta"), trait_name = c("T", "Empty")),
                "No genome-effect terms for trait\\(s\\) 'Empty'")
 })
+
+
+# -- Codex implementation review: cancellation and the LD meaning ---------------
+
+test_that("B16: equivalent linear surfaces have the same blocks in any row order", {
+  pop <- egv_pop(n_ind = 100, seed = 12)
+  on.exit(close_pop(pop), add = TRUE)
+  # One linear surface on L1 (g0, g1, g2 = 0.3, 0.2, 0.1): a = -0.1, d = 0.
+  # Summing its rows' dominance contributions leaves a 1e-17 residue in some
+  # orders and exactly 0 in others.
+  vals <- c(0.3, 0.2, 0.1)
+  perms <- list(1:3, c(1, 3, 2), c(2, 1, 3), c(2, 3, 1), c(3, 1, 2), 3:1)
+  for (i in seq_along(perms)) {
+    o <- perms[[i]]
+    pop <- egv_write(pop, paste0("S", i),
+                     genotype_terms(data.frame(L1 = (0:2)[o]), vals[o]))
+  }
+  pop <- egv_write(pop, "AD", ad_terms("L1", a = -0.1, d = 0, p = 0.5,
+                                       report = FALSE))
+  # Genuinely small, uncancelled dominance must survive.
+  pop <- egv_write(pop, "SMALL", genotype_terms(data.frame(L1 = 0:2),
+                                                c(0.3, 0.2 + 1e-9, 0.1)))
+  pop <- egv_write(pop, "TINY", ad_terms("L1", a = 0, d = 1e-20, p = 0.5,
+                                         report = FALSE))
+  for (anc in c("realised", "genic")) {
+    for (t in c(paste0("S", seq_along(perms)), "AD")) {
+      r <- egv(get_table(pop, "ind_meta"), trait_name = t, anchor = anc)
+      expect_false("dominance" %in% r$effect_name, info = paste(anc, t))
+      expect_true("additive" %in% r$effect_name, info = paste(anc, t))
+    }
+    for (t in c("SMALL", "TINY")) {
+      r <- egv(get_table(pop, "ind_meta"), trait_name = t, anchor = anc)
+      expect_true("dominance" %in% r$effect_name, info = paste(anc, t))
+    }
+  }
+  # Owners summing a pair to residue: no additive_by_additive row.
+  pop <- egv_write(pop, "PC", aa_terms("L2", "L3", e = 0.1, p_1 = 0.5, p_2 = 0.5,
+                                       report = FALSE), owner = "o1")
+  pop <- egv_write(pop, "PC", aa_terms("L2", "L3", e = 0.2, p_1 = 0.5, p_2 = 0.5,
+                                       report = FALSE), owner = "o2")
+  pop <- egv_write(pop, "PC", aa_terms("L2", "L3", e = -0.3, p_1 = 0.5, p_2 = 0.5,
+                                       report = FALSE), owner = "o3")
+  r <- egv(get_table(pop, "ind_meta"), trait_name = "PC")
+  expect_false("additive_by_additive" %in% r$effect_name)
+})
+
+test_that("the realised additive block is the contrast component, not lm() under LD", {
+  # Codex implementation review finding 1. 32 individuals, both loci with
+  # counts (8, 16, 8) -- exact HWE margins, p = 0.5 -- but in LD.
+  pop <- egv_pop(loci = c("L1", "L2"), n_ind = 32, seed = 4)
+  on.exit(close_pop(pop), add = TRUE)
+  cells <- expand.grid(L1 = 0:2, L2 = 0:2)
+  X <- cells[rep(1:9, c(3, 3, 2, 2, 9, 5, 3, 4, 1)), ]
+  ids <- egv_ids(pop)
+  set_g <- data.frame(id_ind = rep(ids, 2),
+                      locus_name = rep(c("L1", "L2"), each = 32),
+                      g = c(X$L1, X$L2))
+  duckdb::duckdb_register(pop$db_conn, "egv_set_g", set_g)
+  DBI::dbExecute(pop$db_conn, paste0(
+    "UPDATE ind_haplotype h SET allele = CASE WHEN h.parent_origin = 1 ",
+    "THEN CAST(s.g >= 1 AS INTEGER) ELSE CAST(s.g = 2 AS INTEGER) END ",
+    "FROM egv_set_g s JOIN genome_meta m USING (locus_name) ",
+    "WHERE h.id_ind = s.id_ind AND h.locus_id = m.locus_id"))
+  duckdb::duckdb_unregister(pop$db_conn, "egv_set_g")
+  G <- egv_dosage(pop, ids)
+  expect_equal(colMeans(G) / 2, c(0.5, 0.5))
+  expect_equal(as.numeric(table(G[, 1])), c(8, 16, 8))
+
+  pop <- egv_write(pop, "E", aa_terms("L1", "L2", e = 1, p_1 = 0.5, p_2 = 0.5,
+                                      report = FALSE))
+  r <- egv(get_table(pop, "ind_meta"))
+  g <- (G[, 1] - 1) * (G[, 2] - 1)
+  expect_equal(egv_get(r, "additive", "E"), 0)
+  expect_equal(egv_get(r, "additive_by_additive", "E"), stats::var(g),
+               tolerance = 1e-12)
+  expect_equal(egv_get(r, "between_components", "E"), 0, tolerance = 1e-12)
+  expect_equal(egv_get(r, "total", "E"), stats::var(g), tolerance = 1e-12)
+  expect_true(all(r$decomposition == "full"))
+  # The joint additive regression is a different estimator: it explains part
+  # of g, which the documented contrast component does not claim to.
+  fit <- stats::lm(g ~ G[, 1] + G[, 2])
+  expect_equal(stats::var(stats::fitted(fit)), 0.02099937, tolerance = 1e-6)
+})

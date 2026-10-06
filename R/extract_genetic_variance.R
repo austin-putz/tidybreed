@@ -34,6 +34,23 @@
 #' [extract_allele_freq()]'s semantics: an `ind_haplotype` filter selects allele
 #' copies. To compare with a generation target, pass the generation base.
 #'
+#' @section What the realised blocks are, under LD:
+#' The realised blocks are the sample covariances of the NOIA **contrast
+#' components** at the cohort's frequencies (the source project's
+#' `nonadd_decompose()`): each locus' heterozygosity is regressed on its own
+#' dosage only, and the additive block is `(X - 2p) alpha` with
+#' `alpha_j = a_j + b_j d_j + sum_l e_jl (2 p_l - 1)`. Under LE these are the
+#' orthogonal least-squares components. Under LD they are not: dominance at
+#' another locus, or a pair product, can still regress on the dosages, so the
+#' `additive` row is **not** the variance of the cohort's joint least-squares
+#' additive projection (the breeding values a regression of the genetic value
+#' on all dosages would give), and `between_components = 0` does not certify
+#' that it is. For example, one pair `e (g_1 - 1)(g_2 - 1)` on a cohort with
+#' both loci at `p = 0.5` and HWE margins but in LD reports `additive = 0`,
+#' while `lm(g ~ g_1 + g_2)` explains part of its variance. `"full"` means
+#' every stored term has a supported shape, not that the cohort's additive
+#' breeding-value variance has been recovered.
+#'
 #' @section What the function can decompose:
 #' Each trait's stored model falls in one of three cases, reported in the
 #' `decomposition` column.
@@ -51,8 +68,9 @@
 #' 3. `"partial"`: anything else. The covered terms are decomposed as in case
 #'    1; everything else goes to `unpartitioned`, the variance of those terms'
 #'    value alone (not `residual`, which in this package is environmental
-#'    noise). In this case the `additive` row is the additive projection of the
-#'    covered terms, not the breeding value of the whole model.
+#'    noise). In this case the `additive` row is the additive contrast
+#'    component of the covered terms, not the breeding value of the whole
+#'    model.
 #'
 #' Scope variants of one term compete (the most specific matching scope
 #' wins), so a term family with any scoped variant is uncovered as a whole.
@@ -65,7 +83,10 @@
 #' genotype surface equal to the dosage is all additive; dominance and
 #' interaction terms induce additive effects too). `dominance` appears when
 #' the converted model has a non-zero dominance coefficient,
-#' `additive_by_additive` when it has a non-zero pair. A block whose variance
+#' `additive_by_additive` when it has a non-zero pair. A coefficient whose
+#' stored contributions cancel to within their floating-point rounding (a
+#' genotype surface that is exactly linear, written in any row order) counts
+#' as zero. A block whose variance
 #' is 0 in this cohort is reported as 0; a missing row means the model has no
 #' such block, so a stored target for it falls out of the `inner_join()` and
 #' into the [dplyr::anti_join()]. An off-diagonal block row appears only when
@@ -326,7 +347,7 @@ extract_genetic_variance <- function(tbl, trait_name = NULL, base_tbl = NULL,
 #'
 #' `.stored_to_functional()` per trait, owners summed, laid out on the shared
 #' covered-locus index: `A`, `D` are `m x k`, `pairs` the union of canonical
-#' pairs (column indices into `loci`) with `E` its `r x k` coefficients. A
+#' pairs (column indices into `loci`) with `E` its `(r, k)` coefficients. A
 #' trait not projected (case 2) has zero columns.
 #'
 #' @keywords internal
@@ -392,7 +413,7 @@ extract_genetic_variance <- function(tbl, trait_name = NULL, base_tbl = NULL,
 #'
 #' @param Z_A Centred dosages, `n x m`.
 #' @param pairs `r x 2` column indices into `Z_A`.
-#' @param E `r x k` coefficients.
+#' @param E `(r, k)` coefficients.
 #' @param chunk Pairs per chunk.
 #' @return `n x k` matrix.
 #' @keywords internal

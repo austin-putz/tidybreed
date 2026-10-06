@@ -133,3 +133,19 @@ ran right after the full suite, so its times are higher.
 passed (4,080 at 0.75.0), 6 warnings (the same five files as 0.74.5). A21
 (`define_additive_effects()` realised size guard, through the shared collector) passes.
 `devtools::document()` and `pkgdown::check_pkgdown()` clean.
+
+## Implementation-review follow-up (0.75.2)
+
+[Codex reviewed the built phase](import_qtl_effect_methods_phase_4_codex_review.md) and
+found four issues. All four were accepted and fixed:
+
+| # | Finding | Change | Gate |
+|---|---|---|---|
+| 1 | Under LD the realised `additive` row is not the cohort's joint least-squares additive projection | Documented (roxygen section "What the realised blocks are, under LD", API skill, main plan §4.3.3 and §8): the rows are NOIA contrast components; `full` means supported shapes. The estimator is unchanged — it is the source's | Codex's 32-individual HWE-margin LD panel: `additive = 0`, `between_components = 0`, while `lm()` explains 0.021 |
+| 2 | Floating-point residue in an accumulated `d` (or summed `e`) decided which rows exist | `.stored_to_functional()` sets a coefficient to 0 when `|x| ≤ n·eps·Σ|contributions|` (`.cancelled()`); a single contribution is never residue | B16: a linear surface in all six row orders, and `ad_terms(d = 0)`, have no dominance row under both anchors; `d = 1e-9` and `d = 1e-20` keep theirs; three owners summing a pair to 0 have no A×A row |
+| 3 | `.noia_to_stored()` gave `NA` alpha for pair-only loci and `.noia_terms()` then silently wrote only the pair | The converter is sparse: coefficients span every locus the model names, missing main effects 0. `.noia_terms()` refuses misaligned or incomplete input | Pair-only at `p = (0.3, 0.6)` (alpha `0.2, −0.4`, `mu = −0.08`), one endpoint missing, permuted/disjoint `a`/`d` names: functional − converted = `mu` through the evaluator; refusal cases |
+| 4 | `genotype_terms()` truncated `copy_count = 2.9` to 2 (and `−0.5` to 0) | Refused before `as.integer()` and before zero rows drop | `2.9`, `−0.5`, a fractional count on a zero-valued row, `NA` refused; 0, 1, 2 accepted |
+
+Every new gate fails on the 0.75.1 code (checked by restoring the old builder file) and
+passes on 0.75.2. Also fixed: a roxygen inline-code false positive (`` `r x k` `` in an
+internal comment) that made `document()` print an error.
