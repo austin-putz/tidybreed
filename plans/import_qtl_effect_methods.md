@@ -2070,7 +2070,9 @@ pass, with messages and error order unchanged (D7, pinned by
 pairs of 500 loci now write in 7.1 s (16,000 pairs: 71.8 s → 0.70 s). The step-4 extractor
 benchmark, run at its planned all-pairs size, exposed the same pattern in the evaluator's
 R-side preparation (`.gev_variant_map()`, `.gev_preflight()`), fixed too; what remains is
-the evaluation statement itself, linear but minutes at 124,750 pairs (a risk for 5c). `.stored_to_functional()` is bit-identical.
+the evaluation statement itself, linear but minutes at 124,750 pairs (a risk for 5c). The
+Codex review of 5a (0.75.4) found the numeric pair key used for repeated-locus checks could
+collide above 2^53; it now falls back to string keys there. `.stored_to_functional()` is bit-identical.
 Results: `plans/import_qtl_effect_methods_phase_5.md`.
 
 ---

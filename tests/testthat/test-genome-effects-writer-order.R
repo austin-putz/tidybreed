@@ -208,3 +208,27 @@ test_that("a whole-table conflict with stored rows names the user's term_id", {
   expect_identical(DBI::dbGetQuery(pop$db_conn,
     "SELECT COUNT(*) AS n FROM genome_effects")$n, 1)
 })
+
+
+# ── .ge_pair_key(): distinct pairs, distinct keys ──────────────────────────
+
+test_that(".ge_pair_key() gives distinct pairs distinct keys, at the 2^53 boundary too", {
+  key <- tidybreed:::.ge_pair_key
+  # Small keys: the exact numeric form x * (max(y) + 1) + y.
+  expect_identical(key(c(1L, 1L, 2L), c(1L, 2L, 1L)), c(4, 5, 7))
+  expect_false(anyDuplicated(key(c(1L, 1L, 2L), c(1L, 2L, 1L))) > 0L)
+
+  # Radix 2^31 with x = 2^22 puts the keys at 2^53, where (2^22, 3) and
+  # (2^22, 4) would round to the same double (Codex review of 5a).
+  x <- c(4194304L, 4194304L, 1L)
+  y <- c(3L, 4L, 2147483647L)
+  k <- key(x, y)
+  expect_identical(anyDuplicated(k), 0L)
+  expect_identical(duplicated(k), duplicated(paste(x, y)))
+
+  # Equal pairs stay equal on either path; NA is a value, as in duplicated().
+  expect_identical(duplicated(key(c(x, 4194304L), c(y, 3L))),
+                   c(FALSE, FALSE, FALSE, TRUE))
+  expect_identical(duplicated(key(c(1L, 1L, 1L), c(NA, NA, 2L))),
+                   c(FALSE, TRUE, FALSE))
+})

@@ -431,17 +431,22 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 #' One exact numeric key per (group, integer value) pair
 #'
 #' For `duplicated()` / `match()` over two integer columns without pasting
-#' strings. Exact while `max(x) * max(y)` stays below 2^53; with a missing or
-#' non-whole value it falls back to pasted strings, which compare `NA` as a
-#' value the way `duplicated()` does on one column.
+#' strings. The key `x * radix + y`, with `radix = max(y) + 1`, is below
+#' `(max(x) + 1) * radix`; it is used only while that bound is at most 2^53, where
+#' every key is an exact double and distinct pairs get distinct keys. Rounding
+#' is monotonic, so the bound computed in doubles never passes a key that is
+#' really larger. Otherwise -- a bound too large, or a missing, negative or
+#' non-whole value -- the key is pasted strings, which compare `NA` as a value
+#' the way `duplicated()` does on one column.
 #'
 #' @keywords internal
 #' @noRd
 .ge_pair_key <- function(x, y) {
-  if (anyNA(x) || anyNA(y) || any(y < 0) || any(y != trunc(y))) {
-    return(paste(x, y))
-  }
-  as.numeric(x) * (max(c(0, y)) + 1) + as.numeric(y)
+  whole <- function(v) !anyNA(v) && all(v >= 0) && all(v == trunc(v))
+  if (!whole(x) || !whole(y)) return(paste(x, y))
+  radix <- max(c(0, y)) + 1
+  if ((max(c(0, x)) + 1) * radix > 2^53) return(paste(x, y))
+  as.numeric(x) * radix + as.numeric(y)
 }
 
 #' Infer `copy_count_value` for indicator members at diploid-autosomal loci

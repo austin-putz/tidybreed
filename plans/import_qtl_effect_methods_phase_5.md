@@ -186,3 +186,29 @@ Note on the run: a `git stash` / `stash pop` used to confirm the roxygen slip pr
 for under a minute while the suite was running. The suite loads the package once at start,
 the new test file is untracked (untouched by the stash), and the only test file that reads
 files from disk (`test-schema.R`) was rerun on its own afterwards: 34 passed.
+
+### Implementation-review follow-up (0.75.4)
+
+[Codex reviewed the built 5a](import_qtl_effect_methods_phase_5_codex_review.md) and
+recommended proceeding with 5b. It reran both writer gates (0.48×, 7.2 s), the targeted test
+files, and its own 7,020 old-vs-new comparisons (all identical). One finding, accepted:
+
+- **`.ge_pair_key()` precision (low).** The key `x · (max(y) + 1) + y` was not checked for
+  exactness: at radix 2^31 and `x = 2^22`, the pairs `(2^22, 3)` and `(2^22, 4)` rounded to one
+  double, which would report a false repeated locus. The header's `max(x) · max(y)` bound was
+  also wrong (it left out the radix's `+ 1` and the final `+ y`). Fixed: the numeric key is
+  used only when `(max(x) + 1) · (max(y) + 1) ≤ 2^53`, which bounds every key, with the same
+  non-negative-whole check on `x` as on `y`; otherwise string keys. A hand-derived test in
+  `test-genome-effects-writer-order.R` checks the boundary pair, an ordinary small-key case,
+  and equal pairs and `NA` on both paths; it fails on the 0.75.3 helper. The equivalence
+  script is unchanged (462 identical); no realistic model reaches the boundary.
+
+Two qualifications from the review are added to the profile above, which said "everything
+left is linear":
+
+- the evidence is for growing numbers of **common** A×A families. Family validation still
+  compares every pair of variants **within** a family, and the scoped paths keep some
+  per-term work (`.ge_term_at_scope()`, the cache misses of `.gev_variant_map()`). A model
+  with very many scoped variants of one term, or of very high order, is not shown linear;
+- large realised evaluation stays expensive (the DuckDB statement, above); 5b/5c fixtures
+  stay small, and the forward `.noia_to_stored()` is profiled in 5b as planned.

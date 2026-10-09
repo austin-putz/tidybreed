@@ -1,3 +1,16 @@
+# tidybreed 0.75.4 (2026-10-09)
+
+Follow-up to the Codex review of step 5a
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`).
+
+* The internal numeric key that the writer and its validator use to find a
+  locus or member slot repeated within a term (`.ge_pair_key()`) could give
+  two distinct pairs the same key once it passed 2^53 (above about four
+  million terms with a very high locus id), turning a valid write into a false
+  "appears more than once" error. The numeric key is now used only when its
+  largest possible value is exact, and otherwise falls back to string keys.
+  A boundary test pins it.
+
 # tidybreed 0.75.3 (2026-10-09)
 
 Step 5a of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):
