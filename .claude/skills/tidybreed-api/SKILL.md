@@ -1,6 +1,6 @@
 ---
 name: tidybreed-api
-description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tgv and the evaluator, extract_genetic_variance, index functions. Load before changing or explaining any exported function.
+description: Reference for every implemented tidybreed function — arguments, semantics and internals of open_pop/define_genome, add_founders, define_chromosome, get_table subsets, schema(), define_trait/define_additive_effects/define_genome_effects, define_genome_effect_terms, define_phenotype, add_phenotype stages, add_tgv and the evaluator, extract_genetic_variance, index functions. Load before changing or explaining any exported function.
 ---
 
 # tidybreed Implemented Functions
@@ -319,6 +319,13 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
   1. **Validate** everything; no RNG use before the draw (`seed` is applied
      after every input check and the anchor-rank check; only the
      architecture-rank and verification failures come after it).
+     **Owner content (0.76.0)**: a trait whose `generated` model has anything
+     but order-one `additive` terms (a `define_genome_effects()` model) is
+     refused after argument validation and before the target
+     (`.dae_refuse_nonadditive_model()`); the error gives the additive-only
+     `define_genome_effects(..., trait_var_comp_tbl = <additive rows>)`
+     re-run, and says later calls need the same filter while the
+     non-additive targets stay stored.
      `parent_origin` must be exactly `1`/`2` before coercion.
      `anchor = "realised"` needs an individuals `base_tbl` and the common
      scope. Sex-linked / organelle QTL are refused (`assert_qtl_autosomal()`;
@@ -342,13 +349,21 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
      for the traits (**with or without** a passed `G`; with `G` and generated
      additive terms already present, the error routes through removing the
      non-additive block, since `define_effect_cov_matrix()` would be
-     refused); a partial block; two candidate sets. Targets are validated by `.qtl_target_std()`: rank and
+     refused; the error also names `define_genome_effects()`); a partial
+     block; two candidate sets. The block itself comes from the shared
+     per-block resolver `.tvc_block_from_rows()` (both generators). Targets
+     are validated by `.qtl_target_std()`: rank and
      PSD on the **correlation scale**, never relative to `G`'s largest
-     eigenvalue (that depends on the traits' units).
+     eigenvalue (that depends on the traits' units). A singular target gets a
+     `message()` naming the reason (`.qtl_rank_note()`, 0.76.0; also from
+     `define_effect_cov_matrix()` and `define_genome_effects()`).
   3. **Draw** the architecture with `.draw_additive_architecture()` (today's
      draws: rnorm / signed gamma for k = 1, `MASS::mvrnorm(G)` rows for k >= 2,
      masked per trait under `"union"`). The same seed gives the same `B0`.
-  4. **Calibrate** with `.qtl_calibrate()` → `.qtl_congruence()`
+  4. **Calibrate** with `.dae_calibrate_shared()` → `.qtl_calibrate()` →
+     `.qtl_congruence()` (the anchor from `.dae_anchor_at()`, the frames from
+     `.dae_build_traits()`: the three helpers the additive-only route of
+     `define_genome_effects()` shares, gate C4 (b))
      (`R/qtl_congruence.R`, ported from the source method): `B = B0 A` with
      `B' M B = G`, run on the correlation scale with `B0` columns normalised
      to unit anchor variance, then **verified** against the stored `G` at
@@ -452,6 +467,80 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
     define_additive_effects("IMP", line_name = "Duroc", parent_origin = 1)
   ```
 
+### `define_genome_effects()`
+
+`R/define_genome_effects.R`, calibration in `R/genome_effects_calibration.R`
+(0.76.0; plan §9, phase-5 plan 5b)
+
+`define_genome_effects(tbl, trait_name, G_A = NULL, G_D = NULL, G_AA = NULL,
+trait_var_comp_tbl = NULL, pairs = NULL, n_pairs = NULL, anchor =
+c("genic", "realised"), dominance_degree_mean = 0.19, dominance_degree_sd =
+0.097, inbreeding_depression = NULL, base_tbl = NULL, warn_bounds = c(0.8,
+1.25))` — samples additive, dominance and A×A effects and **calibrates** them so
+`G_A`, `G_D`, `G_AA` are delivered exactly under the anchor; writes under
+`"generated"` with `mode = "replace_owner"` (the trait's whole generated model,
+line-scoped Part A variants included, counted in a message). Common scope
+only; no `seed` (callers use `set.seed()`), no `effects`. Same pipe subject,
+base resolution (`.dae_resolve_base()`, Wahlund warning) and size limit as
+`define_additive_effects()`.
+
+1. **Validate, no RNG, no write** (C20; the order of the plan's 5b.2):
+   arguments → **targets per block** (`.dge_resolve_targets()`, D8: each of
+   `additive` / `dominance` / `additive_by_additive` from exactly one source —
+   a passed matrix, refused if that block is stored for any call trait
+   anywhere at `line_name IS NULL` or also in the explicit table; else the
+   explicit `trait_var_comp_tbl` rows or the stored `NULL`-line rows, through
+   the shared `.tvc_block_from_rows()` with its scope check) → route (D5:
+   **additive-only** when no D / A×A block or only zero ones; otherwise `G_A`
+   must be positive definite on its correlation scale, an
+   implementation-limit error) → zero-degree refusal (non-zero `G_D` with
+   both degree parameters 0) → owner counts → loci, base, autosomal check,
+   `n` by `COUNT` → pairs (supplied: unknown / outside / self / repeated
+   refused by name; random: `m >= 2`, `n_pairs <= floor(m/2)`;
+   `rank(G_AA) <= r`; realised `rank(G_c) <= n - 1`) → realised dosage guard
+   counting kept designs (`.dge_dosage_guard()`: `n (m + m_D + r)`; Part A's
+   `n m` on the additive-only route) → anchor ranks per block.
+2. **Draw** (`.dge_draw()`, D2 order): `B_a` by
+   `.draw_additive_architecture(mask, "normal", G_A)` (C4); with a dominance
+   block `z` (m×k standard normal; degrees `mean + sd z`); with an A×A block
+   and no supplied pairs one `sample()` matching, canonicalised
+   (`.dge_canonical_pairs()`: C-locale order within a pair, `locus_id` across
+   pairs); then `B_aa`. Zero blocks still draw.
+3. **Calibrate.** Additive-only route: `.dae_calibrate_shared()` +
+   `.dae_build_traits()` — Part A's path, row-identical (C4 (b)). Otherwise
+   `.na_calibrate()` (pure): A×A by `.qtl_calibrate()`; dominance
+   `(mean + sd z)|B_a|`, with each trait named in `inbreeding_depression`
+   given its solved mean (`.na_solve_dd_mean()`, robust: solved in
+   `x = mu/sd`, degenerate / linear / quadratic branches, vertex at a
+   repeated root, positive `V_D` required, verified), then `.qtl_calibrate()`;
+   additive by `.na_additive_stage()` on the correlation scale of `G_A`: the
+   floor `C_res' M C_res` from the residual coupling (PSD by construction),
+   rounding budget `1e-10 max(1, ||floor_s||)`, `T` maximising `tr(T)`. The
+   coupling `C = b B_d + E_c` is one `rowsum()` (hubs exact). Anchors are
+   objects (`.na_anchors()`, `.na_aa_anchor()`; `cross()` added to both anchor
+   kinds, design rank cached). Every present block is verified at
+   `QTL_CALIBRATION_TOL`. No eligibility zeroing (D3 (a)).
+4. **Diagnostics** (D6, before the commit): `.dae_diagnostics()` on the
+   additive-only route; otherwise `.dge_diagnostics()` — realised anchor: each
+   block's genic limit; genic + individuals: each block realised on them (A×A
+   via `.egv_aa_values()` chunks); genic + founder pool: additive pool
+   expectation only, a message.
+5. **Store**: additive-only route Part A's frames; otherwise per trait
+   `.noia_to_stored(a, d, pairs(e), p_base)` → `.noia_terms()` (Cockerham
+   `ad_terms()` + `aa_terms()` at the base `p`, exact zeros dropped). Under
+   `"realised"` the stored split is HWE-referenced; the total is exact and the
+   realised extractor gives the targets back. One `.ge_commit()` with
+   `before_commit` writing each **passed** block (`.tvc_write_block()`).
+6. **Messages** (`.dge_messages()`): replaced counts, the random-pair default,
+   delivered blocks, the floor (conditional on the draw), inbreeding
+   depression (requested vs delivered; approximate for k >= 2, D4; or
+   implied), the functional summary, diagnostics, rank notes.
+
+Gates: `tests/testthat/test-define_genome_effects.R` (C1–C18, C20, G1–G8) and
+`tests/testthat/test-genome-effects-calibration.R` (the source suite ported,
+G4, G6), with the source generator copied in
+`tests/testthat/helper-nonadd-generator-oracle.R` (isolated environment).
+
 ### `remove_generated_effects()`
 
 `R/remove_generated_effects.R` (0.74.5)
@@ -468,8 +557,9 @@ nothing across traits), when a trait has none at the scope. Targets and
 `ind_tgv` are untouched; values are stale until `add_tgv()` re-evaluates. The
 typical use is a variant added by a re-run with a new `parent_origin`, which
 `.dae_warn_parent_only()` now names. A generated model is removed whole, never
-per component (decided 2026-10-05): a step-5 `define_genome_effects()` model is
-common-scope, so `remove_generated_effects(pop, trait)` removes all of it.
+per component (decided 2026-10-05): a `define_genome_effects()` model is
+common-scope, so `remove_generated_effects(pop, trait)` removes all of it, after
+which `define_additive_effects()` accepts the trait again.
 
 ### `extract_allele_freq()`
 
@@ -558,7 +648,8 @@ writes nothing; `ind_tgv` is not touched.
 **How the two writers relate.** `define_genome_effect_terms()` writes any effect
 you supply; `define_*_effects()` functions sample effects of one shape and
 write them through the same engine (`.ge_build → .ge_read_model →
-.ge_resolve_deletes → .ge_commit`). `define_additive_effects()` is provably
+.ge_resolve_deletes → .ge_commit`); `define_genome_effects()` builds its
+non-additive rows with `.noia_terms()`. `define_additive_effects()` is provably
 sugar over the writer — `tests/testthat/test-genome-effects-writer.R`
 ("generator == writer") reproduces its output exactly through
 `define_genome_effect_terms()` with the reserved owner, `replace_scope`, and the

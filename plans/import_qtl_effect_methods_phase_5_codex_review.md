@@ -1,170 +1,237 @@
-# Import QTL-effect methods — Step 5a implementation review
+# Import QTL-effect methods — Step 5b implementation review
 
-Reviewed 2026-10-09: tidybreed **0.75.3**, commit **`9c08715`**, against its
-0.75.2 parent **`0276271`**. This reviews the implemented 5a changes described in
-[import_qtl_effect_methods_phase_5.md](import_qtl_effect_methods_phase_5.md),
-the 5a requirements and downstream dependencies in
-[import_qtl_effect_methods_phase_5_plan.md](import_qtl_effect_methods_phase_5_plan.md),
-and the production code and tests. It does not repeat the earlier review of the
-unimplemented 5b design.
+Reviewed **2026-10-09**, working-tree version **0.76.0**, against
+[the 5b plan](import_qtl_effect_methods_phase_5_plan.md) and
+[the completion summary](import_qtl_effect_methods_phase_5.md). This replaces the
+old 5a review. Its pair-key finding was already fixed in 0.75.4; it is not an
+open finding here. The reviewed implementation includes the uncommitted and
+untracked 5b files present in the workspace, not just the last Git commit.
 
-**Assessment: the efficiency change is effective, and I found no blocking regression
-for the planned 5b workloads. Proceed with 5b. There is one low-priority precision
-defect in the new grouping helper; its small guard is worth adding before building
-further on it.** Both writer performance gates pass in an independent rerun, and
-all 12 targeted test files pass unchanged.
+**Assessment:** the central calibration algebra and ordinary-scale stored results
+pass the planned tests and the additional scientific checks below. I found no
+major scientific error in the exercised ordinary-scale cases. There are **two
+medium-priority defects**: the exactness check precedes a potentially lossy storage
+conversion, and the realised-design guard undercounts retained designs for absent
+or zero blocks. Fix these before treating the advertised exactness and memory
+contracts as fully verified. The first is a silent target miss on an extreme,
+but accepted, variance-block ratio; the second affects reliability at large sizes.
 
-## Finding 1 — Low: guard the numeric pair key against double-precision collisions
+Only this review document was changed. Production code and committed tests were
+not edited to address the findings.
 
-**Location:** [`R/define_genome_effect_terms.R:440`](../R/define_genome_effect_terms.R#L440),
-`.ge_pair_key()`. Used by `.ge_build()` and `.ge_frame_term_messages()` for
-duplicate loci and slots.
+## Finding 1 — Medium: verify the coefficients that are actually stored
 
-The helper computes `x * (max(y) + 1) + y`. It falls back to string keys for
-missing, negative or fractional `y`, but never checks that the resulting integers
-remain exactly representable. Distinct pairs can therefore receive the same key
-above `2^53`, despite both input columns being valid integers.
+**Locations:** `R/genome_effects_calibration.R:212–225` and
+`R/define_genome_effects.R:752–768`.
 
-Reproduced with the current implementation:
+The final additive verification measures `st$B_alpha`. The returned functional
+additive coefficient is then computed as `st$B_alpha - C`. Storage converts it
+back to a statistical coefficient through `.noia_to_stored()`, adding the
+dominance and pair coupling again. When `B_alpha` is tiny relative to `C`, the
+subtraction and re-addition lose significant digits. There is no subsequent
+target check on the converted model; the success message reports the covariance
+of the earlier, unconverted coefficients.
+
+This violates 5b.4's verified-exactness contract and G3's requirement that the
+stored genic alpha equal the calibrated alpha. It is not simply rounding in a
+printed covariance: the persisted coefficient delivers a different variance.
+
+**Independent public reproduction:** one selected QTL, `p = 0.3`, 40 base
+individuals with dosages `rep(c(0, 0, 0, 1, 2), 8)`, `set.seed(2)`, default degree
+parameters, `G_A = 1e-24`, `G_D = 1`, `anchor = "genic"`, `base_tbl` selecting those
+individuals, and `warn_bounds = NULL`.
+
+| Quantity | Result |
+|---|---:|
+| Requested additive variance | `1e-24` |
+| Reported delivered additive variance | `1e-24` (successful exactness message) |
+| Stored alpha | `-1.54287693732158e-12` |
+| Variance from the stored alpha, `2pq * alpha^2` | `9.9979708236190393e-25` |
+| Relative error of that stored variance | `2.029176e-4` |
+| `extract_genetic_variance()` at the same genic base | `9.9994097428880162e-25` |
+| Relative error of the extractor result | `5.902571e-5` |
+
+Both errors exceed `QTL_CALIBRATION_TOL = 1e-8`. The extractor's further
+functional canonicalisation introduces another rounding path; the direct
+stored-coefficient calculation is sufficient to establish the defect. The
+`G_A = 1e-20` public call also succeeded with a stored-coefficient error of
+`1.466041e-6`. Some other ratios/seeds were correctly refused by the existing
+internal check, so its presence does not reliably prevent this storage failure.
+
+A short database-free reproduction of the same conversion defect:
 
 ```r
-k <- tidybreed:::.ge_pair_key(
-  c(4194304L, 4194304L, 1L),
-  c(3L,       4L,       2147483647L)
-)
-format(k, digits = 22)
-# "9007199254740996" "9007199254740996" "4294967295"
-k[1] == k[2]
-# TRUE: (4194304, 3) and (4194304, 4) are distinct pairs.
+devtools::load_all(quiet = TRUE)
+set.seed(2)
+B <- matrix(rnorm(1))
+z <- matrix(rnorm(1))
+cal <- .na_calibrate(.na_anchors("genic", p = 0.3),
+                     matrix(1e-24), matrix(1), B_a = B, z = z)
+stat <- .noia_to_stored(
+  setNames(cal$B_a[, 1], "L"), setNames(cal$B_d[, 1], "L"),
+  data.frame(locus_1 = character(), locus_2 = character(), e = numeric()),
+  c(L = 0.3))
+c(internal = cal$delivered$A[1, 1], stored = 0.42 * stat$alpha^2)
+# internal: 1e-24; stored: approximately 9.997970823619e-25
 ```
 
-The third row sets the radix to `2147483648`; the first two keys round to the
-same double. At a sufficiently large model with sparse high locus IDs, this can
-turn two distinct loci into a false repeated-locus violation and reject a valid
-write. The comment's `max(x) * max(y)` condition is also insufficient: the actual
-expression includes the extra radix increment and final `y`.
+**Recommended correction:** for the genic route, preserve the verified
+`cal$B_alpha` directly when building the stored statistical coefficients instead
+of recovering it through cancellation. For both anchors, check the model after
+its final storage conversion against the requested blocks before committing;
+reject numerically ill-conditioned conversions rather than claiming exactness.
+The realised check must recover functional coefficients from the proposed stored
+model and use the observed within-locus `b`, not measure the HWE-stored additive
+component as if it were the realised additive block. Add a regression covering
+this extreme block ratio and the public stored/extracted results.
 
-**Recommended change:** retain the fast path only when a conservative upper bound
-on the entire encoded key stays below `2^53`; otherwise use the existing string
-fallback. Add a hand-authored uniqueness test at this boundary and an ordinary
-small-key case. These test the helper's mathematical contract, not old output.
+**Scope:** this requires an extremely large dominance/additive variance ratio.
+The tested ordinary-scale models and the per-trait unit changes did not exhibit
+it. It is not evidence that ordinary breeding simulations are generally wrong,
+but the function currently accepts these inputs and promises an exact result.
 
-**Severity and limit:** this is a directly reproduced helper defect, not an
-end-to-end failure reproduced with millions of terms. Its callers use compact
-group positions, so reaching this example needs over four million groups as well
-as a very high locus ID. The planned 124,750-pair / 500-locus workload is safely
-below the boundary, including with integer-max locus IDs. This does **not** block
-the planned 5b work.
+## Finding 2 — Medium: the realised size guard omits designs that remain allocated
 
-## What the code review verified
+**Locations:** `R/define_genome_effects.R:384–386`, `398`, `432–433`, and
+`R/genome_effects_calibration.R:52–63`.
 
-| Area | Assessment |
-|---|---|
-| Writer scalar checks | `.ge_build()` chooses the first failing input term, then its first rule. It builds members in term order and ascending locus-ID order with integer slots. The new test pins cross-rule precedence and user labels. |
-| Member and origin messages | The vectorised rules interleave messages in the previous row/rule order. Unknown origin match types still report only their own rule. |
-| Structural validation | Grouped slot, locus and origin checks retain ordered messages on the tested frames. Family predicates use pre-split rows, with family and variant ordering preserved for unique stored term IDs. |
-| Atomic writes | `.ge_commit()` and its transaction are unchanged. Candidate validation and **whole stored table** validation still run; target writes still use the hook inside the transaction. The conflict/rollback test passes. |
-| Reverse conversion | `.stored_to_functional()` sorts contributions by term and within-term position before accumulation. Dominance cancellation still uses absolute contributions and counts; pair summation and cancellation remain intact. Mixed-shape numerical comparisons were bit-identical. |
-| Scope and target helpers | The additional `.dae_*` and `.gev_*` refactors use position-based grouping while retaining shape-based target classification and scope matching. Additive, removal and prevalence tests pass. |
-| Evaluator preparation | `.gev_variant_map()` and `.gev_preflight()` reach common-family data by position. Origin signatures remain aligned to term positions. Evaluation SQL and the exact deterministic accumulator are unchanged. |
-| Scope of the change | No API, schema, `NAMESPACE` or manual-page changes. The only test-file change is the added writer-order contract file; no existing test file was edited. |
+The guard counts dominance columns only for `live_d`, and pair columns only for
+`live_aa`, as specified by 5b.2 item 6. The code does not consistently allocate
+designs according to those same flags:
 
-The extra evaluator and additive-helper changes are justified extensions of 5a:
-they remove the same repeated-lookup costs from paths that the upcoming generator
-will use. The roxygen comment repair is unrelated to effect math.
+- `.na_anchors("realised")` always constructs and retains the full `Z_D` design
+  in `anchors$D`, including an A + A×A model with no dominance target.
+- With a nonzero dominance target and an explicit zero A×A target, the
+  `has_aa && is.null(na$AA)` branch constructs and retains the full pair design.
+  Its columns were excluded from the guard because `live_aa` is false.
 
-The contract test was committed with the refactor rather than in a preceding
-commit. The results document explains that it was run against 0.75.2 first.
-That historical execution is an implementation report, not something this review
-independently certifies; the current contract tests pass.
+**Independent public reproduction:** temporarily lower
+`QTL_REALISED_MAX_CELLS` to 700 in a separate R process, select 40 individuals and
+8 QTL, use the default 4 random pairs, and inspect the anchors on entry to
+`.na_calibrate()`. Both calls below succeed:
+
+| Blocks besides `G_A = 1` | Guard's count | Retained A / D / A×A cells | Actual design total |
+|---|---:|---|---:|
+| `G_AA = 0.01`, no `G_D` | `40 * (8 + 0 + 4) = 480` | `320 / 320 / 160` | **800** |
+| `G_D = 0.01`, `G_AA = 0` | `40 * (8 + 8 + 0) = 640` | `320 / 320 / 160` | **800** |
+
+These are retained anchor designs, not temporary sweeps or peak-memory overhead.
+The raw dosage matrix is not included in the 800-cell total. Thus even the
+narrower retained-design limit advertised by the guard is exceeded. At real
+sizes this can cause unexpected memory exhaustion; a supplied zero A×A block can
+have a very large pair set, making the omission particularly consequential.
+
+**Recommended correction:** build and retain designs only for live blocks,
+while preserving the specified draws for explicit zero blocks. Zero-block
+coefficients and delivered covariances can be supplied without a dense design.
+Alternatively, count every design actually retained and adjust the documented
+contract. Extend G7 with both cases above; the existing all-live-block guard test
+does not catch them. Ensure a knowable over-limit refusal still precedes the draw
+and leaves the database and RNG unchanged.
+
+## What the scientific and code review verified
+
+The review traced the exported entry point through target/base resolution,
+architecture sampling, anchors, all three calibration stages, conversion,
+writer commit, diagnostics, and owner rules. In particular:
+
+- **Targets and scope:** D8 resolves each block separately; passed matrices
+  cannot overwrite a stored population-wide block or duplicate a block in an
+  explicit selection. Selected stored blocks must be complete and match common
+  scope. Intentionally filtered-out targets remain stored and are absent from
+  this call, as designed.
+- **Anchors:** genic weights are `2pq`, `(2pq)^2`, and the product of the pair's
+  `2pq` weights. Realised designs centre dosage, orthogonalise heterozygosity
+  against its own locus's dosage, centre pair products, and use divisor `n - 1`.
+  The anchor objects avoid dense locus-by-locus covariance matrices.
+- **Calibration:** A×A and dominance use the shared congruence with
+  correlation-scale target validation. The additive stage computes the residual
+  coupling and its PSD floor in standardised coordinates, then solves the
+  remaining covariance. Floor-boundary rounding, unit transforms and sampled
+  architecture rank restrictions are tested. D5's singular-additive restriction
+  is reported as an implementation limit, and zero non-additive blocks take the
+  shared additive-only path.
+- **Sampling:** additive, dominance, pairs, then A×A. The tests pin additive and
+  dominance architecture draws when later blocks are added. Explicit zero
+  blocks still consume their specified draws. Pair canonicalisation handles
+  supplied hubs and random matchings.
+- **Inbreeding depression:** the revised solver covers degenerate, linear,
+  quadratic, repeated-root, sign, zero-variance and bound cases. Single-trait
+  targeting and the exact inbred-genotype mean identity pass. Multiple traits
+  receive the planned requested/delivered report with no closeness guarantee.
+- **Storage and evaluation:** ordinary-scale functional values equal the
+  evaluated stored total up to the model's constant. Realised calibration
+  stores HWE-referenced coefficients; re-projection with the cohort's observed
+  `b` recovers the realised targets. Fixed loci/pairs retain their effects and
+  contribute zero to their own anchored contrast variances.
+- **Replacement and failure behavior:** the generated model is replaced across
+  scopes, custom owners remain, and target writes share the effects transaction.
+  The injected second-target-write failure restores the prior tables.
+  Deterministic refusals preserve RNG state, including its initial absence.
+  `define_additive_effects()` refuses an existing non-additive generated model.
+
+For scientific interpretation, the realised targets are **contrast-component
+covariances**, not the joint least-squares additive projection under LD. Their
+sum is not generally the realised total covariance: cross-component covariances
+also matter. These are documented model definitions, not newly found defects.
+Likewise, single-trait depression is the defined `sum(2pq d)` quantity; the
+multi-trait control is intentionally approximate.
 
 ## Independent verification
 
-### Targeted tests
+Environment: **R 4.5.3**, **testthat 3.3.2**, **DuckDB 1.5.5**. Commands ran against
+the current working tree using `devtools`, so the new untracked R files were
+loaded. No production functions were changed on disk by the probes; tracing and
+the temporary limit change occurred only inside disposable R processes.
 
-Executed from the repository root:
+### Planned 5b tests
 
-```r
-pkgload::load_all(".", quiet = TRUE)
-testthat::test_local(
-  ".",
-  filter = "genome-effect|extract_genetic_variance|define_additive_effects|remove_generated_effects|prevalence-threshold",
-  reporter = "summary"
-)
+```sh
+Rscript -e 'devtools::test(filter = "define_genome_effects|genome-effects-calibration", reporter = "summary", stop_on_failure = TRUE)'
 ```
 
-**Result: exit 0; all 12 selected files passed, with no reported failures,
-warnings or skips.** Coverage includes the writer and its error-order contract,
-builders, schema, hand-derived fixtures, evaluator, thread determinism, extractor,
-both additive-generator files, prevalence and generated-effect removal.
-Log: `/private/tmp/tidybreed_phase5a_targeted.log`.
+**Passed, exit status 0:** 29 public tests and 31 calibration tests; no failures,
+warnings or skips reported. These include the independent source decomposition,
+Zeng Appendix A, all-genotype identities, both anchors, ranks and zero targets,
+floor and mean-solver hand cases, rollback, owner rules, RNG refusal behavior,
+and seeded/thread/restore determinism. Log:
+`/private/tmp/tidybreed_5b_targeted.log`.
 
-### Development comparisons
+### Additional checks beyond the existing gates
 
-The scratch script sources the five pre-change R files into a separate
-environment and compares old/current results using `identical()`. It remains
-outside the repository, respecting the prohibition on committed golden-from-old
-tests. Its cases cover shuffled/nonconsecutive IDs, additive/dominance/indicator/
-A×A shapes, coefficients across several scales, high integer locus IDs,
-malformed slots and scalar values, scoped origins, unusual line names, target
-classification, replacement modes and evaluator maps/preflight.
+| Check | Independent result |
+|---|---|
+| Oracle integrity | All **16** copied functions have identical bodies and formals to the local source project's `non-additive/R/qtl_effects_nonadd.R`. This supplements the suite's environment-isolation smoke test. |
+| Public trait-unit sweep | A two-trait A + D model with units `S = diag(u, 1/u)`, `u = 1, 1e-6, 1e-8, 1e-10`, delivered the stored genic additive target with maximum correlation-scale error **1.15e-15**. This exercises the actual public sampler and writer, beyond G6's supplied architectures. |
+| Three traits, hubs, fixed partner, inbred cohort | Both anchors checked on 60 individuals, 8 QTL, 5 supplied hub pairs including a fixed locus, rank-one dominance (one zero-variance trait) and rank-two A×A targets. Direct covariance calculations from stored coefficients gave maximum A / D / A×A errors **4.95e-15 / 6.08e-18 / 8.24e-18** across the two anchors. |
+| Same model's individual values | Explicit HWE-centred additive, dominance and pair calculations matched `add_tgv()` totals within **8.89e-16**. Fixed-pair coefficients remained nonzero. |
+| Extreme variance-block ratio | Reproduced finding 1 through the public writer, direct stored-coefficient calculation and extractor, plus the short internal conversion probe above. |
+| Retained-design instrumentation | Reproduced both undercounts in finding 2 through successful public calls, tracing anchors at calibration entry. |
 
-**Result: 7,020 comparisons identical, zero mismatches** (300 conversions,
-900 structural checks, 900 target/scope-label checks, 3,600 replacement checks,
-1,200 map/preflight checks and 120 writer builds/errors). The separate precision
-boundary probe reproduces finding 1.
+Additional scripts/logs are in `/private/tmp/tidybreed_5b_probes.*`,
+`/private/tmp/tidybreed_5b_cancel_public.*`, and
+`/private/tmp/tidybreed_5b_multitrait_probe.*`. The scientific covariance/value
+checks used explicit formulas rather than the production calibration's
+`delivered` values as their expected answers.
 
-Script: `/private/tmp/tidybreed_phase5a_review_probes.R`.
-Log: `/private/tmp/tidybreed_phase5a_review_probes.log`.
+### Full package regression suite
 
-### Writer benchmark
+```sh
+Rscript -e 'devtools::test(reporter = "summary", stop_on_failure = TRUE)'
+```
 
-Ran the committed `dev/benchmarks/benchmark_genome_effect_writer.R` at every
-planned size. R 4.5.3; Darwin 24.6.0; x86_64; DuckDB 1.5.5, 16 threads; 500 loci
-on five chromosomes. The sandbox did not expose a core count (`detectCores()`
-returned `NA`). Targeted tests overlapped this run, so these are development
-measurements rather than isolated timing estimates.
+**In progress when this draft was written.** Final status will replace this
+paragraph after completion. Log: `/private/tmp/tidybreed_5b_full_suite.log`.
 
-| Pairs | Setup (`aa_terms`) | Write | Time per pair | Peak R heap |
-|---:|---:|---:|---:|---:|
-| 1,000 | 0.024 s | 0.244 s | 244 µs | 165 MB |
-| 4,000 | 0.152 s | 0.470 s | 118 µs | 179 MB |
-| 16,000 | 0.430 s | 0.747 s | 47 µs | 194 MB |
-| 64,000 | 1.653 s | 3.601 s | 56 µs | 243 MB |
-| 124,750 | 3.260 s | 7.193 s | 58 µs | 390 MB |
+## Remaining completion work and review limits
 
-- Time-per-pair growth from 4,000 to 64,000: **0.48×**, below the 2× gate.
-- All-pairs write: **7.2 s**, below the 60 s gate.
-- Replacement of 16,000 pairs into 20,200 stored terms, three traits/owners and
-  100 line-scoped variants: **1.2 s**, peak 280 MB.
-- Reverse conversion of those 16,000 terms: **0.17 s**.
+The completion summary still ends with `SUITE_PLACEHOLDER`; replace that with
+the actual suite result. This review did not rerun the 5a writer benchmark,
+regenerate documentation, run `R CMD check`, or claim to complete 5c's broader
+phenotype/prevalence/vignette work. The full-suite regression and the existing
+realised round-trip tests cover some integration paths, but do not substitute
+for the specifically planned 5c scientific gates.
 
-Log: `/private/tmp/tidybreed_phase5a_writer_benchmark.log`.
-
-## Readiness for 5b and limits
-
-The shared writer, conversion and evaluator setup are ready for the planned
-generator. Preserve the existing `.ge_build()` / `.dae_stack()` / `.ge_commit()`
-path, including full-table validation and atomic target writes. The planned
-additive-only route must still share Part A's calibration **and storage**, since
-5a does not change its retained zero-row behavior.
-
-The pre-5b grep gate also passes: no `define_genome_effects(` references in
-`R/`, `man/`, `tests/` or `vignettes/`. The generator, new solver and rank-note
-helper are still 5b work; this review does not certify their unimplemented gates.
-
-Two performance qualifications should remain explicit:
-
-- The speed evidence is for growing numbers of common A×A families. Family
-  validation still compares pairs of variants within a family, and exceptional
-  scoped paths retain some per-term work. It is not a proof that every possible
-  high-order or heavily scoped model has linear runtime.
-- Large realised evaluation remains expensive. I did not rerun the extractor's
-  2,000-individual all-pairs benchmark; its timings and in-memory spill finding
-  are reported by the implementation document. Keep ordinary 5b/5c correctness
-  fixtures small, and profile forward `.noia_to_stored()` in 5b as planned.
-
-I did not rerun the full package suite, regenerate documentation or run pkgdown.
-The implementation document's 4,295-expectation full-suite result is separate
-from the independent targeted checks above. This review changes only this
-Markdown file; it makes no production or test-code changes.
+The current evidence supports the 5b algebra and ordinary-scale scientific
+results. The two findings above are concrete remaining defects, rather than
+reasons to redesign the main algorithm.

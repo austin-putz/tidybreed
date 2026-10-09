@@ -15,7 +15,7 @@
 [Codex review](import_qtl_effect_methods_phase_5_codex_review.md) and again after its
 re-review. **All decisions D1–D8 were made by the user (2026-10-06 to 2026-10-09), each
 as recommended; D5 adds a rank `message()` for singular targets (5b.7 item 8).** **5a done
-2026-10-09 (0.75.3)**; results and deviations in
+2026-10-09 (0.75.3); 5b done 2026-10-09 (0.76.0)**; results and deviations in
 [import_qtl_effect_methods_phase_5.md](import_qtl_effect_methods_phase_5.md).
 **Starting point:** 0.75.2 (`0276271`).
 
@@ -343,7 +343,7 @@ internal named in the skills changes its contract (none should).
 
 ---
 
-## 5b — `define_genome_effects()` (0.76.0)
+## 5b — `define_genome_effects()` (0.76.0) — *done 2026-10-09; see the results file*
 
 ### 5b.1 Signature (§9.1, unchanged except D4/D5)
 

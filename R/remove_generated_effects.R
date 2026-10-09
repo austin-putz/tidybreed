@@ -39,7 +39,12 @@
 #' @return The `tidybreed_pop`, invisibly. An error, with nothing deleted,
 #'   when a trait has no generated terms at that scope.
 #'
-#' @seealso [define_additive_effects()]
+#' A [define_genome_effects()] model is common-scope (no `line_name`, no
+#' `parent_origin`), so `remove_generated_effects(pop, trait_name)` removes it
+#' whole: its additive, dominance and additive-by-additive terms together.
+#' [define_additive_effects()] then accepts the trait again.
+#'
+#' @seealso [define_additive_effects()], [define_genome_effects()]
 #'
 #' @examples
 #' \dontrun{

@@ -306,9 +306,13 @@ Construction, highest order first, all closed form:
 Stage 3 is feasible **iff** $\mathbf G_A\succeq\mathbf R-\mathbf Q^\top\mathbf P^{-1}\mathbf Q$. In
 words: dominance and epistasis already imply a floor on the additive covariance, and the
 function refuses a $\mathbf G_A$ below it. For $k=1$ this is Zeng et al. (2013) Appendix A.
-An inbreeding-depression target is a third quadratic, exact for $k=1$ or diagonal
-$\mathbf G_D$ (the closed form of AlphaSimR's `altAddTraitAD()` optimiser). With no
-$\mathbf G_D$, $\mathbf G_{AA}$ it reduces exactly to 1.1.
+An inbreeding-depression target is a third quadratic (the closed form of AlphaSimR's
+`altAddTraitAD()` optimiser), exact for $k=1$; for $k\ge2$ the delivered value is
+reported, not enforced (phase-5 D4: the joint congruence mixes the per-trait columns,
+diagonal $\mathbf G_D$ included). With no $\mathbf G_D$, $\mathbf G_{AA}$ it reduces
+exactly to 1.1. Stage 3 needs a positive-definite $\mathbf G_A$ in this release when a
+non-zero $\mathbf G_D$ or $\mathbf G_{AA}$ is present (phase-5 D5, an implementation
+limit). Loci that do not segregate under the anchor keep their effects (phase-5 D3 (a)).
 
 **Verification in the source project** (suites listed in §1A): additive — 12 core tests + 13 v2 tests, 2026-08-28
 bug audit closed. Non-additive — 18 tests / 89 checks, exact to $10^{-13}$ under both anchors;
@@ -1427,7 +1431,7 @@ define_genome_effects(tbl, trait_name,            # tbl = get_table(pop, "genome
   anchor     = c("genic", "realised"),
   dominance_degree_mean = 0.19,                        # dominance degrees for the B_d architecture
   dominance_degree_sd   = 0.097,
-  inbreeding_depression = NULL,                        # per-trait; needs a dominance block; exact for k = 1 or diagonal G_D
+  inbreeding_depression = NULL,                        # named by trait; needs a dominance block; exact for k = 1, reported for k >= 2 (D4)
   base_tbl   = NULL,
   warn_bounds = c(0.8, 1.25))                          # as §7.4; NULL = off
 ```
@@ -1508,10 +1512,10 @@ define_genome_effects(tbl, trait_name,            # tbl = get_table(pop, "genome
    and no random number is drawn yet.
 2. $p$ from `extract_allele_freq(base_tbl)`. For `"realised"` only, the genotype matrix
    from `extract_genotypes()` (same restrictions as §7.1).
-3. Draw, in this fixed order: the additive architecture with
+3. Draw, in this fixed order (phase-5 D2): the additive architecture with
    `.draw_additive_architecture()` (shared with `define_additive_effects()`, §7.2), then
-   random pairs (only if `pairs = NULL` and A×A is present), then the dominance degrees
-   and the A×A architecture (only for the blocks present). Then call the ported
+   the dominance degrees, then random pairs (only if `pairs = NULL` and A×A is present),
+   then the A×A architecture (each only for the blocks present, zero blocks included). Then call the ported
    `.na_sim(p, X = NULL, ...)` (the body of `sim_qtl_effects_nonadd()`, refactored to take
    `p` and the drawn architectures). The order is what makes an additive-only call match
    `define_additive_effects()` (C4), and adding a block never changes the additive draw.
@@ -1619,7 +1623,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
-| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.1 | 2, 3, 4; **5a done** |
+| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.1 | 2, 3, 4; **5a, 5b done** |
 
 **Every step**, before its commit: bump `DESCRIPTION` `Version:` and add a `NEWS.md` entry
 (CLAUDE.md). The entry says that databases written by earlier versions are not readable
@@ -2034,7 +2038,7 @@ that is cancellation residue (`|x| ≤ n·eps·Σ|contrib|`) is set to 0 in
 and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (4)
 `genotype_terms()` refuses a fractional or negative `copy_count` before `as.integer()`.
 
-### Step 5 — Part C (0.75.3–0.76.1) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
+### Step 5 — Part C (0.75.3–0.76.1) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a and 5b done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
   `R/define_genome_effects.R`. Calibration internals go in `R/genome_effects_calibration.R`.
@@ -2074,6 +2078,18 @@ the evaluation statement itself, linear but minutes at 124,750 pairs (a risk for
 Codex review of 5a (0.75.4) found the numeric pair key used for repeated-locus checks could
 collide above 2^53; it now falls back to string keys there. `.stored_to_functional()` is bit-identical.
 Results: `plans/import_qtl_effect_methods_phase_5.md`.
+
+**As built (5b, 0.76.0).** `define_genome_effects()` in `R/define_genome_effects.R`, the
+calibration in `R/genome_effects_calibration.R`. Targets resolve per block (D8) through a
+resolver shared with Part A; with no non-zero D / A×A block the call is Part A's path and
+writes identical rows and RNG state (C4 (b)); otherwise A×A and dominance go through
+`.qtl_calibrate()` and the additive stage is solved on `G_A`'s correlation scale with the
+floor taken from the residual coupling. The ported solver for the inbreeding-depression
+mean is robust (one change beyond the plan: a discriminant within rounding of 0 is a
+repeated root at the vertex). `define_additive_effects()` refuses a non-additive generated
+model; singular targets get a rank message from all three entry points. All twelve 5b
+mutation checks fail their gates. The §1.3, §9.1, §9.2 step 3, C7 and C17 text above is
+corrected for D2–D5.
 
 ---
 
@@ -2139,7 +2155,7 @@ Results: `plans/import_qtl_effect_methods_phase_5.md`.
 - C4. Additive-only reduction, two levels. (a) **Internals**: with no dominance or A×A block and a **supplied** architecture $\mathbf B_0$, the calibrator's output equals `.qtl_congruence()`'s on the same $\mathbf B_0$ and $\mathbf M$, to 1e-12 (the source method's reduction test). (b) **Public** (decided 2026-10-01, §0A): with the same `set.seed()`, traits, target, `anchor` and `base_tbl`, `define_genome_effects()` with an additive-only target writes `expect_identical()` term, member and origin rows to `define_additive_effects()` with its defaults (`distribution = "normal"`, `method = "shared"`, `seed = NULL`), `effect_owner = "generated"` included (§5). Row ids are compared after dropping the `id_*` key columns, which `next_int_id()` assigns per database. This holds because both draw through `.draw_additive_architecture()` first (§7.2, §9.2), so it also constrains Q5: a future sampler must be added to that helper, not to one generator. Checked for $k=1$ and $k=2$ and both anchors.
 - C5. $\mathbf G_A$ below the floor errors, naming the floor.
 - C6. $k=1$ matches `zeng_appendix_A()` to 1e-12.
-- C7. The inbreeding-depression target is exact for $k=1$ and for diagonal $\mathbf G_D$ with $k\ge2$, and reported (not enforced) for non-diagonal $\mathbf G_D$.
+- C7. The inbreeding-depression target is exact for $k=1$, and reported (not enforced) for $k\ge2$, diagonal $\mathbf G_D$ included (phase-5 D4: the joint congruence mixes the columns).
 - C8. One owner (§5): (a) `define_genome_effects()` on a trait with common, line-A and line-B `generated` additive variants replaces all of them, and its message reports the replaced count and the line-scoped count. (b) On a trait whose `generated` model has a `dominance` or interaction term, `define_additive_effects(line_name = "A", G = …)` (no line-A block is stored, so the A15 overwrite check does not fire) errors before any write, on the §5 content check. The error names the additive-only `define_genome_effects()` re-run, and `trait_var_comp` has no line-A block afterwards. After that re-run, `define_additive_effects()` **without `G`**, with `trait_var_comp_tbl` filtered to `effect_name == "additive"`, succeeds. Without the filter it still errors on the stored `dominance` target (§6C). (c) Custom-owner terms on the same trait are untouched by every call. (d) The writer refuses `effect_owner = "generated"` without `allow_reserved_owner = TRUE`.
 - C9. A×A terms have two `additive` members and land in `interaction`.
 - C10. Non-diploid / non-autosomal QTL are refused with the reason.
@@ -2149,7 +2165,7 @@ Results: `plans/import_qtl_effect_methods_phase_5.md`.
 - C14. Determinism: the same `set.seed()` twice gives `expect_identical()` stored terms, including random pairing.
 - C15. Pairs (Q8): (a) supplied `pairs`: unknown loci, loci outside the filter, self-pairs and reversed duplicates each error naming the keys. A hub design (one locus in three pairs) is accepted, and its genic $\mathbf G_{AA}$ and $\mathbf G_A$ are exact (C1). (b) Random matching: no locus appears in two pairs; the pairs are written in sorted order; the same seed gives `expect_identical()` pairs. (c) `n_pairs = NULL` gives $\lfloor m/2\rfloor$ pairs (odd $m$: one locus unpaired) with the message. $n_{\text{pairs}} > \lfloor m/2\rfloor$ errors naming the maximum and `pairs`. (d) `pairs` and `n_pairs` together, or either without an A×A block, error.
 - C16. `aa_terms()` output is identical under reordering of its input pairs and under swapping the two loci of a pair, and never rescales `e`. `aa_terms()`, `ad_terms()` (both codings) and `genotype_terms()` outputs `rbind()` with each other. Missing `p_1` / `p_2` errors under both codings. Under functional coding `aa_terms()` reports each pair's $\mu$ share, $e(2p_1-1)(2p_2-1)$, and writes it nowhere. (Ships in step 4.)
-- C17. Target semantics (§6C): a block absent from the resolved rows is absent from the model; a stored block is used; a zero matrix is calibrated as an exact zero and stored as zeros; a passed matrix is written. `trait_var_comp_tbl |> filter(effect_name != "additive_by_additive")` gives an A + D model with the stored A×A row untouched. Passing `G_D` while a `dominance` block is stored errors. No `additive` block errors. An additive-only target is accepted (C4). Adding a `dominance` target later and re-running replaces the trait's `generated` model, and the additive architecture draw is unchanged by the new block (same seed). `inbreeding_depression` with no dominance block errors and writes nothing.
+- C17. Target semantics (§6C): a block absent from the resolved rows is absent from the model; a stored block is used; a zero matrix is calibrated as an exact zero and stored as zeros; a passed matrix is written. `trait_var_comp_tbl |> filter(effect_name != "additive_by_additive")` gives an A + D model with the stored A×A row untouched. Passing `G_D` while a `dominance` block is stored errors. No `additive` block errors. An additive-only target is accepted (C4). Adding a `dominance` target later and re-running replaces the trait's `generated` model, and the additive architecture draw is unchanged by the new block (same seed); adding an A×A block leaves the dominance draw unchanged too (phase-5 D2). `inbreeding_depression` with no dominance block errors and writes nothing.
 - C18. Dimnames: a `G_A` / `G_D` / `G_AA` whose dimnames differ from `trait_name` (other names, or the same names in another order) errors and writes nothing. Unnamed matrices are taken in `trait_name` order.
 - C19. (Moved here from the consolidation gates: it needs steps 4 and 5.) For a model **generated with `anchor = "genic"`**, `extract_genetic_variance(anchor = "genic", base_tbl = <the generation base>)`'s blocks equal the targets to 1e-10. On a genotype fixture with **exact** HWE genotype counts at frequencies equal to the stored centres, and LE at every paired locus pair, the covariance of `ind_tgv` `additive` also equals the `"realised"` `additive` block to 1e-10. Away from those conditions they differ, because the stored contrast fixes $b=q-p$ and the realised projection uses the observed $b$ (§4.3.1). The test shows one such difference.
 - C20. Generator, realised anchor: for a model generated with `anchor = "realised"`, `extract_genetic_variance(anchor = "realised")` on the same base individuals returns $\mathbf G_A$, $\mathbf G_D$, $\mathbf G_{AA}$ to 1e-10. The §7.1 restrictions (individuals only, size guard) error as in A6 and A21. `warn_bounds` fires on an inbred panel, and `NULL` silences it. A validation error leaves `.Random.seed` unchanged (as A22).

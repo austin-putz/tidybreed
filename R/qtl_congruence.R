@@ -158,16 +158,85 @@ QTL_CALIBRATION_TOL <- 1e-8
 }
 
 #' The rank error `.qtl_congruence()` raises when the anchor is too small
+#'
+#' `what` names the block for a generator with several (`"dominance"`); the
+#' additive generator leaves it `NULL`.
 #' @noRd
-.qtl_anchor_rank_check <- function(rank_M, q) {
+.qtl_anchor_rank_check <- function(rank_M, q, what = NULL) {
   if (rank_M < q) {
-    stop("The anchor cannot carry the target for any effects: rank(G) = ", q,
+    stop("The anchor cannot carry the ",
+         if (is.null(what)) "target" else paste0("'", what, "' target"),
+         " for any effects: rank(G) = ", q,
          " but the reference covariance M has rank ", rank_M, " at the ",
-         "selected loci (too few independent segregating directions). Select ",
+         "selected ", if (identical(what, "additive_by_additive")) "pairs"
+                      else "loci",
+         " (too few independent segregating directions). Select ",
          "more loci, or loci that segregate in the base population.",
          call. = FALSE)
   }
   invisible(TRUE)
+}
+
+#' Report a singular target, by name (decision D5, phase-5 plan 5b.7 item 8)
+#'
+#' A singular target is valid -- a genetic correlation of 1 or a zero
+#' variance can be deliberate -- but a typed `1` meant as `0.99` looks the
+#' same, so it is reported with a `message()`, never refused. The rank is
+#' judged as everywhere else, on the correlation scale (`.qtl_target_std()`).
+#' A zero block (rank 0) gets no note: it is an explicit "none of this
+#' component", reported as such by the generator.
+#'
+#' The reason is the most specific one that applies: traits with zero
+#' variance, then trait pairs correlated at +/-1, then the traits in the null
+#' space of the correlation matrix.
+#'
+#' @param G Named square target.
+#' @param effect_name The block, for the message.
+#' @return The note (character), or `NULL` when there is none, invisibly.
+#' @noRd
+.qtl_rank_note <- function(G, effect_name, rel_tol = 1e-10) {
+  std <- .qtl_target_std(unname(G), rel_tol = rel_tol)
+  k <- nrow(G)
+  if (std$rank == 0L || std$rank == k) return(invisible(NULL))
+  nm <- rownames(G)
+  if (is.null(nm)) nm <- paste0("Trait", seq_len(k))
+  label <- sub("_", "-", gsub("_by_", "-by-", effect_name), fixed = TRUE)
+  reasons <- character(0)
+  zero <- nm[!std$pos]
+  if (length(zero)) {
+    reasons <- c(reasons, paste0(
+      paste(zero, collapse = ", "), if (length(zero) == 1L) " has" else " have",
+      " zero ", label, " variance"))
+  }
+  pn <- nm[std$pos]
+  if (length(pn) >= 2L) {
+    s <- sqrt(std$d[std$pos])
+    R <- std$G[std$pos, std$pos, drop = FALSE] / outer(s, s)
+    ij <- which(upper.tri(R) & 1 - abs(R) <= rel_tol * (1 + abs(R)),
+                arr.ind = TRUE)
+    if (nrow(ij)) {
+      reasons <- c(reasons, paste0(
+        "genetic correlation ",
+        paste0(ifelse(R[ij] > 0, "+1", "-1"), " between ", pn[ij[, 1]],
+               " and ", pn[ij[, 2]], collapse = "; ")))
+    }
+    if (!length(reasons)) {
+      ev <- std$eigen
+      null <- ev$vectors[, ev$values <= max(ev$values) * rel_tol, drop = FALSE]
+      dep <- pn[rowSums(abs(null)) > 1e-6]
+      if (length(dep)) {
+        reasons <- c(reasons, paste0("a linear dependency among traits ",
+                                     paste(dep, collapse = ", ")))
+      }
+    }
+  }
+  note <- paste0("The '", effect_name, "' target for ", paste(nm, collapse = ", "),
+                 " is singular (rank ", std$rank, " of ", k, "): ",
+                 paste(reasons, collapse = "; "), ". This is valid and is ",
+                 "used as given; check it if you meant, say, a correlation of ",
+                 "0.99 rather than 1.")
+  message(note)
+  invisible(note)
 }
 
 #' Calibrate an architecture to a target and verify it against the target
@@ -274,6 +343,7 @@ QTL_CALIBRATION_TOL <- 1e-8
   w <- as.numeric(w)
   list(kind = "diagonal", weights = w,
        cov = function(B) crossprod(B * sqrt(w)),
+       cross = function(B1, B2) crossprod(B1 * w, B2),
        locus_variance = w,
        rank = function(rel_tol) {
          if (!length(w) || .qtl_max_abs(w) == 0) 0L
@@ -283,17 +353,23 @@ QTL_CALIBRATION_TOL <- 1e-8
 
 #' A design anchor: M = Xc' Xc / denominator
 #'
-#' `Xc` is the column-centred n x m design. `cov()` is `O(nmk)`: it forms
-#' `Xc %*% B`, never `Xc' Xc`. `rank()` uses the singular values of `Xc`
-#' (squared, so the cut-off is on the eigenvalue scale `.qtl_psd_eigen()` uses).
+#' `Xc` is the column-centred n x m design. `cov()` and `cross()` are
+#' `O(nmk)`: they form `Xc %*% B`, never `Xc' Xc`. `rank()` uses the singular
+#' values of `Xc` (squared, so the cut-off is on the eigenvalue scale
+#' `.qtl_psd_eigen()` uses). The SVD is computed once per anchor and cached:
+#' a generator checks the rank before the draw and the congruence checks it
+#' again.
 #' @noRd
 .qtl_anchor_design <- function(Xc, denominator) {
+  cache <- new.env(parent = emptyenv())
   list(kind = "design", design = Xc, denominator = denominator,
        cov = function(B) crossprod(Xc %*% B) / denominator,
+       cross = function(B1, B2) crossprod(Xc %*% B1, Xc %*% B2) / denominator,
        locus_variance = colSums(Xc^2) / denominator,
        rank = function(rel_tol) {
          if (!length(Xc)) return(0L)
-         d2 <- svd(Xc, nu = 0L, nv = 0L)$d^2
+         if (is.null(cache$d2)) cache$d2 <- svd(Xc, nu = 0L, nv = 0L)$d^2
+         d2 <- cache$d2
          if (!length(d2) || max(d2) == 0) 0L else sum(d2 > max(d2) * rel_tol)
        })
 }

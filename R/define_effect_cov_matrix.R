@@ -174,6 +174,7 @@ define_effect_cov_matrix <- function(pop,
   message("Stored '", effect_name, "' covariance matrix for: ",
           paste(trait_name, collapse = ", "),
           if (!is.null(line_name)) paste0(" (line '", line_name, "')"), ".")
+  if (is_genetic) .qtl_rank_note(cov_matrix, effect_name)
   invisible(pop)
 }
 
@@ -463,7 +464,8 @@ DERIVED_EFFECT_NAMES <- c("total", "unpartitioned", "between_components")
       " (it re-draws one scope per call: re-run the others, each line and ",
       "parent_origin, afterwards so they read the new target)"),
     ".")
-  else paste0("re-run the generator that wrote them with the new target.")
+  else paste0("re-run define_genome_effects() with the new target (it ",
+              "re-draws the trait's whole generated model).")
   stop("Trait(s) ", paste(hit_traits, collapse = ", "), " already have ",
        "generated '", effect_name, "' terms (", scope, "), calibrated to ",
        "the target they were generated with. A target written now would not ",

@@ -26,6 +26,11 @@ scope arguments writes the common scope, \verb{line_name = NULL, parent_origin =
 \value{
 The \code{tidybreed_pop}, invisibly. An error, with nothing deleted,
 when a trait has no generated terms at that scope.
+
+A \code{\link[=define_genome_effects]{define_genome_effects()}} model is common-scope (no \code{line_name}, no
+\code{parent_origin}), so \code{remove_generated_effects(pop, trait_name)} removes it
+whole: its additive, dominance and additive-by-additive terms together.
+\code{\link[=define_additive_effects]{define_additive_effects()}} then accepts the trait again.
 }
 \description{
 Deletes every term a generator wrote for \code{trait_name} at exactly one
@@ -61,5 +66,5 @@ pop <- remove_generated_effects(pop, "ADG", parent_origin = 1)
 }
 }
 \seealso{
-\code{\link[=define_additive_effects]{define_additive_effects()}}
+\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=define_genome_effects]{define_genome_effects()}}
 }

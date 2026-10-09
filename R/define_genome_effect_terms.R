@@ -906,9 +906,10 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
       stop("mode = \"replace_trait\" would delete ", sum(reserved),
            " term(s) under the reserved owner '",
            paste(unique(t$effect_owner[reserved]), collapse = "', '"),
-           "', which define_additive_effects() owns. Generated terms are ",
-           "replaced only by re-running that function; use replace_owner or ",
-           "replace_scope to replace your own terms.",
+           "', which the generators define_additive_effects() and ",
+           "define_genome_effects() own. Generated terms are replaced only by ",
+           "re-running a generator (or removed with remove_generated_effects()); ",
+           "use replace_owner or replace_scope to replace your own terms.",
            call. = FALSE)
     }
   }

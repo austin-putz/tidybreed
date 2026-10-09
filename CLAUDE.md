@@ -152,8 +152,9 @@ The model is split into two distinct layers with a strict boundary between them:
 - One row in `trait_meta` per underlying genetic quantity (e.g. `ADG_direct`, `ADG_social`, `WWD`, `WWM`)
 - Has QTL effects in `genome_effects`, genetic values in `ind_tgv` (the breeding value is component `additive`), generation targets in `trait_var_comp`
 - Arguments: `description`, `units` only. Targets enter **only** through
-  `define_effect_cov_matrix()` or a generator's `G =` (`define_additive_effects()`),
-  and a stored target block is never overwritten
+  `define_effect_cov_matrix()` or a generator's `G =` (`define_additive_effects()`)
+  / `G_A =`, `G_D =`, `G_AA =` (`define_genome_effects()`), and a stored target
+  block is never overwritten
 - No phenotype-level information at all — no mean, no residual, no type, no expressed_sex
 
 **Observation layer** — managed by `define_phenotype()`:
@@ -184,8 +185,9 @@ effect definitions), use `define_`.
 
 Examples: `add_founders()`, `add_phenotype()`, `add_tgv()`, `add_ebv()`,
 `add_index()` — all write simulation output.  
-`define_trait()`, `define_additive_effects()`, `define_effect_cov_matrix()`,
-`define_chip()`, `define_index()` — all write model configuration.
+`define_trait()`, `define_additive_effects()`, `define_genome_effects()`,
+`define_effect_cov_matrix()`, `define_chip()`, `define_index()` — all write
+model configuration.
 
 ## Schema and API Reference (lazy-loaded)
 
@@ -224,7 +226,8 @@ this file was updated before.
   that set: DuckDB 1.5.5 cannot delete parent and child rows in one transaction,
   so `validate_genome_effects()` checks orphans before every `COMMIT` instead
   (pinned in `tests/testthat/test-genome-effects-schema.R`).
-- **Generated means calibrated (Q21):** only generators write the reserved
+- **Generated means calibrated (Q21):** only the generators
+  (`define_additive_effects()`, `define_genome_effects()`) write the reserved
   owner `"generated"`, and they always sample **and** calibrate to the stored
   target — never add a manual or unscaled mode to a generator; known
   coefficients go through `define_genome_effect_terms()` under a user owner.

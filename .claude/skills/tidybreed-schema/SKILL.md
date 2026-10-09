@@ -77,7 +77,7 @@ by `define_additive_effects()`.
 |------------------|---------|-----------------------------------------------------------|
 | id_genome_effect | INTEGER | Primary key assigned via `next_int_id()`                  |
 | trait_name       | VARCHAR | R-enforced FK to `trait_meta.trait_name`                  |
-| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for `define_additive_effects()` and means *calibrated to the stored target* (0.74.1: the generator always calibrates, and `define_phenotype(prevalence = )` requires every term to be `"generated"`); it proves each *variant* was calibrated to the block its scope reads, not that two parent-scope variants together deliver it (0.74.5). Generated rows are deleted only by a generator re-run of their scope or `remove_generated_effects()`. `"custom"` is the `define_genome_effect_terms()` default |
+| effect_owner     | VARCHAR | Which writer owns these rows, **for replacement only**. Owners always sum and are never selected between: `"generated"` is reserved for the generators `define_additive_effects()` and `define_genome_effects()` and means *calibrated to the stored target* (0.74.1: the generator always calibrates, and `define_phenotype(prevalence = )` requires every term to be `"generated"`); it proves each *variant* was calibrated to the block its scope reads, not that two parent-scope variants together deliver it (0.74.5). Generated rows are deleted only by a generator re-run of their scope or `remove_generated_effects()`. `"custom"` is the `define_genome_effect_terms()` default |
 | effect_name      | VARCHAR | Optional per-term label; no mathematical meaning          |
 | genome_value     | DOUBLE  | The term's coefficient                                    |
 
@@ -315,7 +315,8 @@ file whose `trait_meta` still has it.
 **Generation targets**: the genetic covariances the effect generators
 calibrate to. One row per (effect_name, line_name, trait_name_1, trait_name_2);
 both `(i,j)` and `(j,i)` pairs stored. Populated **only** by
-`define_effect_cov_matrix()` and a generator's `G =`, both through
+`define_effect_cov_matrix()` and a generator's `G =` / `G_A =`, `G_D =`,
+`G_AA =`, all through
 `.tvc_write_block()`. Stores **only** genetic effects — no phenotype-level
 variances, and never estimates (those are evaluation parameters, plan Q20).
 
@@ -334,9 +335,9 @@ Invariants (0.73.0, plan §6C):
   own block when one exists and otherwise falls back to `NULL`, decided per
   `effect_name`. Readers never mix lines.
 
-Valid `effect_name` values: `"additive"` (additive genetic G matrix);
-reserved, with no generator yet: `"dominance"`,
-`"additive_by_additive"`. Named random effects (HYS, litter, pen)
+Valid `effect_name` values: `"additive"` (additive genetic G matrix),
+`"dominance"` and `"additive_by_additive"` (calibrated by
+`define_genome_effects()`, 0.76.0). Named random effects (HYS, litter, pen)
 go to `phenotype_var_comp`, not here.
 
 | Column           | Type    | Notes                                              |

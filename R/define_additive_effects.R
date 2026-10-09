@@ -354,6 +354,7 @@ define_additive_effects <- function(tbl,
   n_elig <- .dae_n_eligible(po[[trait_name[1L]]])
 
   if (anchor == "realised") .dae_check_realised(base_tbl, line_name, po)
+  .dae_refuse_nonadditive_model(conn, trait_name)
 
   # ── 2. The target (§6C). ──────────────────────────────────────────────────
   tgt <- .dae_resolve_target(pop, trait_name, line_name, G,
@@ -419,11 +420,7 @@ define_additive_effects <- function(tbl,
 
   w_all <- n_elig * p_base * (1 - p_base)
   anchor_at <- function(rows) {
-    if (anchor == "genic") return(.qtl_anchor_diag(w_all[rows]))
-    cols <- match(genome_order$locus_id[rows], design$locus_id)
-    Xc   <- sweep(design$X[, cols, drop = FALSE], 2L,
-                  colMeans(design$X[, cols, drop = FALSE]), "-")
-    .qtl_anchor_design(Xc, nrow(Xc) - 1L)
+    .dae_anchor_at(anchor, rows, w_all, design, genome_order$locus_id)
   }
 
   # Anchor feasibility depends on the base alone, so it is refused before the
@@ -443,9 +440,7 @@ define_additive_effects <- function(tbl,
 
   # ── 5. Calibrate, verified against the target as stored. ─────────────────
   if (k == 1L || method == "shared") {
-    rows <- mask[, 1L]
-    B[rows, ] <- .qtl_calibrate(B[rows, , drop = FALSE], std,
-                                anchor_at(rows))$B
+    B <- .dae_calibrate_shared(B, mask[, 1L], std, anchor_at(mask[, 1L]))
   } else {
     for (t in trait_name) {
       rows <- mask[, t]
@@ -482,21 +477,18 @@ define_additive_effects <- function(tbl,
   }
 
   # ── 7. Build, and commit terms with any new target in one transaction. ────
-  built <- NULL
-  drop  <- integer(0)
+  drop <- integer(0)
   for (t in trait_name) {
-    rows <- mask[, t] & !is.na(B[, t])
-    scope_t <- .dae_scope(line_name, po[[t]])
     # Every trait's old variant at this scope goes, including a zero-target
     # "union" trait that receives no new terms: kept, it would go on
     # delivering its old variance under the new target of 0.
     drop <- c(drop, .ge_resolve_deletes(
       model, t, GE_GENERATED_OWNER, "replace_scope",
-      .ge_scope_from_origin(scope_t, "replace_scope"), TRUE))
-    if (!any(rows)) next
-    built <- .dae_stack(built, .dae_build(conn, t, genome_order$locus_name[rows],
-                                          B[rows, t], p_base[rows], scope_t))
+      .ge_scope_from_origin(.dae_scope(line_name, po[[t]]), "replace_scope"),
+      TRUE))
   }
+  built <- .dae_build_traits(conn, trait_name, B, mask, genome_order$locus_name,
+                             p_base, function(t) .dae_scope(line_name, po[[t]]))
   write_target <- if (tgt$write) {
     G_write <- G
     function(conn) .tvc_write_block(conn, "additive", G_write, line_name)
@@ -535,6 +527,7 @@ define_additive_effects <- function(tbl,
             "differences between lines, use common effects centred on one ",
             "reference line (see ?define_additive_effects).")
   }
+  .qtl_rank_note(G, "additive")
   invisible(pop)
 }
 
@@ -673,6 +666,93 @@ GE_GENERATED_OWNER <- "generated"
        members = rbind(a$members, b$members),
        origins = rbind(a$origins, b$origins),
        labels  = c(a$labels, b$labels))
+}
+
+#' The anchor at a set of loci, as both generators build it
+#'
+#' `"genic"`: the diagonal weights `w_all` (`n_eligible * p * q`) at `rows`.
+#' `"realised"`: the base individuals' dosages at `rows`, centred, with the
+#' sample denominator. Shared so the additive-only route of
+#' [define_genome_effects()] builds the same anchor as
+#' [define_additive_effects()] (gate C4 (b)).
+#'
+#' @param rows Logical over all loci (`locus_id` order).
+#' @param design `.dae_collect_dosages()` result, or `NULL` under `"genic"`.
+#' @keywords internal
+#' @noRd
+.dae_anchor_at <- function(anchor, rows, w_all, design, locus_id) {
+  if (anchor == "genic") return(.qtl_anchor_diag(w_all[rows]))
+  cols <- match(locus_id[rows], design$locus_id)
+  Xc   <- sweep(design$X[, cols, drop = FALSE], 2L,
+                colMeans(design$X[, cols, drop = FALSE]), "-")
+  .qtl_anchor_design(Xc, nrow(Xc) - 1L)
+}
+
+#' Calibrate every trait's architecture on one shared QTL set
+#'
+#' The additive path both generators take (gate C4 (b)): the congruence on
+#' the rows of the draw at `rows`, verified against the target.
+#'
+#' @param B n_loci x k draw from `.draw_additive_architecture()`.
+#' @keywords internal
+#' @noRd
+.dae_calibrate_shared <- function(B, rows, std, anchor) {
+  B[rows, ] <- .qtl_calibrate(B[rows, , drop = FALSE], std, anchor)$B
+  B
+}
+
+#' Build every trait's additive terms (Part A's writer frames)
+#'
+#' One order-one `additive` term per QTL and trait, a zero-valued one
+#' included: the storage both generators use for an additive-only model
+#' (gate C4 (b)).
+#'
+#' @param scope_of Function of a trait name returning its `origin` scope.
+#' @return The stacked candidate build, or `NULL` when no trait has a QTL.
+#' @keywords internal
+#' @noRd
+.dae_build_traits <- function(conn, trait_name, B, mask, locus_name, p_base,
+                              scope_of) {
+  built <- NULL
+  for (t in trait_name) {
+    rows <- mask[, t] & !is.na(B[, t])
+    if (!any(rows)) next
+    built <- .dae_stack(built, .dae_build(conn, t, locus_name[rows], B[rows, t],
+                                          p_base[rows], scope_of(t)))
+  }
+  built
+}
+
+#' Refuse a trait whose generated model has more than additive terms (§5)
+#'
+#' One owner, `"generated"`, holds one calibrated model per trait. A
+#' [define_genome_effects()] model with dominance or A x A terms is calibrated
+#' as a whole (its additive effects carry the coupling the other blocks
+#' induce), so replacing one of its scopes here would leave a model calibrated
+#' to nothing. Checked after argument validation and before the target, any
+#' write, and `seed`.
+#' @keywords internal
+#' @noRd
+.dae_refuse_nonadditive_model <- function(conn, trait_name) {
+  gm <- .gev_read_model(conn, trait_name, effect_owner = GE_GENERATED_OWNER)
+  if (nrow(gm$terms) == 0L) return(invisible(NULL))
+  kind <- .gev_target_kind(gm)
+  bad  <- is.na(kind) | kind != "additive"
+  if (!any(bad)) return(invisible(NULL))
+  tr <- sort(unique(gm$terms$trait_name[bad]))
+  stop("Trait(s) ", paste(tr, collapse = ", "), " already have a generated ",
+       "model with dominance or additive-by-additive terms, written by ",
+       "define_genome_effects(). That model is calibrated as a whole, so ",
+       "define_additive_effects() cannot replace part of it. Re-run ",
+       "define_genome_effects() with an additive-only target first, e.g.\n",
+       "  get_table(pop, \"genome_meta\") |> dplyr::filter(...) |>\n",
+       "    define_genome_effects(c(", paste0('"', tr, '"', collapse = ", "),
+       "), trait_var_comp_tbl = get_table(pop, \"trait_var_comp\") |>\n",
+       "      dplyr::filter(effect_name == \"additive\", is.na(line_name)))\n",
+       "While the 'dominance' / 'additive_by_additive' targets stay stored, a ",
+       "later define_additive_effects() call needs the same ",
+       "`trait_var_comp_tbl` filter. remove_generated_effects() removes the ",
+       "generated model whole instead.", call. = FALSE)
 }
 
 #' Loci already carrying a generated additive term for this trait at this scope
@@ -845,7 +925,8 @@ QTL_REALISED_MAX_CELLS <- 2e7
              "define_effect_cov_matrix(). Remove the stored '",
              paste(other, collapse = "', '"), "' block with remove_rows(), ",
              "re-run this call, then store it again with ",
-             "define_effect_cov_matrix().", call. = FALSE)
+             "define_effect_cov_matrix(). Or calibrate every stored block ",
+             "together with define_genome_effects().", call. = FALSE)
       }
       stop("A stored '", paste(other, collapse = "', '"), "' target exists for ",
            paste(trait_name, collapse = ", "), ". define_additive_effects() ",
@@ -860,7 +941,9 @@ QTL_REALISED_MAX_CELLS <- 2e7
            '      dplyr::filter(effect_name == "additive", ',
            if (is.null(line_name)) "is.na(line_name)"
            else paste0('line_name == "', line_name, '"'), "))\n",
-           "or remove the stored block with remove_rows().", call. = FALSE)
+           "or remove the stored block with remove_rows(), or calibrate ",
+           "every stored block together with define_genome_effects().",
+           call. = FALSE)
     }
     block <- .tvc_block_traits(conn, "additive", line_name, trait_name)
     if (length(block)) {
@@ -892,29 +975,13 @@ QTL_REALISED_MAX_CELLS <- 2e7
 
   explicit <- !is.null(trait_var_comp_tbl)
   rows <- if (explicit) {
-    if (!inherits(trait_var_comp_tbl, "tidybreed_table") ||
-        trait_var_comp_tbl$table_name != "trait_var_comp") {
-      stop("`trait_var_comp_tbl` must be get_table(pop, \"trait_var_comp\") ",
-           "|> filter(...).", call. = FALSE)
-    }
-    if (!identical(trait_var_comp_tbl$pop$db_conn, conn)) {
-      stop("`trait_var_comp_tbl` must come from the same pop as `tbl`.",
-           call. = FALSE)
-    }
-    dplyr::collect(trait_var_comp_tbl)
+    .tvc_collect_explicit(trait_var_comp_tbl, conn)
   } else {
     .dae_default_target_rows(conn, trait_name, line_name)
   }
   rows <- rows[rows$trait_name_1 %in% trait_name |
                rows$trait_name_2 %in% trait_name, , drop = FALSE]
-  hint_filter <- paste0(
-    '  trait_var_comp_tbl = get_table(pop, "trait_var_comp") |>\n',
-    '    dplyr::filter(effect_name == "additive"',
-    if (is.null(line_name)) ", is.na(line_name)"
-    else paste0(', line_name == "', line_name, '"'),
-    ', trait_name_1 %in% c(', paste0('"', trait_name, '"', collapse = ", "),
-    '),\n                  trait_name_2 %in% c(',
-    paste0('"', trait_name, '"', collapse = ", "), '))')
+  hint_filter <- .tvc_hint_filter("additive", trait_name, line_name)
 
   # A stored target is never silently ignored.
   other <- setdiff(unique(rows$effect_name), "additive")
@@ -923,13 +990,73 @@ QTL_REALISED_MAX_CELLS <- 2e7
          paste(trait_name, collapse = ", "), ". define_additive_effects() ",
          "calibrates the additive block only and never silently ignores a ",
          "stored target. To generate additive effects only, say so with\n",
-         hint_filter, "\nor remove the stored block with remove_rows().",
+         hint_filter, "\nor remove the stored block with remove_rows(), or ",
+         "calibrate every stored block together with define_genome_effects().",
          call. = FALSE)
   }
+  M <- .tvc_block_from_rows(conn, "additive", trait_name, rows, explicit,
+                            line_name, .dae_scope_label(line_name, po[[trait_name[1L]]]))
+  if (is.null(M)) {
+    stop("No 'additive' target is stored for ", paste(trait_name, collapse = ", "),
+         if (!is.null(line_name)) paste0(" (line '", line_name, "' or population-wide)"),
+         if (explicit) " in `trait_var_comp_tbl`", ". Pass `G =`, or store one with ",
+         "define_effect_cov_matrix(pop, \"additive\", ...).", call. = FALSE)
+  }
+  list(G = M, write = FALSE)
+}
+
+#' Collect an explicit `trait_var_comp_tbl`, checking where it comes from
+#' @keywords internal
+#' @noRd
+.tvc_collect_explicit <- function(trait_var_comp_tbl, conn) {
+  if (!inherits(trait_var_comp_tbl, "tidybreed_table") ||
+      trait_var_comp_tbl$table_name != "trait_var_comp") {
+    stop("`trait_var_comp_tbl` must be get_table(pop, \"trait_var_comp\") ",
+         "|> filter(...).", call. = FALSE)
+  }
+  if (!identical(trait_var_comp_tbl$pop$db_conn, conn)) {
+    stop("`trait_var_comp_tbl` must come from the same pop as `tbl`.",
+         call. = FALSE)
+  }
+  dplyr::collect(trait_var_comp_tbl)
+}
+
+#' The filter that selects one block of the call's traits, as message text
+#' @keywords internal
+#' @noRd
+.tvc_hint_filter <- function(effect_name, trait_name, line_name) {
+  paste0(
+    '  trait_var_comp_tbl = get_table(pop, "trait_var_comp") |>\n',
+    '    dplyr::filter(effect_name == "', effect_name, '"',
+    if (is.null(line_name)) ", is.na(line_name)"
+    else paste0(', line_name == "', line_name, '"'),
+    ', trait_name_1 %in% c(', paste0('"', trait_name, '"', collapse = ", "),
+    '),\n                  trait_name_2 %in% c(',
+    paste0('"', trait_name, '"', collapse = ", "), '))')
+}
+
+#' One genetic target block from candidate rows, shared by both generators
+#'
+#' `rows` are the candidate `trait_var_comp` rows of one `effect_name` that
+#' touch the call's traits (from an explicit `trait_var_comp_tbl`, or the
+#' stored default). Refuses a block that links a call trait with an outside
+#' trait, two candidate blocks in an explicit table, an explicit block of
+#' another scope than the terms this call writes (the scope check), a
+#' repeated pair, an incomplete or asymmetric block, and one that is not
+#' PSD on its correlation scale.
+#'
+#' @param scope_label The call's scope, for the scope error.
+#' @return The named k x k block, or `NULL` when there are no rows (the block
+#'   is absent).
+#' @keywords internal
+#' @noRd
+.tvc_block_from_rows <- function(conn, effect_name, trait_name, rows, explicit,
+                                 line_name, scope_label) {
+  hint_filter <- .tvc_hint_filter(effect_name, trait_name, line_name)
   outside <- setdiff(unique(c(rows$trait_name_1, rows$trait_name_2)), trait_name)
   if (length(outside)) {
     block <- sort(unique(c(trait_name, outside)))
-    stop("The stored 'additive' block links ",
+    stop("The stored '", effect_name, "' block links ",
          paste(trait_name, collapse = ", "), " with ",
          paste(outside, collapse = ", "), ". Calibrating ",
          paste(trait_name, collapse = ", "), " alone would break the stored ",
@@ -939,8 +1066,8 @@ QTL_REALISED_MAX_CELLS <- 2e7
          hint_filter, call. = FALSE)
   }
   if (explicit && length(unique(rows$line_name)) > 1L) {
-    stop("`trait_var_comp_tbl` holds two candidate 'additive' blocks for ",
-         paste(trait_name, collapse = ", "), " (line_name ",
+    stop("`trait_var_comp_tbl` holds two candidate '", effect_name,
+         "' blocks for ", paste(trait_name, collapse = ", "), " (line_name ",
          paste(ifelse(is.na(unique(rows$line_name)), "NULL",
                       unique(rows$line_name)), collapse = " and "),
          "). Filter it to one.", call. = FALSE)
@@ -950,14 +1077,13 @@ QTL_REALISED_MAX_CELLS <- 2e7
   # refusals) finds a term's target from its own scope, by the same
   # line -> NULL precedence, so the selected block must be that one.
   if (explicit && nrow(rows) > 0L) {
-    want <- .tvc_resolve_line(conn, "additive", trait_name, line_name)
+    want <- .tvc_resolve_line(conn, effect_name, trait_name, line_name)
     got  <- unique(rows$line_name)
     if (!identical(if (is.na(got)) NULL else got, want)) {
       lbl <- function(x) if (is.null(x) || is.na(x)) "population-wide"
                          else paste0("line '", x, "'")
-      stop("`trait_var_comp_tbl` selects the ", lbl(got), " 'additive' block, ",
-           "but terms at this call's scope (",
-           .dae_scope_label(line_name, po[[trait_name[1L]]]), ") are ",
+      stop("`trait_var_comp_tbl` selects the ", lbl(got), " '", effect_name,
+           "' block, but terms at this call's scope (", scope_label, ") are ",
            "described by the ", lbl(want), " block",
            if (!is.null(line_name) && is.null(want))
              paste0(" (line '", line_name, "' has no block of its own)")
@@ -969,35 +1095,30 @@ QTL_REALISED_MAX_CELLS <- 2e7
            "you meant.", call. = FALSE)
     }
   }
-  if (nrow(rows) == 0L) {
-    stop("No 'additive' target is stored for ", paste(trait_name, collapse = ", "),
-         if (!is.null(line_name)) paste0(" (line '", line_name, "' or population-wide)"),
-         if (explicit) " in `trait_var_comp_tbl`", ". Pass `G =`, or store one with ",
-         "define_effect_cov_matrix(pop, \"additive\", ...).", call. = FALSE)
-  }
+  if (nrow(rows) == 0L) return(NULL)
   k <- length(trait_name)
   M <- matrix(NA_real_, k, k, dimnames = list(trait_name, trait_name))
   key <- paste(rows$trait_name_1, rows$trait_name_2)
   if (anyDuplicated(key)) {
-    stop("The 'additive' rows for ", paste(trait_name, collapse = ", "),
+    stop("The '", effect_name, "' rows for ", paste(trait_name, collapse = ", "),
          " hold a (trait_name_1, trait_name_2) pair twice. Filter to one block.",
          call. = FALSE)
   }
   M[cbind(rows$trait_name_1, rows$trait_name_2)] <- rows$cov_value
   if (anyNA(M)) {
     miss <- which(is.na(M), arr.ind = TRUE)
-    stop("The 'additive' rows for ", paste(trait_name, collapse = ", "),
+    stop("The '", effect_name, "' rows for ", paste(trait_name, collapse = ", "),
          " do not form one complete k x k block: missing (",
          paste0(trait_name[miss[, 1]], ", ", trait_name[miss[, 2]],
                 collapse = "), ("), "). Both (i, j) and (j, i) are needed.",
          call. = FALSE)
   }
   if (!isSymmetric(unname(M), tol = 1e-12)) {
-    stop("The stored 'additive' block for ", paste(trait_name, collapse = ", "),
-         " is not symmetric.", call. = FALSE)
+    stop("The stored '", effect_name, "' block for ",
+         paste(trait_name, collapse = ", "), " is not symmetric.", call. = FALSE)
   }
-  .qtl_target_std(unname(M), name = "the stored 'additive' block")
-  list(G = M, write = FALSE)
+  .qtl_target_std(unname(M), name = paste0("the stored '", effect_name, "' block"))
+  M
 }
 
 #' Generated terms a newly written target would describe but this call keeps

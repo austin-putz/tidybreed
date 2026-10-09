@@ -1,3 +1,58 @@
+# tidybreed 0.76.0 (2026-10-09)
+
+Step 5b of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):
+the genome-effect generator.
+
+## New
+
+* `define_genome_effects()` samples additive, dominance and
+  additive-by-additive (A x A) QTL effects and **calibrates** them so the
+  targets `G_A`, `G_D` and `G_AA` are delivered exactly under a named anchor
+  (`"genic"` or `"realised"`), verified to `1e-8` on the correlation scale.
+  It writes under the reserved owner `"generated"` and replaces the traits'
+  whole generated model (line-scoped `define_additive_effects()` variants
+  included, counted in a message).
+  * Targets per block: a passed matrix (written with the effects, never over a
+    stored block), or the rows of `trait_var_comp_tbl`, or the stored
+    population-wide rows. Each block comes from exactly one source. A zero
+    block is an exact zero; an absent block is not in the model.
+  * With no non-zero dominance or A x A target the call takes
+    `define_additive_effects()`'s path and writes identical rows for the same
+    seed. Adding a block later never changes the additive draw.
+  * A x A pairs: supplied (`pairs`, hubs allowed) or a random matching
+    (`n_pairs`, default every QTL paired once, as AlphaSimR).
+  * The additive floor: dominance and epistasis already induce additive
+    variance, and a `G_A` below what the drawn architecture can cancel is
+    refused, naming the minimum per trait. The floor belongs to the sampled
+    architecture.
+  * `inbreeding_depression`: exact for one trait; for several, approximate and
+    reported (requested vs delivered).
+  * Non-zero dominance or A x A targets need a positive-definite `G_A` (an
+    implementation limit of this release, not of the method).
+  * Under `"realised"` the effects are stored with HWE-referenced contrasts:
+    the total is exact and `extract_genetic_variance(anchor = "realised")` on
+    the same individuals returns the targets.
+  * Every refusal that can be known before the draw leaves `.Random.seed` and
+    the database unchanged.
+* A singular genetic target (a zero variance, a correlation of +/-1, a linear
+  dependency) is now reported with a `message()` naming the reason, from
+  `define_genome_effects()`, `define_additive_effects()` and
+  `define_effect_cov_matrix()`. It is still accepted.
+
+## Changes
+
+* `define_additive_effects()` refuses a trait whose generated model has
+  dominance or A x A terms (a `define_genome_effects()` model, calibrated as a
+  whole); the error gives the additive-only `define_genome_effects()` re-run.
+  Its stored-non-additive-target errors also name `define_genome_effects()`.
+* Messages of `define_genome_effect_terms(mode = "replace_trait")` and
+  `define_effect_cov_matrix()` name both generators.
+* Internal: the target resolver is one per-block helper both generators share;
+  anchor objects gain a cross product and cache the design rank; the
+  calibration lives in `R/genome_effects_calibration.R` (ported from the
+  source project with a robust dominance-degree solver and a floor computed on
+  the correlation scale from the residual coupling).
+
 # tidybreed 0.75.4 (2026-10-09)
 
 Follow-up to the Codex review of step 5a

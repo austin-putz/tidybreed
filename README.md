@@ -1120,6 +1120,7 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | `define_trait()` | Register a genetic-layer trait in `trait_meta` |
 | `define_phenotype()` | Register an observed phenotype in `phenotype_meta` |
 | `define_additive_effects()` | Assign QTL effects to filtered loci (single or correlated multi-trait) |
+| `define_genome_effects()` | Sample additive, dominance and A x A QTL effects calibrated to `G_A`, `G_D`, `G_AA` |
 | `define_effect_cov_matrix()` | Load a (co)variance matrix into `trait_var_comp` or `phenotype_var_comp` |
 | `define_effect_fixed_class()` | Add a discrete fixed-effect level-to-shift mapping |
 | `define_effect_fixed_cov()` | Add a linear regression fixed covariate |

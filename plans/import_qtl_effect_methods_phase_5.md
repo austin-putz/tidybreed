@@ -212,3 +212,116 @@ left is linear":
   with very many scoped variants of one term, or of very high order, is not shown linear;
 - large realised evaluation stays expensive (the DuckDB statement, above); 5b/5c fixtures
   stay small, and the forward `.noia_to_stored()` is profiled in 5b as planned.
+
+## 5b — `define_genome_effects()` (0.76.0)
+
+The generator, its calibration internals, the owner rules elsewhere, and gates C1–C12,
+C14, C15, C17, C18, C20 and G1–G8. Everything the plan lists for 5b is built; the
+deviations are below.
+
+### What was built
+
+| Piece | File | Notes |
+|---|---|---|
+| `define_genome_effects()` | `R/define_genome_effects.R` (new) | Exported. Validation in the plan's 5b.2 order (no RNG, no write), the D2 draw (`.dge_draw()`), the two routes (D5), storage, one `.ge_commit()` with the passed targets in `before_commit`, the eight messages of 5b.7, the D6 diagnostics (`.dge_diagnostics()`). |
+| Calibration | `R/genome_effects_calibration.R` (new) | `.na_anchors()` / `.na_aa_anchor()` (anchor objects, never dense `M`), `.na_coupling()` (one `rowsum()`, hubs exact), `.na_calibrate()` (pure), `.na_additive_stage()` (correlation scale, floor from the residual coupling, budget `1e-10 max(1, ||floor_s||)`), `.na_solve_dd_mean()` (robust solver). |
+| Anchor objects | `R/qtl_congruence.R` | `cross()` on both kinds; the design anchor caches its SVD; `.qtl_anchor_rank_check()` can name the block; new `.qtl_rank_note()`. |
+| Part A, shared | `R/define_additive_effects.R` | `.dae_anchor_at()`, `.dae_calibrate_shared()`, `.dae_build_traits()` (the additive-only path both generators call, C4 (b)); `.tvc_block_from_rows()`, `.tvc_collect_explicit()`, `.tvc_hint_filter()` (the per-block target resolver both share; Part A's messages unchanged for `additive`); `.dae_refuse_nonadditive_model()` (5b.6); the A16 third fix; the rank note. |
+| Owner rules elsewhere | `R/define_genome_effect_terms.R`, `R/define_effect_cov_matrix.R`, `R/remove_generated_effects.R` | `replace_trait` refusal names both generators; `define_effect_cov_matrix()` emits the rank note and names `define_genome_effects()` as the regeneration route for non-additive blocks; removal docs. |
+| Tests | `test-define_genome_effects.R` (29 tests), `test-genome-effects-calibration.R` (31 tests), `helper-nonadd-generator-oracle.R` | Below. |
+
+### Gates
+
+**Internals** (`test-genome-effects-calibration.R`, no database). The source suite on a
+300 × 120 LD panel with 30 % inbred rows, architectures drawn in the test and supplied:
+source tests 1–6, 9–15, 17, 18 as the plan's table says (7, 8 not ported; 16 is public).
+Test 1 checks each delivered block three ways: `.na_calibrate()`'s own anchor, the
+source's `nonadd_decompose()` on our functional `(a, d, e)` (its `real_*` or `genic_*`
+blocks, and its identity `g = const + BV + DD + AA`), and the source generator on the
+same supplied architectures. C6 against `zeng_appendix_A()` at 1e-12. C4 (a): with no
+non-zero D / A×A block the result is `identical()` to `.qtl_calibrate()`. G4: the nine
+solver cases (degenerate `ρ = ±1`; `A = 0` with the linear root `μ = 0.1`, built from a
+symmetric pair of loci; Codex's `B = 0` case `μ = ±0.1`; the preferred mean on `ID = 0`
+giving 0.29 / 0.09; a repeated root at `x = 0`; `ρ = 0` with zero variance at the root;
+`ρ = 0`, negative, just inside and just outside the bound; an unattainable one-locus
+request; the `sd` sweep 1e-8 … 1e8 with the same branch and `x`). G6: per-trait units
+`S = diag(1e-6, 1e6)`, the floor computed independently from the residual coupling
+(on / just above / below it), a small-unit trait below its own floor beside a large-unit
+trait far above it, and the `G_A = 4` hand case (floor 1, standardised residual 0.75).
+The oracle is isolated (parent `baseenv()`, every function's environment checked) and
+runs on its own.
+
+**Public** (`test-define_genome_effects.R`). C1, C3, C9 from the stored rows and the
+evaluator; C2 over all 27 genotypes of three loci and one pair, both anchors, at 1e-12
+(plus the realised round trip, below); C4 (b) for `G = 0.7`, a 2 × 2 PD target, `0`,
+`diag(1, 0)` and a rank-one target, both anchors: `identical()` rows, `trait_var_comp`
+**and post-call `.Random.seed`**; explicit zero `G_D` / `G_AA`; replacement with
+custom owners. C5 / C11 (floor error; injected failure on the second target write
+restores all four tables, scoped rows and custom owners included). C7, C12 (exact
+counts `n(p² + Fpq, …)` at `F = 0.5`, mean dominance value `−F Σ 2pq d` at 1e-12, and
+individual values). C8 (a)–(d), C10, C14, C15 (a)–(d), C17 with the D2 half on
+`.dge_draw()` directly, C18. C20: every knowable refusal checked with and without an
+existing `.Random.seed` (`expect_refusal()`), database unchanged. G1 (D5 and the
+three rank-note reasons from all three entry points), G2 (threads 1 / 8, and a file
+database after `restore_pop()`), G3, G5, G7 (mocked `QTL_REALISED_MAX_CELLS = 4000`),
+G8, D3 (a) with a locus fixed in the base pool, and source test 16 as D6.
+
+### Mutation checks
+
+Scripted (`scratchpad/mutate5b.R`, files restored in `finally`, restoration checked
+with `cmp`). Every mutation fails its gate:
+
+| Mutation | Fails |
+|---|---|
+| Drop `E_c` from `C` | C1/C3/C9, C2, G3, C15 (a) |
+| Observed `b` in storage under `"realised"` | C2 (the realised round trip) |
+| Floor test on the raw scale | G6 (on / above / below the floor) |
+| Floor as `R − QᵀP⁻¹Q` with the source's tolerance | G6 |
+| Verbatim `solve_dd_mean()` | G4 (six of the cases) |
+| Additive-only storage through `.noia_terms()` | C4 (b) |
+| Solve unrequested traits' degree means too | G5 |
+| D5 check without the zero-block exception | G1 |
+| Draw pairs before dominance | C17 / D2 |
+| Additive-only through the quadratic | C4 (b) (all three), G1 |
+| Skip the D5 check | G1, C20 |
+| `define_additive_effects()` content refusal removed | C8 (b) |
+
+### Forward conversion
+
+Profiled as the plan asked. `.noia_to_stored()` + `.noia_terms()`: 1,000 QTL with 500
+pairs, 0.03 + 0.03 s; 1,000 QTL with 19,900 hub pairs on 200 loci, 0.79 + 0.54 s. Not
+vectorised: it does not show. The generator benchmark itself is 5c.
+
+### Deviations from the plan
+
+- **The repeated root is taken at the vertex.** The plan's `q = 0` branch covers only
+  `B = 0`, `disc = 0` exactly. Probing showed that any discriminant within rounding of 0
+  breaks the stable formula: `√(residue)` moves both roots by about `√eps` (so `ρ = 0`
+  was refused on a clean case), and `C / q` of two residues is noise. A discriminant
+  within the same budget is now one root, `−B / (2A)`, which also covers the plan's
+  `q = 0` case.
+- **G4's bound cases use the attainable side.** The line `d = x u + v` reaches the
+  Cauchy–Schwarz bound on one side only (where the maximising direction puts positive
+  weight on `v`), so the fixture's bound carries that sign. The repeated-root test asserts
+  `|x| < 1e-3` and the exact ratio: a double root's location is ill-conditioned.
+- **C2's mutation guard.** Recovering functional coefficients from the stored ones is
+  self-consistent under the "observed `b` in storage" mutation, so the identity alone
+  cannot catch it. The C2 test adds the realised round trip
+  (`extract_genetic_variance(anchor = "realised")` on the base returns the targets at
+  1e-10), which does; that is the core of 5c's C20, run here on a 54-individual fixture.
+- **One-locus inbreeding depression.** With one locus `ID / √V_D = sign(d)`, so the public
+  one-locus case requests `±√G_D` (the solver's degenerate branch), not an arbitrary
+  value.
+- **D6 under `"genic"` with individuals** collects the dosages again for the comparison
+  (Part A does the same); above the size limit it is skipped with a message.
+- **Messages.** Calibration errors from the dominance and A×A stages now name the block
+  and the anchor (the plan asks every error to name the anchor). Small delivered
+  off-diagonals print as round-off (e.g. `-3.7e-17`), as Part A's do.
+
+### Suite
+
+Full suite with `NOT_CRAN=true` (`testthat::test_dir()`, 78 files): **1,159 tests, 4,779
+expectations, 0 failures, 0 errors**, 6 warnings, the 0.75.2 baseline in the same five
+files (`add_founders`, `add_phenotype`, `genome_map`, `parity` ×2, `phenotype_composite`).
+`devtools::document()` and `pkgdown::check_pkgdown()` clean. The 484 new expectations are
+the two new test files.
