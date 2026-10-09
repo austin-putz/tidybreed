@@ -330,54 +330,66 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
     }
   }
 
-  # Per-term scalars must actually be scalar within the term.
-  term_rows <- vector("list", length(labels))
-  for (k in seq_along(labels)) {
-    sub <- terms[idx == k, , drop = FALSE]
+  # Per-term scalars must actually be scalar within the term. Each rule is
+  # decided for every term at once (a per-term subset is quadratic), and the
+  # error is the first violation by (term in user order, rule): the term
+  # comes first, so a later rule failing on an earlier term wins.
+  n_terms <- length(labels)
+  first   <- match(seq_len(n_terms), idx)              # first row of each term
+  val1    <- terms$genome_value[first]
+  nm1     <- terms$effect_name[first]
+  gv      <- terms$genome_value
+  en      <- terms$effect_name
+  bad_value <- is.na(val1) |
+    .ge_any_by(idx, is.na(gv) | gv != val1[idx], n_terms)
+  bad_name  <- .ge_any_by(idx, ifelse(is.na(en) | is.na(nm1[idx]),
+                                      is.na(en) != is.na(nm1[idx]),
+                                      en != nm1[idx]), n_terms)
+  dup_row   <- duplicated(.ge_pair_key(idx, terms$locus_id))
+  bad_locus <- .ge_any_by(idx, dup_row, n_terms)
+  bad <- which(bad_value | bad_name | bad_locus)
+  if (length(bad) > 0L) {
+    k   <- bad[1]
     tag <- paste0("term_id '", labels[k], "'")
-    val <- unique(sub$genome_value)
-    if (length(val) != 1L || is.na(val)) {
-      stop(tag, ": 'genome_value' must be one non-missing value for the whole ",
-           "term (got ", paste(val, collapse = ", "), "). A term is one ",
-           "coefficient over its members.", call. = FALSE)
-    }
-    nm <- unique(sub$effect_name)
-    if (length(nm) != 1L) {
-      stop(tag, ": 'effect_name' must be constant within a term (got ",
-           paste0("'", nm, "'", collapse = ", "), ").", call. = FALSE)
-    }
-    if (anyDuplicated(sub$locus_id)) {
-      dup <- unique(sub$locus_name[duplicated(sub$locus_id)])
-      stop(tag, ": locus ", paste0("'", dup, "'", collapse = ", "),
-           " appears more than once in one term. Each locus contributes at ",
-           "most one member.", call. = FALSE)
-    }
-    term_rows[[k]] <- data.frame(
-      id_genome_effect = k,
-      trait_name       = trait_name,
-      effect_owner     = effect_owner,
-      effect_name      = as.character(nm),
-      genome_value     = as.numeric(val),
-      stringsAsFactors = FALSE
-    )
-  }
-
-  # Members, canonicalized by ascending locus_id.
-  members <- do.call(rbind, lapply(seq_along(labels), function(k) {
     sub <- terms[idx == k, , drop = FALSE]
-    sub <- sub[order(sub$locus_id), , drop = FALSE]
-    data.frame(
-      id_genome_effect = k,
-      member_slot      = seq_len(nrow(sub)),
-      locus_id         = as.integer(sub$locus_id),
-      locus_name       = as.character(sub$locus_name),
-      contrast_name    = as.character(sub$contrast_name),
-      copy_count_value = as.integer(sub$copy_count_value),
-      dosage_value     = as.integer(sub$dosage_value),
-      center_value     = as.numeric(sub$center_value),
-      stringsAsFactors = FALSE
-    )
-  }))
+    if (bad_value[k]) {
+      stop(tag, ": 'genome_value' must be one non-missing value for the whole ",
+           "term (got ", paste(unique(sub$genome_value), collapse = ", "),
+           "). A term is one coefficient over its members.", call. = FALSE)
+    }
+    if (bad_name[k]) {
+      stop(tag, ": 'effect_name' must be constant within a term (got ",
+           paste0("'", unique(sub$effect_name), "'", collapse = ", "), ").",
+           call. = FALSE)
+    }
+    dup <- unique(sub$locus_name[duplicated(sub$locus_id)])
+    stop(tag, ": locus ", paste0("'", dup, "'", collapse = ", "),
+         " appears more than once in one term. Each locus contributes at ",
+         "most one member.", call. = FALSE)
+  }
+  term_frame <- data.frame(
+    id_genome_effect = seq_len(n_terms),
+    trait_name       = rep(trait_name, n_terms),
+    effect_owner     = rep(effect_owner, n_terms),
+    effect_name      = as.character(nm1),
+    genome_value     = as.numeric(val1),
+    stringsAsFactors = FALSE
+  )
+
+  # Members, canonicalized by ascending locus_id within each term.
+  o   <- order(idx, terms$locus_id)
+  sub <- terms[o, , drop = FALSE]
+  members <- data.frame(
+    id_genome_effect = idx[o],
+    member_slot      = sequence(tabulate(idx, n_terms)),
+    locus_id         = as.integer(sub$locus_id),
+    locus_name       = as.character(sub$locus_name),
+    contrast_name    = as.character(sub$contrast_name),
+    copy_count_value = as.integer(sub$copy_count_value),
+    dosage_value     = as.integer(sub$dosage_value),
+    center_value     = as.numeric(sub$center_value),
+    stringsAsFactors = FALSE
+  )
 
   # Fill Cockerham centres from the base where the user left them out, on
   # additive/dominance members only. An explicit centre always wins; an
@@ -398,10 +410,38 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 
   origins <- .ge_build_origins(origin, members, labels)
   .ge_check_origin_fields(origins, members, labels)
-  list(terms   = do.call(rbind, term_rows),
+  list(terms   = term_frame,
        members = members,
        origins = origins,
        labels  = stats::setNames(labels, seq_along(labels)))
+}
+
+#' Per group: does any row of the group satisfy `flag`?
+#'
+#' `idx` holds group numbers `1..n`. An `NA` flag counts as `TRUE`, so a rule
+#' that cannot be decided is reported rather than passed.
+#'
+#' @keywords internal
+#' @noRd
+.ge_any_by <- function(idx, flag, n) {
+  flag[is.na(flag)] <- TRUE
+  tabulate(idx[flag], n) > 0L
+}
+
+#' One exact numeric key per (group, integer value) pair
+#'
+#' For `duplicated()` / `match()` over two integer columns without pasting
+#' strings. Exact while `max(x) * max(y)` stays below 2^53; with a missing or
+#' non-whole value it falls back to pasted strings, which compare `NA` as a
+#' value the way `duplicated()` does on one column.
+#'
+#' @keywords internal
+#' @noRd
+.ge_pair_key <- function(x, y) {
+  if (anyNA(x) || anyNA(y) || any(y < 0) || any(y != trunc(y))) {
+    return(paste(x, y))
+  }
+  as.numeric(x) * (max(c(0, y)) + 1) + as.numeric(y)
 }
 
 #' Infer `copy_count_value` for indicator members at diploid-autosomal loci
@@ -418,18 +458,23 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 
   counts <- .ge_reachable_copy_counts(conn)
   chr_of <- DBI::dbGetQuery(conn, "SELECT locus_id, chr_name FROM genome_meta")
-  for (i in which(need)) {
-    chr <- chr_of$chr_name[match(members$locus_id[i], chr_of$locus_id)]
-    cc  <- counts[[chr]]
-    if (length(cc) != 1L) {
-      stop("term_id '", labels[members$id_genome_effect[i]], "' locus '",
-           members$locus_name[i], "': copy_count_value cannot be inferred — ",
-           "chromosome '", chr, "' can carry ", paste(cc, collapse = " or "),
-           " copies, so dosage alone is not a genotype state here. Supply ",
-           "copy_count_value explicitly.", call. = FALSE)
-    }
-    members$copy_count_value[i] <- cc
+  rows <- which(need)
+  chr  <- chr_of$chr_name[match(members$locus_id[rows], chr_of$locus_id)]
+  # One copy count per chromosome, or the first member (in member order) on a
+  # chromosome where dosage alone is not a state.
+  single <- vapply(counts, length, integer(1)) == 1L
+  bad <- which(!single[chr] %in% TRUE)
+  if (length(bad) > 0L) {
+    i  <- rows[bad[1]]
+    cc <- counts[[chr[bad[1]]]]
+    stop("term_id '", labels[members$id_genome_effect[i]], "' locus '",
+         members$locus_name[i], "': copy_count_value cannot be inferred — ",
+         "chromosome '", chr[bad[1]], "' can carry ",
+         paste(cc, collapse = " or "),
+         " copies, so dosage alone is not a genotype state here. Supply ",
+         "copy_count_value explicitly.", call. = FALSE)
   }
+  members$copy_count_value[rows] <- unlist(counts[chr], use.names = FALSE)
   members
 }
 
@@ -458,42 +503,46 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 #' @keywords internal
 #' @noRd
 .ge_check_member_fields <- function(members, labels) {
-  v <- character(0)
-  for (i in seq_len(nrow(members))) {
-    tag <- paste0("term_id '", labels[members$id_genome_effect[i]], "' locus '",
-                  members$locus_name[i], "'")
-    if (members$contrast_name[i] == "indicator") {
-      if (is.na(members$dosage_value[i])) {
-        v <- c(v, paste(tag, "is an indicator and needs 'dosage_value'"))
-      } else if (!is.na(members$copy_count_value[i]) &&
-                 members$dosage_value[i] > members$copy_count_value[i]) {
-        v <- c(v, paste0(tag, ": dosage_value (", members$dosage_value[i],
-                         ") exceeds copy_count_value (",
-                         members$copy_count_value[i], ")"))
-      }
-      if (!is.na(members$center_value[i])) {
-        v <- c(v, paste(tag, "is an indicator and must not carry",
-                        "'center_value' (an indicator is a state, not a",
-                        "centred contrast)"))
-      }
-    } else {
-      if (is.na(members$center_value[i])) {
-        v <- c(v, paste0(tag, " is '", members$contrast_name[i],
-                         "' and needs 'center_value' (p under Cockerham",
-                         " coding, 0.5 under functional)",
-                         if (isTRUE(members$fill_failed[i]))
-                           " -- and base_tbl has no allele copies at this locus"
-                         else ""))
-      } else if (members$center_value[i] < 0 || members$center_value[i] > 1) {
-        v <- c(v, paste0(tag, ": center_value must be between 0 and 1 (got ",
-                         members$center_value[i], ")"))
-      }
-      if (!is.na(members$copy_count_value[i]) || !is.na(members$dosage_value[i])) {
-        v <- c(v, paste0(tag, " is '", members$contrast_name[i], "' and must ",
-                         "not carry an indicator state"))
-      }
-    }
-  }
+  # Each member yields at most two messages, in this order: the state/centre
+  # rule, then the "must not carry" rule. Built for every row at once and
+  # interleaved row by row, so the list reads exactly as a per-row loop would.
+  tag <- paste0("term_id '", labels[members$id_genome_effect], "' locus '",
+                members$locus_name, "'")
+  kind <- members$contrast_name
+  cc   <- members$copy_count_value
+  dv   <- members$dosage_value
+  ctr  <- members$center_value
+  ind  <- kind == "indicator"
+  first <- second <- rep(NA_character_, nrow(members))
+
+  w <- ind & is.na(dv)
+  first[w] <- paste(tag[w], "is an indicator and needs 'dosage_value'")
+  w <- ind & !is.na(dv) & !is.na(cc) & dv > cc
+  first[w] <- paste0(tag[w], ": dosage_value (", dv[w],
+                     ") exceeds copy_count_value (", cc[w], ")")
+  w <- ind & !is.na(ctr)
+  second[w] <- paste(tag[w], "is an indicator and must not carry",
+                     "'center_value' (an indicator is a state, not a",
+                     "centred contrast)")
+
+  fail <- if (is.null(members$fill_failed)) logical(nrow(members))
+          else members$fill_failed %in% TRUE
+  w <- !ind & is.na(ctr)
+  first[w] <- paste0(tag[w], " is '", kind[w],
+                     "' and needs 'center_value' (p under Cockerham",
+                     " coding, 0.5 under functional)",
+                     ifelse(fail[w],
+                            " -- and base_tbl has no allele copies at this locus",
+                            ""))
+  w <- !ind & !is.na(ctr) & (ctr < 0 | ctr > 1)
+  first[w] <- paste0(tag[w], ": center_value must be between 0 and 1 (got ",
+                     ctr[w], ")")
+  w <- !ind & (!is.na(cc) | !is.na(dv))
+  second[w] <- paste0(tag[w], " is '", kind[w], "' and must ",
+                      "not carry an indicator state")
+
+  v <- c(rbind(first, second))
+  v <- v[!is.na(v)]
   if (length(v) > 0L) {
     stop("Invalid 'terms':\n  - ", paste(unique(v), collapse = "\n  - "),
          call. = FALSE)
@@ -512,43 +561,40 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
 #' @noRd
 .ge_check_origin_fields <- function(origins, members, labels) {
   if (nrow(origins) == 0L) return(invisible(NULL))
-  v <- character(0)
   locus <- members$locus_name[match(paste(origins$id_genome_effect,
                                           origins$member_slot),
                                     paste(members$id_genome_effect,
                                           members$member_slot))]
-  for (i in seq_len(nrow(origins))) {
-    tag <- paste0("term_id '", labels[origins$id_genome_effect[i]], "' locus '",
-                  locus[i], "'")
-    lmt <- origins$line_match_type[i]
-    ln  <- origins$line_name[i]
-    po  <- origins$parent_origin[i]
-    if (!lmt %in% c("exact", "unknown", "any")) {
-      v <- c(v, paste0(tag, ": line_match_type must be 'exact', 'unknown' or ",
-                       "'any' (got '", lmt, "')"))
-      next
-    }
-    if (lmt == "exact" && is.na(ln)) {
-      v <- c(v, paste(tag, "is line_match_type 'exact' and needs a line_name"))
-    }
-    if (lmt != "exact" && !is.na(ln)) {
-      v <- c(v, paste0(tag, ": line_match_type '", lmt, "' takes no line_name ",
-                       "(got '", ln, "')"))
-    }
-    if (lmt == "any" && is.na(po)) {
-      v <- c(v, paste(tag, "is line_match_type 'any' with no parent_origin,",
-                      "which constrains nothing and is not a second spelling",
-                      "of the common scope. Use origin = NULL for that, or",
-                      "give a parent_origin"))
-    }
-    if (!is.na(po) && !po %in% c(1L, 2L)) {
-      v <- c(v, paste0(tag, ": parent_origin must be 1 (sire) or 2 (dam), or ",
-                       "NA for either (got ", po, ")"))
-    }
-    if (is.na(origins$copy_count[i]) || origins$copy_count[i] < 1L) {
-      v <- c(v, paste(tag, "needs copy_count >= 1"))
-    }
-  }
+  tag <- paste0("term_id '", labels[origins$id_genome_effect], "' locus '",
+                locus, "'")
+  lmt <- origins$line_match_type
+  ln  <- origins$line_name
+  po  <- origins$parent_origin
+  # One column per rule, in rule order; read row by row. An unknown match type
+  # reports only itself, as nothing else about the row is meaningful.
+  n <- nrow(origins)
+  msg <- matrix(NA_character_, nrow = 5L, ncol = n)
+  known <- lmt %in% c("exact", "unknown", "any")
+  w <- !known
+  msg[1, w] <- paste0(tag[w], ": line_match_type must be 'exact', 'unknown' ",
+                      "or 'any' (got '", lmt[w], "')")
+  w <- known & lmt == "exact" & is.na(ln)
+  msg[1, w] <- paste(tag[w], "is line_match_type 'exact' and needs a line_name")
+  w <- known & lmt != "exact" & !is.na(ln)
+  msg[2, w] <- paste0(tag[w], ": line_match_type '", lmt[w], "' takes no ",
+                      "line_name (got '", ln[w], "')")
+  w <- known & lmt == "any" & is.na(po)
+  msg[3, w] <- paste(tag[w], "is line_match_type 'any' with no parent_origin,",
+                     "which constrains nothing and is not a second spelling",
+                     "of the common scope. Use origin = NULL for that, or",
+                     "give a parent_origin")
+  w <- known & !is.na(po) & !po %in% c(1L, 2L)
+  msg[4, w] <- paste0(tag[w], ": parent_origin must be 1 (sire) or 2 (dam), ",
+                      "or NA for either (got ", po[w], ")")
+  w <- known & (is.na(origins$copy_count) | origins$copy_count < 1L)
+  msg[5, w] <- paste(tag[w], "needs copy_count >= 1")
+  v <- c(msg)
+  v <- v[!is.na(v)]
   if (length(v) > 0L) {
     stop("Invalid 'origin':\n  - ", paste(unique(v), collapse = "\n  - "),
          call. = FALSE)
@@ -864,14 +910,39 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
   ids <- t$id_genome_effect[hit]
   if (mode != "replace_scope" || length(ids) == 0L) return(ids)
 
-  keep <- vapply(ids, function(id) {
-    .ge_term_at_scope(model$members[model$members$id_genome_effect == id, ,
-                                    drop = FALSE],
-                      model$origins[model$origins$id_genome_effect == id, ,
-                                    drop = FALSE],
-                      scope)
+  ids[.ge_terms_at_scope(model, ids, scope)]
+}
+
+#' `.ge_term_at_scope()` for many stored terms, splitting the model once
+#'
+#' A per-id subset of the member and origin frames is quadratic in the size of
+#' the stored model.
+#'
+#' @return Logical, one per `ids`.
+#' @keywords internal
+#' @noRd
+.ge_terms_at_scope <- function(model, ids, scope) {
+  if (length(ids) == 0L) return(logical(0))
+  rows <- .ge_rows_by_id(model, ids)
+  vapply(seq_along(ids), function(i) {
+    .ge_term_at_scope(model$members[rows$members[[i]], , drop = FALSE],
+                      model$origins[rows$origins[[i]], , drop = FALSE], scope)
   }, logical(1))
-  ids[keep]
+}
+
+#' Member and origin row numbers of each of `ids`, from one pass over each
+#'
+#' @return `list(members, origins)`, each a list parallel to `ids`.
+#' @keywords internal
+#' @noRd
+.ge_rows_by_id <- function(model, ids) {
+  u   <- unique(ids)
+  lev <- seq_along(u)
+  by  <- function(x) {
+    split(seq_along(x), factor(match(x, u), levels = lev))[match(ids, u)]
+  }
+  list(members = by(model$members$id_genome_effect),
+       origins = by(model$origins$id_genome_effect))
 }
 
 

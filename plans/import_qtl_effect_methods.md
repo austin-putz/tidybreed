@@ -1619,7 +1619,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
-| 5 | Part C | 0.76.0 | 2, 3, 4 |
+| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.1 | 2, 3, 4; **5a done** |
 
 **Every step**, before its commit: bump `DESCRIPTION` `Version:` and add a `NEWS.md` entry
 (CLAUDE.md). The entry says that databases written by earlier versions are not readable
@@ -2034,7 +2034,7 @@ that is cancellation residue (`|x| ≤ n·eps·Σ|contrib|`) is set to 0 in
 and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (4)
 `genotype_terms()` refuses a fractional or negative `copy_count` before `as.integer()`.
 
-### Step 5 — Part C (0.76.0)
+### Step 5 — Part C (0.75.3–0.76.1) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
   `R/define_genome_effects.R`. Calibration internals go in `R/genome_effects_calibration.R`.
@@ -2061,6 +2061,17 @@ and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (
   feasible `G` under the named anchor and QTL set; a line call calibrates its own
   variant only; `"union"` does not hit non-zero off-diagonals; one call has one
   `parent_origin` scope; the extractor measures the population the user means.
+
+**As built (5a, 0.75.3).** Writer speed, the step-4 risk. Internal only: every per-term or
+per-id data-frame subset in the writer, the whole-table validator, `replace_scope` deletes,
+`.stored_to_functional()` and the per-term target/line/parent lookups became one grouping
+pass, with messages and error order unchanged (D7, pinned by
+`test-genome-effects-writer-order.R`, written and passing against 0.75.2 first). All 124,750
+pairs of 500 loci now write in 7.1 s (16,000 pairs: 71.8 s → 0.70 s). The step-4 extractor
+benchmark, run at its planned all-pairs size, exposed the same pattern in the evaluator's
+R-side preparation (`.gev_variant_map()`, `.gev_preflight()`), fixed too; what remains is
+the evaluation statement itself, linear but minutes at 124,750 pairs (a risk for 5c). `.stored_to_functional()` is bit-identical.
+Results: `plans/import_qtl_effect_methods_phase_5.md`.
 
 ---
 

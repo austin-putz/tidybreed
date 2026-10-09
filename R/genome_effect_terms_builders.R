@@ -500,62 +500,87 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 .stored_to_functional <- function(terms, members) {
   loci <- as.character(sort(unique(members$locus_id)))
   a <- d <- stats::setNames(numeric(length(loci)), loci)
-  # Sum of |contributions| and their count per d, for the cancellation bound.
-  d_abs <- d; d_n <- d
-  add_d <- function(l, x) {
-    d[l]     <<- d[l] + x
-    d_abs[l] <<- d_abs[l] + abs(x)
-    d_n[l]   <<- d_n[l] + 1
-  }
-  kappa <- 0
-  pk <- character(0); pe <- numeric(0)
-  mem_by <- split(members, members$id_genome_effect)
-  for (i in seq_len(nrow(terms))) {
-    v  <- terms$genome_value[i]
-    mm <- mem_by[[as.character(terms$id_genome_effect[i])]]
-    mm <- mm[order(mm$locus_id), , drop = FALSE]
-    if (nrow(mm) == 1L) {
-      l <- as.character(mm$locus_id)
-      c <- mm$center_value
-      switch(mm$contrast_name,
-        additive = {
-          a[l] <- a[l] + v
-          kappa <- kappa + v * (1 - 2 * c)
-        },
-        dominance = {
-          add_d(l, v)
-          a[l] <- a[l] - v * (1 - 2 * c)
-          kappa <- kappa - v * (c^2 + (1 - c)^2)
-        },
-        indicator = {
-          if (!identical(as.integer(mm$copy_count_value), 2L)) {
-            stop("Internal error: .stored_to_functional() got an indicator ",
-                 "that is not a diploid state.", call. = FALSE)
-          }
-          switch(as.character(mm$dosage_value),
-            "1" = { add_d(l, v) },
-            "2" = { a[l] <- a[l] + v / 2; add_d(l, -v / 2)
-                    kappa <- kappa + v / 2 },
-            "0" = { a[l] <- a[l] - v / 2; add_d(l, -v / 2)
-                    kappa <- kappa + v / 2 })
-        })
-    } else if (nrow(mm) == 2L && all(mm$contrast_name == "additive")) {
-      lk <- as.character(mm$locus_id[1]); ll <- as.character(mm$locus_id[2])
-      ck <- mm$center_value[1];           cl <- mm$center_value[2]
-      a[lk] <- a[lk] + v * (1 - 2 * cl)
-      a[ll] <- a[ll] + v * (1 - 2 * ck)
-      kappa <- kappa + v * (1 - 2 * ck) * (1 - 2 * cl)
-      pk <- c(pk, paste(lk, ll)); pe <- c(pe, v)
-    } else {
-      stop("Internal error: .stored_to_functional() got a term outside the ",
-           "covered shapes.", call. = FALSE)
+
+  # Each term's members in ascending locus_id, grouped by term position.
+  tp <- match(members$id_genome_effect, terms$id_genome_effect)
+  members <- members[!is.na(tp), , drop = FALSE]
+  tp <- tp[!is.na(tp)]
+  o  <- order(tp, members$locus_id)
+  members <- members[o, , drop = FALSE]
+  tp <- tp[o]
+  n_mem  <- tabulate(tp, nrow(terms))
+  first  <- match(seq_len(nrow(terms)), tp)
+  kind1  <- members$contrast_name[first]
+  n_add  <- tabulate(tp[members$contrast_name == "additive"], nrow(terms))
+  single <- n_mem == 1L
+  pair   <- n_mem == 2L & n_add == 2L
+  bad_ind <- single & kind1 %in% "indicator" &
+    !(as.integer(members$copy_count_value[first]) %in% 2L)
+  bad <- which(bad_ind | !(single | pair))
+  if (length(bad) > 0L) {
+    if (bad_ind[bad[1]]) {
+      stop("Internal error: .stored_to_functional() got an indicator ",
+           "that is not a diploid state.", call. = FALSE)
     }
+    stop("Internal error: .stored_to_functional() got a term outside the ",
+         "covered shapes.", call. = FALSE)
   }
+
+  # Every contribution, tagged with its term position, then summed per
+  # coefficient in term order: rowsum() adds in input order in double
+  # precision, exactly as a running total over the terms would.
+  v <- terms$genome_value
+  s <- which(single)
+  l <- as.character(members$locus_id[first[s]])
+  c <- members$center_value[first[s]]
+  k <- kind1[s]
+  dv <- as.character(members$dosage_value[first[s]])
+  vs <- v[s]
+  is_add <- k == "additive"
+  is_dom <- k == "dominance"
+  i1 <- k == "indicator" & dv %in% "1"
+  i2 <- k == "indicator" & dv %in% "2"
+  i0 <- k == "indicator" & dv %in% "0"
+
+  p  <- which(pair)
+  lk <- as.character(members$locus_id[first[p]])
+  ll <- as.character(members$locus_id[first[p] + 1L])
+  ck <- members$center_value[first[p]]
+  cl <- members$center_value[first[p] + 1L]
+  vp <- v[p]
+
+  # a: (term position, within-term order, locus, value)
+  a_pos <- c(s[is_add], s[is_dom], s[i2], s[i0], p, p)
+  a_sub <- c(rep(1L, sum(is_add | is_dom | i2 | i0)), rep(1L, length(p)),
+             rep(2L, length(p)))
+  a_loc <- c(l[is_add], l[is_dom], l[i2], l[i0], lk, ll)
+  a_val <- c(vs[is_add], -(vs[is_dom] * (1 - 2 * c[is_dom])),
+             vs[i2] / 2, -(vs[i0] / 2),
+             vp * (1 - 2 * cl), vp * (1 - 2 * ck))
+  a <- .s2f_accumulate(a, a_pos, a_sub, a_loc, a_val)
+
+  d_pos <- c(s[is_dom], s[i1], s[i2], s[i0])
+  d_loc <- c(l[is_dom], l[i1], l[i2], l[i0])
+  d_val <- c(vs[is_dom], vs[i1], -vs[i2] / 2, -vs[i0] / 2)
+  d_sub <- rep(1L, length(d_pos))
+  d     <- .s2f_accumulate(d, d_pos, d_sub, d_loc, d_val)
+  d_abs <- .s2f_accumulate(d * 0, d_pos, d_sub, d_loc, abs(d_val))
+  d_n   <- .s2f_accumulate(d * 0, d_pos, d_sub, d_loc, rep(1, length(d_pos)))
+
+  k_pos <- c(s[is_add], s[is_dom], s[i2], s[i0], p)
+  k_val <- c(vs[is_add] * (1 - 2 * c[is_add]),
+             -(vs[is_dom] * (c[is_dom]^2 + (1 - c[is_dom])^2)),
+             vs[i2] / 2, vs[i0] / 2,
+             vp * (1 - 2 * ck) * (1 - 2 * cl))
+  kappa <- if (length(k_pos) == 0L) 0 else
+    as.numeric(rowsum(k_val[order(k_pos)], rep(1L, length(k_pos))))
+
   d[.cancelled(d, d_abs, d_n)] <- 0
   pairs <- data.frame(locus_id_1 = integer(0), locus_id_2 = integer(0),
                       e = numeric(0))
-  if (length(pk) > 0L) {
+  if (length(p) > 0L) {
     # Owners (and duplicate variants) sum into one coefficient per pair.
+    pk <- paste(lk, ll); pe <- vp
     e  <- tapply(pe, pk, sum)
     e[.cancelled(e, tapply(abs(pe), pk, sum), tapply(pe, pk, length))] <- 0
     ks <- strsplit(names(e), " ", fixed = TRUE)
@@ -567,6 +592,23 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
     rownames(pairs) <- NULL
   }
   list(a = a, d = d, pairs = pairs, kappa = kappa)
+}
+
+#' Add contributions into a named coefficient vector, in term order
+#'
+#' `pos` is the contributing term's position and `sub` its order inside the
+#' term; `loc` names the coefficient. The sum starts from `x`'s current values
+#' (zeros) and runs in (pos, sub) order, so it equals a running total over the
+#' terms bit for bit.
+#'
+#' @keywords internal
+#' @noRd
+.s2f_accumulate <- function(x, pos, sub, loc, val) {
+  if (length(pos) == 0L) return(x)
+  o  <- order(pos, sub)
+  rs <- rowsum(val[o], loc[o], reorder = FALSE)
+  x[rownames(rs)] <- x[rownames(rs)] + rs[, 1]
+  x
 }
 
 #' Which sums are cancellation residue: `|x| <= n * eps * sum(|terms|)`

@@ -112,14 +112,21 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
 #' @keywords internal
 #' @noRd
 .gev_target_kind <- function(model) {
-  vapply(model$terms$id_genome_effect, function(id) {
-    contr <- model$members$contrast_name[model$members$id_genome_effect == id]
-    if (length(contr) == 1L && contr %in% c("additive", "dominance")) return(contr)
-    if (length(contr) == 2L && all(contr == "additive")) {
-      return("additive_by_additive")
-    }
-    NA_character_
-  }, character(1), USE.NAMES = FALSE)
+  ids <- model$terms$id_genome_effect
+  if (length(ids) == 0L) return(character(0))
+  u   <- unique(ids)
+  g   <- match(model$members$id_genome_effect, u)
+  ok  <- !is.na(g)
+  g   <- g[ok]
+  contr <- model$members$contrast_name[ok]
+  n     <- tabulate(g, length(u))
+  n_add <- tabulate(g[contr %in% "additive"], length(u))
+  first <- contr[match(seq_along(u), g)]
+  kind  <- rep(NA_character_, length(u))
+  one   <- n == 1L & first %in% c("additive", "dominance")
+  kind[one] <- first[one]
+  kind[n == 2L & n_add == 2L] <- "additive_by_additive"
+  kind[match(ids, u)]
 }
 
 #' The line a term is scoped to, or `NA` for a population-wide term
@@ -133,11 +140,7 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
 #' @keywords internal
 #' @noRd
 .gev_term_line <- function(model) {
-  vapply(model$terms$id_genome_effect, function(id) {
-    ln <- unique(stats::na.omit(
-      model$origins$line_name[model$origins$id_genome_effect == id]))
-    if (length(ln) == 0L) NA_character_ else paste(sort(ln), collapse = ",")
-  }, character(1), USE.NAMES = FALSE)
+  .gev_term_origin_values(model, model$origins$line_name)
 }
 
 #' The parent-of-origin scope of a term
@@ -150,11 +153,29 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
 #' @keywords internal
 #' @noRd
 .gev_term_parent <- function(model) {
-  vapply(model$terms$id_genome_effect, function(id) {
-    po <- unique(stats::na.omit(
-      model$origins$parent_origin[model$origins$id_genome_effect == id]))
-    if (length(po) == 0L) NA_character_ else paste(sort(po), collapse = ",")
-  }, character(1), USE.NAMES = FALSE)
+  .gev_term_origin_values(model, model$origins$parent_origin)
+}
+
+#' Per term: its origin rows' distinct non-missing values, sorted and joined
+#'
+#' `x` is one column of `model$origins`. `NA` for a term with none. Grouped
+#' once over the origin rows; a per-term filter is quadratic in the model.
+#'
+#' @return Character, one per row of `model$terms`.
+#' @keywords internal
+#' @noRd
+.gev_term_origin_values <- function(model, x) {
+  ids <- model$terms$id_genome_effect
+  out <- rep(NA_character_, length(ids))
+  ok  <- !is.na(x)
+  if (!any(ok)) return(out)
+  u   <- unique(ids)
+  g   <- match(model$origins$id_genome_effect[ok], u)
+  val <- vapply(split(x[ok][!is.na(g)], factor(g[!is.na(g)], seq_along(u))),
+                function(v) if (length(v) == 0L) NA_character_
+                            else paste(sort(unique(v)), collapse = ","),
+                character(1), USE.NAMES = FALSE)
+  val[match(ids, u)]
 }
 
 #' Evaluation-unit kind for a member contrast
@@ -460,7 +481,10 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
 .gev_variant_map <- function(model, alphabets, free) {
   terms   <- model$terms
   members <- model$members
-  ids_by  <- split(terms$id_genome_effect, terms$family_key)
+  # Families as term positions, in family-key order. Everything the loop reads
+  # per family is reached by position: a lookup by name scans (or re-hashes)
+  # every name, which made this loop quadratic in a model of many terms.
+  pos_by  <- split(seq_len(nrow(terms)), terms$family_key)
   key_of  <- function(id) as.character(id)
 
   # Column-wise splits, not data-frame subsetting: the loop below runs once per
@@ -469,6 +493,7 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
   slot_by  <- split(members$member_slot, mid)
   kind_by  <- split(.gev_member_kind(members$contrast_name), mid)
   star_by  <- split(free, mid)
+  mem_pos  <- match(key_of(terms$id_genome_effect), names(slot_by))
   org_sig  <- .gev_origin_sigs(model$origins, terms$id_genome_effect)
   mem_by   <- NULL   # built lazily: only a cache miss needs the full rows
   org_by   <- NULL
@@ -478,19 +503,21 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
   map_id <- 0L
   cache <- new.env(parent = emptyenv())
 
-  for (key in names(ids_by)) {
-    fam_ids <- ids_by[[key]]
-    k1      <- key_of(fam_ids[1])
-    slots   <- slot_by[[k1]]
-    kinds   <- kind_by[[k1]]
-    stars   <- star_by[[k1]]
+  for (f in seq_along(pos_by)) {
+    key     <- names(pos_by)[f]
+    tp      <- pos_by[[f]]
+    fam_ids <- terms$id_genome_effect[tp]
+    j       <- mem_pos[tp[1]]
+    slots   <- if (is.na(j)) NULL else slot_by[[j]]
+    kinds   <- if (is.na(j)) NULL else kind_by[[j]]
+    stars   <- if (is.na(j)) NULL else star_by[[j]]
 
     labs <- lapply(seq_along(kinds), function(m) {
       if (stars[m]) "*" else alphabets[[kinds[m]]]
     })
     if (any(lengths(labs) == 0L)) next
 
-    sigs <- org_sig[key_of(fam_ids)]
+    sigs <- org_sig[tp]
     if (length(fam_ids) == 1L && !nzchar(sigs[1])) {
       # The common scope matches every label-vector: no containment search.
       # This is the overwhelmingly common family shape.
@@ -602,18 +629,27 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
   warn_at <- getOption("tidybreed.label_vector_warn", 1e4)
   stop_at <- getOption("tidybreed.label_vector_max",  1e6)
   terms   <- model$terms
-  mid     <- as.character(model$members$id_genome_effect)
-  kind_by <- split(.gev_member_kind(model$members$contrast_name), mid)
-  star_by <- split(free, mid)
-  ids_by  <- split(terms$id_genome_effect, terms$family_key)
-
+  members <- model$members
+  # Label-vectors of each family's first variant: the product over its members
+  # of 1 (a free slot) or its alphabet size. Computed per term in one pass; a
+  # per-family lookup by name is quadratic in a model of many terms.
+  size <- ifelse(free, 1,
+                 lengths(alphabets)[.gev_member_kind(members$contrast_name)])
+  g    <- match(members$id_genome_effect, terms$id_genome_effect)
+  n_term <- rep(1, nrow(terms))
+  if (length(g)) {
+    n_term <- vapply(split(size, factor(g, levels = seq_len(nrow(terms)))),
+                     prod, numeric(1), USE.NAMES = FALSE)
+  }
+  first <- vapply(split(seq_len(nrow(terms)), terms$family_key), `[`, 1L, 1L,
+                  USE.NAMES = FALSE)
+  n_fam <- n_term[first]
   worst <- 0
   worst_id <- NA_integer_
-  for (key in names(ids_by)) {
-    k1    <- as.character(ids_by[[key]][1])
-    sizes <- ifelse(star_by[[k1]], 1L, lengths(alphabets[kind_by[[k1]]]))
-    n <- prod(sizes)
-    if (n > worst) { worst <- n; worst_id <- ids_by[[key]][1] }
+  if (length(n_fam) && max(n_fam) > 0) {
+    w <- which.max(n_fam)
+    worst <- n_fam[w]
+    worst_id <- terms$id_genome_effect[first[w]]
   }
   # A family key can be fifty locus ids long, which is unreadable in a message.
   # Name the trait and one id the user can look up in genome_effect_terms.

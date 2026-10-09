@@ -1,3 +1,41 @@
+# tidybreed 0.75.3 (2026-10-09)
+
+Step 5a of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):
+writer speed, ahead of the `define_genome_effects()` generator. Internal only:
+no API, schema or stored-value change, and every message and error order is
+unchanged.
+
+* The genome-effect writer is linear in the model size. Per-term data-frame
+  subsets in `.ge_build()`, the term/member/origin field checks, the
+  whole-table validator (`.ge_validate_frames()`, run before every `COMMIT`),
+  `replace_scope` deletes and the per-term target/line/parent lookups made
+  every write quadratic. Writing A x A pairs with
+  `define_genome_effect_terms()` (500 loci, one trait):
+
+  | Pairs | 0.75.2 | 0.75.3 |
+  |---:|---:|---:|
+  | 1,000 | 2.2 s | 0.24 s |
+  | 4,000 | 9.6 s | 0.46 s |
+  | 16,000 | 71.8 s | 0.70 s |
+  | 124,750 (all pairs of 500 loci) | not run (most of an hour, step-4 estimate) | 7.1 s |
+
+  Replacing one trait's 16,000 pairs in a populated model (20,200 stored terms,
+  three traits and owners, line-scoped variants): 74.6 s -> 1.4 s.
+  `.stored_to_functional()` (the extractor's conversion) on 16,000 terms:
+  8.6 s -> 0.17 s, with bit-identical results.
+* When several things are wrong, the writer still reports the first violation
+  by term (in the order typed), then rule, then member, and validators keep
+  their whole ordered list of violations. A new contract test
+  (`test-genome-effects-writer-order.R`), written against 0.75.2 before the
+  change, pins this.
+* The evaluator's R-side preparation (`add_tgv()`, `add_phenotype()`,
+  `extract_genetic_variance()`) is linear in the number of terms too; its
+  evaluation statement is unchanged. Realised `extract_genetic_variance()` on
+  2,000 individuals with 20,000 pairs: 124 s -> 25.5 s; genic with all
+  124,750 pairs: 7.2 s (13.1 s for 19,900 pairs before).
+* New benchmark `dev/benchmarks/benchmark_genome_effect_writer.R`; the
+  extractor benchmark now uses all 124,750 pairs of 500 loci.
+
 # tidybreed 0.75.2 (2026-10-05)
 
 Follow-up to the Codex review of the built Phase 4

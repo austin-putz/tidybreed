@@ -363,11 +363,12 @@ validate_genome_effects <- function(conn, labels = NULL) {
   }))
 
   v <- character(0)
-  for (i in seq_len(nrow(dom))) {
+  # Only members off a diploid chromosome need their origin rows.
+  chrs <- chr_of$chr_name[match(dom$locus_id, chr_of$locus_id)]
+  for (i in which(is.na(chrs) | !chrs %in% diploid)) {
     id   <- dom$id_genome_effect[i]
     slot <- dom$member_slot[i]
-    chr  <- chr_of$chr_name[match(dom$locus_id[i], chr_of$locus_id)]
-    if (!is.na(chr) && chr %in% diploid) next
+    chr  <- chrs[i]
     so <- origins[origins$id_genome_effect == id & origins$member_slot == slot,
                   , drop = FALSE]
     if (nrow(so) > 0L && sum(so$copy_count) == 2L) next
@@ -430,10 +431,9 @@ validate_genome_effects <- function(conn, labels = NULL) {
 #' @noRd
 .ge_validate_frames <- function(terms, members, origins, labels = NULL) {
   tag_of <- function(id) {
-    lab <- if (is.null(labels)) NA_character_ else
+    lab <- if (is.null(labels)) rep(NA_character_, length(id)) else
       unname(labels[match(as.character(id), names(labels))])
-    if (length(lab) != 1L || is.na(lab)) paste0("term ", id)
-    else paste0("term_id '", lab, "'")
+    ifelse(is.na(lab), paste0("term ", id), paste0("term_id '", lab, "'"))
   }
   v <- character(0)
   # Only a genuinely empty model is trivially valid. Members with no term at all
@@ -453,88 +453,41 @@ validate_genome_effects <- function(conn, labels = NULL) {
                      paste(sort(unique(o_key[!o_key %in% m_key])), collapse = "; ")))
   }
 
-  for (id in terms$id_genome_effect) {
-    mm <- members[members$id_genome_effect == id, , drop = FALSE]
-    oo <- origins[origins$id_genome_effect == id, , drop = FALSE]
-    tag <- tag_of(id)
-
-    if (nrow(mm) == 0L) {
-      v <- c(v, paste(tag, "has no members"))
-      next
-    }
-    if (anyDuplicated(mm$locus_id)) {
-      v <- c(v, paste(tag, "names the same locus more than once"))
-    }
-    if (!identical(sort(mm$member_slot), seq_len(nrow(mm)))) {
-      v <- c(v, paste(tag, "member_slot must be 1..n in ascending locus_id order"))
-    } else if (is.unsorted(mm$locus_id[order(mm$member_slot)])) {
-      v <- c(v, paste(tag, "members are not canonicalized by ascending locus_id"))
-    }
-
-    for (i in seq_len(nrow(mm))) {
-      slot <- mm$member_slot[i]
-      kind <- mm$contrast_name[i]
-      so   <- oo[oo$member_slot == slot, , drop = FALSE]
-      mtag <- paste0(tag, " member ", slot)
-      if (nrow(so) == 0L) next
-      if (!identical(sort(so$origin_slot), seq_len(nrow(so)))) {
-        v <- c(v, paste(mtag, "origin_slot must be 1..n"))
-      }
-      if (kind == "additive") {
-        # Two origin rows on one additive member are incoherent: under OR the
-        # scope matches more copies than either alone while looking narrower;
-        # under AND no single copy can be both. "A or B" is expanded by the
-        # writer into separate variants.
-        if (nrow(so) > 1L) {
-          v <- c(v, paste(mtag, "additive members take at most one origin row",
-                          "(expand alternatives into separate variants)"))
-        }
-        if (any(so$copy_count != 1L)) {
-          v <- c(v, paste(mtag, "additive origin requires copy_count = 1",
-                          "(matching is per allele copy)"))
-        }
-      } else {
-        if (any(so$line_match_type == "any")) {
-          v <- c(v, paste(mtag, "'any' is permitted only on additive members:",
-                          "a genotype scope must name lines and sum to the",
-                          "realized copy count, so an 'any' entry constrains",
-                          "nothing"))
-        }
-        # A genotype unit is the whole locus state, so the multiset must account
-        # for every copy the state is defined over: 2 for Cockerham dominance,
-        # and the declared copy_count_value for an indicator.
-        want <- if (kind == "dominance") 2L else mm$copy_count_value[i]
-        if (!is.na(want) && sum(so$copy_count) != want) {
-          v <- c(v, paste0(mtag, ": origin multiset demands ", sum(so$copy_count),
-                           " copies but the member's state is defined over ",
-                           want, if (kind == "dominance")
-                             " (Cockerham dominance is diploid)" else
-                             " (copy_count_value)"))
-        }
-      }
-    }
-  }
+  # Per-term rules, decided for every term at once: a per-term subset of the
+  # member and origin frames is quadratic in the model size, and this runs on
+  # the whole stored model before every COMMIT. The messages are then put in
+  # the order a loop over terms (in row order) would produce them: term, then
+  # rule, then member (in member row order), then the member's rules.
+  v <- c(v, .ge_frame_term_messages(terms, members, origins, tag_of))
 
   # Fallback families: precedence operates only within a family.
   if (nrow(terms) == 0L) return(unique(v))
-  keys <- .ge_family_keys(terms, members)
-  for (fam in split(terms$id_genome_effect, keys)) {
+  keys  <- .ge_family_keys(terms, members)
+  t_pos <- seq_len(nrow(terms))
+  m_rows <- split(seq_len(nrow(members)),
+                  factor(match(members$id_genome_effect, terms$id_genome_effect),
+                         levels = t_pos))
+  o_rows <- split(seq_len(nrow(origins)),
+                  factor(match(origins$id_genome_effect, terms$id_genome_effect),
+                         levels = t_pos))
+  for (fam in split(t_pos, keys)) {
     if (length(fam) < 2L) next
-    preds <- lapply(fam, function(id) {
-      .ge_predicate(members[members$id_genome_effect == id, , drop = FALSE],
-                    origins[origins$id_genome_effect == id, , drop = FALSE])
+    preds <- lapply(fam, function(i) {
+      .ge_predicate(members[m_rows[[i]], , drop = FALSE],
+                    origins[o_rows[[i]], , drop = FALSE])
     })
+    ids <- terms$id_genome_effect[fam]
     for (i in seq_along(fam)) for (j in seq_along(fam)) {
       if (j <= i) next
       le <- .ge_pred_leq(preds[[i]], preds[[j]])
       ge <- .ge_pred_leq(preds[[j]], preds[[i]])
       if (le && ge) {
-        v <- c(v, paste0(tag_of(fam[i]), " and ", tag_of(fam[j]),
+        v <- c(v, paste0(tag_of(ids[i]), " and ", tag_of(ids[j]),
                          " are the same logical term at the same scope",
                          " (duplicate family + scope identity)",
-                         .ge_duplicate_hint(terms, members, fam[i], fam[j])))
+                         .ge_duplicate_hint(terms, members, ids[i], ids[j])))
       } else if (!le && !ge && .ge_pred_overlap(preds[[i]], preds[[j]])) {
-        v <- c(v, paste0(tag_of(fam[i]), " and ", tag_of(fam[j]),
+        v <- c(v, paste0(tag_of(ids[i]), " and ", tag_of(ids[j]),
                          " have overlapping but incomparable scopes in one",
                          " family: neither is more specific, so no variant can",
                          " be selected"))
@@ -544,6 +497,125 @@ validate_genome_effects <- function(conn, labels = NULL) {
   unique(v)
 }
 
+#' The per-term structural messages of `.ge_validate_frames()`, in loop order
+#'
+#' For each term (row order; a repeated id is reported at its first row):
+#' "has no members" alone, or else a repeated locus, then the `member_slot`
+#' rule (or, when the slots are valid, the locus order), then each member's
+#' origin rules in member row order.
+#'
+#' @keywords internal
+#' @noRd
+.ge_frame_term_messages <- function(terms, members, origins, tag_of) {
+  ids <- unique(terms$id_genome_effect)
+  K   <- length(ids)
+  if (K == 0L) return(character(0))
+  tpos <- match(members$id_genome_effect, ids)
+  keep <- which(!is.na(tpos))
+  tp   <- tpos[keep]
+  n_m  <- tabulate(tp, K)
+  tag  <- tag_of(ids)
+  out_tp <- integer(0); out_rule <- integer(0); out_m <- integer(0)
+  out_msg <- character(0)
+  # paste() recycles a zero-length argument to "", so an empty selection
+  # still yields one string: append only when something was selected.
+  add <- function(t, rule, m, msg) {
+    if (length(t) == 0L) return(invisible(NULL))
+    out_tp   <<- c(out_tp, t);    out_rule <<- c(out_rule, rule)
+    out_m    <<- c(out_m, m);     out_msg  <<- c(out_msg, msg)
+  }
+
+  none <- which(n_m == 0L)
+  add(none, rep(1L, length(none)), rep(0L, length(none)),
+      paste(tag[none], "has no members"))
+
+  locus <- members$locus_id[keep]
+  dup_locus <- tabulate(tp[duplicated(.ge_pair_key(tp, locus))], K) > 0L
+  w <- which(dup_locus)
+  add(w, rep(2L, length(w)), rep(0L, length(w)),
+      paste(tag[w], "names the same locus more than once"))
+
+  # identical(sort(slots), seq_len(n)): integer slots that are exactly 1..n.
+  slot <- members$member_slot[keep]
+  bad_slot_row <- is.na(slot) | slot < 1L | slot > n_m[tp] |
+    duplicated(.ge_pair_key(tp, slot))
+  slot_bad <- if (!is.integer(members$member_slot)) n_m > 0L else
+    tabulate(tp[bad_slot_row], K) > 0L
+  w <- which(slot_bad)
+  add(w, rep(3L, length(w)), rep(0L, length(w)),
+      paste(tag[w], "member_slot must be 1..n in ascending locus_id order"))
+  # Valid slots: are the loci ascending in slot order?
+  o  <- order(tp, slot)
+  so <- tp[o]; lo <- locus[o]
+  down <- c(FALSE, so[-1] == so[-length(so)] & lo[-1] < lo[-length(lo)])
+  unsorted <- tabulate(so[down], K) > 0L & !slot_bad
+  w <- which(unsorted)
+  add(w, rep(3L, length(w)), rep(0L, length(w)),
+      paste(tag[w], "members are not canonicalized by ascending locus_id"))
+
+  # Member origin rules. Each member reads the origin rows of its own
+  # (term, slot), as a per-term subset would.
+  if (nrow(origins) > 0L && length(keep) > 0L) {
+    okey <- paste(origins$id_genome_effect, origins$member_slot)
+    ukey <- unique(okey)
+    g    <- match(okey, ukey)
+    G    <- length(ukey)
+    n_o  <- tabulate(g, G)
+    os   <- origins$origin_slot
+    os_bad <- if (!is.integer(os)) n_o > 0L else
+      tabulate(g[is.na(os) | os < 1L | os > n_o[g] |
+                   duplicated(.ge_pair_key(g, os))], G) > 0L
+    cc <- origins$copy_count
+    cc_ne1  <- tabulate(g[is.na(cc) | cc != 1L], G) > 0L
+    any_any <- tabulate(g[origins$line_match_type %in% "any"], G) > 0L
+    sum_cc  <- as.numeric(rowsum(as.numeric(cc), factor(g, levels = seq_len(G)),
+                                 reorder = TRUE))
+
+    mg   <- match(paste(members$id_genome_effect[keep], slot), ukey)
+    has  <- which(!is.na(mg))
+    if (length(has) > 0L) {
+      r    <- keep[has]                       # member rows (original order)
+      gm   <- mg[has]
+      kind <- members$contrast_name[r]
+      mtag <- paste0(tag[tp[has]], " member ", slot[has])
+      sub1 <- ifelse(os_bad[gm], paste(mtag, "origin_slot must be 1..n"),
+                     NA_character_)
+      add_k <- kind == "additive"
+      want <- ifelse(kind == "dominance", 2L, members$copy_count_value[r])
+      sub2 <- ifelse(add_k,
+        ifelse(n_o[gm] > 1L,
+               paste(mtag, "additive members take at most one origin row",
+                     "(expand alternatives into separate variants)"),
+               NA_character_),
+        ifelse(any_any[gm],
+               paste(mtag, "'any' is permitted only on additive members:",
+                     "a genotype scope must name lines and sum to the",
+                     "realized copy count, so an 'any' entry constrains",
+                     "nothing"),
+               NA_character_))
+      sub3 <- ifelse(add_k,
+        ifelse(cc_ne1[gm],
+               paste(mtag, "additive origin requires copy_count = 1",
+                     "(matching is per allele copy)"),
+               NA_character_),
+        ifelse(!is.na(want) & sum_cc[gm] != want,
+               paste0(mtag, ": origin multiset demands ", sum_cc[gm],
+                      " copies but the member's state is defined over ",
+                      want, ifelse(kind == "dominance",
+                                   " (Cockerham dominance is diploid)",
+                                   " (copy_count_value)")),
+               NA_character_))
+      msg <- c(rbind(sub1, sub2, sub3))
+      m_pos <- rep(r, each = 3L)
+      t_of  <- rep(tp[has], each = 3L)
+      ok <- !is.na(msg)
+      add(t_of[ok], rep(4L, sum(ok)), m_pos[ok], msg[ok])
+    }
+  }
+
+  ord <- order(out_tp, out_rule, out_m, seq_along(out_tp))
+  out_msg[ord]
+}
 
 # ── Dosage collection ───────────────────────────────────────────────────────
 

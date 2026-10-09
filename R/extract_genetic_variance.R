@@ -412,7 +412,7 @@ extract_genetic_variance <- function(tbl, trait_name = NULL, base_tbl = NULL,
 #' builds that matrix whole; with all pairs of 500 loci it is ~2 GB.
 #'
 #' @param Z_A Centred dosages, `n x m`.
-#' @param pairs `r x 2` column indices into `Z_A`.
+#' @param pairs Two-column matrix of column indices into `Z_A`, one row per pair.
 #' @param E `(r, k)` coefficients.
 #' @param chunk Pairs per chunk.
 #' @return `n x k` matrix.

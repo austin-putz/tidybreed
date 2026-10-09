@@ -6,14 +6,13 @@
 #
 # Case "typical": 2,000 individuals, 500 loci, 2 traits, A + D + A x A with
 #   1,000 pairs, realised and genic.
-# Case "all_pairs": the same cohort, every pair of the first 200 loci (19,900
-#   pairs). A literal port of nonadd_covariates() would build a 2,000 x 19,900
-#   double matrix (~318 MB) plus a 19,900^2 pair covariance (~3.2 GB); the
-#   extractor accumulates the A x A values in pair chunks (two here) instead.
-#   All 124,750 pairs of the 500 loci are not used: writing them through
-#   define_genome_effect_terms() takes most of an hour (the writer's per-term
-#   R loop is the bottleneck, ~2.9 ms per pair at 4,000 pairs), which is a
-#   writer cost, not the extractor's. The write is timed separately below.
+# Case "all_pairs": the same cohort, every pair of the 500 loci (124,750
+#   pairs). A literal port of nonadd_covariates() would build a 2,000 x
+#   124,750 double matrix (~2 GB) plus a 124,750^2 pair covariance (~124 GB);
+#   the extractor accumulates the A x A values in pair chunks instead.
+#   Until 0.75.3 this case used the 19,900 pairs of the first 200 loci:
+#   writing all 124,750 took most of an hour in the writer's per-term R loop.
+#   Since the step-5a writer it takes seconds; the write is timed below.
 #
 # Deterministic (fixed seeds). Not part of R CMD check. Run manually:
 #
@@ -21,6 +20,13 @@
 # ------------------------------------------------------------------------
 
 devtools::load_all(quiet = TRUE)
+
+# The all-pairs realised evaluation spills to disk. An in-memory DuckDB spills
+# to tempdir()/duckdb/temp and does not create the missing parent directory
+# ("IO Error: Failed to create directory"), so create it first. A file-backed
+# database (tidybreed's default) spills next to its file instead.
+dir.create(file.path(tempdir(), "duckdb", "temp"), recursive = TRUE,
+           showWarnings = FALSE)
 
 n_ind  <- 2000L
 n_loci <- 500L
@@ -50,7 +56,7 @@ write_model <- function(pop, trait, pairs, seed) {
 set.seed(1)
 every <- t(utils::combn(n_loci, 2))
 some_pairs <- every[sort(sample(nrow(every), 1000L)), , drop = FALSE]
-all_pairs <- t(utils::combn(200L, 2))
+all_pairs <- every
 
 pop <- write_model(pop, "T1", some_pairs, 11)
 pop <- write_model(pop, "T2", some_pairs, 12)
@@ -72,7 +78,7 @@ time_it <- function(label, expr) {
 
 cat("n_ind =", n_ind, " n_loci =", n_loci, "\n")
 cat("typical: 2 traits, 1,000 pairs | all_pairs: 1 trait,",
-    format(nrow(all_pairs), big.mark = ","), "pairs of 200 loci\n\n")
+    format(nrow(all_pairs), big.mark = ","), "pairs of", n_loci, "loci\n\n")
 cohort <- get_table(pop, "ind_meta")
 time_it("typical, realised",  extract_genetic_variance(cohort, c("T1", "T2")))
 time_it("typical, genic",     extract_genetic_variance(cohort, c("T1", "T2"),

@@ -688,13 +688,7 @@ GE_GENERATED_OWNER <- "generated"
       model$terms$effect_owner == GE_GENERATED_OWNER]
   if (length(ids) == 0L) return(integer(0))
   sc  <- .ge_scope_from_origin(scope, "replace_scope")
-  hit <- vapply(ids, function(id) {
-    .ge_term_at_scope(model$members[model$members$id_genome_effect == id, ,
-                                    drop = FALSE],
-                      model$origins[model$origins$id_genome_effect == id, ,
-                                    drop = FALSE],
-                      sc)
-  }, logical(1))
+  hit <- .ge_terms_at_scope(model, ids, sc)
   unique(model$members$locus_id[model$members$id_genome_effect %in% ids[hit]])
 }
 
@@ -725,13 +719,13 @@ GE_GENERATED_OWNER <- "generated"
   keys <- .ge_family_keys(t, model$members[
     model$members$id_genome_effect %in% t$id_genome_effect, , drop = FALSE])
   hits <- character(0)
-  for (fam in split(t$id_genome_effect, keys)) {
-    if (length(fam) < 2L) next
-    preds <- lapply(fam, function(id) {
-      .ge_predicate(model$members[model$members$id_genome_effect == id, ,
-                                  drop = FALSE],
-                    model$origins[model$origins$id_genome_effect == id, ,
-                                  drop = FALSE])
+  rows <- .ge_rows_by_id(model, t$id_genome_effect)
+  for (pos in split(seq_len(nrow(t)), keys)) {
+    if (length(pos) < 2L) next
+    fam   <- t$id_genome_effect[pos]
+    preds <- lapply(pos, function(k) {
+      .ge_predicate(model$members[rows$members[[k]], , drop = FALSE],
+                    model$origins[rows$origins[[k]], , drop = FALSE])
     })
     for (i in seq_along(fam)) for (j in seq_along(fam)) {
       if (j == i) next
@@ -1029,11 +1023,13 @@ QTL_REALISED_MAX_CELLS <- 2e7
   out <- list(line = character(0), other = character(0))
   if (!any(g$hit)) return(out)
   m <- g$model
-  for (i in which(g$hit)) {
-    id <- m$terms$id_genome_effect[i]
+  hits <- which(g$hit)
+  rows <- .ge_rows_by_id(m, m$terms$id_genome_effect[hits])
+  for (h in seq_along(hits)) {
+    i  <- hits[h]
     t  <- m$terms$trait_name[i]
-    mm <- m$members[m$members$id_genome_effect == id, , drop = FALSE]
-    oo <- m$origins[m$origins$id_genome_effect == id, , drop = FALSE]
+    mm <- m$members[rows$members[[h]], , drop = FALSE]
+    oo <- m$origins[rows$origins[[h]], , drop = FALSE]
     own <- .ge_scope_from_origin(.dae_scope(line_name, po[[t]]), "replace_scope")
     if (.ge_term_at_scope(mm, oo, own)) next
     pp  <- unique(stats::na.omit(oo$parent_origin))
