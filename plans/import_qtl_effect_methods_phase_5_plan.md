@@ -9,7 +9,7 @@
   `non-additive/R/qtl_effects_nonadd.R` (531 lines) and
   `non-additive/tests/test_qtl_effects_nonadd.R` (18 tests).
 
-**Versions:** 0.75.3 (5a), 0.76.0 (5b), 0.76.1 (5c). The main plan gives step 5 one version
+**Versions:** 0.75.3 (5a), 0.76.0 (5b), 0.76.2 (5c; 0.75.4 and 0.76.1 are the review follow-ups of 5a and 5b). The main plan gives step 5 one version
 (0.76.0). This plan splits it in three (decision D1).
 **Status:** planned 2026-10-06, revised the same day after the
 [Codex review](import_qtl_effect_methods_phase_5_codex_review.md) and again after its
@@ -90,7 +90,7 @@ corrections now in their text). D8 is new from the review.
 |---|---|---|---|
 | 5a | 0.75.3 | Writer speed. Internal only, no API change. | Its gate is "every existing writer test still passes", plus a benchmark. Mixing it into 5b would hide a writer regression inside a new feature. |
 | 5b | 0.76.0 | `define_genome_effects()`, the calibration internals, the owner rules, gates C1–C12, C14, C15, C17, C18. | The generator and its algebra. |
-| 5c | 0.76.1 | End-to-end: phenotypes (C13), prevalence, `remove_generated_effects()`, the extractor round trips (C19, C20), the vignette. | These cross into phenotypes and the extractor, and the vignette describes the finished set of four paths. |
+| 5c | 0.76.2 | End-to-end: phenotypes (C13), prevalence, `remove_generated_effects()`, the extractor round trips (C19, C20), the vignette. | These cross into phenotypes and the extractor, and the vignette describes the finished set of four paths. |
 
 As in step 4, the user can choose to run them in one pass (each commit with the full suite
 green) or to review between them.
@@ -959,7 +959,7 @@ correctness gates; the oracle is a cross-check.
 
 ---
 
-## 5c — End to end and the vignette (0.76.1)
+## 5c — End to end and the vignette (0.76.2)
 
 ### 5c.1 Gates — mostly `tests/testthat/test-define_genome_effects-integration.R`
 
@@ -1024,7 +1024,7 @@ Runs in seconds: small genome, `:memory:` database, `eval = TRUE` chunks. Listed
 
 ### 5c.3 Docs (5c)
 
-NEWS, DESCRIPTION 0.76.1, results file (5c), main plan "As built (5)", the API skill's
+NEWS, DESCRIPTION 0.76.2, results file (5c), main plan "As built (5)", the API skill's
 cross-references to the vignette.
 
 ---

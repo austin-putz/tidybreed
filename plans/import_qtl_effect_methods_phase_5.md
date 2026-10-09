@@ -325,3 +325,57 @@ expectations, 0 failures, 0 errors**, 6 warnings, the 0.75.2 baseline in the sam
 files (`add_founders`, `add_phenotype`, `genome_map`, `parity` ×2, `phenotype_composite`).
 `devtools::document()` and `pkgdown::check_pkgdown()` clean. The 484 new expectations are
 the two new test files.
+
+### Implementation-review follow-up (0.76.1)
+
+[Codex reviewed the built 5b](import_qtl_effect_methods_phase_5_codex_review.md): the planned
+gates and the full suite pass, and its independent scientific checks (oracle integrity, a
+public trait-unit sweep to `u = 1e-10`, three traits with hubs, a fixed partner and an
+inbred cohort under both anchors, individual values against `add_tgv()`) found no error at
+ordinary scale. Two medium findings, both accepted:
+
+- **F1: the stored additive coefficients were not the verified ones.** `.na_calibrate()`
+  verified `B_alpha`, then returned the functional `a = B_alpha - C`; storage
+  (`.noia_to_stored()`) added the coupling back. When `B_alpha` is tiny beside `C` that
+  cancels: `G_A = 1e-24`, `G_D = 1`, one QTL at `p = 0.3`, seed 2 stored a variance off by
+  −2.0e-4 behind a message reporting it exact (reproduced through the public path, other
+  seeds at the same ratio +8.5e-5). Fixed by `.na_store_alpha()`, which never removes and
+  re-adds the coupling: under `"genic"` the anchor's `b`, `c` are the HWE ones at the stored
+  centre, so `B_alpha` is stored as is (now exact, relative error 0); under `"realised"` the
+  stored coefficient is `B_alpha + Delta`, `Delta` the coupling (linear in `b`, `c`) of the
+  HWE-minus-observed `b` and `c`, and the realised coefficient the stored model implies
+  (stored − `Delta`) is verified against the target again; a miss is refused ("cannot be
+  stored exactly", e.g. an out-of-HWE locus at `G_A = 1e-24`). `.dge_build_nonadditive()`
+  writes these in place of `.noia_to_stored()`'s recovered `alpha`; the delivered covariance
+  in the message is measured from them.
+- **F2: the realised size guard undercounted kept designs.** The guard counts dominance and
+  pair columns only for non-zero blocks, but `.na_anchors("realised")` always built the
+  dominance design and a zero `G_AA` still built the pair design (A + A×A, or D + zero A×A,
+  kept 800 cells where the guard counted 480 / 640). Fixed on the allocation side, so the
+  documented contract stands: `.na_anchors(dominance =)` builds `D` only for a non-zero
+  block, the A×A anchor is built only for a non-zero block, and `.na_calibrate()` gives a
+  zero block zero coefficients and a zero delivered covariance without an anchor (its
+  draws are still consumed, so C17 holds). The genic-with-individuals diagnostic builds the
+  dominance design only when it compares that block.
+
+**Tests.** Public (`test-define_genome_effects.R`): G3 at `G_A = 1e-24` / `G_D = 1` checks
+the stored genic variance to 1e-12; G7 captures the anchors handed to `.na_calibrate()`
+for A + A×A, D + zero A×A and zero D + A×A (exactly `n m`, `n m_D`, `n r` cells), admits
+A + A×A at `n (m + r)` and refuses D + zero A×A one cell over `n (m + m_D)`, with database
+and RNG unchanged. Calibration (`test-genome-effects-calibration.R`): the short genic
+reproduction, the realised `Delta` identity and its refusal, and zero blocks without
+anchors. Mutations: storing `.noia_to_stored()`'s `alpha` again fails the G3 test; always
+building the dominance design fails G7.
+
+**Not changed: the extractor at such ratios.** `extract_genetic_variance()` canonicalises
+stored terms to functional effects and re-projects (`.egv_coefficients()`, `.egv_alpha()`),
+the same subtraction and re-addition. On the fixed model above it reports the additive
+block as `1.000085e-24` (the stored model is exact). Its precision is absolute, about
+`eps` times the coupling, which is ordinary for a decomposition whose own consistency check
+is relative to the total genetic value; an additive block twenty-four orders below the
+dominance block is below that resolution. Decided with the user: documented, not changed
+(a new "Precision" section in `?extract_genetic_variance`).
+
+**Suite.** Full suite with `NOT_CRAN=true` (78 files): **1,162 tests, 4,805 expectations, 0
+failures, 0 errors**, the same 6 baseline warnings in the same five files. No exported
+signature or roxygen changed.

@@ -37,16 +37,21 @@
 #'   each pair's `Z_A` columns; every `M_c = Z_c' Z_c / (n - 1)`.
 #'
 #' The A x A anchor needs the pairs, which may be drawn later: add it with
-#' `.na_aa_anchor()`.
+#' `.na_aa_anchor()`. Only a non-zero block gets an anchor: a zero block's
+#' coefficients are 0 and need no design, so the realised designs kept are
+#' exactly the ones the dosage guard counts.
 #'
-#' @return list(anchor, p, w = 2pq, b, cc, A, D, AA = NULL, Z_A = NULL).
+#' @param dominance Build the dominance anchor (a non-zero dominance target).
+#' @return list(anchor, p, w = 2pq, b, cc, A, D = NULL unless `dominance`,
+#'   AA = NULL, Z_A = NULL).
 #' @keywords internal
 #' @noRd
-.na_anchors <- function(anchor, p = NULL, X = NULL) {
+.na_anchors <- function(anchor, p = NULL, X = NULL, dominance = TRUE) {
   if (anchor == "genic") {
     w <- 2 * p * (1 - p)
     return(list(anchor = anchor, p = p, w = w, b = (1 - p) - p, cc = 2 * p - 1,
-                A = .qtl_anchor_diag(w), D = .qtl_anchor_diag(w^2), AA = NULL,
+                A = .qtl_anchor_diag(w),
+                D = if (dominance) .qtl_anchor_diag(w^2), AA = NULL,
                 Z_A = NULL))
   }
   n   <- nrow(X)
@@ -57,9 +62,11 @@
   vx  <- colSums(Z_A^2) / n
   cwx <- colSums(Wc * Z_A) / n
   b   <- ifelse(vx > 0, cwx / vx, 0)
-  Z_D <- Wc - sweep(Z_A, 2L, b, "*")
   list(anchor = anchor, p = p, w = 2 * p * (1 - p), b = b, cc = 2 * p - 1,
-       A = .qtl_anchor_design(Z_A, n - 1L), D = .qtl_anchor_design(Z_D, n - 1L),
+       A = .qtl_anchor_design(Z_A, n - 1L),
+       D = if (dominance) {
+         .qtl_anchor_design(Wc - sweep(Z_A, 2L, b, "*"), n - 1L)
+       },
        AA = NULL, Z_A = Z_A)
 }
 
@@ -124,9 +131,12 @@
 #' Part A's congruence alone (`.qtl_calibrate()`), never the quadratic with
 #' `C = 0` (gate C4).
 #'
-#' Every present block's delivered covariance is verified against its target
-#' as stored, at `QTL_CALIBRATION_TOL` on the correlation scale; a miss is an
-#' error.
+#' A zero dominance or A x A block (present, all zero) gets zero
+#' coefficients without a calibration or an anchor. Every present block's
+#' delivered covariance is verified against its target as stored, at
+#' `QTL_CALIBRATION_TOL` on the correlation scale; a miss is an error. The
+#' coefficients that will be stored are verified again after their
+#' conversion (`.na_store_alpha()`).
 #'
 #' @param anchors `.na_anchors()` result (with `.na_aa_anchor()` when `G_AA`).
 #' @param G_A,G_D,G_AA Named k x k targets; `NULL` = absent block.
@@ -175,16 +185,24 @@
                 inbreeding = ib))
   }
 
-  # Stage 1: A x A.
-  if (!is.null(G_AA)) {
+  # Stage 1: A x A. A zero block is 0 and has no anchor.
+  if (!is.null(G_AA) && !live(std_AA)) {
+    B_aa <- matrix(0, nrow(pairs), k)
+    delivered$AA <- matrix(0, k, k)
+  } else if (!is.null(G_AA)) {
     B_aa <- .na_block_calibrate(B_aa, std_AA, anchors$AA, "additive_by_additive",
                                 anchors$anchor)
     delivered$AA <- anchors$AA$cov(B_aa)
   }
 
-  # Stage 2: dominance, from the degrees of the architecture |B_a|.
+  # Stage 2: dominance, from the degrees of the architecture |B_a|. A zero
+  # block is 0 and has no anchor.
   B_d <- NULL
-  if (!is.null(G_D)) {
+  if (!is.null(G_D) && !live(std_D)) {
+    B_d <- matrix(0, m, k)
+    delivered$D <- matrix(0, k, k)
+    ib$delivered <- stats::setNames(numeric(k), traits)
+  } else if (!is.null(G_D)) {
     u <- abs(B_a)
     B_d <- (dominance_degree_mean + dominance_degree_sd * z) * u
     for (t in names(inbreeding_depression)) {
@@ -223,6 +241,63 @@
        B_aa = if (!is.null(G_AA)) B_aa, B_alpha = st$B_alpha, C = C,
        floor = st$floor, floor_s = st$floor_s, G_tilde_min = st$G_tilde_min,
        delivered = .na_names(delivered, traits), inbreeding = ib)
+}
+
+#' The additive coefficients to store, verified as stored
+#'
+#' Storage is Cockerham terms centred at the base frequencies `p`, whose
+#' additive coefficient is the statistical effect under HWE at `p`:
+#' `a + (q - p) d + sum e (2 p' - 1)`. Recovering it from the functional `a`
+#' (`B_alpha - C`, then adding a coupling back) cancels: when `B_alpha` is
+#' tiny beside `C` (an additive target many orders below the dominance or
+#' A x A one) the stored coefficient keeps few correct digits and misses the
+#' target it was verified at. So the coupling is never removed and re-added:
+#'
+#' * `"genic"`: the anchor's `b` and `c` are the HWE ones at `p`, so the
+#'   stored coefficient is `B_alpha` itself.
+#' * `"realised"`: the stored coefficient is `B_alpha + Delta`, `Delta` the
+#'   coupling (`.na_coupling()`, linear in `b` and `c`) of the differences
+#'   between the HWE and the observed `b` and `c`. The model's realised
+#'   additive coefficient is then the stored one minus `Delta`, which is
+#'   what is verified against the target; when `Delta` dwarfs `B_alpha` the
+#'   storage cannot carry the target's digits and the call is refused.
+#'
+#' @param cal `.na_calibrate()` result, route `"nonadditive"`.
+#' @param p Base allele frequencies the terms are centred at.
+#' @param G_A The additive target, for the check.
+#' @return `cal` with `alpha_stored` (m x k) and `delivered$A` measured from
+#'   it.
+#' @keywords internal
+#' @noRd
+.na_store_alpha <- function(cal, anchors, p, G_A, pairs = NULL) {
+  m <- nrow(cal$B_alpha); k <- ncol(cal$B_alpha)
+  if (anchors$anchor == "genic") {
+    alpha <- cal$B_alpha
+    back  <- alpha
+  } else {
+    Delta <- .na_coupling(m, k, ((1 - p) - p) - anchors$b,
+                          (2 * p - 1) - anchors$cc, cal$B_d, cal$B_aa, pairs)
+    alpha <- cal$B_alpha + Delta
+    back  <- alpha - Delta
+  }
+  A <- anchors$A$cov(back)
+  A <- (A + t(A)) / 2
+  err <- .qtl_target_error(A, .qtl_target_std(unname(G_A), "G_A"))
+  if (err > QTL_CALIBRATION_TOL) {
+    stop("The calibrated 'additive' effects cannot be stored exactly: as ",
+         "Cockerham terms at the base frequencies their covariance differs ",
+         "from the target by ", format(err, digits = 3), " on the correlation ",
+         "scale (tolerance ", QTL_CALIBRATION_TOL, "). The \"realised\" ",
+         "anchor's dominance and pair coupling differs from the stored HWE ",
+         "one by far more than the additive effects themselves (an additive ",
+         "target many orders of magnitude below `G_D` / `G_AA`). Raise ",
+         "`G_A`, or use anchor = \"genic\". Nothing was written.",
+         call. = FALSE)
+  }
+  dimnames(A) <- dimnames(cal$delivered$A)
+  cal$alpha_stored <- alpha
+  cal$delivered$A  <- A
+  cal
 }
 
 #' @keywords internal

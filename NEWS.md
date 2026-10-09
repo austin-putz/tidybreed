@@ -1,3 +1,24 @@
+# tidybreed 0.76.1 (2026-10-09)
+
+Follow-up to the Codex review of step 5b
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`).
+
+* `define_genome_effects()` stores the additive coefficients it verified.
+  It used to recover them from the functional effects and add the dominance
+  and A x A coupling back, which cancels: with an additive target many orders
+  of magnitude below `G_D` (e.g. `G_A = 1e-24`, `G_D = 1`) the stored model
+  delivered an additive variance off by 2e-4 while the message reported it
+  exact. Under `"genic"` the verified coefficient is now stored as is (exact);
+  under `"realised"` the stored coefficient is checked again as stored, and a
+  target the storage cannot carry is refused instead of written.
+* `define_genome_effects(anchor = "realised")` keeps a design only for a
+  non-zero block. It used to keep the dominance design in an A + A x A model
+  and the pair design for a zero `G_AA`, beyond the cells its size guard
+  counted; the guard's count is now the designs kept.
+* `extract_genetic_variance()` documents its precision (new section): each
+  block is exact to about machine epsilon times the model's coefficients, so
+  an additive block many orders below the dominance one keeps few digits.
+
 # tidybreed 0.76.0 (2026-10-09)
 
 Step 5b of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):

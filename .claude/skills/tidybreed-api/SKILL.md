@@ -498,8 +498,11 @@ base resolution (`.dae_resolve_base()`, Wahlund warning) and size limit as
    `n` by `COUNT` → pairs (supplied: unknown / outside / self / repeated
    refused by name; random: `m >= 2`, `n_pairs <= floor(m/2)`;
    `rank(G_AA) <= r`; realised `rank(G_c) <= n - 1`) → realised dosage guard
-   counting kept designs (`.dge_dosage_guard()`: `n (m + m_D + r)`; Part A's
-   `n m` on the additive-only route) → anchor ranks per block.
+   counting kept designs (`.dge_dosage_guard()`: `n (m + m_D + r)`, `m_D`
+   and `r` only for non-zero blocks — only those get a design
+   (`.na_anchors(dominance =)`, A×A anchor only when live), so the count is
+   exact; Part A's `n m` on the additive-only route) → anchor ranks per
+   block.
 2. **Draw** (`.dge_draw()`, D2 order): `B_a` by
    `.draw_additive_architecture(mask, "normal", G_A)` (C4); with a dominance
    block `z` (m×k standard normal; degrees `mean + sd z`); with an A×A block
@@ -518,8 +521,15 @@ base resolution (`.dae_resolve_base()`, Wahlund warning) and size limit as
    rounding budget `1e-10 max(1, ||floor_s||)`, `T` maximising `tr(T)`. The
    coupling `C = b B_d + E_c` is one `rowsum()` (hubs exact). Anchors are
    objects (`.na_anchors()`, `.na_aa_anchor()`; `cross()` added to both anchor
-   kinds, design rank cached). Every present block is verified at
-   `QTL_CALIBRATION_TOL`. No eligibility zeroing (D3 (a)).
+   kinds, design rank cached). A zero D or A×A block gets zero coefficients
+   without a calibration or anchor. Every present block is verified at
+   `QTL_CALIBRATION_TOL`. No eligibility zeroing (D3 (a)). Then
+   `.na_store_alpha()`: the stored (HWE-at-`p`) additive coefficient is
+   `B_alpha` itself under genic and `B_alpha + Delta` (coupling of the
+   HWE-minus-observed `b`, `c`) under realised — never `(B_alpha - C) + C`,
+   which cancels when `G_A` ≪ `G_D` / `G_AA` — re-verified as stored; a miss
+   is refused. `.dge_build_nonadditive()` writes these in place of
+   `.noia_to_stored()`'s recovered `alpha`.
 4. **Diagnostics** (D6, before the commit): `.dae_diagnostics()` on the
    additive-only route; otherwise `.dge_diagnostics()` — realised anchor: each
    block's genic limit; genic + individuals: each block realised on them (A×A

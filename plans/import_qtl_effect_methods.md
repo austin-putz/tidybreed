@@ -1623,7 +1623,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
-| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.1 | 2, 3, 4; **5a, 5b done** |
+| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.2 | 2, 3, 4; **5a, 5b done** |
 
 **Every step**, before its commit: bump `DESCRIPTION` `Version:` and add a `NEWS.md` entry
 (CLAUDE.md). The entry says that databases written by earlier versions are not readable
@@ -2038,7 +2038,7 @@ that is cancellation residue (`|x| ≤ n·eps·Σ|contrib|`) is set to 0 in
 and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (4)
 `genotype_terms()` refuses a fractional or negative `copy_count` before `as.integer()`.
 
-### Step 5 — Part C (0.75.3–0.76.1) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a and 5b done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
+### Step 5 — Part C (0.75.3–0.76.2) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a and 5b done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
   `R/define_genome_effects.R`. Calibration internals go in `R/genome_effects_calibration.R`.

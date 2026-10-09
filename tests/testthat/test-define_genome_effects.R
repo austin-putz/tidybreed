@@ -264,6 +264,23 @@ test_that("G3: under genic the stored alpha is the calibrated B_alpha", {
   }
 })
 
+test_that("G3: an additive target far below the dominance one is stored exactly (review r6 F1)", {
+  # One QTL at p = 0.3, G_A / G_D = 1e-24: recovering alpha from the
+  # functional a by cancellation stored a variance off by 2e-4.
+  pop <- dge_pop("g3x")
+  on.exit(close_pop(pop))
+  set_genotypes(pop, ind_ids(pop), "Locus_1",
+                matrix(rep(c(0, 0, 0, 1, 2), 40), ncol = 1))
+  set.seed(2)
+  quiet(define_genome_effects(gm_at(pop, 1), "T1", G_A = 1e-24, G_D = 1,
+                              base_tbl = gen0(pop), warn_bounds = NULL))
+  sm <- stored_model(pop, "T1")
+  expect_equal(sm$p, 0.3)
+  g <- genic_blocks(sm)
+  expect_lt(abs(g$A[1, 1] / 1e-24 - 1), 1e-12)
+  expect_lt(abs(g$D[1, 1] - 1), 1e-12)
+})
+
 
 # -- C4 (b): the additive-only route is define_additive_effects() ------------
 
@@ -776,7 +793,7 @@ test_that("G5: reversed name order gives identical rows; bad names are refused",
 })
 
 test_that("G7: the realised size guard counts the kept designs; knowable shortages refuse early", {
-  pop <- dge_pop("g7")
+  pop <- dge_pop("g7", traits = c("T1", "T2", "T3", "T4"))
   on.exit(close_pop(pop))
   testthat::local_mocked_bindings(QTL_REALISED_MAX_CELLS = 4000, .package = "tidybreed")
   # Additive-only, n x m = 200 x 20 = 4000: at the limit, accepted, and equal
@@ -800,6 +817,34 @@ test_that("G7: the realised size guard counts the kept designs; knowable shortag
                    G_A = nm2(diag(2), c("T2", "T3")), G_AA = nm2(diag(2), c("T2", "T3")),
                    pairs = data.frame(locus_name_1 = "Locus_1", locus_name_2 = "Locus_2")),
                  "has rank 2 but there is 1 pair")
+  # Only non-zero blocks keep a design (review r6 F2): the anchors handed to
+  # the calibration are exactly the guard's count, for a zero or absent
+  # dominance or A x A block.
+  kept <- function(...) {
+    got <- NULL
+    testthat::local_mocked_bindings(.na_calibrate = function(anchors, ...) {
+      got <<- anchors
+      stop("captured")
+    }, QTL_REALISED_MAX_CELLS = 1e6, .package = "tidybreed")
+    expect_error(define_genome_effects(gm_at(pop, 20), "T3", G_A = 1,
+                                       anchor = "realised", base_tbl = gen0(pop), ...),
+                 "captured")
+    cells <- function(a) if (is.null(a)) 0 else length(a$design)
+    c(A = cells(got$A), D = cells(got$D), AA = cells(got$AA))
+  }
+  expect_identical(kept(G_AA = 0.1), c(A = 4000, D = 0, AA = 2000))
+  expect_identical(kept(G_D = 0.1, G_AA = 0), c(A = 4000, D = 4000, AA = 0))
+  expect_identical(kept(G_D = 0, G_AA = 0.1), c(A = 4000, D = 0, AA = 2000))
+  # So the guard admits A + A x A at 200 x (20 + 10) = 6000 cells, where it
+  # previously kept 8000 (the dominance design too).
+  testthat::local_mocked_bindings(QTL_REALISED_MAX_CELLS = 6000, .package = "tidybreed")
+  set.seed(132)
+  expect_no_error(quiet(define_genome_effects(gm_at(pop, 20), "T4", G_A = 1,
+                    G_AA = 0.1, anchor = "realised", base_tbl = gen0(pop))))
+  expect_refusal(pop, function() define_genome_effects(gm_at(pop, 20), "T2", G_A = 1,
+                   G_D = 0.1, G_AA = 0, anchor = "realised", base_tbl = gen0(pop),
+                   n_pairs = 10),
+                 "200 individuals x \\(20 additive \\+ 20 dominance \\+ 0 pair columns\\)")
   small <- get_table(pop, "ind_meta") |> dplyr::filter(id_ind %in% !!ind_ids(pop)[1:2])
   expect_refusal(pop, function() define_genome_effects(gm_at(pop, 5), c("T2", "T3"),
                    G_A = nm2(diag(2), c("T2", "T3")), anchor = "realised", base_tbl = small),

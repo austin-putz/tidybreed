@@ -116,6 +116,16 @@
 #' prevalence: the threshold also assumes a near-normal liability, which a
 #' skewed finite-locus model need not give.
 #'
+#' @section Precision:
+#' Each block is computed to an **absolute** precision of about machine
+#' epsilon times the size of the model's coefficients, not relative to the
+#' block itself. Re-projecting the stored terms adds the dominance and pair
+#' coefficients into the additive one (`alpha = a + b d + sum e c`), so an
+#' additive block many orders of magnitude below the dominance or A x A
+#' block keeps few correct digits: a model stored with an additive variance
+#' of exactly `1e-24` beside a dominance variance of 1 is reported as about
+#' `1.0001e-24`. At ordinary ratios the error is at rounding level.
+#'
 #' @param tbl A `tidybreed_table` from [get_table()], optionally filtered,
 #'   selecting the individuals.
 #' @param trait_name Character vector of traits. `NULL` (default) is every

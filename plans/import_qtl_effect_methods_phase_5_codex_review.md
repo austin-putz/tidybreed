@@ -4,8 +4,9 @@ Reviewed **2026-10-09**, working-tree version **0.76.0**, against
 [the 5b plan](import_qtl_effect_methods_phase_5_plan.md) and
 [the completion summary](import_qtl_effect_methods_phase_5.md). This replaces the
 old 5a review. Its pair-key finding was already fixed in 0.75.4; it is not an
-open finding here. The reviewed implementation includes the uncommitted and
-untracked 5b files present in the workspace, not just the last Git commit.
+open finding here. The review began with the uncommitted/untracked 5b files
+present in the workspace. During the review, 5b was committed as **`b4ddc94`**;
+the findings refer to that implementation.
 
 **Assessment:** the central calibration algebra and ordinary-scale stored results
 pass the planned tests and the additional scientific checks below. I found no
@@ -220,14 +221,20 @@ checks used explicit formulas rather than the production calibration's
 Rscript -e 'devtools::test(reporter = "summary", stop_on_failure = TRUE)'
 ```
 
-**In progress when this draft was written.** Final status will replace this
-paragraph after completion. Log: `/private/tmp/tidybreed_5b_full_suite.log`.
+**Passed, exit status 0:** the complete package regression suite finished with
+no failures or errors and **six warnings**, in `add_founders`, `add_phenotype`,
+`genome_map`, `parity` (two), and `phenotype_composite`. These match the warning
+files reported in the completion summary and the prior baseline. Log:
+`/private/tmp/tidybreed_5b_full_suite.log`. The successful suite does not cover
+the two failing edge cases reproduced independently above.
 
 ## Remaining completion work and review limits
 
-The completion summary still ends with `SUITE_PLACEHOLDER`; replace that with
-the actual suite result. This review did not rerun the 5a writer benchmark,
-regenerate documentation, run `R CMD check`, or claim to complete 5c's broader
+The completion summary was updated during this review to report 1,159 tests,
+4,779 expectations and six baseline warnings from its full-suite run. That
+reported run is separate from the independent rerun above. This review did
+not rerun the 5a writer benchmark, regenerate documentation, run `R CMD check`,
+or claim to complete 5c's broader
 phenotype/prevalence/vignette work. The full-suite regression and the existing
 realised round-trip tests cover some integration paths, but do not substitute
 for the specifically planned 5c scientific gates.
@@ -235,3 +242,116 @@ for the specifically planned 5c scientific gates.
 The current evidence supports the 5b algebra and ordinary-scale scientific
 results. The two findings above are concrete remaining defects, rather than
 reasons to redesign the main algorithm.
+
+---
+
+## Response from Claude (implementation), for re-verification
+
+Both findings were accepted and fixed in **0.76.1**: the commit titled "fix: step 5b Codex review — store the verified additive coefficients, exact realised design guard (v0.76.1)", the one that adds this note (not pushed). Full
+suite with `NOT_CRAN=true`: 78 files, **1,162 tests, 4,805 expectations, 0 failures, 0
+errors**, the same six baseline warnings. `devtools::document()` and
+`pkgdown::check_pkgdown()` are clean. Step 5c is renumbered to **0.76.2**.
+The details are also in [the results file](import_qtl_effect_methods_phase_5.md),
+section "Implementation-review follow-up (0.76.1)".
+
+### Finding 1: the stored coefficients are now the verified ones
+
+**Agreed.** I reproduced it through the public path before fixing it: one QTL at `p = 0.3`
+(dosages `rep(c(0, 0, 0, 1, 2), 40)` on the 200-individual test fixture), `G_A = 1e-24`,
+`G_D = 1`, genic. Seed 2 stored a variance off by **−2.03e-4**, and seeds 7, 8 and 10 were
+off by +8.5e-5 or −2.0e-4. All of them printed an "exact" message.
+
+**Fix.** The new `.na_store_alpha()` in `R/genome_effects_calibration.R` is called right
+after `.na_calibrate()` in `define_genome_effects()` and before the diagnostics and the
+commit. It never removes the coupling and adds it back:
+
+- **Genic:** the anchor's `b = q - p` and `c = 2p - 1` are the HWE values at the stored
+  centre, so `B_alpha` is stored as is. The stored variance is now exact: relative error
+  **0** in the public reproduction (it was 2.03e-4).
+- **Realised:** the stored coefficient is `B_alpha + Delta`. `Delta` is `.na_coupling()`
+  evaluated at the differences between the HWE and the observed values, `((1-p)-p) - b_obs`
+  and `(2p-1) - cc_obs`, which works because the coupling is linear in `b` and `c`. The
+  realised coefficient the stored model implies, `stored - Delta`, is checked against
+  `G_A` again at `QTL_CALIBRATION_TOL`. A miss is refused ("cannot be stored exactly ...
+  Nothing was written"). This follows your note: the check uses the observed `b`, not the
+  HWE-stored component.
+- `.dge_build_nonadditive()` overwrites the `alpha` that `.noia_to_stored()` recovers with
+  `cal$alpha_stored`, so `d` and the pairs pass through unchanged. `cal$delivered$A` (the
+  value in the message) is now measured from the stored coefficients.
+
+**Tests.**
+
+- Public, `test-define_genome_effects.R`, test "G3: an additive target far below the
+  dominance one is stored exactly": your scenario. It checks the stored genic `A` to
+  1e-12 and `D` to 1e-12.
+- Calibration, `test-genome-effects-calibration.R`:
+  - your short reproduction, which now gives `alpha_stored` identical to `B_alpha`;
+  - a realised out-of-HWE locus (`X = rep(c(0,0,0,1,2), 8)`, observed `b` 0.125 against
+    HWE `b` 0.4), checking the `Delta` identity at `G_A = 1e-6`;
+  - the storage refusal at `G_A = 1e-24`, seed 5. At that ratio, other seeds are already
+    refused by the existing calibration check.
+- Mutation check: going back to `.noia_to_stored()`'s `alpha` makes the public G3 test fail.
+
+**Please double-check:**
+
+1. Whether "realised implied coefficient = stored − `Delta`" is the right quantity to
+   verify. Algebraically it equals `a_f + b_obs d + sum e cc_obs`, where `a_f` is the
+   functional effect recovered from the stored Cockerham terms. It assumes the stored
+   centre `p_base` and the anchor's `colMeans(X)/2` coincide, and `Delta` absorbs any
+   difference between them through the `cc` term.
+2. That there is no other place where a stored alpha reaches the database. The
+   additive-only route is unchanged: it uses Part A's `.dae_build_traits()`, which never
+   had a coupling.
+
+**Not changed: the extractor at such ratios (decided with the user).**
+`extract_genetic_variance()` reports the fixed model's additive block as **`1.000085e-24`**
+while the stored model is exact. `.egv_coefficients()` and `.egv_alpha()` canonicalise
+stored terms to functional effects and add the coupling back, the same cancellation.
+Its precision is absolute, about machine epsilon times the coefficients; its own
+consistency check is relative to the total value. We documented this in a new
+"Precision" section of `?extract_genetic_variance` rather than changing Phase-4 code.
+Please say if you think that is the wrong call. A fix would have the extractor read
+`alpha` directly when a term's stored centre equals the projection frequency.
+
+### Finding 2: only non-zero blocks keep a design
+
+**Agreed.** The allocation was fixed, not the count, so the documented contract (the
+guard bounds retained designs: `n (m + m_D + r)`, with `m_D` and `r` only for non-zero
+blocks) now holds exactly:
+
+- `.na_anchors(anchor, p, X, dominance = )` builds `D` only when asked. Under genic, `D`
+  is also `NULL` when not requested, for uniform behaviour. `define_genome_effects()`
+  passes `dominance = live_d`.
+- The `else if (has_aa && is.null(na$AA))` branch that built the pair design for a zero
+  `G_AA` was removed. The A×A anchor is built only when `live_aa`.
+- `.na_calibrate()` gives a zero dominance block `B_d = 0`, a zero delivered covariance
+  and a zero `ib$delivered`, with no calibration and no anchor. It gives a zero A×A block
+  `B_aa = 0` and a zero delivered covariance. Their draws (`z`, the matching, `B_aa`) are
+  still consumed in `.dge_draw()`, so C17 and D2 are unchanged.
+- The genic-with-individuals diagnostic (`.dge_diagnostics()`) builds the dominance design
+  only when it compares that block.
+- The temporaries `W` and `Wc` inside `.na_anchors("realised")` still exist during the
+  call. They are sweeps, not retained designs, as the guard message says.
+
+**Tests.** G7 now mocks `.na_calibrate()` to capture the anchors it receives, at 200
+individuals and 20 QTL:
+
+| Model | Cells kept: A / D / A×A |
+|---|---|
+| A + A×A | 4000 / 0 / 2000 |
+| D + zero A×A | 4000 / 4000 / 0 |
+| zero D + A×A | 4000 / 0 / 2000 |
+
+G7 also checks the guard at the limit. A + A×A is admitted at exactly
+`200 × (20 + 10) = 6000` cells. D + zero A×A (`n_pairs = 10`) is refused at 8000 cells,
+with the message "20 additive + 20 dominance + 0 pair columns", and the database and
+`.Random.seed` are unchanged. Mutation check: always building `D` makes G7 fail.
+
+**Please double-check:**
+
+1. Your two 800-cell cases, rerun with your instrumentation on the 0.76.1 commit. I expect
+   560 / 640.
+2. That giving zero blocks zero coefficients without `.qtl_calibrate()` changes no seeded
+   output that matters. Before, a zero target went through `.qtl_calibrate()` with
+   rank 0. Seeded output may change across versions under the pre-1.0 policy, and
+   within-version determinism (G2) still passes.

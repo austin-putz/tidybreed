@@ -395,7 +395,8 @@ define_genome_effects <- function(tbl,
   .qtl_anchor_rank_check(anc_A$rank(1e-10), std$additive$rank)
   na <- NULL
   if (route == "nonadditive") {
-    na <- .na_anchors(anchor, p = p_base[candidate], X = design$X)
+    na <- .na_anchors(anchor, p = p_base[candidate], X = design$X,
+                      dominance = live_d)
     if (live_d) {
       .qtl_anchor_rank_check(na$D$rank(1e-10), std$dominance$rank, "dominance")
     }
@@ -429,8 +430,6 @@ define_genome_effects <- function(tbl,
              "pass more `n_pairs`, or pass `pairs`. Nothing was written.",
              call. = FALSE)
       }
-    } else if (has_aa && is.null(na$AA)) {
-      na <- .na_aa_anchor(na, dr$pairs)
     }
     cal <- .na_calibrate(na, G$additive, G$dominance, G$additive_by_additive,
                          B_a = dr$B_a, z = dr$z, B_aa = dr$B_aa,
@@ -438,6 +437,7 @@ define_genome_effects <- function(tbl,
                          dominance_degree_mean = dominance_degree_mean,
                          dominance_degree_sd = dominance_degree_sd,
                          inbreeding_depression = inbreeding_depression)
+    cal <- .na_store_alpha(cal, na, p_base[candidate], G$additive, dr$pairs)
   }
 
   # ── 10. Diagnostics: computed before the commit, reported after. ──────────
@@ -744,7 +744,9 @@ define_genome_effects <- function(tbl,
 #' Store a non-additive model: Cockerham terms at the base frequencies
 #'
 #' Per trait, the functional `(a, d, e)` become statistical (NOIA) terms at
-#' the base `p` (`.noia_to_stored()`, `.noia_terms()`): `ad_terms()` +
+#' the base `p` (`.noia_to_stored()`, `.noia_terms()`), with the additive
+#' coefficients `.na_store_alpha()` verified in place of the ones
+#' `.noia_to_stored()` recovers from `a`: `ad_terms()` +
 #' `aa_terms()` rows. Exact zeros are dropped by the builders; a zero
 #' dominance or A x A column writes no terms of that kind.
 #' @keywords internal
@@ -764,6 +766,8 @@ define_genome_effects <- function(tbl,
                  e = numeric(0), stringsAsFactors = FALSE)
     }
     stat  <- .noia_to_stored(a, d, pr, pk)
+    # The verified coefficient, not one recovered by cancellation.
+    stat$alpha[qtl_name] <- cal$alpha_stored[, j]
     built <- .dae_stack(built, .ge_build(conn, trait_name[j], .noia_terms(stat),
                                          NULL, GE_GENERATED_OWNER))
   }
@@ -832,11 +836,11 @@ define_genome_effects <- function(tbl,
       "Skipped the observed comparison: the base individuals' genotypes ",
       "could not be collected (partial or above the in-memory limit).")))
   }
-  ob <- .na_anchors("realised", X = X)
+  ob <- .na_anchors("realised", X = X, dominance = live("dominance"))
   n  <- nrow(X)
   C  <- .na_coupling(nrow(cal$B_a), k, ob$b, ob$cc, cal$B_d, cal$B_aa, pairs)
   A  <- crossprod(ob$Z_A %*% (cal$B_a + C)) / (n - 1)
-  D  <- if (!is.null(cal$B_d)) ob$D$cov(cal$B_d)
+  D  <- if (live("dominance")) ob$D$cov(cal$B_d)
   AA <- if (!is.null(cal$B_aa)) {
     v <- .egv_aa_values(ob$Z_A, pairs, cal$B_aa, .egv_pair_chunk(n))
     crossprod(v) / (n - 1)

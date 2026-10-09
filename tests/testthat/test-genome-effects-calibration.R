@@ -529,6 +529,56 @@ test_that("G6. One trait, G_A = 4, original-unit floor 1: the standardised resid
 })
 
 
+test_that("The stored additive coefficients are verified, not recovered by cancellation (review r6 F1)", {
+  # Genic: B_alpha is stored as is, so a target 1e-24 beside G_D = 1 is exact
+  # (recovering it as (B_alpha - C) + C missed by 2e-4).
+  set.seed(2)
+  an  <- .na_anchors("genic", p = 0.3)
+  cal <- .na_calibrate(an, matrix(1e-24), matrix(1), B_a = matrix(stats::rnorm(1)),
+                       z = matrix(stats::rnorm(1)))
+  cal <- .na_store_alpha(cal, an, 0.3, matrix(1e-24))
+  expect_identical(cal$alpha_stored, cal$B_alpha)
+  expect_lt(abs(0.42 * cal$alpha_stored[1, 1]^2 / 1e-24 - 1), 1e-12)
+
+  # Realised, out of HWE (observed b 0.125, HWE b 0.4): the realised
+  # coefficient is the stored one minus the coupling difference, which
+  # carries the target at ordinary ratios and is refused where it cannot.
+  X  <- matrix(rep(c(0, 0, 0, 1, 2), 8), ncol = 1)
+  ar <- .na_anchors("realised", X = X)
+  store <- function(ga, seed) {
+    set.seed(seed)
+    c1 <- .na_calibrate(ar, matrix(ga), matrix(1), B_a = matrix(stats::rnorm(1)),
+                        z = matrix(stats::rnorm(1)))
+    .na_store_alpha(c1, ar, ar$p, matrix(ga))
+  }
+  ok <- store(1e-6, 1)
+  d_shift <- (0.4 - ar$b) * ok$B_d[1, 1]
+  expect_equal(ok$alpha_stored[1, 1], ok$B_alpha[1, 1] + d_shift)
+  expect_equal(ok$delivered$A[1, 1], 1e-6, tolerance = 1e-10)
+  expect_error(store(1e-24, 5), "cannot be stored exactly.*Nothing was written")
+})
+
+test_that("A zero dominance or A x A block has no anchor and zero coefficients (review r6 F2)", {
+  set.seed(6)
+  X  <- matrix(stats::rbinom(40 * 6, 2, 0.4), 40)
+  ar <- .na_anchors("realised", X = X, dominance = FALSE)
+  expect_null(ar$D)
+  pairs <- cbind(1:3, 4:6)
+  ar <- .na_aa_anchor(ar, pairs)
+  cal <- .na_calibrate(ar, matrix(1), matrix(0), matrix(0.2),
+                       B_a = matrix(stats::rnorm(6)), z = matrix(stats::rnorm(6)),
+                       B_aa = matrix(stats::rnorm(3)), pairs = pairs)
+  expect_identical(cal$B_d, matrix(0, 6, 1))
+  expect_equal(unname(cal$delivered$AA[1, 1]), 0.2, tolerance = 1e-10)
+  ad <- .na_anchors("realised", X = X)
+  cal <- .na_calibrate(ad, matrix(1), matrix(0.3), matrix(0),
+                       B_a = matrix(stats::rnorm(6)), z = matrix(stats::rnorm(6)),
+                       B_aa = matrix(stats::rnorm(3)), pairs = pairs)
+  expect_null(ad$AA)
+  expect_identical(cal$B_aa, matrix(0, 3, 1))
+  expect_equal(unname(cal$delivered$D[1, 1]), 0.3, tolerance = 1e-10)
+})
+
 test_that("The source oracle is isolated and runs on its own", {
   set.seed(140)
   fns <- ls(nonadd_oracle, all.names = TRUE)
