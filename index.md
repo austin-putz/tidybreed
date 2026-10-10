@@ -1259,6 +1259,7 @@ pop <- restore_pop(db_path = "~/path/to/project/tidybreed_output/sim.duckdb")
 | [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md) | Register a genetic-layer trait in `trait_meta` |
 | [`define_phenotype()`](https://austin-putz.github.io/tidybreed/reference/define_phenotype.md) | Register an observed phenotype in `phenotype_meta` |
 | [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md) | Assign QTL effects to filtered loci (single or correlated multi-trait) |
+| [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md) | Sample additive, dominance and A x A QTL effects calibrated to `G_A`, `G_D`, `G_AA` |
 | [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md) | Load a (co)variance matrix into `trait_var_comp` or `phenotype_var_comp` |
 | [`define_effect_fixed_class()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_class.md) | Add a discrete fixed-effect level-to-shift mapping |
 | [`define_effect_fixed_cov()`](https://austin-putz.github.io/tidybreed/reference/define_effect_fixed_cov.md) | Add a linear regression fixed covariate |

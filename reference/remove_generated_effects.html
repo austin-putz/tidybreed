@@ -15,13 +15,28 @@ parent_origin, which adds a variant beside the old one rather than
 replacing it. Two parent scopes at one line are a legal model, but no
 stored target describes their combined variance, so
 define_phenotype(prevalence = ) refuses such a trait.
-Nothing else changes. The stored targets in trait_var_comp stay (a
-target with no terms of its kind is ignored by the prevalence threshold
-and blocks nothing), and so do the values already in ind_tgv: they
-describe the old model until
-add_tgv() (or add_phenotype(), which calls it) re-evaluates the
-individuals. Removing a line's variant makes that line's copies fall back
-to the common variant, where there is one."><meta property="og:description" content="Deletes every term a generator wrote for trait_name at exactly one
+A define_genome_effects() model is common-scope (no line_name, no
+parent_origin), so remove_generated_effects(pop, trait_name) removes it
+whole: its additive, dominance and additive-by-additive terms together.
+Nothing else changes:
+The stored targets in trait_var_comp stay. A target with no terms
+of its kind is ignored by the prevalence threshold, but it still
+counts for generation: define_additive_effects() refuses a trait with
+a stored dominance or additive_by_additive target unless
+trait_var_comp_tbl selects the additive rows alone (or those targets
+are removed with remove_rows()); define_genome_effects() calibrates
+to all of them again.
+The values already in ind_tgv stay. They describe the old model
+until add_tgv() (or add_phenotype(), which calls it) re-evaluates the
+individuals. If the removal leaves the trait with no terms at all,
+that re-evaluation is an error (&quot;No genome effects found&quot;), so the old
+values cannot be refreshed and are still what get_table() shows: write
+a new model before computing genetic values or recording phenotypes
+again. No new record is ever made from them.
+
+
+Removing a line's variant makes that line's copies fall back to the common
+variant, where there is one."><meta property="og:description" content="Deletes every term a generator wrote for trait_name at exactly one
 scope, (line_name, parent_origin) — the scope a re-run of
 define_additive_effects() would replace — whatever its kind:
 additive, dominance and interaction terms at that scope go together. A
@@ -37,13 +52,28 @@ parent_origin, which adds a variant beside the old one rather than
 replacing it. Two parent scopes at one line are a legal model, but no
 stored target describes their combined variance, so
 define_phenotype(prevalence = ) refuses such a trait.
-Nothing else changes. The stored targets in trait_var_comp stay (a
-target with no terms of its kind is ignored by the prevalence threshold
-and blocks nothing), and so do the values already in ind_tgv: they
-describe the old model until
-add_tgv() (or add_phenotype(), which calls it) re-evaluates the
-individuals. Removing a line's variant makes that line's copies fall back
-to the common variant, where there is one."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
+A define_genome_effects() model is common-scope (no line_name, no
+parent_origin), so remove_generated_effects(pop, trait_name) removes it
+whole: its additive, dominance and additive-by-additive terms together.
+Nothing else changes:
+The stored targets in trait_var_comp stay. A target with no terms
+of its kind is ignored by the prevalence threshold, but it still
+counts for generation: define_additive_effects() refuses a trait with
+a stored dominance or additive_by_additive target unless
+trait_var_comp_tbl selects the additive rows alone (or those targets
+are removed with remove_rows()); define_genome_effects() calibrates
+to all of them again.
+The values already in ind_tgv stay. They describe the old model
+until add_tgv() (or add_phenotype(), which calls it) re-evaluates the
+individuals. If the removal leaves the trait with no terms at all,
+that re-evaluation is an error (&quot;No genome effects found&quot;), so the old
+values cannot be refreshed and are still what get_table() shows: write
+a new model before computing genetic values or recording phenotypes
+again. No new record is ever made from them.
+
+
+Removing a line's variant makes that line's copies fall back to the common
+variant, where there is one."><meta property="og:image" content="https://austin-putz.github.io/tidybreed/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -51,7 +81,7 @@ to the common variant, where there is one."><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +92,8 @@ to the common variant, where there is one."><meta property="og:image" content="h
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/genetic-models.html">Genetic models: writing, generating and measuring QTL effects</a></li>
+    <li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -96,13 +127,25 @@ This is the only way to remove a generated variant:
 replacing it. Two parent scopes at one line are a legal model, but no
 stored target describes their combined variance, so
 <code>define_phenotype(prevalence = )</code> refuses such a trait.</p>
-<p>Nothing else changes. The stored targets in <code>trait_var_comp</code> stay (a
-target with no terms of its kind is ignored by the <code>prevalence</code> threshold
-and blocks nothing), and so do the values already in <code>ind_tgv</code>: they
-describe the old model until
-<code><a href="add_tgv.html">add_tgv()</a></code> (or <code><a href="add_phenotype.html">add_phenotype()</a></code>, which calls it) re-evaluates the
-individuals. Removing a line's variant makes that line's copies fall back
-to the common variant, where there is one.</p>
+<p>A <code><a href="define_genome_effects.html">define_genome_effects()</a></code> model is common-scope (no <code>line_name</code>, no
+<code>parent_origin</code>), so <code>remove_generated_effects(pop, trait_name)</code> removes it
+whole: its additive, dominance and additive-by-additive terms together.</p>
+<p>Nothing else changes:</p><ul><li><p><strong>The stored targets in <code>trait_var_comp</code> stay.</strong> A target with no terms
+of its kind is ignored by the <code>prevalence</code> threshold, but it still
+counts for generation: <code><a href="define_additive_effects.html">define_additive_effects()</a></code> refuses a trait with
+a stored <code>dominance</code> or <code>additive_by_additive</code> target unless
+<code>trait_var_comp_tbl</code> selects the additive rows alone (or those targets
+are removed with <code><a href="remove_rows.html">remove_rows()</a></code>); <code><a href="define_genome_effects.html">define_genome_effects()</a></code> calibrates
+to all of them again.</p></li>
+<li><p><strong>The values already in <code>ind_tgv</code> stay.</strong> They describe the old model
+until <code><a href="add_tgv.html">add_tgv()</a></code> (or <code><a href="add_phenotype.html">add_phenotype()</a></code>, which calls it) re-evaluates the
+individuals. If the removal leaves the trait with <strong>no terms at all</strong>,
+that re-evaluation is an error ("No genome effects found"), so the old
+values cannot be refreshed and are still what <code><a href="get_table.html">get_table()</a></code> shows: write
+a new model before computing genetic values or recording phenotypes
+again. No new record is ever made from them.</p></li>
+</ul><p>Removing a line's variant makes that line's copies fall back to the common
+variant, where there is one.</p>
     </div>
 
     <div class="section level2">
@@ -145,7 +188,7 @@ when a trait has no generated terms at that scope.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code></p></div>
+    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="define_genome_effects.html">define_genome_effects()</a></code></p></div>
     </div>
 
     <div class="section level2">

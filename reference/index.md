@@ -49,6 +49,10 @@ an observation.
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   : Define additive QTL effects for one or more traits
 
+- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  : Define additive, dominance and epistatic QTL effects calibrated to
+  targets
+
 - [`remove_generated_effects()`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md)
   : Remove one scope of generated effects
 

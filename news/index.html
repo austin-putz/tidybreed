@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,7 +18,8 @@
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/genetic-models.html">Genetic models: writing, generating and measuring QTL effects</a></li>
+    <li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -34,6 +35,88 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.3" id="tidybreed-0763-2026-10-09">tidybreed 0.76.3 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0763-2026-10-09"></a></h2>
+<p>Follow-up to the Codex review of step 5c (<code>plans/import_qtl_effect_methods_phase_5_codex_review.md</code>). Documentation and messages only.</p>
+<ul><li>
+<code><a href="../reference/remove_generated_effects.html">?remove_generated_effects</a></code> no longer overpromises. Stored dominance and A x A targets outlive the terms and still count for generation: <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> needs <code>trait_var_comp_tbl</code> limited to the additive rows. And if the removal leaves a trait with no terms at all, <code><a href="../reference/add_tgv.html">add_tgv()</a></code> and <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> refuse it, so the old <code>ind_tgv</code> values stay until a new model is written; no record is made from them. A test pins both.</li>
+<li>“No genome effects found” errors (from <code><a href="../reference/add_tgv.html">add_tgv()</a></code>, <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> and <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code>) name <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> among the ways to write effects.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.2" id="tidybreed-0762-2026-10-09">tidybreed 0.76.2 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0762-2026-10-09"></a></h2>
+<p>Step 5c of the import plan (<code>plans/import_qtl_effect_methods_phase_5_plan.md</code>): end-to-end checks of <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> and a vignette. Step 5 is complete. No change to any function’s behaviour.</p>
+<ul><li>New vignette, “Genetic models” (<code>vignettes/genetic-models.Rmd</code>): the four ways to give a trait QTL effects — known coefficients through <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> with the additive floor — and measuring them with <code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code> joined to the stored targets, with what “exact” promises.</li>
+<li>New end-to-end tests: phenotypes on an additive + dominance model carry both variances; a <code>prevalence</code> threshold on a generated A + D + A x A model (at exact HWE + LE the threshold’s sum is the realised total as a population variance, and off equilibrium the difference is <code>between_components</code> and drift); <code><a href="../reference/remove_generated_effects.html">remove_generated_effects()</a></code> on a whole generated model; and both anchors measured back by the extractor (genic targets to 1e-10; the realised round trip of all three blocks to 1e-10).</li>
+<li>New benchmark <code>dev/benchmarks/benchmark_define_genome_effects.R</code>: 2,000 individuals, 1,000 QTL, two traits, 500 A x A pairs take about 3 s under <code>"genic"</code> and 11 s under <code>"realised"</code>; 20,000 hub pairs take about 8 s.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.1" id="tidybreed-0761-2026-10-09">tidybreed 0.76.1 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0761-2026-10-09"></a></h2>
+<p>Follow-up to the Codex review of step 5b (<code>plans/import_qtl_effect_methods_phase_5_codex_review.md</code>).</p>
+<ul><li>
+<code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> stores the additive coefficients it verified. It used to recover them from the functional effects and add the dominance and A x A coupling back, which cancels: with an additive target many orders of magnitude below <code>G_D</code> (e.g. <code>G_A = 1e-24</code>, <code>G_D = 1</code>) the stored model delivered an additive variance off by 2e-4 while the message reported it exact. Under <code>"genic"</code> the verified coefficient is now stored as is (exact); under <code>"realised"</code> the stored coefficient is checked again as stored, and a target the storage cannot carry is refused instead of written.</li>
+<li>
+<code>define_genome_effects(anchor = "realised")</code> keeps a design only for a non-zero block. It used to keep the dominance design in an A + A x A model and the pair design for a zero <code>G_AA</code>, beyond the cells its size guard counted; the guard’s count is now the designs kept.</li>
+<li>
+<code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code> documents its precision (new section): each block is exact to about machine epsilon times the model’s coefficients, so an additive block many orders below the dominance one keeps few digits.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.0" id="tidybreed-0760-2026-10-09">tidybreed 0.76.0 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0760-2026-10-09"></a></h2>
+<p>Step 5b of the import plan (<code>plans/import_qtl_effect_methods_phase_5_plan.md</code>): the genome-effect generator.</p>
+<div class="section level3">
+<h3 id="new-0-76-0">New<a class="anchor" aria-label="anchor" href="#new-0-76-0"></a></h3>
+<ul><li>
+<code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> samples additive, dominance and additive-by-additive (A x A) QTL effects and <strong>calibrates</strong> them so the targets <code>G_A</code>, <code>G_D</code> and <code>G_AA</code> are delivered exactly under a named anchor (<code>"genic"</code> or <code>"realised"</code>), verified to <code>1e-8</code> on the correlation scale. It writes under the reserved owner <code>"generated"</code> and replaces the traits’ whole generated model (line-scoped <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> variants included, counted in a message).
+<ul><li>Targets per block: a passed matrix (written with the effects, never over a stored block), or the rows of <code>trait_var_comp_tbl</code>, or the stored population-wide rows. Each block comes from exactly one source. A zero block is an exact zero; an absent block is not in the model.</li>
+<li>With no non-zero dominance or A x A target the call takes <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code>’s path and writes identical rows for the same seed. Adding a block later never changes the additive draw.</li>
+<li>A x A pairs: supplied (<code>pairs</code>, hubs allowed) or a random matching (<code>n_pairs</code>, default every QTL paired once, as AlphaSimR).</li>
+<li>The additive floor: dominance and epistasis already induce additive variance, and a <code>G_A</code> below what the drawn architecture can cancel is refused, naming the minimum per trait. The floor belongs to the sampled architecture.</li>
+<li>
+<code>inbreeding_depression</code>: exact for one trait; for several, approximate and reported (requested vs delivered).</li>
+<li>Non-zero dominance or A x A targets need a positive-definite <code>G_A</code> (an implementation limit of this release, not of the method).</li>
+<li>Under <code>"realised"</code> the effects are stored with HWE-referenced contrasts: the total is exact and <code>extract_genetic_variance(anchor = "realised")</code> on the same individuals returns the targets.</li>
+<li>Every refusal that can be known before the draw leaves <code>.Random.seed</code> and the database unchanged.</li>
+</ul></li>
+<li>A singular genetic target (a zero variance, a correlation of +/-1, a linear dependency) is now reported with a <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code> naming the reason, from <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code>, <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> and <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>. It is still accepted.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="changes-0-76-0">Changes<a class="anchor" aria-label="anchor" href="#changes-0-76-0"></a></h3>
+<ul><li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> refuses a trait whose generated model has dominance or A x A terms (a <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> model, calibrated as a whole); the error gives the additive-only <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> re-run. Its stored-non-additive-target errors also name <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code>.</li>
+<li>Messages of <code>define_genome_effect_terms(mode = "replace_trait")</code> and <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> name both generators.</li>
+<li>Internal: the target resolver is one per-block helper both generators share; anchor objects gain a cross product and cache the design rank; the calibration lives in <code>R/genome_effects_calibration.R</code> (ported from the source project with a robust dominance-degree solver and a floor computed on the correlation scale from the residual coupling).</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.75.4" id="tidybreed-0754-2026-10-09">tidybreed 0.75.4 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0754-2026-10-09"></a></h2>
+<p>Follow-up to the Codex review of step 5a (<code>plans/import_qtl_effect_methods_phase_5_codex_review.md</code>).</p>
+<ul><li>The internal numeric key that the writer and its validator use to find a locus or member slot repeated within a term (<code>.ge_pair_key()</code>) could give two distinct pairs the same key once it passed 2^53 (above about four million terms with a very high locus id), turning a valid write into a false “appears more than once” error. The numeric key is now used only when its largest possible value is exact, and otherwise falls back to string keys. A boundary test pins it.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.75.3" id="tidybreed-0753-2026-10-09">tidybreed 0.75.3 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0753-2026-10-09"></a></h2>
+<p>Step 5a of the import plan (<code>plans/import_qtl_effect_methods_phase_5_plan.md</code>): writer speed, ahead of the <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> generator. Internal only: no API, schema or stored-value change, and every message and error order is unchanged.</p>
+<ul><li>
+<p>The genome-effect writer is linear in the model size. Per-term data-frame subsets in <code>.ge_build()</code>, the term/member/origin field checks, the whole-table validator (<code>.ge_validate_frames()</code>, run before every <code>COMMIT</code>), <code>replace_scope</code> deletes and the per-term target/line/parent lookups made every write quadratic. Writing A x A pairs with <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code> (500 loci, one trait):</p>
+<table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th align="right">Pairs</th>
+<th align="right">0.75.2</th>
+<th align="right">0.75.3</th>
+</tr></thead><tbody><tr><td align="right">1,000</td>
+<td align="right">2.2 s</td>
+<td align="right">0.24 s</td>
+</tr><tr><td align="right">4,000</td>
+<td align="right">9.6 s</td>
+<td align="right">0.46 s</td>
+</tr><tr><td align="right">16,000</td>
+<td align="right">71.8 s</td>
+<td align="right">0.70 s</td>
+</tr><tr><td align="right">124,750 (all pairs of 500 loci)</td>
+<td align="right">not run (most of an hour, step-4 estimate)</td>
+<td align="right">7.1 s</td>
+</tr></tbody></table><p>Replacing one trait’s 16,000 pairs in a populated model (20,200 stored terms, three traits and owners, line-scoped variants): 74.6 s -&gt; 1.4 s. <code>.stored_to_functional()</code> (the extractor’s conversion) on 16,000 terms: 8.6 s -&gt; 0.17 s, with bit-identical results.</p>
+</li>
+<li><p>When several things are wrong, the writer still reports the first violation by term (in the order typed), then rule, then member, and validators keep their whole ordered list of violations. A new contract test (<code>test-genome-effects-writer-order.R</code>), written against 0.75.2 before the change, pins this.</p></li>
+<li><p>The evaluator’s R-side preparation (<code><a href="../reference/add_tgv.html">add_tgv()</a></code>, <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code>, <code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code>) is linear in the number of terms too; its evaluation statement is unchanged. Realised <code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code> on 2,000 individuals with 20,000 pairs: 124 s -&gt; 25.5 s; genic with all 124,750 pairs: 7.2 s (13.1 s for 19,900 pairs before).</p></li>
+<li><p>New benchmark <code>dev/benchmarks/benchmark_genome_effect_writer.R</code>; the extractor benchmark now uses all 124,750 pairs of 500 loci.</p></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.75.2" id="tidybreed-0752-2026-10-05">tidybreed 0.75.2 (2026-10-05)<a class="anchor" aria-label="anchor" href="#tidybreed-0752-2026-10-05"></a></h2>
 <p>Follow-up to the Codex review of the built Phase 4 (<code>plans/import_qtl_effect_methods_phase_4_codex_review.md</code>).</p>
@@ -317,7 +400,7 @@
 <div class="section level3">
 <h3 id="breaking-changes-0-72-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-72-0"></a></h3>
 <ul><li>
-<strong><code>define_genome_effects()</code> is now <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>.</strong> Same arguments, same behaviour; the file is <code>R/define_genome_effect_terms.R</code>. There is no alias. The old name is kept free for the effect generator planned for Part C.</li>
+<strong><code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> is now <code><a href="../reference/define_genome_effect_terms.html">define_genome_effect_terms()</a></code>.</strong> Same arguments, same behaviour; the file is <code>R/define_genome_effect_terms.R</code>. There is no alias. The old name is kept free for the effect generator planned for Part C.</li>
 <li>
 <strong>Genetic <code>effect_name</code> values use full words.</strong> <code>"gen_add"</code> is now <code>"additive"</code>, and the reserved <code>"epistasis"</code> is now <code>"additive_by_additive"</code>. This applies to <code><a href="../reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, <code><a href="../reference/get_trait_var.html">get_trait_var()</a></code> and the rows of <code>trait_var_comp</code>.</li>
 <li>
@@ -421,7 +504,7 @@
 <li>
 <code>define_genome_effects(base_tbl = )</code> fills Cockerham <code>center_value</code> on any <code>additive</code> or <code>dominance</code> member that has none (column omitted or <code>NA</code>). Explicit centres win, indicators are untouched, the base is queried only if a centre is actually missing, and without <code>base_tbl</code> a missing centre stays an error.</li>
 <li>
-<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> is now provably sugar over <code>define_genome_effects()</code>: a test reproduces its three effect tables and <code>add_tbv()</code> output exactly through the general writer with the reserved owner, <code>replace_scope</code>, and the same <code>base_tbl</code>.</li>
+<code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> is now provably sugar over <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code>: a test reproduces its three effect tables and <code>add_tbv()</code> output exactly through the general writer with the reserved owner, <code>replace_scope</code>, and the same <code>base_tbl</code>.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="changed-0-69-0">Changed<a class="anchor" aria-label="anchor" href="#changed-0-69-0"></a></h3>
@@ -559,7 +642,7 @@
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.66.0" id="tidybreed-0660-2026-09-10">tidybreed 0.66.0 (2026-09-10)<a class="anchor" aria-label="anchor" href="#tidybreed-0660-2026-09-10"></a></h2>
-<p>Phase C of <code>plans/update_genome_effects_v4.md</code>: the writers. Adds <code>define_genome_effects()</code> and its two <code>terms</code> builders, rebuilds <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> on top of it, and deletes <code>trait_meta.expressed_parent</code>. <strong>Still deliberately mid-migration</strong>: <code>add_tbv()</code> (Phase D) reads the old column shape and does not work in this version.</p>
+<p>Phase C of <code>plans/update_genome_effects_v4.md</code>: the writers. Adds <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> and its two <code>terms</code> builders, rebuilds <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> on top of it, and deletes <code>trait_meta.expressed_parent</code>. <strong>Still deliberately mid-migration</strong>: <code>add_tbv()</code> (Phase D) reads the old column shape and does not work in this version.</p>
 <div class="section level3">
 <h3 id="new-0-66-0">New<a class="anchor" aria-label="anchor" href="#new-0-66-0"></a></h3>
 <ul><li><p><strong><code>define_genome_effects(pop, trait_name, terms, ...)</code></strong> — the general writer for arbitrary genome effects. <code>terms</code> is a <strong>long data frame, one row per (term x locus)</strong>, with scope in a separate <code>origin</code> argument (<code>NULL</code> for the common scope, a named scalar list, or a data frame keyed by <code>locus_name</code>). No nesting, no S3 constructor, no <code>member_slot</code> arithmetic: the same shape as every table <code><a href="../reference/get_table.html">get_table()</a></code> returns. Four replacement modes — <code>append</code>, <code>replace_scope</code>, <code>replace_owner</code>, <code>replace_trait</code> — and a whole write is one transaction that validates the entire table set before <code>COMMIT</code>. Every message about malformed input names the <code>term_id</code> <strong>the user typed</strong>, never an <code>id_genome_effect</code> they have not seen.</p></li>
@@ -569,7 +652,7 @@
 </ul></div>
 <div class="section level3">
 <h3 id="breaking-0-66-0">Breaking<a class="anchor" aria-label="anchor" href="#breaking-0-66-0"></a></h3>
-<ul><li><p><strong><code>trait_meta.expressed_parent</code> is deleted</strong> — argument, column, description and documentation. Imprinting is a property of an <strong>effect</strong>, not of a trait: it is one origin row on a member, so it can now differ per locus, per line and per effect owner, none of which a trait-wide flag could express. Use <code>define_additive_effects(parent_origin = 1)</code> for the whole-genome case that flag covered, or <code>define_genome_effects()</code> for anything finer.</p></li>
+<ul><li><p><strong><code>trait_meta.expressed_parent</code> is deleted</strong> — argument, column, description and documentation. Imprinting is a property of an <strong>effect</strong>, not of a trait: it is one origin row on a member, so it can now differ per locus, per line and per effect owner, none of which a trait-wide flag could express. Use <code>define_additive_effects(parent_origin = 1)</code> for the whole-genome case that flag covered, or <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> for anything finer.</p></li>
 <li><p><strong><code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> writes terms.</strong> Same call, new storage: one order-one <code>additive</code> term per locus under the reserved owner <code>generated_additive_tbv</code>, with the base allele frequency as the member’s <code>center_value</code>. New <code>parent_origin</code> argument, <strong>per trait</strong> (scalar recycled, positional vector, or named by trait). A call mixing origins across traits while supplying <code>G</code> is now rejected: under random mating a locus’s paternal and maternal copies are independent, so the genetic covariance between a paternal-only and a maternal-only trait is exactly zero and the requested off-diagonal is unobtainable, not merely approximate.</p></li>
 <li><p><strong>Re-running <code><a href="../reference/define_additive_effects.html">define_additive_effects()</a></code> replaces only the variant at the same scope</strong>, not the whole trait. Successive common / line-A / line-B calls each keep the others — the per-copy fallback that makes crossbred breeding values correct needs all of them standing. One consequence is worth knowing: changing <code>parent_origin</code> on a re-run <strong>adds</strong> a variant rather than replacing one. That is a legal containment pair and rarely what was intended, so the function warns on exactly that case and names both variants.</p></li>
 <li><p><strong>The foreign keys <em>inside</em> the effect set are gone</strong> (<code>members</code> -&gt; <code>effects</code>, <code>origins</code> -&gt; <code>members</code>). DuckDB 1.5.5 refuses to delete a parent row inside an explicit transaction whose children were deleted earlier in that same transaction — single-column and composite keys alike, either delete order, filtered or whole-table — and succeeds only in autocommit. That made every replace mode impossible to write atomically, and a half-replaced effect model is a <em>different</em> genetic model rather than a weaker one. The same integrity is enforced by <code>validate_genome_effects()</code> before every <code>COMMIT</code>, and the DuckDB behaviour is pinned by a test so a version that fixes it gets noticed. The <code>locus_id</code> -&gt; <code>genome_meta</code> key stays; <code>genome_meta</code> rows are never deleted.</p></li>

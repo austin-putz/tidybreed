@@ -1,5 +1,217 @@
 # Changelog
 
+## tidybreed 0.76.3 (2026-10-09)
+
+Follow-up to the Codex review of step 5c
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`).
+Documentation and messages only.
+
+- [`?remove_generated_effects`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md)
+  no longer overpromises. Stored dominance and A x A targets outlive the
+  terms and still count for generation:
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  needs `trait_var_comp_tbl` limited to the additive rows. And if the
+  removal leaves a trait with no terms at all,
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  and
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  refuse it, so the old `ind_tgv` values stay until a new model is
+  written; no record is made from them. A test pins both.
+- “No genome effects found” errors (from
+  [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  and
+  [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md))
+  name
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  among the ways to write effects.
+
+## tidybreed 0.76.2 (2026-10-09)
+
+Step 5c of the import plan
+(`plans/import_qtl_effect_methods_phase_5_plan.md`): end-to-end checks
+of
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+and a vignette. Step 5 is complete. No change to any function’s
+behaviour.
+
+- New vignette, “Genetic models” (`vignettes/genetic-models.Rmd`): the
+  four ways to give a trait QTL effects — known coefficients through
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  with the additive floor — and measuring them with
+  [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+  joined to the stored targets, with what “exact” promises.
+- New end-to-end tests: phenotypes on an additive + dominance model
+  carry both variances; a `prevalence` threshold on a generated A + D +
+  A x A model (at exact HWE + LE the threshold’s sum is the realised
+  total as a population variance, and off equilibrium the difference is
+  `between_components` and drift);
+  [`remove_generated_effects()`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md)
+  on a whole generated model; and both anchors measured back by the
+  extractor (genic targets to 1e-10; the realised round trip of all
+  three blocks to 1e-10).
+- New benchmark `dev/benchmarks/benchmark_define_genome_effects.R`:
+  2,000 individuals, 1,000 QTL, two traits, 500 A x A pairs take about 3
+  s under `"genic"` and 11 s under `"realised"`; 20,000 hub pairs take
+  about 8 s.
+
+## tidybreed 0.76.1 (2026-10-09)
+
+Follow-up to the Codex review of step 5b
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`).
+
+- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  stores the additive coefficients it verified. It used to recover them
+  from the functional effects and add the dominance and A x A coupling
+  back, which cancels: with an additive target many orders of magnitude
+  below `G_D` (e.g. `G_A = 1e-24`, `G_D = 1`) the stored model delivered
+  an additive variance off by 2e-4 while the message reported it exact.
+  Under `"genic"` the verified coefficient is now stored as is (exact);
+  under `"realised"` the stored coefficient is checked again as stored,
+  and a target the storage cannot carry is refused instead of written.
+- `define_genome_effects(anchor = "realised")` keeps a design only for a
+  non-zero block. It used to keep the dominance design in an A + A x A
+  model and the pair design for a zero `G_AA`, beyond the cells its size
+  guard counted; the guard’s count is now the designs kept.
+- [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+  documents its precision (new section): each block is exact to about
+  machine epsilon times the model’s coefficients, so an additive block
+  many orders below the dominance one keeps few digits.
+
+## tidybreed 0.76.0 (2026-10-09)
+
+Step 5b of the import plan
+(`plans/import_qtl_effect_methods_phase_5_plan.md`): the genome-effect
+generator.
+
+### New
+
+- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  samples additive, dominance and additive-by-additive (A x A) QTL
+  effects and **calibrates** them so the targets `G_A`, `G_D` and `G_AA`
+  are delivered exactly under a named anchor (`"genic"` or
+  `"realised"`), verified to `1e-8` on the correlation scale. It writes
+  under the reserved owner `"generated"` and replaces the traits’ whole
+  generated model (line-scoped
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  variants included, counted in a message).
+  - Targets per block: a passed matrix (written with the effects, never
+    over a stored block), or the rows of `trait_var_comp_tbl`, or the
+    stored population-wide rows. Each block comes from exactly one
+    source. A zero block is an exact zero; an absent block is not in the
+    model.
+  - With no non-zero dominance or A x A target the call takes
+    [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)’s
+    path and writes identical rows for the same seed. Adding a block
+    later never changes the additive draw.
+  - A x A pairs: supplied (`pairs`, hubs allowed) or a random matching
+    (`n_pairs`, default every QTL paired once, as AlphaSimR).
+  - The additive floor: dominance and epistasis already induce additive
+    variance, and a `G_A` below what the drawn architecture can cancel
+    is refused, naming the minimum per trait. The floor belongs to the
+    sampled architecture.
+  - `inbreeding_depression`: exact for one trait; for several,
+    approximate and reported (requested vs delivered).
+  - Non-zero dominance or A x A targets need a positive-definite `G_A`
+    (an implementation limit of this release, not of the method).
+  - Under `"realised"` the effects are stored with HWE-referenced
+    contrasts: the total is exact and
+    `extract_genetic_variance(anchor = "realised")` on the same
+    individuals returns the targets.
+  - Every refusal that can be known before the draw leaves
+    `.Random.seed` and the database unchanged.
+- A singular genetic target (a zero variance, a correlation of +/-1, a
+  linear dependency) is now reported with a
+  [`message()`](https://rdrr.io/r/base/message.html) naming the reason,
+  from
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md),
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  and
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md).
+  It is still accepted.
+
+### Changes
+
+- [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  refuses a trait whose generated model has dominance or A x A terms (a
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  model, calibrated as a whole); the error gives the additive-only
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  re-run. Its stored-non-additive-target errors also name
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md).
+- Messages of `define_genome_effect_terms(mode = "replace_trait")` and
+  [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+  name both generators.
+- Internal: the target resolver is one per-block helper both generators
+  share; anchor objects gain a cross product and cache the design rank;
+  the calibration lives in `R/genome_effects_calibration.R` (ported from
+  the source project with a robust dominance-degree solver and a floor
+  computed on the correlation scale from the residual coupling).
+
+## tidybreed 0.75.4 (2026-10-09)
+
+Follow-up to the Codex review of step 5a
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`).
+
+- The internal numeric key that the writer and its validator use to find
+  a locus or member slot repeated within a term (`.ge_pair_key()`) could
+  give two distinct pairs the same key once it passed 2^53 (above about
+  four million terms with a very high locus id), turning a valid write
+  into a false “appears more than once” error. The numeric key is now
+  used only when its largest possible value is exact, and otherwise
+  falls back to string keys. A boundary test pins it.
+
+## tidybreed 0.75.3 (2026-10-09)
+
+Step 5a of the import plan
+(`plans/import_qtl_effect_methods_phase_5_plan.md`): writer speed, ahead
+of the
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+generator. Internal only: no API, schema or stored-value change, and
+every message and error order is unchanged.
+
+- The genome-effect writer is linear in the model size. Per-term
+  data-frame subsets in `.ge_build()`, the term/member/origin field
+  checks, the whole-table validator (`.ge_validate_frames()`, run before
+  every `COMMIT`), `replace_scope` deletes and the per-term
+  target/line/parent lookups made every write quadratic. Writing A x A
+  pairs with
+  [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+  (500 loci, one trait):
+
+  | Pairs | 0.75.2 | 0.75.3 |
+  |---:|---:|---:|
+  | 1,000 | 2.2 s | 0.24 s |
+  | 4,000 | 9.6 s | 0.46 s |
+  | 16,000 | 71.8 s | 0.70 s |
+  | 124,750 (all pairs of 500 loci) | not run (most of an hour, step-4 estimate) | 7.1 s |
+
+  Replacing one trait’s 16,000 pairs in a populated model (20,200 stored
+  terms, three traits and owners, line-scoped variants): 74.6 s -\>
+  1.4 s. `.stored_to_functional()` (the extractor’s conversion) on
+  16,000 terms: 8.6 s -\> 0.17 s, with bit-identical results.
+
+- When several things are wrong, the writer still reports the first
+  violation by term (in the order typed), then rule, then member, and
+  validators keep their whole ordered list of violations. A new contract
+  test (`test-genome-effects-writer-order.R`), written against 0.75.2
+  before the change, pins this.
+
+- The evaluator’s R-side preparation
+  ([`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md),
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md),
+  [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md))
+  is linear in the number of terms too; its evaluation statement is
+  unchanged. Realised
+  [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+  on 2,000 individuals with 20,000 pairs: 124 s -\> 25.5 s; genic with
+  all 124,750 pairs: 7.2 s (13.1 s for 19,900 pairs before).
+
+- New benchmark `dev/benchmarks/benchmark_genome_effect_writer.R`; the
+  extractor benchmark now uses all 124,750 pairs of 500 loci.
+
 ## tidybreed 0.75.2 (2026-10-05)
 
 Follow-up to the Codex review of the built Phase 4
@@ -674,7 +886,8 @@ test suite passes with only renamed calls and strings. Summary in
 
 ### Breaking changes
 
-- **`define_genome_effects()` is now
+- **[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  is now
   [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md).**
   Same arguments, same behaviour; the file is
   `R/define_genome_effect_terms.R`. There is no alias. The old name is
@@ -1195,10 +1408,11 @@ decision D1–D8 in that plan is implemented and tested.
   queried only if a centre is actually missing, and without `base_tbl` a
   missing centre stays an error.
 - [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
-  is now provably sugar over `define_genome_effects()`: a test
-  reproduces its three effect tables and `add_tbv()` output exactly
-  through the general writer with the reserved owner, `replace_scope`,
-  and the same `base_tbl`.
+  is now provably sugar over
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md):
+  a test reproduces its three effect tables and `add_tbv()` output
+  exactly through the general writer with the reserved owner,
+  `replace_scope`, and the same `base_tbl`.
 
 ### Changed
 
@@ -1501,7 +1715,8 @@ implementation of the effect math.
 ## tidybreed 0.66.0 (2026-09-10)
 
 Phase C of `plans/update_genome_effects_v4.md`: the writers. Adds
-`define_genome_effects()` and its two `terms` builders, rebuilds
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+and its two `terms` builders, rebuilds
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
 on top of it, and deletes `trait_meta.expressed_parent`. **Still
 deliberately mid-migration**: `add_tbv()` (Phase D) reads the old column
@@ -1549,7 +1764,9 @@ shape and does not work in this version.
   can now differ per locus, per line and per effect owner, none of which
   a trait-wide flag could express. Use
   `define_additive_effects(parent_origin = 1)` for the whole-genome case
-  that flag covered, or `define_genome_effects()` for anything finer.
+  that flag covered, or
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  for anything finer.
 
 - **[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
   writes terms.** Same call, new storage: one order-one `additive` term

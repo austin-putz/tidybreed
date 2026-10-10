@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,7 +18,8 @@
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="articles/genetic-models.html">Genetic models: writing, generating and measuring QTL effects</a></li>
+    <li><a class="dropdown-item" href="articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json"></form></li>
@@ -41,13 +42,13 @@
 <div class="section level2">
 <h2 id="highlights">Highlights<a class="anchor" aria-label="anchor" href="#highlights"></a></h2>
 <table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><tbody><tr><td>Exported functions</td>
-<td>46 (+17 S3 methods; 356 functions total incl. internals)</td>
+<td>47 (+17 S3 methods; 356 functions total incl. internals)</td>
 </tr><tr><td>R source</td>
 <td>62 files, ~23,600 lines (~6,900 of which are roxygen docs)</td>
 </tr><tr><td>C++ (Rcpp)</td>
 <td>2 files, ~220 lines (gamete/recombination kernel)</td>
 </tr><tr><td>Documentation</td>
-<td>213 man pages, 1 vignette, 1,160-line README</td>
+<td>213 man pages, 2 vignettes, 1,160-line README</td>
 </tr><tr><td>Tests</td>
 <td>70 testthat files, ~23,300 lines, 1021 tests, ~2,780 assertions</td>
 </tr><tr><td>Test : source ratio</td>
@@ -59,10 +60,10 @@
 </tr></tbody></table></div>
 <div class="section level2">
 <h2 id="detailed-counts">Detailed Counts<a class="anchor" aria-label="anchor" href="#detailed-counts"></a></h2>
-<table class="table"><thead><tr><th>Metric</th>
+<table class="table"><colgroup><col width="42%"><col width="57%"></colgroup><thead><tr><th>Metric</th>
 <th align="right">Count</th>
 </tr></thead><tbody><tr><td>Exported functions (<code>NAMESPACE</code>)</td>
-<td align="right">46</td>
+<td align="right">47</td>
 </tr><tr><td>S3 methods registered</td>
 <td align="right">17</td>
 </tr><tr><td>Total R function definitions</td>
@@ -91,7 +92,7 @@
 <code>expect_*()</code> assertions</td>
 <td align="right">2,782</td>
 </tr><tr><td>Vignettes</td>
-<td align="right">1 (<code>tidybreed-introduction.Rmd</code>, 672 lines)</td>
+<td align="right">2 (<code>tidybreed-introduction.Rmd</code>, 672 lines; <code>genetic-models.Rmd</code>, 177 lines)</td>
 </tr><tr><td><code>NEWS.md</code></td>
 <td align="right">4,330 lines, 145 version headings</td>
 </tr><tr><td><code>README.md</code></td>
@@ -102,7 +103,7 @@
 <td align="right">232</td>
 </tr></tbody></table></div>
 <div class="section level2">
-<h2 id="exported-api-46-functions">Exported API (46 functions)<a class="anchor" aria-label="anchor" href="#exported-api-46-functions"></a></h2>
+<h2 id="exported-api-47-functions">Exported API (47 functions)<a class="anchor" aria-label="anchor" href="#exported-api-47-functions"></a></h2>
 <table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><thead><tr><th>Prefix</th>
 <th>Functions</th>
 </tr></thead><tbody><tr><td>
@@ -113,7 +114,7 @@
 </td>
 </tr><tr><td><code>define_</code></td>
 <td>
-<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_additive_effects</code>, <code>define_genome_effect_terms</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>, <code>define_condition_change_action</code>
+<code>define_genome</code>, <code>define_chromosome</code>, <code>define_founder_haplotypes</code>, <code>define_chip</code>, <code>define_trait</code>, <code>define_additive_effects</code>, <code>define_genome_effects</code>, <code>define_genome_effect_terms</code>, <code>define_phenotype</code>, <code>define_residual_cov</code>, <code>define_effect_cov_matrix</code>, <code>define_effect_random</code>, <code>define_effect_fixed_class</code>, <code>define_effect_fixed_cov</code>, <code>define_effect_intercept</code>, <code>define_index</code>, <code>define_table</code>, <code>define_schema_description</code>, <code>define_condition_change_action</code>
 </td>
 </tr><tr><td><code>add_</code></td>
 <td>

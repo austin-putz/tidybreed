@@ -23,7 +23,7 @@ ind_ebv, ...).'><meta property="og:image" content="https://austin-putz.github.io
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,7 +34,8 @@ ind_ebv, ...).'><meta property="og:image" content="https://austin-putz.github.io
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/genetic-models.html">Genetic models: writing, generating and measuring QTL effects</a></li>
+    <li><a class="dropdown-item" href="../articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -220,6 +221,19 @@ differs from that sum by <code>between_components</code> and the drift in each b
 which this function shows. Even a matching variance does not guarantee the
 prevalence: the threshold also assumes a near-normal liability, which a
 skewed finite-locus model need not give.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="precision">Precision<a class="anchor" aria-label="anchor" href="#precision"></a></h2>
+
+
+<p>Each block is computed to an <strong>absolute</strong> precision of about machine
+epsilon times the size of the model's coefficients, not relative to the
+block itself. Re-projecting the stored terms adds the dominance and pair
+coefficients into the additive one (<code>alpha = a + b d + sum e c</code>), so an
+additive block many orders of magnitude below the dominance or A x A
+block keeps few correct digits: a model stored with an additive variance
+of exactly <code>1e-24</code> beside a dominance variance of 1 is reported as about
+<code>1.0001e-24</code>. At ordinary ratios the error is at rounding level.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

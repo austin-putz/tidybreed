@@ -32,7 +32,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.75.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,7 +45,8 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
+<li><a class="dropdown-item" href="articles/genetic-models.html">Genetic models: writing, generating and measuring QTL effects</a></li>
+    <li><a class="dropdown-item" href="articles/tidybreed-introduction.html">Introduction to tidybreed</a></li>
   </ul>
 </li>
       </ul>
@@ -1393,6 +1394,11 @@ tidybreed
 <tr>
 <td><code><a href="reference/define_additive_effects.html">define_additive_effects()</a></code></td>
 <td>Assign QTL effects to filtered loci (single or correlated multi-trait)</td>
+</tr>
+<tr>
+<td><code><a href="reference/define_genome_effects.html">define_genome_effects()</a></code></td>
+<td>Sample additive, dominance and A x A QTL effects calibrated to <code>G_A</code>, <code>G_D</code>, <code>G_AA</code>
+</td>
 </tr>
 <tr>
 <td><code><a href="reference/define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code></td>

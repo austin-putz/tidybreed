@@ -12,10 +12,10 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 |  |  |
 |----|----|
-| Exported functions | 46 (+17 S3 methods; 356 functions total incl. internals) |
+| Exported functions | 47 (+17 S3 methods; 356 functions total incl. internals) |
 | R source | 62 files, ~23,600 lines (~6,900 of which are roxygen docs) |
 | C++ (Rcpp) | 2 files, ~220 lines (gamete/recombination kernel) |
-| Documentation | 213 man pages, 1 vignette, 1,160-line README |
+| Documentation | 213 man pages, 2 vignettes, 1,160-line README |
 | Tests | 70 testthat files, ~23,300 lines, 1021 tests, ~2,780 assertions |
 | Test : source ratio | 0.99 : 1 |
 | History | 232 commits, 145 released versions in NEWS.md |
@@ -25,7 +25,7 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 
 | Metric | Count |
 |----|---:|
-| Exported functions (`NAMESPACE`) | 46 |
+| Exported functions (`NAMESPACE`) | 47 |
 | S3 methods registered | 17 |
 | Total R function definitions | 356 |
 | R source files (`R/`) | 62 |
@@ -38,18 +38,18 @@ replicate archiving. A small Rcpp kernel handles meiosis/recombination.
 | testthat lines of code | 23,321 (+ 5 helper files, 1,059 lines) |
 | `test_that()` blocks | 1021 |
 | `expect_*()` assertions | 2,782 |
-| Vignettes | 1 (`tidybreed-introduction.Rmd`, 672 lines) |
+| Vignettes | 2 (`tidybreed-introduction.Rmd`, 672 lines; `genetic-models.Rmd`, 177 lines) |
 | `NEWS.md` | 4,330 lines, 145 version headings |
 | `README.md` | 1,161 lines |
 | Design docs (`plans/`) | 74 files, 31,296 lines |
 | Git commits | 232 |
 
-## Exported API (46 functions)
+## Exported API (47 functions)
 
 | Prefix | Functions |
 |----|----|
 | `open_` / `restore_` / `close_` | `open_pop`, `restore_pop`, `close_pop` |
-| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description`, `define_condition_change_action` |
+| `define_` | `define_genome`, `define_chromosome`, `define_founder_haplotypes`, `define_chip`, `define_trait`, `define_additive_effects`, `define_genome_effects`, `define_genome_effect_terms`, `define_phenotype`, `define_residual_cov`, `define_effect_cov_matrix`, `define_effect_random`, `define_effect_fixed_class`, `define_effect_fixed_cov`, `define_effect_intercept`, `define_index`, `define_table`, `define_schema_description`, `define_condition_change_action` |
 | `add_` | `add_founders`, `add_offspring`, `add_phenotype`, `add_tgv`, `add_ebv`, `add_index`, `add_dosage`, `add_genotypes` |
 | `mutate_` | `mutate_table`, `mutate_derived`, `mutate_group_seq`, `mutate_group_named`, `mutate_group_concatenate` |
 | `extract_` / `remove_` / `archive_` | `extract_genotypes`, `remove_rows`, `remove_generated_effects`, `archive_replicate`, `extract_allele_freq`, `extract_genetic_variance` |
