@@ -894,7 +894,8 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
 .gev_require_terms <- function(model, trait) {
   if (sum(model$terms$trait_name == trait) > 0L) return(invisible(NULL))
   stop("No genome effects found for trait '", trait,
-       "'. Call define_additive_effects() or define_genome_effect_terms() first.",
+       "'. Write its effects with define_additive_effects(), ",
+       "define_genome_effects() or define_genome_effect_terms() first.",
        call. = FALSE)
 }
 

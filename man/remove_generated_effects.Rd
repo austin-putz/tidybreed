@@ -26,11 +26,6 @@ scope arguments writes the common scope, \verb{line_name = NULL, parent_origin =
 \value{
 The \code{tidybreed_pop}, invisibly. An error, with nothing deleted,
 when a trait has no generated terms at that scope.
-
-A \code{\link[=define_genome_effects]{define_genome_effects()}} model is common-scope (no \code{line_name}, no
-\code{parent_origin}), so \code{remove_generated_effects(pop, trait_name)} removes it
-whole: its additive, dominance and additive-by-additive terms together.
-\code{\link[=define_additive_effects]{define_additive_effects()}} then accepts the trait again.
 }
 \description{
 Deletes every term a generator wrote for \code{trait_name} at exactly one
@@ -51,13 +46,30 @@ replacing it. Two parent scopes at one line are a legal model, but no
 stored target describes their combined variance, so
 \code{define_phenotype(prevalence = )} refuses such a trait.
 
-Nothing else changes. The stored targets in \code{trait_var_comp} stay (a
-target with no terms of its kind is ignored by the \code{prevalence} threshold
-and blocks nothing), and so do the values already in \code{ind_tgv}: they
-describe the old model until
-\code{\link[=add_tgv]{add_tgv()}} (or \code{\link[=add_phenotype]{add_phenotype()}}, which calls it) re-evaluates the
-individuals. Removing a line's variant makes that line's copies fall back
-to the common variant, where there is one.
+A \code{\link[=define_genome_effects]{define_genome_effects()}} model is common-scope (no \code{line_name}, no
+\code{parent_origin}), so \code{remove_generated_effects(pop, trait_name)} removes it
+whole: its additive, dominance and additive-by-additive terms together.
+
+Nothing else changes:
+\itemize{
+\item \strong{The stored targets in \code{trait_var_comp} stay.} A target with no terms
+of its kind is ignored by the \code{prevalence} threshold, but it still
+counts for generation: \code{\link[=define_additive_effects]{define_additive_effects()}} refuses a trait with
+a stored \code{dominance} or \code{additive_by_additive} target unless
+\code{trait_var_comp_tbl} selects the additive rows alone (or those targets
+are removed with \code{\link[=remove_rows]{remove_rows()}}); \code{\link[=define_genome_effects]{define_genome_effects()}} calibrates
+to all of them again.
+\item \strong{The values already in \code{ind_tgv} stay.} They describe the old model
+until \code{\link[=add_tgv]{add_tgv()}} (or \code{\link[=add_phenotype]{add_phenotype()}}, which calls it) re-evaluates the
+individuals. If the removal leaves the trait with \strong{no terms at all},
+that re-evaluation is an error ("No genome effects found"), so the old
+values cannot be refreshed and are still what \code{\link[=get_table]{get_table()}} shows: write
+a new model before computing genetic values or recording phenotypes
+again. No new record is ever made from them.
+}
+
+Removing a line's variant makes that line's copies fall back to the common
+variant, where there is one.
 }
 \examples{
 \dontrun{

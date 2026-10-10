@@ -1623,7 +1623,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
-| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 (+ 0.76.1 review fixes) / 0.76.2 | 2, 3, 4; **done** |
+| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 (+ 0.76.1 review fixes) / 0.76.2 (+ 0.76.3 review fixes) | 2, 3, 4; **done** |
 
 **Every step**, before its commit: bump `DESCRIPTION` `Version:` and add a `NEWS.md` entry
 (CLAUDE.md). The entry says that databases written by earlier versions are not readable

@@ -1,3 +1,20 @@
+# tidybreed 0.76.3 (2026-10-09)
+
+Follow-up to the Codex review of step 5c
+(`plans/import_qtl_effect_methods_phase_5_codex_review.md`). Documentation
+and messages only.
+
+* `?remove_generated_effects` no longer overpromises. Stored dominance and
+  A x A targets outlive the terms and still count for generation:
+  `define_additive_effects()` needs `trait_var_comp_tbl` limited to the
+  additive rows. And if the removal leaves a trait with no terms at all,
+  `add_tgv()` and `add_phenotype()` refuse it, so the old `ind_tgv` values
+  stay until a new model is written; no record is made from them. A test
+  pins both.
+* "No genome effects found" errors (from `add_tgv()`, `add_phenotype()` and
+  `extract_genotypes()`) name `define_genome_effects()` among the ways to
+  write effects.
+
 # tidybreed 0.76.2 (2026-10-09)
 
 Step 5c of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):

@@ -6,7 +6,7 @@ and its re-review. Decisions D1–D8 were made by the user 2026-10-06 to 2026-10
 recommended; D5 adds a rank `message()` for singular targets (built in 5b). Three commits
 (D1); the user reviews between them.
 
-## Step 5 at a glance — complete (0.75.3 → 0.76.2)
+## Step 5 at a glance — complete (0.75.3 → 0.76.3)
 
 | Commit | Version | What |
 |---|---|---|
@@ -15,6 +15,7 @@ recommended; D5 adds a rank `message()` for singular targets (built in 5b). Thre
 | 5b | 0.76.0 | `define_genome_effects()`: additive, dominance and A×A effects sampled and calibrated to `G_A`, `G_D`, `G_AA` exactly under `"genic"` or `"realised"`; the additive floor; inbreeding depression (exact for one trait); additive-only targets take `define_additive_effects()`'s path, with identical rows. |
 | 5b review | 0.76.1 | The stored additive coefficients are the verified ones (they lost digits when `G_A` ≪ `G_D`); realised designs only for non-zero blocks, so the size guard is exact; the extractor's precision limit documented. Re-verified by Codex. |
 | 5c | 0.76.2 | End-to-end gates (phenotypes, prevalence, removal, both anchors measured back), the generator benchmark, the "Genetic models" vignette. |
+| 5c review | 0.76.3 | `?remove_generated_effects` qualified (kept targets still count for generation; an empty model cannot be re-evaluated, so old `ind_tgv` values stay); "No genome effects found" names `define_genome_effects()`; a test pins it. |
 
 Every Part C gate of the main plan (§11 C1–C20) and the phase plan's G1–G8 is in the suite;
 the full suite after 5c is 1,170 tests, 4,855 expectations, no failures. Open after step
@@ -467,3 +468,39 @@ promises. A 60-locus `:memory:` population; it renders in about 5 s.
 Full suite with `NOT_CRAN=true` (79 files): **1,170 tests, 4,855 expectations, 0 failures,
 0 errors**, the six baseline warnings in the same five files. `pkgdown::check_pkgdown()`
 clean; the vignette renders against `load_all()`. `R CMD check` was not run.
+
+### Implementation-review follow-up (0.76.3)
+
+[Codex reviewed 5c](import_qtl_effect_methods_phase_5_codex_review.md): every gate passes,
+its independent checks (two traits at exact HWE + LE under both anchors; three traits on an
+inbred base with hubs and a fixed partner; replacement and repeated records; a liability
+on the cutpoint) found no scientific or implementation defect, and the benchmark and the
+vignette ran. One low finding, accepted: **`?remove_generated_effects` overpromised
+recovery.**
+
+- It said a target without terms "blocks nothing" and that `define_additive_effects()`
+  "then accepts the trait again". Both are true of the prevalence threshold and of the
+  non-additive-model refusal, but a stored D or A×A target still makes
+  `define_additive_effects()` refuse unless `trait_var_comp_tbl` selects the additive
+  rows (5c's own test does this; the deviation note above explains it).
+- It said `ind_tgv` values are stale until `add_tgv()` re-evaluates. When the removal
+  leaves **no terms at all**, `add_tgv()` refuses ("No genome effects found") and so does
+  `add_phenotype()`, so the old values stay in `ind_tgv` until a new model is written.
+  Nothing is ever recorded from them; a reader of `get_table("ind_tgv")` still sees them.
+
+Fixed in the documentation (now two bullets, targets and `ind_tgv`; the paragraph about a
+`define_genome_effects()` model moved out of `@return`, where it had been filed by mistake)
+and in the API skill. The three "No genome effects found" errors (`add_tgv()`,
+`add_phenotype()`, `extract_genotypes()`) now name `define_genome_effects()` too. A new
+integration test removes a trait's whole generated model and checks that `add_tgv()` refuses
+naming the generators, `ind_tgv` is unchanged, an unfiltered `define_additive_effects()` is
+refused naming the stored targets, and `define_genome_effects()` to the kept targets then
+refreshes every value. The empty-model refusal itself is unchanged, as Codex recommended.
+
+Codex's C13 note is right and already how the test reads: under LD the realised total
+includes covariances between components, so the coarse bound is a sanity check on that
+fixture, not an equality.
+
+**Suite.** Full suite with `NOT_CRAN=true` (79 files): **1,171 tests, 4,862 expectations, 0
+failures, 0 errors**, the six baseline warnings. `devtools::document()` regenerated
+`man/remove_generated_effects.Rd`.

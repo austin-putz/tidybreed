@@ -236,6 +236,38 @@ test_that("remove_generated_effects() removes the whole A + D + A x A model, kee
   expect_identical(gen_kinds(pop), "additive")
 })
 
+test_that("removing a trait's last terms: add_tgv() refuses, the old values stay, a new model refreshes them (5c review F1)", {
+  pop <- dgi_pop("rge_empty")
+  on.exit(close_pop(pop))
+  set.seed(243)
+  quiet(define_genome_effects(gm_to(pop, 20), "T1", G_A = 1, G_D = 0.3, G_AA = 0.2))
+  pop <- quiet(inds(pop) |> add_tgv("T1"))
+  cache <- function() DBI::dbGetQuery(pop$db_conn, paste0(
+    "SELECT id_ind, component_name, tgv_value FROM ind_tgv ",
+    "WHERE trait_name = 'T1' ORDER BY id_ind, component_name"))
+  old <- cache()
+  expect_setequal(unique(old$component_name),
+                  c("additive", "dominance", "interaction"))
+
+  pop <- quiet(remove_generated_effects(pop, "T1"))
+  expect_identical(DBI::dbGetQuery(pop$db_conn,
+    "SELECT COUNT(*) AS n FROM genome_effects WHERE trait_name = 'T1'")$n, 0)
+  # No terms: re-evaluation is refused, and the old values are still there.
+  expect_error(quiet(inds(pop) |> add_tgv("T1")),
+               "No genome effects found for trait 'T1'.*define_genome_effects\\(\\)")
+  expect_identical(cache(), old)
+  # The kept D and A x A targets still count for generation ...
+  expect_error(quiet(gm_to(pop, 20) |> define_additive_effects("T1")),
+               "stored 'dominance', 'additive_by_additive' target exists for T1")
+  # ... and a new model calibrated to them refreshes the values.
+  set.seed(244)
+  quiet(define_genome_effects(gm_to(pop, 20), "T1"))
+  pop <- quiet(inds(pop) |> add_tgv("T1"))
+  new <- cache()
+  expect_identical(new[, 1:2], old[, 1:2])
+  expect_false(isTRUE(all.equal(new$tgv_value, old$tgv_value)))
+})
+
 
 # -- C19: the genic anchor measured back ------------------------------------
 

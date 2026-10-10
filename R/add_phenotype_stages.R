@@ -154,8 +154,8 @@ NULL
       stop(
         "No genome effects found for phenotype '", t, "'. ",
         "A simple phenotype reads the genetic value of the trait of the same ",
-        "name: write its effects with define_additive_effects() or ",
-        "define_genome_effect_terms() first. ",
+        "name: write its effects with define_additive_effects(), ",
+        "define_genome_effects() or define_genome_effect_terms() first. ",
         "A phenotype assembled from other traits needs 'components' in ",
         "define_phenotype(); one with no genetic architecture needs ",
         "type = 'derived_formula'.",

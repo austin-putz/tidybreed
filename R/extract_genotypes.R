@@ -212,7 +212,8 @@ extract_genotypes <- function(tbl,
     causal_ids <- unique(effects_df[["locus_id"]])
     if (length(causal_ids) == 0)
       stop("No causal loci found in the filtered 'effects_tbl'. ",
-           "Call define_additive_effects() or define_genome_effect_terms() first.",
+           "Write effects with define_additive_effects(), define_genome_effects() ",
+           "or define_genome_effect_terms() first.",
            call. = FALSE)
     locus_ids <- union(locus_ids, as.integer(causal_ids))
   }

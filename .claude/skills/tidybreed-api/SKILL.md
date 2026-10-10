@@ -574,12 +574,18 @@ parent_origin)` (via `.ge_resolve_deletes(..., "replace_scope")`, which
 matches origin rows, not contrasts), in one transaction
 validated by `validate_genome_effects()`. Errors, deleting nothing (all or
 nothing across traits), when a trait has none at the scope. Targets and
-`ind_tgv` are untouched; values are stale until `add_tgv()` re-evaluates. The
+`ind_tgv` are untouched; values are stale until `add_tgv()` re-evaluates —
+and when the removal leaves the trait **no terms at all**, `add_tgv()` /
+`add_phenotype()` refuse ("No genome effects found", `.gev_require_terms()`),
+so the stale values stay until a new model is written (pinned in
+`test-define_genome_effects-integration.R`). The
 typical use is a variant added by a re-run with a new `parent_origin`, which
 `.dae_warn_parent_only()` now names. A generated model is removed whole, never
 per component (decided 2026-10-05): a `define_genome_effects()` model is
-common-scope, so `remove_generated_effects(pop, trait)` removes all of it, after
-which `define_additive_effects()` accepts the trait again.
+common-scope, so `remove_generated_effects(pop, trait)` removes all of it. The
+kept D / A×A targets still count for generation: `define_additive_effects()`
+then needs `trait_var_comp_tbl` limited to the additive rows (its stored-target
+refusal), while the non-additive-*model* refusal no longer applies.
 
 ### `extract_allele_freq()`
 
