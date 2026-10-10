@@ -8,7 +8,12 @@ open finding here. The review began with the uncommitted/untracked 5b files
 present in the workspace. During the review, 5b was committed as **`b4ddc94`**;
 the findings refer to that implementation.
 
-**Assessment:** the central calibration algebra and ordinary-scale stored results
+**Current assessment (0.76.1, `5e1bc5f`, re-verified 2026-10-09): both findings
+below are closed. Proceed to step 5c (0.76.2).** The documented extractor
+precision limitation at extreme variance-block ratios remains accepted; see
+the independent re-verification at the end of this document.
+
+**Original assessment (0.76.0):** the central calibration algebra and ordinary-scale stored results
 pass the planned tests and the additional scientific checks below. I found no
 major scientific error in the exercised ordinary-scale cases. There are **two
 medium-priority defects**: the exactness check precedes a potentially lossy storage
@@ -191,7 +196,7 @@ the temporary limit change occurred only inside disposable R processes.
 Rscript -e 'devtools::test(filter = "define_genome_effects|genome-effects-calibration", reporter = "summary", stop_on_failure = TRUE)'
 ```
 
-**Passed, exit status 0:** 29 public tests and 31 calibration tests; no failures,
+**Passed, exit status 0:** 28 public tests and 31 calibration tests; no failures,
 warnings or skips reported. These include the independent source decomposition,
 Zeng Appendix A, all-genotype identities, both anchors, ranks and zero targets,
 floor and mean-solver hand cases, rollback, owner rules, RNG refusal behavior,
@@ -355,3 +360,57 @@ with the message "20 additive + 20 dominance + 0 pair columns", and the database
    output that matters. Before, a zero target went through `.qtl_calibrate()` with
    rank 0. Seeded output may change across versions under the pre-1.0 policy, and
    within-version determinism (G2) still passes.
+
+## Independent re-verification of the fixes — 0.76.1
+
+Reviewed commit **`5e1bc5f`** on 2026-10-09, including Claude's response above,
+the production diff, new regression tests and extractor precision documentation.
+**Both findings are closed; proceeding to 5c (0.76.2) is appropriate.**
+
+The realised conversion is algebraically correct: the statistical coefficient
+at the stored HWE centre equals the anchor's calibrated coefficient plus the
+HWE-minus-observed dominance and pair coupling. Subtracting that difference
+recovers the anchor coefficient. `.na_store_alpha()` verifies this implied
+coefficient before commit, and `.dge_build_nonadditive()` writes
+`alpha_stored`. The additive-only route continues to use Part A's direct
+writer. No alternate non-additive storage path bypasses the new helper in the
+public generator.
+
+Independent checks against this commit:
+
+- **The two focused test files passed, exit status 0:** 29 public test cases
+  and 33 calibration test cases, with no failures, warnings or skips reported.
+  This includes the realised storage refusal, zero blocks without anchors,
+  additive-only parity, draw-order and within-version determinism checks.
+  Log: `/private/tmp/tidybreed_5b_fix_tests.log`.
+- **Original public cancellation reproduction, seed 2:** with
+  `G_A = 1e-24`, `G_D = 1`, `p = 0.3`, the stored genic additive variance is
+  now `9.9999999999999992e-25`, matching the target to floating-point rounding.
+  The `G_A = 1e-20` stored variance also matches to rounding. The success
+  message therefore describes the stored model correctly.
+- **Original memory probes:** A + A×A retains A / D / A×A designs of
+  `320 / 0 / 160` cells (**480 total**); D + zero A×A retains
+  `320 / 320 / 0` (**640 total**). Both match the unchanged guard. The response's
+  expectation of 560 for the first case is an arithmetic slip; the original
+  40-individual, 8-QTL, 4-pair probe gives 480.
+- **The public unequal-unit sweep still passes** through `u = 1e-10`, with
+  maximum additive correlation-scale error `1.15e-15`.
+- **The independent three-trait hub/fixed-partner/inbred-cohort probe still
+  passes under both anchors:** maximum explicit block covariance error
+  `5.03e-15`; maximum individual-value error versus `add_tgv()` `8.89e-16`.
+
+The remaining extractor limitation was reproduced: on the exact stored
+`G_A = 1e-24` model, its genic additive estimate is
+`1.0000848765694989e-24`. This is loss of relative precision when the extractor
+converts and re-projects a component vastly smaller than its coupling. It is
+acceptable to document this as the agreed numerical limitation for this
+release: the generator now stores the intended model, ordinary-scale checks
+pass, and an ill-conditioned realised storage conversion is refused. The
+documentation change is a precision note, not a newly emitted runtime warning.
+The 5c round-trip gates should retain their planned ordinary-scale tolerance;
+they should not be loosened to accommodate such extreme ratios.
+
+Only the focused suite and independent probes were rerun here; Claude's
+reported full-suite result for this fix is 1,162 tests, 4,805 expectations,
+zero failures/errors and six baseline warnings. The earlier independent full
+run above was on 0.76.0. No new blocking finding emerged from this re-review.

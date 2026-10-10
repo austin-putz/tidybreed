@@ -6,6 +6,22 @@ and its re-review. Decisions D1–D8 were made by the user 2026-10-06 to 2026-10
 recommended; D5 adds a rank `message()` for singular targets (built in 5b). Three commits
 (D1); the user reviews between them.
 
+## Step 5 at a glance — complete (0.75.3 → 0.76.2)
+
+| Commit | Version | What |
+|---|---|---|
+| 5a | 0.75.3 | The genome-effect writer and evaluator preparation made linear in model size (all 124,750 pairs of 500 loci written in 7.1 s; 16,000 pairs went from 71.8 s to 0.7 s). Internal only. |
+| 5a review | 0.75.4 | Exact pair keys above 2^53. |
+| 5b | 0.76.0 | `define_genome_effects()`: additive, dominance and A×A effects sampled and calibrated to `G_A`, `G_D`, `G_AA` exactly under `"genic"` or `"realised"`; the additive floor; inbreeding depression (exact for one trait); additive-only targets take `define_additive_effects()`'s path, with identical rows. |
+| 5b review | 0.76.1 | The stored additive coefficients are the verified ones (they lost digits when `G_A` ≪ `G_D`); realised designs only for non-zero blocks, so the size guard is exact; the extractor's precision limit documented. Re-verified by Codex. |
+| 5c | 0.76.2 | End-to-end gates (phenotypes, prevalence, removal, both anchors measured back), the generator benchmark, the "Genetic models" vignette. |
+
+Every Part C gate of the main plan (§11 C1–C20) and the phase plan's G1–G8 is in the suite;
+the full suite after 5c is 1,170 tests, 4,855 expectations, no failures. Open after step
+5 (not defects): `extract_genetic_variance()` loses relative precision on a block many
+orders of magnitude below its coupling (documented, decided with the user), and the
+out-of-scope list of the phase plan stands.
+
 ## 5a — Writer speed (0.75.3)
 
 Internal only: no API, schema, stored-value or message change.
@@ -379,3 +395,75 @@ dominance block is below that resolution. Decided with the user: documented, not
 **Suite.** Full suite with `NOT_CRAN=true` (78 files): **1,162 tests, 4,805 expectations, 0
 failures, 0 errors**, the same 6 baseline warnings in the same five files. No exported
 signature or roxygen changed.
+
+## 5c — End to end and the vignette (0.76.2)
+
+Tests, a benchmark and a vignette over the code of 5a and 5b; no function's behaviour
+changed. Codex's re-verification of 0.76.1 (both findings closed, "proceed to 5c") is
+committed with it.
+
+### Gates — `tests/testthat/test-define_genome_effects-integration.R` (8 tests)
+
+**Fixture.** An exact HWE + LE cohort, built as the full factorial of per-locus genotype
+counts (1, 2, 1) at `p = 1/2` and (9, 6, 1) at `p = 1/4`: three loci, 256 individuals. Every
+function of one locus is uncorrelated with every function of the others and each locus is
+in exact HWE, so every realised block is exactly `n/(n − 1)` times its genic value. The
+`p = 1/4` locus keeps the coupling `c = 2p − 1` non-zero. The other fixtures are the
+200- or 400-founder population of the 5b tests (sampled from 300 haplotypes, so in LD), and
+an inbred version of it.
+
+| Gate | What is checked |
+|---|---|
+| **C13** | A + D (`G_A = 1`, `G_D = 2`, realised, 400 individuals): the record minus its residual minus the mean is `ind_tgv_total` per individual (1e-12); `var(ind_tgv_total)` is the extractor's realised `total` (1e-10); the blocks are the targets. Coarse: the phenotypic minus the residual variance is in (2, 4), i.e. near `V_A + V_D = 3`, not `V_A = 1`. |
+| **Prevalence (a)** | A + D + A×A on the factorial fixture: the stored centres are the exact frequencies; the genic blocks are the targets (1e-10); realised `between_components` is 0 and `total` is `n/(n − 1) × 1.5`; the threshold's sum is 1.5, i.e. `(n − 1)/n` times the realised total. `add_phenotype()` on a `prevalence` phenotype records category 2 exactly when the stored liability exceeds `qnorm(0.8) √(1.5 + 1)`. |
+| **Prevalence (b)** | On the LD founders: blocks + `between_components` = `total` (1e-10), with `|between_components| > 1e-4` and a block more than 1e-3 off its target, while the threshold still sums the targets (1.5). |
+| **Prevalence (c)** | `define_additive_effects(parent_origin = 1)` beside a generated D / A×A model is refused (the 5b.6 refusal), nothing written; the common-scope model gives the threshold 1.5. |
+| **Removal** | `remove_generated_effects()` on a real A + D + A×A model (term kinds `additive`, `dominance`, `interaction`) leaves only the custom term and the targets unchanged; `define_additive_effects()` then works and writes additive terms only. |
+| **C19** | Two traits, A + D, genic, on the factorial fixture: genic blocks and cross-covariances are the targets (1e-10); `cov` of `ind_tgv`'s `additive` component equals the realised additive block (1e-10) and is `n/(n − 1)` times `G_A`. Off the fixture (half the cohort fully inbred) the two additive measures differ by more than 1e-3. |
+| **C20** | Two traits, A + D + A×A, realised, generated and measured on the same 200 individuals: all nine block entries are the targets (1e-10), and the 12 rows `inner_join()` the stored targets one to one. |
+
+### Benchmark — `dev/benchmarks/benchmark_define_genome_effects.R`
+
+2,000 individuals, 1,000 QTL, k = 2, `G_A`, `G_D`, `G_AA` all 2 × 2. Each call timed whole
+(resolution, draw, calibration, diagnostics, write, messages). Peak is R's `gc()` "max
+used", DuckDB excluded.
+
+| Run | Time | Peak R memory |
+|---|---:|---:|
+| genic, 500 random pairs (founder-pool base) | 2.7 s | 612 Mb |
+| realised, 500 random pairs (designs 2,000 × 2,500 = 5e6 cells) | 10.5 s | 533 Mb |
+| genic, 20,000 supplied hub pairs (21 hubs; 44,000 stored terms) | 7.7 s | 693 Mb |
+
+All three are well within interactive use, so nothing was optimised. The realised run was
+not profiled.
+
+### Vignette — `vignettes/genetic-models.Rmd`
+
+The four paths in order: known coefficients (§9.3's worked A + D + A×A through
+`define_genome_effect_terms()`), `define_additive_effects()` with a two-trait `G`,
+`define_genome_effects()` with the messages it prints, and the floor refusal shown live,
+then `extract_genetic_variance()` joined to `trait_var_comp`. It closes with the scope
+promises. A 60-locus `:memory:` population; it renders in about 5 s.
+
+### Deviations from the plan
+
+- **C20's `warn_bounds` check** is not repeated: the 5b test "16 / D6" already fires it on
+  an inbred panel under both anchors and silences it with `NULL`. A comment points there.
+- **Removal, then `define_additive_effects()`** needs `trait_var_comp_tbl` limited to the
+  additive rows: the stored D and A×A targets outlive the terms (as documented), and the
+  additive generator refuses to ignore a stored target silently. What the plan asked for
+  holds: the 5b.6 refusal of a non-additive *model* no longer applies.
+- **`_pkgdown.yml`** has no `articles:` index (the introduction vignette was never listed
+  either); pkgdown lists every vignette on its own, and `check_pkgdown()` is clean.
+- **The vignette** says functional `d` is stored as an `indicator` term, so the hand-written
+  model's `ind_tgv` components are `additive`, `indicator` and `interaction`. The first
+  draft said `dominance`; rendering caught it.
+- **No mutation checks** for these gates. They measure code whose own gates were
+  mutation-checked in 4 and 5b; each asserts an exact identity, not a loose bound, except
+  C13's single coarse check.
+
+### Suite
+
+Full suite with `NOT_CRAN=true` (79 files): **1,170 tests, 4,855 expectations, 0 failures,
+0 errors**, the six baseline warnings in the same five files. `pkgdown::check_pkgdown()`
+clean; the vignette renders against `load_all()`. `R CMD check` was not run.

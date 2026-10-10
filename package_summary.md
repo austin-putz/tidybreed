@@ -14,7 +14,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | Exported functions | 47 (+17 S3 methods; 356 functions total incl. internals) |
 | R source | 62 files, ~23,600 lines (~6,900 of which are roxygen docs) |
 | C++ (Rcpp) | 2 files, ~220 lines (gamete/recombination kernel) |
-| Documentation | 213 man pages, 1 vignette, 1,160-line README |
+| Documentation | 213 man pages, 2 vignettes, 1,160-line README |
 | Tests | 70 testthat files, ~23,300 lines, 1021 tests, ~2,780 assertions |
 | Test : source ratio | 0.99 : 1 |
 | History | 232 commits, 145 released versions in NEWS.md |
@@ -37,7 +37,7 @@ A small Rcpp kernel handles meiosis/recombination.
 | testthat lines of code | 23,321 (+ 5 helper files, 1,059 lines) |
 | `test_that()` blocks | 1021 |
 | `expect_*()` assertions | 2,782 |
-| Vignettes | 1 (`tidybreed-introduction.Rmd`, 672 lines) |
+| Vignettes | 2 (`tidybreed-introduction.Rmd`, 672 lines; `genetic-models.Rmd`, 177 lines) |
 | `NEWS.md` | 4,330 lines, 145 version headings |
 | `README.md` | 1,161 lines |
 | Design docs (`plans/`) | 74 files, 31,296 lines |

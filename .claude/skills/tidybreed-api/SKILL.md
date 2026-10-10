@@ -550,6 +550,16 @@ Gates: `tests/testthat/test-define_genome_effects.R` (C1–C18, C20, G1–G8) an
 `tests/testthat/test-genome-effects-calibration.R` (the source suite ported,
 G4, G6), with the source generator copied in
 `tests/testthat/helper-nonadd-generator-oracle.R` (isolated environment).
+End to end (5c): `tests/testthat/test-define_genome_effects-integration.R`
+(C13 phenotypes, prevalence on a generated A + D + A×A model, removal, C19,
+C20, with an exact HWE + LE factorial fixture). Benchmark
+`dev/benchmarks/benchmark_define_genome_effects.R`.
+
+**Vignette** `vignettes/genetic-models.Rmd` ("Genetic models") walks the four
+paths — `define_genome_effect_terms()` with the builders,
+`define_additive_effects()`, `define_genome_effects()` (with the floor), and
+`extract_genetic_variance()` joined to `trait_var_comp` — and states the scope
+promises. Keep it in step when any of the four changes.
 
 ### `remove_generated_effects()`
 

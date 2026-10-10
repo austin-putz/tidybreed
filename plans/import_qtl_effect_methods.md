@@ -1623,7 +1623,7 @@ There is no compatibility shim between steps (CLAUDE.md, pre-1.0).
 | 2 | Part A + §6C targets | 0.73.0 | **done** (`_phase_2.md`) |
 | 3 | Consolidation + P2 + Q18, in three commits (3a / 3b / 3c) | 0.74.0 / 0.74.1 (+ 0.74.2 review fixes) / 0.74.3 (+ 0.74.4 follow-ups, 0.74.5 Codex review fixes) | 2 (the `line_name` readers, §6C); **done** |
 | 4 | Part B | 0.75.0 | 2 (genotype collection, size guard, PSD helper in `R/qtl_congruence.R`) and 3 (value names) |
-| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 / 0.76.2 | 2, 3, 4; **5a, 5b done** |
+| 5 | Part C, in three commits (5a / 5b / 5c, decision D1 of `_phase_5_plan.md`) | 0.75.3 / 0.76.0 (+ 0.76.1 review fixes) / 0.76.2 | 2, 3, 4; **done** |
 
 **Every step**, before its commit: bump `DESCRIPTION` `Version:` and add a `NEWS.md` entry
 (CLAUDE.md). The entry says that databases written by earlier versions are not readable
@@ -2038,7 +2038,7 @@ that is cancellation residue (`|x| ≤ n·eps·Σ|contrib|`) is set to 0 in
 and `.noia_terms()` refuses misaligned coefficients — step 5 builds on both; (4)
 `genotype_terms()` refuses a fractional or negative `copy_count` before `as.integer()`.
 
-### Step 5 — Part C (0.75.3–0.76.2) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a and 5b done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
+### Step 5 — Part C (0.75.3–0.76.2) *(planned in `import_qtl_effect_methods_phase_5_plan.md`, decisions D1–D8 made 2026-10-06/09; 5a, 5b and 5c done 2026-10-09, results `import_qtl_effect_methods_phase_5.md`)*
 
 - Generator `define_genome_effects()` (the name freed in step 1) in a new
   `R/define_genome_effects.R`. Calibration internals go in `R/genome_effects_calibration.R`.
@@ -2090,6 +2090,25 @@ repeated root at the vertex). `define_additive_effects()` refuses a non-additive
 model; singular targets get a rank message from all three entry points. All twelve 5b
 mutation checks fail their gates. The §1.3, §9.1, §9.2 step 3, C7 and C17 text above is
 corrected for D2–D5.
+
+**As built (5b review, 0.76.1).** Codex's implementation review found two medium defects,
+both fixed: the stored additive coefficient is the verified one (`.na_store_alpha()`; it
+was recovered by cancelling the coupling, which lost digits when `G_A` ≪ `G_D`), and only
+non-zero blocks keep a realised design, so the size guard counts what is kept.
+`extract_genetic_variance()` documents its absolute precision at such ratios. Codex
+re-verified both fixes.
+
+**As built (5c, 0.76.2) — step 5 complete.** End-to-end gates in
+`test-define_genome_effects-integration.R`: C13 (the record minus its residual is the total
+genetic value; its variance is the realised total), prevalence (a) at an exact HWE + LE
+factorial fixture, where the genic blocks equal the targets and the threshold's sum is
+`(n − 1)/n` times the realised total; (b) off equilibrium through the B3 identity; (c) no
+parent-scoped variant beside a generated non-additive model), `remove_generated_effects()`
+on a real A + D + A×A model, C19 (genic blocks to 1e-10; `ind_tgv`'s `additive` equals the
+realised block at HWE + LE and not off it) and C20 (realised round trip of all three blocks
+for two traits, 1e-10). Benchmark: 2,000 individuals × 1,000 QTL × 2 traits with 500 pairs
+takes 2.7 s genic and 10.5 s realised; 20,000 hub pairs take 7.7 s. The vignette
+`vignettes/genetic-models.Rmd` covers the four paths.
 
 ---
 

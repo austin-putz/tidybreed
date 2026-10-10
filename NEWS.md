@@ -1,3 +1,26 @@
+# tidybreed 0.76.2 (2026-10-09)
+
+Step 5c of the import plan (`plans/import_qtl_effect_methods_phase_5_plan.md`):
+end-to-end checks of `define_genome_effects()` and a vignette. Step 5 is
+complete. No change to any function's behaviour.
+
+* New vignette, "Genetic models" (`vignettes/genetic-models.Rmd`): the four
+  ways to give a trait QTL effects — known coefficients through
+  `define_genome_effect_terms()`, `define_additive_effects()`,
+  `define_genome_effects()` with the additive floor — and measuring them with
+  `extract_genetic_variance()` joined to the stored targets, with what
+  "exact" promises.
+* New end-to-end tests: phenotypes on an additive + dominance model carry
+  both variances; a `prevalence` threshold on a generated A + D + A x A model
+  (at exact HWE + LE the threshold's sum is the realised total as a
+  population variance, and off equilibrium the difference is
+  `between_components` and drift); `remove_generated_effects()` on a whole
+  generated model; and both anchors measured back by the extractor (genic
+  targets to 1e-10; the realised round trip of all three blocks to 1e-10).
+* New benchmark `dev/benchmarks/benchmark_define_genome_effects.R`: 2,000
+  individuals, 1,000 QTL, two traits, 500 A x A pairs take about 3 s under
+  `"genic"` and 11 s under `"realised"`; 20,000 hub pairs take about 8 s.
+
 # tidybreed 0.76.1 (2026-10-09)
 
 Follow-up to the Codex review of step 5b
