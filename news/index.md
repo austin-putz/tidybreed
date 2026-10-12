@@ -1,5 +1,33 @@
 # Changelog
 
+## tidybreed 0.76.4 (2026-10-12)
+
+`R CMD check` fixes; no change to any result.
+
+- GitHub’s `R CMD check` (R 4.6.1, macOS and Ubuntu) failed one test
+  added in 0.76.1: at an additive target of 1e-24 beside a dominance
+  variance of 1, the calibration itself refused on that platform’s
+  rounding before the storage check the test was aimed at. The storage
+  checks now use hand-built calibration results, and the public
+  extreme-ratio test uses the first seed that calibrates, so neither
+  depends on last-bit rounding.
+- The “code files for non-ASCII characters” WARNING is gone: the em
+  dashes, arrows, ellipses and box-drawing characters in messages and
+  print methods are written as `\uXXXX` escapes. What is printed is
+  unchanged.
+- The other `R CMD check` findings are fixed:
+  [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
+  passed `trait =` to `parse_blupf90_solutions(trait_name =)` by partial
+  matching (now the exact name); `head`, `read.table`, `write.table`,
+  `sd` and `setNames` are imported; `LICENSE` is the `YEAR` /
+  `COPYRIGHT HOLDER` stub R expects, with the full MIT text in
+  `LICENSE.md`; `.vscode`, `GEMINI.md` and `package_summary.md` are left
+  out of the built package;
+  [`citation()`](https://rdrr.io/r/utils/citation.html) reads the
+  version from the package metadata, so it works uninstalled.
+- CI’s `R CMD check` now fails on WARNINGs as well as ERRORs.
+- `plans/TODO.md` brought up to date after the import plan.
+
 ## tidybreed 0.76.3 (2026-10-09)
 
 Follow-up to the Codex review of step 5c

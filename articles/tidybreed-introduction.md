@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpQGPPFy/duckdb
+#> ℹ /tmp/RtmpKND1Vp/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -463,8 +463,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 M     AI_Stud   250
-#> 2 F     Iowa      250
+#> 1 F     Iowa      250
+#> 2 M     AI_Stud   250
 ```
 
 The warning above is deliberate:
@@ -609,12 +609,12 @@ pop |> get_table("ind_tgv") |> collect() |> head()
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1      1 A_72   ADG        additive           0.409
-#> 2      2 A_138  ADG        additive          -0.296
-#> 3      3 A_272  ADG        additive           0.399
-#> 4      4 A_37   ADG        additive           0.298
-#> 5      5 A_169  ADG        additive           0.924
-#> 6      6 A_356  ADG        additive           0.592
+#> 1    395 A_310  ADG        additive           0.482
+#> 2    396 A_25   ADG        additive          -0.132
+#> 3    397 A_83   ADG        additive          -0.336
+#> 4    398 A_335  ADG        additive           1.07 
+#> 5    399 A_499  ADG        additive          -0.225
+#> 6    400 A_8    ADG        additive           0.175
 ```
 
 [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)

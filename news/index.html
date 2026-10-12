@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,16 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.4" id="tidybreed-0764-2026-10-12">tidybreed 0.76.4 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0764-2026-10-12"></a></h2>
+<p><code>R CMD check</code> fixes; no change to any result.</p>
+<ul><li>GitHub’s <code>R CMD check</code> (R 4.6.1, macOS and Ubuntu) failed one test added in 0.76.1: at an additive target of 1e-24 beside a dominance variance of 1, the calibration itself refused on that platform’s rounding before the storage check the test was aimed at. The storage checks now use hand-built calibration results, and the public extreme-ratio test uses the first seed that calibrates, so neither depends on last-bit rounding.</li>
+<li>The “code files for non-ASCII characters” WARNING is gone: the em dashes, arrows, ellipses and box-drawing characters in messages and print methods are written as <code>\uXXXX</code> escapes. What is printed is unchanged.</li>
+<li>The other <code>R CMD check</code> findings are fixed: <code><a href="../reference/add_ebv.html">add_ebv()</a></code> passed <code>trait =</code> to <code>parse_blupf90_solutions(trait_name =)</code> by partial matching (now the exact name); <code>head</code>, <code>read.table</code>, <code>write.table</code>, <code>sd</code> and <code>setNames</code> are imported; <code>LICENSE</code> is the <code>YEAR</code> / <code>COPYRIGHT HOLDER</code> stub R expects, with the full MIT text in <code>LICENSE.md</code>; <code>.vscode</code>, <code>GEMINI.md</code> and <code>package_summary.md</code> are left out of the built package; <code><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation()</a></code> reads the version from the package metadata, so it works uninstalled.</li>
+<li>CI’s <code>R CMD check</code> now fails on WARNINGs as well as ERRORs.</li>
+<li>
+<code>plans/TODO.md</code> brought up to date after the import plan.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.3" id="tidybreed-0763-2026-10-09">tidybreed 0.76.3 (2026-10-09)<a class="anchor" aria-label="anchor" href="#tidybreed-0763-2026-10-09"></a></h2>
 <p>Follow-up to the Codex review of step 5c (<code>plans/import_qtl_effect_methods_phase_5_codex_review.md</code>). Documentation and messages only.</p>
