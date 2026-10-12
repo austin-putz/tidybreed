@@ -1,3 +1,14 @@
+# tidybreed 0.76.5 (2026-10-12)
+
+Repository housekeeping; no change to the package.
+
+* `AGENTS.md` and `GEMINI.md` are tracked and tell other coding agents to read
+  `CLAUDE.md` at the start of every session (and the schema/API skills before
+  changing a table or function). Both stay out of the built package via
+  `.Rbuildignore`.
+* `plans/documentation.md`, the proposed documentation structure that
+  `plans/TODO.md` links to, is committed.
+
 # tidybreed 0.76.4 (2026-10-12)
 
 `R CMD check` fixes; no change to any result.
