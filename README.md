@@ -22,7 +22,7 @@
 <a href="https://www.r-project.org"><img src="https://img.shields.io/badge/R-%3E%3D%204.1-276DC3.svg?style=for-the-badge&logo=r&logoColor=white" alt="R" /></a>
 <a href="https://duckdb.org"><img src="https://img.shields.io/badge/database-DuckDB-FFF000.svg?style=for-the-badge&logo=duckdb&logoColor=black" alt="DuckDB" /></a>
 <a href="https://isocpp.org"><img src="https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=for-the-badge&logo=cplusplus&logoColor=white" alt="C++17" /></a>
-<a href="https://www.tidyverse.org"><img src="https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&logo=tidyverse&logoColor=white" alt="tidyverse" /></a>
+<a href="https://tidyverse.org/"><img src="https://img.shields.io/badge/API-tidyverse-1a162d.svg?style=for-the-badge&logo=tidyverse&logoColor=white" alt="tidyverse" /></a>
 <a href="https://testthat.r-lib.org"><img src="https://img.shields.io/badge/testing-testthat-1f9c5a.svg?style=for-the-badge" alt="Testing: testthat" /></a>
 </p>
 

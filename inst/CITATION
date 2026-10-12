@@ -5,13 +5,13 @@ bibentry(
                        email   = "putz.austin@gmail.com",
                        comment = c(ORCID = "0000-0001-6459-7123")),
   year        = format(Sys.Date(), "%Y"),
-  note        = paste0("R package version ", packageVersion("tidybreed"),
+  note        = paste0("R package version ", meta$Version,
                        ". Pre-release (< v1.0.0); API subject to change."),
   url         = "https://github.com/austin-putz/tidybreed",
   textVersion = paste0(
     "Putz, A. (", format(Sys.Date(), "%Y"), "). ",
     "tidybreed: Tidy Breeding Program Simulation. ",
-    "R package version ", packageVersion("tidybreed"), ". ",
+    "R package version ", meta$Version, ". ",
     "https://github.com/austin-putz/tidybreed"
   )
 )

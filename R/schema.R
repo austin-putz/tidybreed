@@ -315,7 +315,7 @@ register_schema_meta <- function(conn, entries) {
   rbind(
     # trait_meta
     .sm_tbl("trait_meta",
-            "Genetic component trait definitions. One row per trait. Genetic layer only — no observation-layer metadata. Populated by define_trait()."),
+            "Genetic component trait definitions. One row per trait. Genetic layer only \u2014 no observation-layer metadata. Populated by define_trait()."),
     .sm_col("trait_meta", "id_trait",
             "Auto-incrementing primary key"),
     .sm_col("trait_meta", "trait_name",
@@ -1388,10 +1388,10 @@ print.tidybreed_table_desc <- function(x, ...) {
   rows_str <- if (is.na(n_rows)) "? rows" else paste0(format(n_rows, big.mark = ","), " rows")
   cols_str <- paste0(format(n_cols, big.mark = ","), " cols")
 
-  left    <- paste0("── ", tbl_name, " ")
-  right   <- paste0(" ", rows_str, " · ", cols_str, " ")
+  left    <- paste0("\u2500\u2500 ", tbl_name, " ")
+  right   <- paste0(" ", rows_str, " \u00B7 ", cols_str, " ")
   fill_w  <- max(2L, width - nchar(left) - nchar(right))
-  cat(left, strrep("─", fill_w), right, "\n", sep = "")
+  cat(left, strrep("\u2500", fill_w), right, "\n", sep = "")
 
   if (!is.null(tbl_desc) && nzchar(tbl_desc)) {
     cat("  ", tbl_desc, "\n", sep = "")
@@ -1406,7 +1406,7 @@ print.tidybreed_table_desc <- function(x, ...) {
 
   col_w  <- max(nchar("Column"),      max(nchar(x$column_name), na.rm = TRUE))
   type_w <- max(nchar("Type"),
-                max(nchar(ifelse(is.na(x$column_type), "—", x$column_type)), na.rm = TRUE))
+                max(nchar(ifelse(is.na(x$column_type), "\u2014", x$column_type)), na.rm = TRUE))
 
   hdr <- paste0(
     "  ", formatC("Column",      width = -col_w),  "  ",
@@ -1415,7 +1415,7 @@ print.tidybreed_table_desc <- function(x, ...) {
   )
   cat(hdr, "\n")
   sep_w <- max(2L, width - 2L)
-  cat("  ", strrep("─", sep_w), "\n", sep = "")
+  cat("  ", strrep("\u2500", sep_w), "\n", sep = "")
 
   for (i in seq_len(nrow(x))) {
     ctype <- if (is.na(x$column_type[i])) "(stale)" else x$column_type[i]

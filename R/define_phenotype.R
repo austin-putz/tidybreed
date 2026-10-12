@@ -400,7 +400,7 @@ define_phenotype <- function(pop,
     if (!is.null(residual_var))
       stop(
         "`derived_formula` phenotypes have no independent residual variance. ",
-        "Do not supply `residual_var` — residual properties are determined by ",
+        "Do not supply `residual_var` \u2014 residual properties are determined by ",
         "the component phenotypes.",
         call. = FALSE
       )

@@ -26,3 +26,7 @@
 ^\.markdownlint\.json$
 ^\.quarto$
 ^\.\.Rcheck$
+^\.vscode$
+^GEMINI\.md$
+^package_summary\.md$
+^AGENTS\.md$

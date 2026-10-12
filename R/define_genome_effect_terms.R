@@ -211,7 +211,7 @@ define_genome_effect_terms <- function(pop,
   if (!isTRUE(allow_reserved_owner) && effect_owner %in% GE_RESERVED_OWNERS) {
     stop("'", effect_owner, "' is a reserved effect owner written by the ",
          "package itself (", paste(GE_RESERVED_OWNERS, collapse = ", "), "). ",
-         "Choose your own effect_owner — owners always sum, so a separate one ",
+         "Choose your own effect_owner \u2014 owners always sum, so a separate one ",
          "costs nothing and keeps define_additive_effects() from deleting your ",
          "rows.", call. = FALSE)
   }
@@ -473,7 +473,7 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
     i  <- rows[bad[1]]
     cc <- counts[[chr[bad[1]]]]
     stop("term_id '", labels[members$id_genome_effect[i]], "' locus '",
-         members$locus_name[i], "': copy_count_value cannot be inferred — ",
+         members$locus_name[i], "': copy_count_value cannot be inferred \u2014 ",
          "chromosome '", chr[bad[1]], "' can carry ",
          paste(cc, collapse = " or "),
          " copies, so dosage alone is not a genotype state here. Supply ",
@@ -969,7 +969,7 @@ GE_ORIGIN_COLS <- c("term_id", "locus_name", "line_match_type", "line_name",
   if (!all(c("genome_effects", "genome_effect_members",
              "genome_effect_member_origins") %in% pop$tables)) {
     stop("The genome-effect tables do not exist yet. Call define_genome() ",
-         "before defining effects — genome_effect_members declares a foreign ",
+         "before defining effects \u2014 genome_effect_members declares a foreign ",
          "key to genome_meta.locus_id.", call. = FALSE)
   }
   invisible(NULL)

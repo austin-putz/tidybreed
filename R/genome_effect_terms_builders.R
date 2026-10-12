@@ -98,7 +98,7 @@ ad_terms <- function(locus_name, a, d = 0, p,
   if (isTRUE(report)) {
     mu <- if (coding == "functional") a * (2 * p - 1) + 2 * p * (1 - p) * d
           else rep(0, n)
-    message("Implied genetic mean (", coding, " coding), reported only — ",
+    message("Implied genetic mean (", coding, " coding), reported only \u2014 ",
             "written to no table: ",
             paste0(locus_name, " mu = ", format(round(mu, 6)),
                    collapse = "; "),
@@ -391,7 +391,7 @@ aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
 
   if (isTRUE(report) && coding == "functional") {
     mu <- e[k] * (2 * q1[k] - 1) * (2 * q2[k] - 1)
-    message("Implied genetic mean (functional coding), reported only — ",
+    message("Implied genetic mean (functional coding), reported only \u2014 ",
             "written to no table: ",
             paste0("(", l1[k], ", ", l2[k], ") mu = ", format(round(mu, 6)),
                    collapse = "; "),

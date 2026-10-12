@@ -369,7 +369,7 @@ define_additive_effects <- function(tbl,
          call. = FALSE)
   }
   if (nrow(loci_df) == 0L) {
-    stop("No loci selected — your filter returned zero rows.", call. = FALSE)
+    stop("No loci selected \u2014 your filter returned zero rows.", call. = FALSE)
   }
   # Everything downstream (effects, p_base, the written members) is in
   # locus_id order, so take the names from genome_meta rather than from the
@@ -820,8 +820,8 @@ GE_GENERATED_OWNER <- "generated"
   if (length(hits) == 0L) return(invisible(NULL))
   warning("This call left two additive variants that differ only in the ",
           "parent dimension: ", paste(unique(hits), collapse = "; "),
-          ". Both stand — the qualified one applies to its parent's copies and ",
-          "the other falls back for the rest — which is a legal fallback pair ",
+          ". Both stand \u2014 the qualified one applies to its parent's copies and ",
+          "the other falls back for the rest \u2014 which is a legal fallback pair ",
           "but is rarely what re-running the same call with a new ",
           "parent_origin was meant to do. To drop the unwanted variant, use ",
           "remove_generated_effects(pop, trait_name, line_name = , ",

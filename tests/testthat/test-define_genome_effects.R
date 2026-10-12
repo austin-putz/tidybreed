@@ -271,9 +271,23 @@ test_that("G3: an additive target far below the dominance one is stored exactly 
   on.exit(close_pop(pop))
   set_genotypes(pop, ind_ids(pop), "Locus_1",
                 matrix(rep(c(0, 0, 0, 1, 2), 40), ncol = 1))
-  set.seed(2)
-  quiet(define_genome_effects(gm_at(pop, 1), "T1", G_A = 1e-24, G_D = 1,
-                              base_tbl = gen0(pop), warn_bounds = NULL))
+  # At this ratio whether the calibration itself converges depends on the
+  # draw and the platform's rounding (an honest refusal); test storage on
+  # the first seed that calibrates.
+  done <- FALSE
+  for (s in 1:30) {
+    set.seed(s)
+    done <- tryCatch({
+      quiet(define_genome_effects(gm_at(pop, 1), "T1", G_A = 1e-24, G_D = 1,
+                                  base_tbl = gen0(pop), warn_bounds = NULL))
+      TRUE
+    }, error = function(e) {
+      expect_match(conditionMessage(e), "did not reach the 'additive' target")
+      FALSE
+    })
+    if (done) break
+  }
+  expect_true(done)
   sm <- stored_model(pop, "T1")
   expect_equal(sm$p, 0.3)
   g <- genic_blocks(sm)

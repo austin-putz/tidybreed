@@ -202,7 +202,7 @@ remove_rows <- function(tbl, tables = NULL, confirm_all = FALSE,
       conn, paste0("SELECT COUNT(*) AS n FROM ", table_name)
     )$n
     stop(
-      "remove_rows(): no filter applied — this would delete ALL ",
+      "remove_rows(): no filter applied \u2014 this would delete ALL ",
       n_total, " row", if (n_total != 1L) "s" else "",
       " from '", table_name, "'.\n",
       "  To delete an entire table, pass confirm_all = TRUE:\n",

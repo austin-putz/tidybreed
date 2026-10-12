@@ -44,7 +44,7 @@ print.tidybreed_table <- function(x, n = 10, c = 10, ...) {
   n_cols   <- length(tbl_cols)
 
   cat("<tidybreed_table: ", x$table_name, ">  [",
-      n_rows, " row", if (n_rows != 1) "s" else "", " × ",
+      n_rows, " row", if (n_rows != 1) "s" else "", " \u00D7 ",
       n_cols, " field", if (n_cols != 1) "s" else "", "]\n", sep = "")
 
   if (length(x$pending_filter) > 0) {
@@ -62,8 +62,8 @@ print.tidybreed_table <- function(x, n = 10, c = 10, ...) {
     remaining <- tbl_cols[(c + 1):n_cols]
     shown     <- min(5L, length(remaining))
     names_str <- paste(remaining[seq_len(shown)], collapse = ", ")
-    if (length(remaining) > shown) names_str <- paste0(names_str, ", …")
-    cat("# … with ", n_cols - c, " more field",
+    if (length(remaining) > shown) names_str <- paste0(names_str, ", \u2026")
+    cat("# \u2026 with ", n_cols - c, " more field",
         if (n_cols - c != 1) "s" else "", ": ", names_str, "\n", sep = "")
   }
 
@@ -623,7 +623,7 @@ mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
           "Tibble for field '", field_name, "' contains ", length(unknown),
           " ID(s) not found in '", table_name, "': ",
           paste(head(unknown, 5), collapse = ", "),
-          if (length(unknown) > 5) ", …" else "",
+          if (length(unknown) > 5) ", \u2026" else "",
           call. = FALSE
         )
       }
@@ -644,7 +644,7 @@ mutate_table <- function(tbl_obj, ..., .set_default = FALSE) {
     } else {
       # --- Plain vector (length > 1) — error ---
       stop(
-        "Plain vectors are not allowed in mutate_table() — row order is not ",
+        "Plain vectors are not allowed in mutate_table() \u2014 row order is not ",
         "guaranteed and can silently assign wrong values to wrong rows.\n\n",
         "Use a tibble with the primary key column instead:\n",
         "  mutate_table(", field_name, " = tibble::tibble(\n",

@@ -76,7 +76,7 @@ define_chip <- function(tbl, chip_name, col_name = paste0("is_", chip_name)) {
   }
   if (nrow(collected) == 0L) {
     stop(
-      "No loci selected — your filter returned zero rows. ",
+      "No loci selected \u2014 your filter returned zero rows. ",
       "Check the filter before piping into define_chip().",
       call. = FALSE
     )

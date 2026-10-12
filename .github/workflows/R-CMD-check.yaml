@@ -47,10 +47,9 @@ jobs:
 
       - uses: r-lib/actions/check-r-package@v2
         with:
-          # tidybreed is pre-1.0 and currently carries a known non-ASCII WARNING
-          # (em-dashes and box-drawing characters in R/). Fail only on genuine
-          # ERRORs until that cleanup lands, then tighten this to '"warning"'.
-          error-on: '"error"'
+          # Fail on WARNINGs as well as ERRORs (the non-ASCII warning was fixed
+          # in 0.76.4). NOTEs such as "New submission" do not fail the run.
+          error-on: '"warning"'
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
 

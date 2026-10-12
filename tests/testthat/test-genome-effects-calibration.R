@@ -530,32 +530,41 @@ test_that("G6. One trait, G_A = 4, original-unit floor 1: the standardised resid
 
 
 test_that("The stored additive coefficients are verified, not recovered by cancellation (review r6 F1)", {
-  # Genic: B_alpha is stored as is, so a target 1e-24 beside G_D = 1 is exact
-  # (recovering it as (B_alpha - C) + C missed by 2e-4).
-  set.seed(2)
+  # The extreme cases use hand-built calibration results, so they test the
+  # storage step alone: whether .na_calibrate() itself reaches a 1e-24
+  # target beside G_D = 1 depends on the platform's last-bit rounding (it
+  # refused on GitHub's R 4.6.1, which this test used to rely on not doing).
+  cal_of <- function(B_alpha, B_d, A) {
+    list(B_alpha = matrix(B_alpha), B_d = matrix(B_d), B_aa = NULL,
+         delivered = list(A = matrix(A)))
+  }
+
+  # Genic: B_alpha is stored as is, so a target 1e-24 beside a dominance
+  # effect of 1 is exact (recovering it as (B_alpha - C) + C missed by 2e-4).
   an  <- .na_anchors("genic", p = 0.3)
-  cal <- .na_calibrate(an, matrix(1e-24), matrix(1), B_a = matrix(stats::rnorm(1)),
-                       z = matrix(stats::rnorm(1)))
-  cal <- .na_store_alpha(cal, an, 0.3, matrix(1e-24))
-  expect_identical(cal$alpha_stored, cal$B_alpha)
+  a0  <- sqrt(1e-24 / 0.42)
+  cal <- .na_store_alpha(cal_of(a0, 1, 1e-24), an, 0.3, matrix(0.42 * a0^2))
+  expect_identical(cal$alpha_stored, matrix(a0))
   expect_lt(abs(0.42 * cal$alpha_stored[1, 1]^2 / 1e-24 - 1), 1e-12)
 
   # Realised, out of HWE (observed b 0.125, HWE b 0.4): the realised
   # coefficient is the stored one minus the coupling difference, which
-  # carries the target at ordinary ratios and is refused where it cannot.
+  # carries the target at ordinary ratios ...
   X  <- matrix(rep(c(0, 0, 0, 1, 2), 8), ncol = 1)
   ar <- .na_anchors("realised", X = X)
-  store <- function(ga, seed) {
-    set.seed(seed)
-    c1 <- .na_calibrate(ar, matrix(ga), matrix(1), B_a = matrix(stats::rnorm(1)),
-                        z = matrix(stats::rnorm(1)))
-    .na_store_alpha(c1, ar, ar$p, matrix(ga))
-  }
-  ok <- store(1e-6, 1)
+  set.seed(1)
+  ok <- .na_store_alpha(
+    .na_calibrate(ar, matrix(1e-6), matrix(1), B_a = matrix(stats::rnorm(1)),
+                  z = matrix(stats::rnorm(1))),
+    ar, ar$p, matrix(1e-6))
   d_shift <- (0.4 - ar$b) * ok$B_d[1, 1]
   expect_equal(ok$alpha_stored[1, 1], ok$B_alpha[1, 1] + d_shift)
   expect_equal(ok$delivered$A[1, 1], 1e-6, tolerance = 1e-10)
-  expect_error(store(1e-24, 5), "cannot be stored exactly.*Nothing was written")
+  # ... and is refused where it cannot: B_alpha 1e-12 beside a shift of
+  # 0.275 keeps about four digits once stored.
+  tiny <- cal_of(1e-12, 1, NA_real_)
+  expect_error(.na_store_alpha(tiny, ar, ar$p, ar$A$cov(tiny$B_alpha)),
+               "cannot be stored exactly.*Nothing was written")
 })
 
 test_that("A zero dominance or A x A block has no anchor and zero coefficients (review r6 F2)", {

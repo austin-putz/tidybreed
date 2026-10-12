@@ -246,7 +246,7 @@ add_index <- function(tbl,
 
   if (length(missing_info) > 0) {
     stop(
-      "Cannot compute index '", index_name, "' — some individuals are missing ",
+      "Cannot compute index '", index_name, "' \u2014 some individuals are missing ",
       "values for required traits in '", tbl$table_name, "':\n",
       paste(missing_info, collapse = "\n"), "\n",
       "Ensure all index traits have values for all individuals before calling ",

@@ -165,7 +165,7 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
 
   founder_haps_long <- dplyr::collect(tbl)
   if (nrow(founder_haps_long) == 0L) {
-    stop("No haplotypes selected — your filter returned zero rows.", call. = FALSE)
+    stop("No haplotypes selected \u2014 your filter returned zero rows.", call. = FALSE)
   }
 
   # Reconstruct a haplotype x locus allele matrix from the long founder pool.

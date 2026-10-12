@@ -106,7 +106,7 @@ print.tidybreed_pop <- function(x, ...) {
   # A dead connection: report and stop before touching the database.
   if (!DBI::dbIsValid(x$db_conn)) {
     cat("  Database   ", db_label, "  [disconnected]\n", sep = "")
-    cat(strrep("─", width), "\n", sep = "")
+    cat(strrep("\u2500", width), "\n", sep = "")
     return(invisible(x))
   }
 
@@ -137,7 +137,7 @@ print.tidybreed_pop <- function(x, ...) {
       ))
       if (len_cm > 0) parts <- c(parts, paste0(fmt(len_cm), " cM"))
     }
-    cat("\n  Genome     ", paste(parts, collapse = " · "), "\n", sep = "")
+    cat("\n  Genome     ", paste(parts, collapse = " \u00B7 "), "\n", sep = "")
 
     if ("founder_haplotypes" %in% tables) {
       # haplotype_id is unique only within a line; count (line_name, haplotype_id) pairs.
@@ -170,7 +170,7 @@ print.tidybreed_pop <- function(x, ...) {
                             if (n_causal == 1) "causal locus" else "causal loci")
   )
   if (length(model_parts) > 0)
-    cat("  Model      ", paste(model_parts, collapse = " · "), "\n", sep = "")
+    cat("  Model      ", paste(model_parts, collapse = " \u00B7 "), "\n", sep = "")
 
   # ── Individuals ─────────────────────────────────────────────────────────────
   n_ind <- if ("ind_meta" %in% tables) n_of("SELECT COUNT(*) FROM ind_meta") else 0
@@ -183,7 +183,7 @@ print.tidybreed_pop <- function(x, ...) {
       error = function(e) NULL)
     if (!is.null(by_sex) && nrow(by_sex) > 0)
       cat("    by sex     ",
-          paste(paste(vapply(by_sex$n, fmt, character(1)), by_sex$sex), collapse = " · "),
+          paste(paste(vapply(by_sex$n, fmt, character(1)), by_sex$sex), collapse = " \u00B7 "),
           "\n", sep = "")
 
     by_line <- tryCatch(
@@ -192,7 +192,7 @@ print.tidybreed_pop <- function(x, ...) {
       error = function(e) NULL)
     if (!is.null(by_line) && nrow(by_line) > 1)
       cat("    by line    ",
-          paste(paste(by_line$line_name, vapply(by_line$n, fmt, character(1))), collapse = " · "),
+          paste(paste(by_line$line_name, vapply(by_line$n, fmt, character(1))), collapse = " \u00B7 "),
           "\n", sep = "")
   }
 
@@ -204,15 +204,15 @@ print.tidybreed_pop <- function(x, ...) {
     .tb_rec(conn, tables, "ind_index",     "index",      fmt)
   )
   if (length(rec_parts) > 0)
-    cat("\n  Records    ", paste(rec_parts, collapse = " · "), "\n", sep = "")
+    cat("\n  Records    ", paste(rec_parts, collapse = " \u00B7 "), "\n", sep = "")
 
   # ── Tool dirs ───────────────────────────────────────────────────────────────
   tool_dirs <- x$run_dirs[names(x$run_dirs) != "base"]
   if (length(tool_dirs) > 0)
     cat("  Tool dirs  ", paste(names(tool_dirs), collapse = ", "), "\n", sep = "")
 
-  cat("\n  schema(pop) · describe_table(pop, \"name\")\n")
-  cat(strrep("─", width), "\n", sep = "")
+  cat("\n  schema(pop) \u00B7 describe_table(pop, \"name\")\n")
+  cat(strrep("\u2500", width), "\n", sep = "")
 
   invisible(x)
 }

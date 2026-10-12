@@ -316,7 +316,7 @@ define_genome_effects <- function(tbl,
          call. = FALSE)
   }
   if (nrow(loci_df) == 0L) {
-    stop("No loci selected — your filter returned zero rows.", call. = FALSE)
+    stop("No loci selected \u2014 your filter returned zero rows.", call. = FALSE)
   }
   genome_order <- DBI::dbGetQuery(conn,
     "SELECT locus_id, locus_name FROM genome_meta ORDER BY locus_id")

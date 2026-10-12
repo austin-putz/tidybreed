@@ -62,9 +62,9 @@
       close <- agrep(u, known_traits, ignore.case = TRUE, value = TRUE,
                      max.distance = list(cost = 2, all = 2))
       if (length(close) > 0)
-        paste0("  '", u, "' → did you mean: ", paste(head(close, 3), collapse = ", "), "?")
+        paste0("  '", u, "' \u2192 did you mean: ", paste(head(close, 3), collapse = ", "), "?")
       else
-        paste0("  '", u, "' → not found in trait_meta")
+        paste0("  '", u, "' \u2192 not found in trait_meta")
     }, character(1))
     stop(
       "Unknown trait name(s) in `formula_tgv = \"", formula_tgv, "\"`:\n",
@@ -210,9 +210,9 @@
       close <- agrep(u, known_phenos, ignore.case = TRUE, value = TRUE,
                      max.distance = list(cost = 2, all = 2))
       if (length(close) > 0)
-        paste0("  '", u, "' → did you mean: ", paste(head(close, 3), collapse = ", "), "?")
+        paste0("  '", u, "' \u2192 did you mean: ", paste(head(close, 3), collapse = ", "), "?")
       else
-        paste0("  '", u, "' → not found in phenotype_meta")
+        paste0("  '", u, "' \u2192 not found in phenotype_meta")
     }, character(1))
     warning(
       "Unknown phenotype name(s) in `formula = \"", formula, "\"`:\n",

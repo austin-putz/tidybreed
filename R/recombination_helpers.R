@@ -88,7 +88,7 @@ build_chr_info <- function(locus_map) {
     stop(
       "Recombination rate lambda = ", signif(lambda, 4),
       " exceeds the supported ceiling (30 Morgans / 3000 cM per chromosome). ",
-      "Check cM_per_Mb / the genetic map — a per-chromosome genetic length above ",
+      "Check cM_per_Mb / the genetic map \u2014 a per-chromosome genetic length above ",
       "3000 cM is almost certainly a units error.",
       call. = FALSE
     )

@@ -10,6 +10,8 @@
 #' @import duckdb
 #' @useDynLib tidybreed, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
+#' @importFrom stats sd setNames
+#' @importFrom utils head read.table write.table
 ## usethis namespace: end
 NULL
 
@@ -60,10 +62,10 @@ NULL
       width = 72
     ),
     paste0("  ", cli::col_grey("Tidy Breeding Program Simulation")),
-    paste0("  ", cli::col_grey("License: MIT · No warranty; use at your own risk")),
+    paste0("  ", cli::col_grey("License: MIT \u00B7 No warranty; use at your own risk")),
     "",
     paste0("  ", cli::style_bold("Citation:"), "  citation(\"tidybreed\")"),
-    paste0("  ", cli::style_bold("Help:    "), "  ?tidybreed  ·  browseVignettes(\"tidybreed\")"),
+    paste0("  ", cli::style_bold("Help:    "), "  ?tidybreed  \u00B7  browseVignettes(\"tidybreed\")"),
     "",
     paste0("  ", cli::style_bold("Backend: "), "  DuckDB ", duck_ver),
     paste0("  ", cli::style_bold("Storage: "), "  All data lives on disk in a .duckdb file, not in R memory"),

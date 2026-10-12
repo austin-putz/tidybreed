@@ -275,7 +275,7 @@ add_ebv <- function(tbl,
     message("Stored ", nrow(ebv_df), " EBV record(s) in ind_ebv",
             if (n_written < nrow(ebv_df))
               paste0(" (", nrow(ebv_df) - n_written, " NA)"),
-            " — model = '", model, "'.")
+            " \u2014 model = '", model, "'.")
   }
 
   invisible(pop)
@@ -367,7 +367,7 @@ ebv_parent_avg <- function(pop, subset_ids, trait_name, model, eval_nums) {
 
       if (is.na(p1_ebv) || is.na(p2_ebv)) {
         warning("Individual '", id, "' trait '", t,
-                "': one or both parent EBVs missing — EBV set to NA.",
+                "': one or both parent EBVs missing \u2014 EBV set to NA.",
                 call. = FALSE)
         pa_val <- NA_real_
       } else {
@@ -515,7 +515,7 @@ ebv_blupf90 <- function(pop, subset_ids, trait_name, model, eval_nums,
   message("Parsing solutions (animal effect = ", animal_effect_num, ")...")
   ebv_df <- parse_blupf90_solutions(
     eval_dir          = eval_dir,
-    trait             = trait,
+    trait_name        = trait,
     animal_effect_num = animal_effect_num,
     all_ped_ids       = all_ped_ids,
     model             = model,

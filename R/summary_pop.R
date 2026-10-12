@@ -100,20 +100,20 @@ print.tidybreed_summary <- function(x, ...) {
   cat("  Database :", x$db_path, "\n")
 
   stats <- paste0("  Tables   : ", x$n_tables)
-  if (!is.na(x$n_ind))    stats <- paste0(stats, "  │  Individuals: ", format(x$n_ind,  big.mark = ","))
-  if (!is.na(x$n_loci))   stats <- paste0(stats, "  │  Loci: ",         format(x$n_loci, big.mark = ","))
-  if (!is.na(x$n_traits)) stats <- paste0(stats, "  │  Traits: ",       x$n_traits)
+  if (!is.na(x$n_ind))    stats <- paste0(stats, "  \u2502  Individuals: ", format(x$n_ind,  big.mark = ","))
+  if (!is.na(x$n_loci))   stats <- paste0(stats, "  \u2502  Loci: ",         format(x$n_loci, big.mark = ","))
+  if (!is.na(x$n_traits)) stats <- paste0(stats, "  \u2502  Traits: ",       x$n_traits)
   cat(stats, "\n")
 
   for (tbl_name in names(x$tables)) {
     cat("\n")
     tbl <- x$tables[[tbl_name]]
 
-    left  <- paste0("── ", tbl_name, " ")
+    left  <- paste0("\u2500\u2500 ", tbl_name, " ")
     right <- paste0(" ", format(tbl$n_rows, big.mark = ","),
-                    " rows · ", format(tbl$n_cols, big.mark = ","), " cols")
+                    " rows \u00B7 ", format(tbl$n_cols, big.mark = ","), " cols")
     fill_w <- max(2L, width - nchar(left) - nchar(right))
-    cat(left, strrep("─", fill_w), right, "\n", sep = "")
+    cat(left, strrep("\u2500", fill_w), right, "\n", sep = "")
 
     if (!is.null(tbl$description) && nzchar(tbl$description)) {
       cat("  ", tbl$description, "\n", sep = "")
@@ -152,9 +152,9 @@ print.tidybreed_summary <- function(x, ...) {
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 .tb_ruler <- function(title, width) {
-  left   <- paste0("── ", title, " ")
+  left   <- paste0("\u2500\u2500 ", title, " ")
   fill_w <- max(2L, width - nchar(left))
-  cat(left, strrep("─", fill_w), "\n", sep = "")
+  cat(left, strrep("\u2500", fill_w), "\n", sep = "")
 }
 
 
@@ -279,7 +279,7 @@ print.tidybreed_summary <- function(x, ...) {
     max_val <- safe_str(row$max)
     min_str <- if (is.na(min_val)) "?" else min_val
     max_str <- if (is.na(max_val)) "?" else max_val
-    sprintf('%d unique  "%s" … "%s"%s', n_unique, min_str, max_str, na_sfx)
+    sprintf('%d unique  "%s" \u2026 "%s"%s', n_unique, min_str, max_str, na_sfx)
 
   } else if (is_dbl || (is_int && n_unique > max_values)) {
     sprintf("Min: %s  Q1: %s  Med: %s  Q3: %s  Max: %s%s",
@@ -291,7 +291,7 @@ print.tidybreed_summary <- function(x, ...) {
     max_val <- safe_str(row$max)
     min_str <- if (is.na(min_val)) "?" else min_val
     max_str <- if (is.na(max_val)) "?" else max_val
-    sprintf("%s → %s%s", min_str, max_str, na_sfx)
+    sprintf("%s \u2192 %s%s", min_str, max_str, na_sfx)
 
   } else if (n_unique <= max_values) {
     freq_str <- .tb_freq_table(conn, tbl_name, col_name, max_values)
