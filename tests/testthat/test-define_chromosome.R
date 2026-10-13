@@ -198,3 +198,42 @@ test_that("define_chromosome() does not perturb the RNG stream", {
 
   expect_equal(before, after)
 })
+
+test_that("an inheritance rule that changes existing individuals is refused", {
+  set.seed(1)
+  pop <- suppressMessages(
+    make_test_pop("dc_guard", n_loci = 30, n_chr = 3, n_males = 2, n_females = 2,
+                  n_haplotypes = 20))
+  on.exit(close_pop(pop), add = TRUE)
+  inh  <- function() DBI::dbGetQuery(pop$db_conn,
+    "SELECT * FROM chr_inheritance ORDER BY chr_name, offspring_sex NULLS FIRST, line_name NULLS FIRST")
+  before <- inh()
+  s0 <- .Random.seed
+
+  # Males of line A already carry two copies of chromosome 2.
+  expect_error(
+    define_chromosome(pop, "2", offspring_sex = "M",
+                      from_parent_1 = 0, from_parent_2 = 1),
+    "would change the copies of chromosome '2'.*sex M, line A: 1,1 -> 0,1")
+  expect_error(
+    define_chromosome(pop, "2", line_name = "A",
+                      from_parent_1 = 0, from_parent_2 = 1),
+    "sex F, line A: 1,1 -> 0,1; sex M, line A: 1,1 -> 0,1")
+  expect_identical(inh(), before)
+  expect_identical(.Random.seed, s0)
+
+  # Changing nothing for them is allowed: the same rule again, a rule for a
+  # line with no individuals, and any recombination rule.
+  expect_no_error(suppressMessages(
+    define_chromosome(pop, "2", from_parent_1 = 1, from_parent_2 = 1)))
+  expect_no_error(suppressMessages(
+    define_chromosome(pop, "2", line_name = "B",
+                      from_parent_1 = 0, from_parent_2 = 1)))
+  expect_no_error(suppressMessages(
+    define_chromosome(pop, "2", recombines = FALSE)))
+
+  # And the population still breeds.
+  expect_no_error(suppressMessages(add_offspring(pop,
+    data.frame(id_parent_1 = "A_1", id_parent_2 = "A_3", line_name = "A",
+               sex = "M"), seed = 1)))
+})

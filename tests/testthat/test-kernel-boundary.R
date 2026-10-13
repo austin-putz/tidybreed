@@ -69,11 +69,15 @@ test_that("a stored 2,0 fails explicitly in add_offspring", {
   suppressMessages({
     pop <- open_pop(pop_name = "kb_20o", db_name = ":memory:") |>
       define_genome(n_loci = 10, n_chr = 2, chr_len_Mb = 50) |>
-      define_founder_haplotypes(n_haplotypes = 10, method = "fixed") |>
-      get_table("founder_haplotypes") |>
-      add_founders(n_males = 2, n_females = 2, line_name = "A")
-    # Introduce the unimplemented rule AFTER plain-autosome founders exist.
+      define_founder_haplotypes(n_haplotypes = 10, method = "fixed")
+    # Chromosome 1 is X-like for every line, set before any founder exists.
     pop <- define_chromosome(pop, "1", offspring_sex = "M",
+                             from_parent_1 = 0, from_parent_2 = 1)
+    pop <- pop |> get_table("founder_haplotypes") |>
+      add_founders(n_males = 2, n_females = 2, line_name = "A")
+    # The unimplemented rule, for the offspring's line only: define_chromosome()
+    # refuses a rule that would change the copies existing individuals carry.
+    pop <- define_chromosome(pop, "1", offspring_sex = "M", line_name = "F1",
                              from_parent_1 = 2, from_parent_2 = 0)
   })
   on.exit(close_pop(pop), add = TRUE)

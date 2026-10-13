@@ -1,3 +1,14 @@
+# tidybreed 0.76.10 (2026-10-12)
+
+* `define_chromosome()` refuses an inheritance rule that would change the
+  copies of a chromosome that existing individuals already carry. Those
+  individuals' haplotypes were written under the old rule, so the call used
+  to succeed and breeding from them then failed in `add_offspring()`. The
+  error names each affected sex and line with its old and new copy counts,
+  and nothing is written. A rule that changes no existing individual (the
+  same rule again, or a rule for a line with no individuals yet) and any
+  recombination rule are still accepted.
+
 # tidybreed 0.76.9 (2026-10-12)
 
 Documentation of `define_genome()` and `define_chromosome()`; no change to any

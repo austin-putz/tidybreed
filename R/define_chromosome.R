@@ -47,10 +47,13 @@
 #' the parent's.
 #'
 #' **Timing.** Founders and offspring are written with the rules in force at
-#' the time. A rule changed after [add_founders()] is accepted, but the
-#' existing animals keep the copies they were given, so breeding from them
-#' then fails ("expected 10 [rows] given chr_inheritance rules"). Set every
-#' rule first.
+#' the time, so set every inheritance rule before [add_founders()]. Once
+#' individuals exist, an inheritance call that would change the copies any of
+#' them carry is refused (nothing is written): their stored haplotypes would
+#' no longer match, and breeding from them would fail. A call that changes
+#' nothing for existing individuals, such as a rule for a line with no
+#' individuals yet, is still allowed. Recombination rules can be changed at
+#' any time; they apply to gametes made afterwards.
 #'
 #' Every write is checked in the same transaction (one rule per key, both
 #' sexes resolvable, at most 2 copies); a rejected call leaves the previous
@@ -269,6 +272,12 @@ define_chromosome <- function(pop, chr_name,
   exists_n <- DBI::dbGetQuery(conn,
     sprintf("SELECT COUNT(*) AS n FROM %s WHERE %s", table, key_pred))$n
 
+  # Animals already written carry the copies the rules gave them, so a rule
+  # that changes them would break every later mating. Compared after the
+  # write, before COMMIT: a harmless call (an identical rule, a rule for a
+  # line with no animals yet) still goes through.
+  if (has_inheritance) karyo_before <- .dc_karyotypes(conn, chr_name)
+
   if (!overwrite && exists_n > 0L) {
     stop(sprintf(
       "define_chromosome(): a %s row already exists for (chr_name=%s, %s=%s, line_name=%s) and overwrite = FALSE.",
@@ -285,10 +294,64 @@ define_chromosome <- function(pop, chr_name,
     "INSERT INTO %s (%s) SELECT %s FROM %s", table, insert_cols, insert_cols, tmp_tbl))
 
   validator(conn)
+  if (has_inheritance) {
+    .dc_refuse_changed_karyotypes(karyo_before, .dc_karyotypes(conn, chr_name),
+                                  chr_name)
+  }
 
   DBI::dbExecute(conn, "COMMIT")
   committed <- TRUE
 
   message(msg)
   invisible(pop)
+}
+
+
+#' Copy counts of one chromosome for every (sex, line) already in `ind_meta`
+#'
+#' Resolved exactly as [add_founders()] and [add_offspring()] resolve them, so
+#' the comparison sees what those animals actually carry.
+#'
+#' @return Data frame `sex, line_name, from_parent_1, from_parent_2`, ordered.
+#' @keywords internal
+#' @noRd
+.dc_karyotypes <- function(conn, chr_name) {
+  groups <- DBI::dbGetQuery(conn, paste(
+    "SELECT DISTINCT sex, line_name FROM ind_meta",
+    "ORDER BY sex NULLS FIRST, line_name NULLS FIRST"))
+  out <- groups
+  out$from_parent_1 <- integer(nrow(groups))
+  out$from_parent_2 <- integer(nrow(groups))
+  for (i in seq_len(nrow(groups))) {
+    sx <- if (is.na(groups$sex[i])) NULL else groups$sex[i]
+    ln <- if (is.na(groups$line_name[i])) NULL else groups$line_name[i]
+    r  <- resolve_chr_inheritance(conn, sx, ln)
+    r  <- r[r$chr_name == chr_name, , drop = FALSE]
+    out$from_parent_1[i] <- r$from_parent_1
+    out$from_parent_2[i] <- r$from_parent_2
+  }
+  out
+}
+
+#' Refuse an inheritance rule that changes animals already written
+#' @keywords internal
+#' @noRd
+.dc_refuse_changed_karyotypes <- function(before, after, chr_name) {
+  changed <- before$from_parent_1 != after$from_parent_1 |
+             before$from_parent_2 != after$from_parent_2
+  if (!any(changed)) return(invisible(NULL))
+  b <- before[changed, , drop = FALSE]
+  a <- after[changed, , drop = FALSE]
+  lab <- function(x) if (is.na(x)) "NULL" else x
+  what <- vapply(seq_len(nrow(b)), function(i) sprintf(
+    "sex %s, line %s: %d,%d -> %d,%d", lab(b$sex[i]), lab(b$line_name[i]),
+    b$from_parent_1[i], b$from_parent_2[i],
+    a$from_parent_1[i], a$from_parent_2[i]), character(1))
+  stop("define_chromosome() would change the copies of chromosome '", chr_name,
+       "' that existing individuals already carry (from_parent_1,",
+       "from_parent_2): ", paste(utils::head(what, 5L), collapse = "; "),
+       if (length(what) > 5L) "; ..." else "", ". Their haplotypes were ",
+       "written under the old rule, so breeding from them would fail. Set ",
+       "chromosome inheritance rules before add_founders(), in a new ",
+       "population. Nothing was written.", call. = FALSE)
 }

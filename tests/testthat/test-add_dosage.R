@@ -135,8 +135,10 @@ test_that("add_dosage does not error when chr_inheritance has a sex-linked row",
   pop <- make_dosage_pop(n_loci = 10)
   on.exit(close_pop(pop), add = TRUE)
 
+  # For a line with no individuals: define_chromosome() refuses a rule that
+  # would change the copies existing individuals carry.
   suppressMessages(
-    pop <- define_chromosome(pop, "1", offspring_sex = "M",
+    pop <- define_chromosome(pop, "1", offspring_sex = "M", line_name = "Z",
                              from_parent_1 = 0, from_parent_2 = 1))
 
   expect_no_error(pop |> get_table("ind_meta") |> add_dosage())

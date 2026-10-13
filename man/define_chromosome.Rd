@@ -100,10 +100,13 @@ are looked up with the offspring's sex and line, recombination rules with
 the parent's.
 
 \strong{Timing.} Founders and offspring are written with the rules in force at
-the time. A rule changed after \code{\link[=add_founders]{add_founders()}} is accepted, but the
-existing animals keep the copies they were given, so breeding from them
-then fails ("expected 10 \link[dplyr:rows]{rows} given chr_inheritance rules"). Set every
-rule first.
+the time, so set every inheritance rule before \code{\link[=add_founders]{add_founders()}}. Once
+individuals exist, an inheritance call that would change the copies any of
+them carry is refused (nothing is written): their stored haplotypes would
+no longer match, and breeding from them would fail. A call that changes
+nothing for existing individuals, such as a rule for a line with no
+individuals yet, is still allowed. Recombination rules can be changed at
+any time; they apply to gametes made afterwards.
 
 Every write is checked in the same transaction (one rule per key, both
 sexes resolvable, at most 2 copies); a rejected call leaves the previous

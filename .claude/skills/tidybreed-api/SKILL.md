@@ -119,7 +119,13 @@ supply `recombines` to write a `chr_recombination` row (keyed by `parent_sex`) â
 never both in one call (mixing them would make "which sex" ambiguous). Writes are
 transactional (delete-then-insert with `IS NOT DISTINCT FROM`, then validate, then
 commit; rollback on failure). `overwrite = TRUE` (default) upserts; `overwrite =
-FALSE` errors if the exact NULL-safe key already exists.
+FALSE` errors if the exact NULL-safe key already exists. **Guard (0.76.10):** an
+inheritance call is refused, before `COMMIT`, when it changes the resolved copy
+counts of the chromosome for any `(sex, line_name)` already in `ind_meta`
+(`.dc_karyotypes()` before vs after the write); existing haplotypes would no
+longer match and `add_offspring()` would fail. A call that changes no existing
+individual (an identical rule, a rule for a line with no individuals yet) passes.
+Recombination calls are never guarded â€” they affect only later gametes.
 
 ```r
 pop <- pop |>
