@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.11</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,10 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.11" id="tidybreed-07611-2026-10-13">tidybreed 0.76.11 (2026-10-13)<a class="anchor" aria-label="anchor" href="#tidybreed-07611-2026-10-13"></a></h2>
+<ul><li>Plan for review: <code>plans/line_specific_chr_rules_add_offspring.md</code>. <code><a href="../reference/add_offspring.html">add_offspring()</a></code> currently ignores a line-specific <code>chr_inheritance</code> or <code>chr_recombination</code> rule on a chromosome that is a plain autosome under the line-agnostic rules. Until the fix lands, <code>define_chromosome(line_name = )</code> takes effect in <code><a href="../reference/add_founders.html">add_founders()</a></code> but not in <code><a href="../reference/add_offspring.html">add_offspring()</a></code> for such chromosomes. No code change in this version.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.10" id="tidybreed-07610-2026-10-12">tidybreed 0.76.10 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-07610-2026-10-12"></a></h2>
 <ul><li>

@@ -1,5 +1,18 @@
 # Changelog
 
+## tidybreed 0.76.11 (2026-10-13)
+
+- Plan for review: `plans/line_specific_chr_rules_add_offspring.md`.
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  currently ignores a line-specific `chr_inheritance` or
+  `chr_recombination` rule on a chromosome that is a plain autosome
+  under the line-agnostic rules. Until the fix lands,
+  `define_chromosome(line_name = )` takes effect in
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  but not in
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  for such chromosomes. No code change in this version.
+
 ## tidybreed 0.76.10 (2026-10-12)
 
 - [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)

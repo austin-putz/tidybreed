@@ -149,7 +149,7 @@ look at the result.
 pop <- open_pop(pop_name = "A", db_name = ":memory:") |>
   define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmp7yuhM6/duckdb
+#> ℹ /tmp/RtmplKq43k/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -200,7 +200,7 @@ pop <- open_pop(pop_name = "B", db_name = ":memory:") |>
                 cM_per_Mb  = 1.2,
                 chr_names  = c("1", "2", "3", "X"))
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmp7yuhM6/duckdb
+#> ℹ /tmp/RtmplKq43k/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -221,7 +221,7 @@ pop <- open_pop(pop_name = "C", db_name = ":memory:") |>
                             min_allele_freq = 0.05,
                             max_allele_freq = 0.95)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmp7yuhM6/duckdb
+#> ℹ /tmp/RtmplKq43k/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -246,7 +246,7 @@ pop <- open_pop(pop_name = "fly", db_name = ":memory:") |>
   define_genome(n_loci = 400, n_chr = 4, chr_len_Mb = c(23, 46, 50, 1.4),
                 recombines_M = FALSE)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/Rtmp7yuhM6/duckdb
+#> ℹ /tmp/RtmplKq43k/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
