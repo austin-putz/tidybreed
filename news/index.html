@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,20 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.10" id="tidybreed-07610-2026-10-12">tidybreed 0.76.10 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-07610-2026-10-12"></a></h2>
+<ul><li>
+<code><a href="../reference/define_chromosome.html">define_chromosome()</a></code> refuses an inheritance rule that would change the copies of a chromosome that existing individuals already carry. Those individuals’ haplotypes were written under the old rule, so the call used to succeed and breeding from them then failed in <code><a href="../reference/add_offspring.html">add_offspring()</a></code>. The error names each affected sex and line with its old and new copy counts, and nothing is written. A rule that changes no existing individual (the same rule again, or a rule for a line with no individuals yet) and any recombination rule are still accepted.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.9" id="tidybreed-0769-2026-10-12">tidybreed 0.76.9 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0769-2026-10-12"></a></h2>
+<p>Documentation of <code><a href="../reference/define_genome.html">define_genome()</a></code> and <code><a href="../reference/define_chromosome.html">define_chromosome()</a></code>; no change to any result.</p>
+<ul><li>Both pages have runnable examples (previously <code>\dontrun{}</code>), including founders written under X/Y rules and a genome with no male recombination.</li>
+<li>
+<code><a href="../reference/define_genome.html">?define_genome</a></code> now says where loci go: split evenly across chromosomes whatever their lengths, evenly spaced within each, never at the ends. It also says how <code>chr_len_Mb</code> and <code>cM_per_Mb</code> become crossovers (Poisson, mean = genetic length in Morgans), and which tables it creates. The old list of tables left out <code>ind_crossover</code>, and internal notes on foreign keys were removed.</li>
+<li>
+<code><a href="../reference/define_chromosome.html">?define_chromosome</a></code> has a table of copy counts for X/Y, Z/W and mitochondria, and the order in which sex- and line-specific rules are chosen. <code>line_name</code> is described as working (it read “reserved”; line rules are used by <code><a href="../reference/add_founders.html">add_founders()</a></code> and <code><a href="../reference/add_offspring.html">add_offspring()</a></code>). It also warns that a rule changed after <code><a href="../reference/add_founders.html">add_founders()</a></code> is accepted, but breeding from the existing animals then fails.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.8" id="tidybreed-0768-2026-10-12">tidybreed 0.76.8 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0768-2026-10-12"></a></h2>
 <ul><li>

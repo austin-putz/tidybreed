@@ -1,5 +1,47 @@
 # Changelog
 
+## tidybreed 0.76.10 (2026-10-12)
+
+- [`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  refuses an inheritance rule that would change the copies of a
+  chromosome that existing individuals already carry. Those individuals’
+  haplotypes were written under the old rule, so the call used to
+  succeed and breeding from them then failed in
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md).
+  The error names each affected sex and line with its old and new copy
+  counts, and nothing is written. A rule that changes no existing
+  individual (the same rule again, or a rule for a line with no
+  individuals yet) and any recombination rule are still accepted.
+
+## tidybreed 0.76.9 (2026-10-12)
+
+Documentation of
+[`define_genome()`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+and
+[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md);
+no change to any result.
+
+- Both pages have runnable examples (previously `\dontrun{}`), including
+  founders written under X/Y rules and a genome with no male
+  recombination.
+- [`?define_genome`](https://austin-putz.github.io/tidybreed/reference/define_genome.md)
+  now says where loci go: split evenly across chromosomes whatever their
+  lengths, evenly spaced within each, never at the ends. It also says
+  how `chr_len_Mb` and `cM_per_Mb` become crossovers (Poisson, mean =
+  genetic length in Morgans), and which tables it creates. The old list
+  of tables left out `ind_crossover`, and internal notes on foreign keys
+  were removed.
+- [`?define_chromosome`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
+  has a table of copy counts for X/Y, Z/W and mitochondria, and the
+  order in which sex- and line-specific rules are chosen. `line_name` is
+  described as working (it read “reserved”; line rules are used by
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  and
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)).
+  It also warns that a rule changed after
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  is accepted, but breeding from the existing animals then fails.
+
 ## tidybreed 0.76.8 (2026-10-12)
 
 - [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
