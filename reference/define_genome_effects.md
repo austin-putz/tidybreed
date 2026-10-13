@@ -338,7 +338,7 @@ pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 200)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpOJ05Ue/duckdb
+#> ℹ /tmp/RtmpK5kjor/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.

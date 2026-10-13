@@ -1,5 +1,20 @@
 # Changelog
 
+## tidybreed 0.76.8 (2026-10-12)
+
+- [`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+  numbers `id_tgv` reproducibly. The evaluator’s final `GROUP BY`
+  returned its rows in whatever order DuckDB’s threads finished, and
+  `id_tgv` was assigned in that order, so two runs of the same seeded
+  script wrote the same genetic values under different `id_tgv`s. The
+  evaluator now returns its rows sorted by `id_ind`, `trait_name` and
+  `component_name`. A new determinism test compares whole `ind_tgv`
+  tables, ids included, across identical populations with
+  `expect_identical()`. `tgv_value` was already bit-identical and is
+  unchanged.
+- The genetic-models vignette sorts its `ind_tgv` preview by `id_tgv`,
+  so the printed table is the same on every render.
+
 ## tidybreed 0.76.7 (2026-10-12)
 
 - [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,12 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.8" id="tidybreed-0768-2026-10-12">tidybreed 0.76.8 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0768-2026-10-12"></a></h2>
+<ul><li>
+<code><a href="../reference/add_tgv.html">add_tgv()</a></code> numbers <code>id_tgv</code> reproducibly. The evaluator’s final <code>GROUP BY</code> returned its rows in whatever order DuckDB’s threads finished, and <code>id_tgv</code> was assigned in that order, so two runs of the same seeded script wrote the same genetic values under different <code>id_tgv</code>s. The evaluator now returns its rows sorted by <code>id_ind</code>, <code>trait_name</code> and <code>component_name</code>. A new determinism test compares whole <code>ind_tgv</code> tables, ids included, across identical populations with <code>expect_identical()</code>. <code>tgv_value</code> was already bit-identical and is unchanged.</li>
+<li>The genetic-models vignette sorts its <code>ind_tgv</code> preview by <code>id_tgv</code>, so the printed table is the same on every render.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.7" id="tidybreed-0767-2026-10-12">tidybreed 0.76.7 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0767-2026-10-12"></a></h2>
 <ul><li>

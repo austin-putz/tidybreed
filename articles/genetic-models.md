@@ -63,16 +63,16 @@ pop <- pop |>
 
 pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
 #> Computed TGV for 200 individuals on trait 'ADG' (additive, indicator, interaction).
-get_table(pop, "ind_tgv") |> collect() |> arrange(id_ind) |> head(6)
+get_table(pop, "ind_tgv") |> collect() |> arrange(id_tgv) |> head(6)
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1    214 A_1    ADG        interaction        -0.08
-#> 2    130 A_1    ADG        additive            0.42
-#> 3    416 A_1    ADG        indicator           0   
-#> 4    163 A_10   ADG        interaction         0   
-#> 5     38 A_10   ADG        additive            0.12
-#> 6    332 A_10   ADG        indicator           0.1
+#> 1      1 A_1    ADG        additive            0.42
+#> 2      2 A_1    ADG        indicator           0   
+#> 3      3 A_1    ADG        interaction        -0.08
+#> 4      4 A_10   ADG        additive            0.12
+#> 5      5 A_10   ADG        indicator           0.1 
+#> 6      6 A_10   ADG        interaction         0
 ```
 
 Each individual gets one value per component; the `ind_tgv_total` view
