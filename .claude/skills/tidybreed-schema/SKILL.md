@@ -200,7 +200,7 @@ supported — see `ind_meta.ploidy`.
 |---------------|----------|-----------------------------------------------------------|
 | chr_name      | VARCHAR  | FK to `genome_meta.chr_name` (R-enforced)                 |
 | offspring_sex | VARCHAR  | `NULL` = all/default; `'M'`/`'F'` — the **offspring** (carrier) sex |
-| line_name     | VARCHAR  | `NULL` = all lines; reserved for line-specific rules (crossbreeding) |
+| line_name     | VARCHAR  | `NULL` = all lines; else a rule for that line only (the offspring's line), resolved by `add_founders()` / `add_offspring()` |
 | from_parent_1 | UTINYINT | Absolute copies inherited from parent_1 (sire), at ploidy 2 |
 | from_parent_2 | UTINYINT | Absolute copies inherited from parent_2 (dam), at ploidy 2  |
 
@@ -225,7 +225,7 @@ parent of sex S makes gametes, does this chromosome recombine?"*
 |------------|---------|--------------------------------------------------------------|
 | chr_name   | VARCHAR | FK to `genome_meta.chr_name` (R-enforced)                    |
 | parent_sex | VARCHAR | `NULL` = both parents; `'M'`/`'F'` — the **producing-parent** sex |
-| line_name  | VARCHAR | `NULL` = all lines; reserved for line-specific rules         |
+| line_name  | VARCHAR | `NULL` = all lines; else a rule for that line only (the producing parent's line) |
 | recombines | BOOLEAN | TRUE if the chromosome recombines in that parent sex's meiosis |
 
 **Logical key** `(chr_name, parent_sex, line_name)`, NULL-normalized in R.

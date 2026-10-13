@@ -1,91 +1,131 @@
 #' Define a chromosome's inheritance or recombination rule
 #'
 #' @description
-#' Sets a non-default rule for one chromosome — sex chromosomes (X/Y, Z/W, X0/Z0)
-#' and organelles (mitochondria, plastids). [define_genome()] seeds every
-#' chromosome with the default diploid-autosome rule (one copy from each parent,
-#' recombining in both sexes); call `define_chromosome()` before [add_founders()]
-#' to override that default.
+#' Changes how one chromosome is passed on, for sex chromosomes (X/Y, Z/W,
+#' X0, Z0) and organelles (mitochondria, plastids). [define_genome()] starts
+#' every chromosome as a diploid autosome: one copy from each parent,
+#' recombining in both sexes. Call `define_chromosome()` after
+#' [define_genome()] and **before [add_founders()]**, once per rule that
+#' differs from that default.
 #'
-#' The rule is stored across two explicit long tables, and **each call sets
-#' exactly one concern**:
+#' Each call sets **one** of two things:
 #'
-#' * **Inheritance** (copy count): supply `from_parent_1` and `from_parent_2` —
-#'   the number of copies of this chromosome an offspring of `offspring_sex`
-#'   inherits from parent_1 (sire) and parent_2 (dam). Writes `chr_inheritance`.
-#' * **Recombination**: supply `recombines` — whether a parent of `parent_sex`
-#'   recombines this chromosome when making gametes. Writes `chr_recombination`.
+#' * **Inheritance**: give `from_parent_1` and `from_parent_2`, the number of
+#'   copies an offspring inherits from its sire (parent 1) and its dam
+#'   (parent 2), optionally for one `offspring_sex`. Writes
+#'   `chr_inheritance`.
+#' * **Recombination**: give `recombines`, whether a parent recombines this
+#'   chromosome when it makes gametes, optionally for one `parent_sex`.
+#'   Writes `chr_recombination`.
 #'
-#' Copy counts are **absolute** (correct at ploidy 2, which this version
-#' enforces): an autosome is `from_parent_1 = 1, from_parent_2 = 1`; a male's X is
-#' `0, 1`; a male's Y is `1, 0`; a female's Y is `0, 0`; maternal mitochondria are
-#' `0, 1`. The two concerns are kept in separate calls because "which sex" means
-#' the **offspring** for copy count but the **producing parent** for
-#' recombination — mixing them in one call would make that ambiguous.
+#' They are separate calls because "which sex" means different animals: the
+#' **offspring** for inheritance, the **parent** for recombination.
 #'
-#' @param pop A `tidybreed_pop` object.
-#' @param chr_name Character scalar. Must already exist as a `genome_meta.chr_name`
-#'   value (defined via [define_genome()]'s `chr_names` argument).
-#' @param offspring_sex `NULL` (default; the sex-agnostic default row), `"M"`, or
-#'   `"F"`. The **inheritance** row key — the offspring sex whose copy counts this
-#'   call sets. Only valid on an inheritance call.
-#' @param parent_sex `NULL` (default; both parent sexes), `"M"`, or `"F"`. The
-#'   **recombination** row key — the producing-parent sex whose recombination this
-#'   call sets. Only valid on a recombination call.
-#' @param line_name `NULL` (default; all lines) or a line name. Reserved for
-#'   line-specific rules (crossbreeding); resolves with the same precedence as the
-#'   sex dimension.
-#' @param from_parent_1,from_parent_2 Non-negative integers supplied **together**
-#'   on an inheritance call. Copies inherited from parent_1 (sire) and parent_2
-#'   (dam); their sum must be `<= 2` in this diploid release.
-#' @param recombines Single logical supplied on a recombination call. `TRUE` if
-#'   the chromosome recombines during gamete formation, `FALSE` for
-#'   non-recombining chromosomes (Y, W, MT, most organelles). For a genome-wide
-#'   achiasmatic sex, set `recombines_M`/`recombines_F` on [define_genome()]
-#'   instead of one call per chromosome.
-#' @param overwrite Logical. `TRUE` (default) upserts the row for this logical
-#'   key. `FALSE` errors if the exact `(chr_name, sex, line_name)` key already
-#'   exists (note: [define_genome()] pre-seeds the `(chr, NULL, NULL)` default
-#'   row, so `overwrite = FALSE` on a default-keyed call always collides — it is
-#'   meant for guarding *new* sex/line-specific rows).
+#' @details
+#' **Copy counts** are absolute numbers of copies, at most 2 in total:
 #'
-#' @return The `tidybreed_pop` (invisibly). Assign the result back.
+#' | Chromosome | `offspring_sex` | `from_parent_1` (sire) | `from_parent_2` (dam) |
+#' |---|---|---|---|
+#' | Autosome (the default) | either | 1 | 1 |
+#' | Mammalian X in males | `"M"` | 0 | 1 |
+#' | Mammalian Y in males | `"M"` | 1 | 0 |
+#' | Mammalian Y in females | `"F"` | 0 | 0 |
+#' | Avian Z in females | `"F"` | 1 | 0 |
+#' | Avian W in females | `"F"` | 0 | 1 |
+#' | Avian W in males | `"M"` | 0 | 0 |
+#' | Maternal mitochondria | either (`NULL`) | 0 | 1 |
 #'
-#' @seealso [define_genome()]
+#' Only the sexes that differ from the default need a rule: a mammalian X in
+#' females keeps the default `1, 1`. A chromosome a parent carries in one copy
+#' is passed on unchanged; one it carries in two copies recombines as
+#' `chr_recombination` says.
+#'
+#' **Which rule applies.** For an animal of sex S in line L, the most
+#' specific stored rule wins: `(S, L)`, then `(S, any line)`, then
+#' `(any sex, L)`, then the default `(any sex, any line)`. Inheritance rules
+#' are looked up with the offspring's sex and line, recombination rules with
+#' the parent's.
+#'
+#' **Timing.** Founders and offspring are written with the rules in force at
+#' the time. A rule changed after [add_founders()] is accepted, but the
+#' existing animals keep the copies they were given, so breeding from them
+#' then fails ("expected 10 [rows] given chr_inheritance rules"). Set every
+#' rule first.
+#'
+#' Every write is checked in the same transaction (one rule per key, both
+#' sexes resolvable, at most 2 copies); a rejected call leaves the previous
+#' rule in place. See the rules with `get_table(pop, "chr_inheritance")` and
+#' `get_table(pop, "chr_recombination")`.
+#'
+#' @param pop A `tidybreed_pop` with a genome from [define_genome()].
+#' @param chr_name Character scalar: a chromosome name from
+#'   [define_genome()]'s `chr_names` (e.g. `"X"`).
+#' @param offspring_sex Inheritance calls only: `"M"` or `"F"` for a rule that
+#'   applies to offspring of that sex, or `NULL` (default) for both.
+#' @param parent_sex Recombination calls only: `"M"` or `"F"` for a rule that
+#'   applies when a parent of that sex makes gametes, or `NULL` (default) for
+#'   both.
+#' @param line_name Optional line name: the rule applies only to animals of
+#'   that line (the offspring's line for inheritance, the parent's for
+#'   recombination), for crossbreeding designs whose lines differ. `NULL`
+#'   (default) applies to every line.
+#' @param from_parent_1,from_parent_2 Inheritance calls: whole numbers,
+#'   always given together, of copies from the sire (parent 1) and the dam
+#'   (parent 2). Their sum is 0, 1 or 2; see the table in *Details*.
+#' @param recombines Recombination calls: `TRUE` if the chromosome recombines
+#'   when a parent makes gametes, `FALSE` if it is passed on whole (a Y, a W).
+#'   To stop one sex recombining on every chromosome, use `recombines_M` /
+#'   `recombines_F` in [define_genome()] instead.
+#' @param overwrite Logical. `TRUE` (default) replaces an existing rule with
+#'   the same chromosome, sex and line. `FALSE` refuses instead, to guard
+#'   against redefining a rule by accident. Every chromosome already has a
+#'   default rule (both sexes, all lines) from [define_genome()], so
+#'   `overwrite = FALSE` is useful only for sex- or line-specific rules.
+#'
+#' @return The `tidybreed_pop`, invisibly. Assign it back.
+#'
+#' @seealso [define_genome()], [add_founders()], [add_offspring()].
 #'
 #' @examples
-#' \dontrun{
-#' pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
-#'   define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+#' # Mammalian X and Y: inheritance for the sexes that differ, and a
+#' # non-recombining Y
+#' pop <- open_pop(pop_name = "mammal", db_name = ":memory:") |>
+#'   define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100,
 #'                 chr_names = c("1", "X", "Y"))
-#'
-#' # Mammalian sex chromosomes — inheritance (override only the deviating sexes)
 #' pop <- pop |>
 #'   define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
 #'   define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
 #'   define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
-#'   # Y is non-recombining (both parent sexes)
 #'   define_chromosome("Y", recombines = FALSE)
+#' get_table(pop, "chr_inheritance")
 #'
-#' # Avian Z/W — females (ZW) are the heterogametic sex, males are ZZ
-#' pop_zw <- open_pop(pop_name = "chicken", db_name = ":memory:") |>
-#'   define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+#' # Founders are written with those rules: a male has one X copy and one Y
+#' set.seed(1)
+#' pop <- pop |> define_founder_haplotypes(n_haplotypes = 40)
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   add_founders(n_males = 2, n_females = 2, line_name = "A")
+#' close_pop(pop)
+#'
+#' # Avian Z and W: females (ZW) are the heterogametic sex
+#' pop <- open_pop(pop_name = "chicken", db_name = ":memory:") |>
+#'   define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100,
 #'                 chr_names = c("1", "Z", "W"))
-#' pop_zw <- pop_zw |>
+#' pop <- pop |>
 #'   define_chromosome("Z", offspring_sex = "F", from_parent_1 = 1, from_parent_2 = 0) |>
 #'   define_chromosome("W", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 1) |>
 #'   define_chromosome("W", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 0) |>
-#'   # W is non-recombining (both parent sexes)
 #'   define_chromosome("W", recombines = FALSE)
+#' close_pop(pop)
 #'
-#' # Mitochondria — maternal inheritance + non-recombining (separate calls)
-#' pop2 <- open_pop(pop_name = "test2", db_name = ":memory:") |>
-#'   define_genome(n_loci = 1000, n_chr = 2, chr_len_Mb = 100,
+#' # Mitochondria: one maternal copy in both sexes, never recombining
+#' pop <- open_pop(pop_name = "mito", db_name = ":memory:") |>
+#'   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = c(100, 0.02),
 #'                 chr_names = c("1", "MT"))
-#' pop2 <- pop2 |>
+#' pop <- pop |>
 #'   define_chromosome("MT", from_parent_1 = 0, from_parent_2 = 1) |>
 #'   define_chromosome("MT", recombines = FALSE)
-#' }
+#' close_pop(pop)
 #' @export
 define_chromosome <- function(pop, chr_name,
                               offspring_sex = NULL,

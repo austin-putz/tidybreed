@@ -2,7 +2,7 @@
 % Please edit documentation in R/define_genome.R
 \name{define_genome}
 \alias{define_genome}
-\title{Define the genome structure of a breeding population}
+\title{Define the genome of a population}
 \usage{
 define_genome(
   pop,
@@ -17,97 +17,125 @@ define_genome(
 )
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object from \code{\link[=open_pop]{open_pop()}}. Must not already have a
-genome defined — \code{define_genome()} is called once per population.}
+\item{pop}{A \code{tidybreed_pop} from \code{\link[=open_pop]{open_pop()}} with no genome yet;
+\code{define_genome()} is refused on a population that already has one.}
 
-\item{n_loci}{Integer scalar. Total number of loci to simulate. Must be a
-whole number and at least \code{n_chr} (every chromosome needs a locus).}
+\item{n_loci}{Whole number: the total number of loci (SNPs) across the
+genome, at least \code{n_chr}.}
 
-\item{n_chr}{Integer scalar. Number of chromosomes. Must be a whole number.}
+\item{n_chr}{Whole number: the number of chromosomes, including any sex
+chromosomes or organelles you will set up with \code{\link[=define_chromosome]{define_chromosome()}}.}
 
-\item{chr_len_Mb}{Numeric scalar or numeric vector of length \code{n_chr}.
-Chromosome length(s) in megabases. A single scalar applies the same
-length to all chromosomes; a vector specifies each chromosome separately.
-Determines the physical coordinate \code{genome_meta.pos_bp}.}
+\item{chr_len_Mb}{Chromosome length(s) in megabases: one number for every
+chromosome, or a vector of \code{n_chr} values in chromosome order. Sets the
+physical positions, and with \code{cM_per_Mb} the genetic map. It does not
+change how many loci a chromosome gets.}
 
-\item{cM_per_Mb}{Numeric scalar or numeric vector of length \code{n_chr}. Genetic
-map rate in centiMorgans per megabase, used to derive the genetic map
-position \code{genome_map.pos_cM} from \code{pos_bp} (\code{pos_cM = pos_bp/1e6 * cM_per_Mb}). Default \code{1.0}. Must be finite and strictly positive.}
+\item{cM_per_Mb}{Recombination rate in centiMorgans per megabase: one
+number, or a vector of \code{n_chr} values. Must be positive. Default \code{1},
+about one crossover per 100 Mb per meiosis.}
 
-\item{locus_names}{Character vector of length \code{n_loci} or \code{NULL}. Custom
-locus names. When \code{NULL} (default), names are auto-generated as
-\code{"Locus_1"}, \code{"Locus_2"}, etc.}
+\item{locus_names}{Optional character vector of \code{n_loci} unique, non-empty
+names, in genome order (chromosome 1 first). \code{NULL} (default) gives
+\code{"Locus_1"}, \code{"Locus_2"}, ...}
 
-\item{chr_names}{Character vector of length \code{n_chr} or \code{NULL}. Custom
-chromosome names. When \code{NULL} (default), chromosomes are numbered
-\verb{1, 2, ..., n_chr}.}
+\item{chr_names}{Optional vector of \code{n_chr} unique, non-empty chromosome
+names, in order, e.g. \code{c(1:18, "X", "Y")} (stored as text). \code{NULL}
+(default) gives \code{"1"}, \code{"2"}, ... Name sex chromosomes and organelles
+here so \code{\link[=define_chromosome]{define_chromosome()}} can refer to them.}
 
-\item{recombines_M, recombines_F}{Logical scalar. Genome-wide recombination
-default for \strong{male-parent} and \strong{female-parent} meiosis, seeded into
-\code{chr_recombination}. Both default \code{TRUE}. Set one \code{FALSE} for a genome-wide,
-whole-genome achiasmatic sex (e.g. \code{recombines_F = FALSE} for silkworm
-females, \code{recombines_M = FALSE} for \emph{Drosophila} males) instead of writing a
-per-chromosome rule for every chromosome. Per-chromosome overrides (Y, W,
-\emph{Drosophila} chr4) still go through \code{\link[=define_chromosome]{define_chromosome()}}.}
+\item{recombines_M, recombines_F}{Logical: whether a male (\code{M}) or female
+(\code{F}) parent recombines its chromosomes when making gametes, genome-wide.
+Both default \code{TRUE}. Set one to \code{FALSE} for a species where one sex has
+no crossing over at all, e.g. \code{recombines_M = FALSE} for \emph{Drosophila}
+males or \code{recombines_F = FALSE} for silkworm females. For single
+chromosomes (a Y or W), use \code{\link[=define_chromosome]{define_chromosome()}} instead.}
 }
 \value{
-The input \code{tidybreed_pop} with genome tables added.
+The \code{tidybreed_pop}, with the genome tables added.
 }
 \description{
-Adds genome tables (\code{genome_meta}, \code{genome_map}, \code{ind_haplotype},
-\code{ind_genotype}, \code{chr_inheritance}, \code{chr_recombination}, \code{genome_effects},
-\code{genome_effect_members}, \code{genome_effect_member_origins}) and the
-\code{genome_effect_terms} / \code{genome_effect_loci} views to a population opened
-with \code{\link[=open_pop]{open_pop()}}. The three effect tables are created here rather than in
-\code{\link[=open_pop]{open_pop()}} so that \code{genome_meta} already exists and the \code{locus_id} foreign
-key can be declared.
-Pipe-friendly — accepts a \code{tidybreed_pop} and returns a \code{tidybreed_pop}.
-Physical position (\code{pos_bp}, base pairs) lives in \code{genome_meta}; the genetic
-map (\code{pos_cM}, centiMorgans) lives in the long \code{genome_map} table. Haplotypes
-are stored in long format; \code{ind_genotype} is an on-demand dosage cache
-populated by \code{\link[=add_dosage]{add_dosage()}}.
+Lays out the loci of a population opened with \code{\link[=open_pop]{open_pop()}}: how many,
+on which chromosomes, at which physical and genetic positions. It is the
+second step of every simulation, and runs once per population:
 
-This is the second step in setting up a simulation:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{pop <- open_pop(...) |>
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{pop <- open_pop(pop_name = "pigs", db_name = ":memory:") |>
   define_genome(n_loci = 50000, n_chr = 18, chr_len_Mb = 100)
 }\if{html}{\out{</div>}}
 
-To create the founder haplotype pool needed by \code{\link[=add_founders]{add_founders()}}, call
-\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} after this function.
+Next come \code{\link[=define_chromosome]{define_chromosome()}} for any sex chromosomes or organelles,
+\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} for the founder allele pool, and
+\code{\link[=add_founders]{add_founders()}}.
+}
+\details{
+\strong{Where the loci go.} Loci are divided as evenly as possible across the
+chromosomes, whatever their lengths (50 loci on 3 chromosomes gives
+17, 16, 17), and spaced evenly within each chromosome, never at either end.
+Each gets an id (\code{locus_id}, 1 to \code{n_loci} in genome order), a name, a
+chromosome and a physical position \code{pos_bp}, stored in \code{genome_meta}. To
+make some of them QTL or markers later, filter \code{get_table(pop, "genome_meta")} and pipe it into \code{\link[=define_additive_effects]{define_additive_effects()}},
+\code{\link[=define_genome_effects]{define_genome_effects()}} or \code{\link[=define_chip]{define_chip()}}.
 
-The call is \strong{atomic}: every table is created inside a single transaction, so
-an error at any point (invalid argument, impossible locus spacing, failed
-validation) leaves the database exactly as it was and the population can be
-re-used for a corrected call.
+\strong{Genetic map and recombination.} Each locus's genetic position is
+\code{pos_cM = pos_bp / 1e6 * cM_per_Mb}, stored in \code{genome_map}. In
+\code{\link[=add_offspring]{add_offspring()}} a chromosome's number of crossovers per meiosis is
+Poisson with mean equal to its genetic length in Morgans (the last locus's
+\code{pos_cM / 100}), placed uniformly in cM (the Haldane model). So the
+default 1 cM/Mb gives a 100 Mb chromosome about one crossover per meiosis.
+
+\strong{What is created.} \code{define_genome()} writes \code{genome_meta}, \code{genome_map},
+the seeded chromosome rules \code{chr_inheritance} and \code{chr_recombination}, and
+the empty tables later functions fill: \code{ind_haplotype} (alleles, written by
+\code{\link[=add_founders]{add_founders()}} and \code{\link[=add_offspring]{add_offspring()}}), \code{ind_genotype} (dosages, filled
+on demand by \code{\link[=add_dosage]{add_dosage()}}), \code{ind_crossover} and the three genome-effect
+tables with their views \code{genome_effect_terms} and \code{genome_effect_loci}.
+Every chromosome starts as a diploid autosome: one copy from each parent,
+recombining in both sexes unless \code{recombines_M} / \code{recombines_F} say
+otherwise.
+
+The call is \strong{atomic}: everything is written in one transaction, so an
+error (an invalid argument, loci too dense to place) leaves the database
+as it was and you can simply call again with corrected arguments.
 }
 \examples{
-\dontrun{
-# Simple setup
+# 1,000 loci on 10 chromosomes of 100 Mb each
 pop <- open_pop(pop_name = "A", db_name = ":memory:") |>
   define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100)
+get_table(pop, "genome_meta")
+get_table(pop, "genome_map")
+close_pop(pop)
 
-# Different chromosome lengths (cattle)
-pop <- open_pop(pop_name = "Cattle", db_name = ":memory:") |>
-  define_genome(
-    n_loci = 50000,
-    n_chr  = 30,
-    chr_len_Mb = c(158, 137, 121, 120, 121, 119, 112, 113, 105, 104,
-                   107,  91,  84,  84,  85,  81,  75,  66,  64,  72,
-                    71,  61,  52,  62,  42,  51,  45,  46,  51,  42)
-  )
-
-# With founder haplotypes
+# Chromosomes of different lengths, a higher recombination rate and
+# your own names (the first three cattle autosomes plus X)
 pop <- open_pop(pop_name = "B", db_name = ":memory:") |>
+  define_genome(n_loci = 400, n_chr = 4,
+                chr_len_Mb = c(158, 137, 121, 139),
+                cM_per_Mb  = 1.2,
+                chr_names  = c("1", "2", "3", "X"))
+close_pop(pop)
+
+# The usual next steps: a founder pool, then founders
+set.seed(1)
+pop <- open_pop(pop_name = "C", db_name = ":memory:") |>
   define_genome(n_loci = 1000, n_chr = 10, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 100,
                             min_allele_freq = 0.05,
                             max_allele_freq = 0.95)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "A")
+close_pop(pop)
 
-# Genome-wide achiasmy — Drosophila males do not recombine (all chromosomes).
-# Per-chromosome overrides (e.g. chr4) still go through define_chromosome().
+# No crossing over in males on any chromosome (Drosophila); a single
+# non-recombining chromosome goes through define_chromosome() instead
 pop <- open_pop(pop_name = "fly", db_name = ":memory:") |>
-  define_genome(n_loci = 1000, n_chr = 4, chr_len_Mb = 100,
+  define_genome(n_loci = 400, n_chr = 4, chr_len_Mb = c(23, 46, 50, 1.4),
                 recombines_M = FALSE)
+get_table(pop, "chr_recombination")
+close_pop(pop)
 }
+\seealso{
+\code{\link[=define_chromosome]{define_chromosome()}}, \code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}},
+\code{\link[=add_founders]{add_founders()}}; \code{get_table(pop, "genome_meta")} and
+\code{get_table(pop, "genome_map")} to look at the result.
 }

@@ -1,3 +1,23 @@
+# tidybreed 0.76.9 (2026-10-12)
+
+Documentation of `define_genome()` and `define_chromosome()`; no change to any
+result.
+
+* Both pages have runnable examples (previously `\dontrun{}`), including
+  founders written under X/Y rules and a genome with no male recombination.
+* `?define_genome` now says where loci go: split evenly across chromosomes
+  whatever their lengths, evenly spaced within each, never at the ends. It
+  also says how `chr_len_Mb` and `cM_per_Mb` become crossovers (Poisson,
+  mean = genetic length in Morgans), and which tables it creates. The old
+  list of tables left out `ind_crossover`, and internal notes on foreign
+  keys were removed.
+* `?define_chromosome` has a table of copy counts for X/Y, Z/W and
+  mitochondria, and the order in which sex- and line-specific rules are
+  chosen. `line_name` is described as working (it read "reserved"; line
+  rules are used by `add_founders()` and `add_offspring()`). It also warns
+  that a rule changed after `add_founders()` is accepted, but breeding from
+  the existing animals then fails.
+
 # tidybreed 0.76.8 (2026-10-12)
 
 * `add_tgv()` numbers `id_tgv` reproducibly. The evaluator's final

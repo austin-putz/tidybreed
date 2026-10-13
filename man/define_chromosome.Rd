@@ -17,100 +17,140 @@ define_chromosome(
 )
 }
 \arguments{
-\item{pop}{A \code{tidybreed_pop} object.}
+\item{pop}{A \code{tidybreed_pop} with a genome from \code{\link[=define_genome]{define_genome()}}.}
 
-\item{chr_name}{Character scalar. Must already exist as a \code{genome_meta.chr_name}
-value (defined via \code{\link[=define_genome]{define_genome()}}'s \code{chr_names} argument).}
+\item{chr_name}{Character scalar: a chromosome name from
+\code{\link[=define_genome]{define_genome()}}'s \code{chr_names} (e.g. \code{"X"}).}
 
-\item{offspring_sex}{\code{NULL} (default; the sex-agnostic default row), \code{"M"}, or
-\code{"F"}. The \strong{inheritance} row key — the offspring sex whose copy counts this
-call sets. Only valid on an inheritance call.}
+\item{offspring_sex}{Inheritance calls only: \code{"M"} or \code{"F"} for a rule that
+applies to offspring of that sex, or \code{NULL} (default) for both.}
 
-\item{parent_sex}{\code{NULL} (default; both parent sexes), \code{"M"}, or \code{"F"}. The
-\strong{recombination} row key — the producing-parent sex whose recombination this
-call sets. Only valid on a recombination call.}
+\item{parent_sex}{Recombination calls only: \code{"M"} or \code{"F"} for a rule that
+applies when a parent of that sex makes gametes, or \code{NULL} (default) for
+both.}
 
-\item{line_name}{\code{NULL} (default; all lines) or a line name. Reserved for
-line-specific rules (crossbreeding); resolves with the same precedence as the
-sex dimension.}
+\item{line_name}{Optional line name: the rule applies only to animals of
+that line (the offspring's line for inheritance, the parent's for
+recombination), for crossbreeding designs whose lines differ. \code{NULL}
+(default) applies to every line.}
 
-\item{from_parent_1, from_parent_2}{Non-negative integers supplied \strong{together}
-on an inheritance call. Copies inherited from parent_1 (sire) and parent_2
-(dam); their sum must be \verb{<= 2} in this diploid release.}
+\item{from_parent_1, from_parent_2}{Inheritance calls: whole numbers,
+always given together, of copies from the sire (parent 1) and the dam
+(parent 2). Their sum is 0, 1 or 2; see the table in \emph{Details}.}
 
-\item{recombines}{Single logical supplied on a recombination call. \code{TRUE} if
-the chromosome recombines during gamete formation, \code{FALSE} for
-non-recombining chromosomes (Y, W, MT, most organelles). For a genome-wide
-achiasmatic sex, set \code{recombines_M}/\code{recombines_F} on \code{\link[=define_genome]{define_genome()}}
-instead of one call per chromosome.}
+\item{recombines}{Recombination calls: \code{TRUE} if the chromosome recombines
+when a parent makes gametes, \code{FALSE} if it is passed on whole (a Y, a W).
+To stop one sex recombining on every chromosome, use \code{recombines_M} /
+\code{recombines_F} in \code{\link[=define_genome]{define_genome()}} instead.}
 
-\item{overwrite}{Logical. \code{TRUE} (default) upserts the row for this logical
-key. \code{FALSE} errors if the exact \verb{(chr_name, sex, line_name)} key already
-exists (note: \code{\link[=define_genome]{define_genome()}} pre-seeds the \verb{(chr, NULL, NULL)} default
-row, so \code{overwrite = FALSE} on a default-keyed call always collides — it is
-meant for guarding \emph{new} sex/line-specific rows).}
+\item{overwrite}{Logical. \code{TRUE} (default) replaces an existing rule with
+the same chromosome, sex and line. \code{FALSE} refuses instead, to guard
+against redefining a rule by accident. Every chromosome already has a
+default rule (both sexes, all lines) from \code{\link[=define_genome]{define_genome()}}, so
+\code{overwrite = FALSE} is useful only for sex- or line-specific rules.}
 }
 \value{
-The \code{tidybreed_pop} (invisibly). Assign the result back.
+The \code{tidybreed_pop}, invisibly. Assign it back.
 }
 \description{
-Sets a non-default rule for one chromosome — sex chromosomes (X/Y, Z/W, X0/Z0)
-and organelles (mitochondria, plastids). \code{\link[=define_genome]{define_genome()}} seeds every
-chromosome with the default diploid-autosome rule (one copy from each parent,
-recombining in both sexes); call \code{define_chromosome()} before \code{\link[=add_founders]{add_founders()}}
-to override that default.
+Changes how one chromosome is passed on, for sex chromosomes (X/Y, Z/W,
+X0, Z0) and organelles (mitochondria, plastids). \code{\link[=define_genome]{define_genome()}} starts
+every chromosome as a diploid autosome: one copy from each parent,
+recombining in both sexes. Call \code{define_chromosome()} after
+\code{\link[=define_genome]{define_genome()}} and \strong{before \code{\link[=add_founders]{add_founders()}}}, once per rule that
+differs from that default.
 
-The rule is stored across two explicit long tables, and \strong{each call sets
-exactly one concern}:
+Each call sets \strong{one} of two things:
 \itemize{
-\item \strong{Inheritance} (copy count): supply \code{from_parent_1} and \code{from_parent_2} —
-the number of copies of this chromosome an offspring of \code{offspring_sex}
-inherits from parent_1 (sire) and parent_2 (dam). Writes \code{chr_inheritance}.
-\item \strong{Recombination}: supply \code{recombines} — whether a parent of \code{parent_sex}
-recombines this chromosome when making gametes. Writes \code{chr_recombination}.
+\item \strong{Inheritance}: give \code{from_parent_1} and \code{from_parent_2}, the number of
+copies an offspring inherits from its sire (parent 1) and its dam
+(parent 2), optionally for one \code{offspring_sex}. Writes
+\code{chr_inheritance}.
+\item \strong{Recombination}: give \code{recombines}, whether a parent recombines this
+chromosome when it makes gametes, optionally for one \code{parent_sex}.
+Writes \code{chr_recombination}.
 }
 
-Copy counts are \strong{absolute} (correct at ploidy 2, which this version
-enforces): an autosome is \verb{from_parent_1 = 1, from_parent_2 = 1}; a male's X is
-\verb{0, 1}; a male's Y is \verb{1, 0}; a female's Y is \verb{0, 0}; maternal mitochondria are
-\verb{0, 1}. The two concerns are kept in separate calls because "which sex" means
-the \strong{offspring} for copy count but the \strong{producing parent} for
-recombination — mixing them in one call would make that ambiguous.
+They are separate calls because "which sex" means different animals: the
+\strong{offspring} for inheritance, the \strong{parent} for recombination.
+}
+\details{
+\strong{Copy counts} are absolute numbers of copies, at most 2 in total:\tabular{llll}{
+   Chromosome \tab \code{offspring_sex} \tab \code{from_parent_1} (sire) \tab \code{from_parent_2} (dam) \cr
+   Autosome (the default) \tab either \tab 1 \tab 1 \cr
+   Mammalian X in males \tab \code{"M"} \tab 0 \tab 1 \cr
+   Mammalian Y in males \tab \code{"M"} \tab 1 \tab 0 \cr
+   Mammalian Y in females \tab \code{"F"} \tab 0 \tab 0 \cr
+   Avian Z in females \tab \code{"F"} \tab 1 \tab 0 \cr
+   Avian W in females \tab \code{"F"} \tab 0 \tab 1 \cr
+   Avian W in males \tab \code{"M"} \tab 0 \tab 0 \cr
+   Maternal mitochondria \tab either (\code{NULL}) \tab 0 \tab 1 \cr
+}
+
+
+Only the sexes that differ from the default need a rule: a mammalian X in
+females keeps the default \verb{1, 1}. A chromosome a parent carries in one copy
+is passed on unchanged; one it carries in two copies recombines as
+\code{chr_recombination} says.
+
+\strong{Which rule applies.} For an animal of sex S in line L, the most
+specific stored rule wins: \verb{(S, L)}, then \verb{(S, any line)}, then
+\verb{(any sex, L)}, then the default \verb{(any sex, any line)}. Inheritance rules
+are looked up with the offspring's sex and line, recombination rules with
+the parent's.
+
+\strong{Timing.} Founders and offspring are written with the rules in force at
+the time. A rule changed after \code{\link[=add_founders]{add_founders()}} is accepted, but the
+existing animals keep the copies they were given, so breeding from them
+then fails ("expected 10 \link[dplyr:rows]{rows} given chr_inheritance rules"). Set every
+rule first.
+
+Every write is checked in the same transaction (one rule per key, both
+sexes resolvable, at most 2 copies); a rejected call leaves the previous
+rule in place. See the rules with \code{get_table(pop, "chr_inheritance")} and
+\code{get_table(pop, "chr_recombination")}.
 }
 \examples{
-\dontrun{
-pop <- open_pop(pop_name = "test", db_name = ":memory:") |>
-  define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+# Mammalian X and Y: inheritance for the sexes that differ, and a
+# non-recombining Y
+pop <- open_pop(pop_name = "mammal", db_name = ":memory:") |>
+  define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100,
                 chr_names = c("1", "X", "Y"))
-
-# Mammalian sex chromosomes — inheritance (override only the deviating sexes)
 pop <- pop |>
   define_chromosome("X", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 1) |>
   define_chromosome("Y", offspring_sex = "M", from_parent_1 = 1, from_parent_2 = 0) |>
   define_chromosome("Y", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 0) |>
-  # Y is non-recombining (both parent sexes)
   define_chromosome("Y", recombines = FALSE)
+get_table(pop, "chr_inheritance")
 
-# Avian Z/W — females (ZW) are the heterogametic sex, males are ZZ
-pop_zw <- open_pop(pop_name = "chicken", db_name = ":memory:") |>
-  define_genome(n_loci = 1000, n_chr = 3, chr_len_Mb = 100,
+# Founders are written with those rules: a male has one X copy and one Y
+set.seed(1)
+pop <- pop |> define_founder_haplotypes(n_haplotypes = 40)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 2, n_females = 2, line_name = "A")
+close_pop(pop)
+
+# Avian Z and W: females (ZW) are the heterogametic sex
+pop <- open_pop(pop_name = "chicken", db_name = ":memory:") |>
+  define_genome(n_loci = 300, n_chr = 3, chr_len_Mb = 100,
                 chr_names = c("1", "Z", "W"))
-pop_zw <- pop_zw |>
+pop <- pop |>
   define_chromosome("Z", offspring_sex = "F", from_parent_1 = 1, from_parent_2 = 0) |>
   define_chromosome("W", offspring_sex = "F", from_parent_1 = 0, from_parent_2 = 1) |>
   define_chromosome("W", offspring_sex = "M", from_parent_1 = 0, from_parent_2 = 0) |>
-  # W is non-recombining (both parent sexes)
   define_chromosome("W", recombines = FALSE)
+close_pop(pop)
 
-# Mitochondria — maternal inheritance + non-recombining (separate calls)
-pop2 <- open_pop(pop_name = "test2", db_name = ":memory:") |>
-  define_genome(n_loci = 1000, n_chr = 2, chr_len_Mb = 100,
+# Mitochondria: one maternal copy in both sexes, never recombining
+pop <- open_pop(pop_name = "mito", db_name = ":memory:") |>
+  define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = c(100, 0.02),
                 chr_names = c("1", "MT"))
-pop2 <- pop2 |>
+pop <- pop |>
   define_chromosome("MT", from_parent_1 = 0, from_parent_2 = 1) |>
   define_chromosome("MT", recombines = FALSE)
-}
+close_pop(pop)
 }
 \seealso{
-\code{\link[=define_genome]{define_genome()}}
+\code{\link[=define_genome]{define_genome()}}, \code{\link[=add_founders]{add_founders()}}, \code{\link[=add_offspring]{add_offspring()}}.
 }
