@@ -91,10 +91,9 @@ one transaction.
 ```{r additive}
 G <- matrix(c(1.0, 0.4,
               0.4, 2.0), 2, dimnames = list(c("BF", "WW"), c("BF", "WW")))
-set.seed(2)
 pop <- get_table(pop, "genome_meta") |>
   filter(locus_id <= 40) |>
-  define_additive_effects(c("BF", "WW"), G = G)
+  define_additive_effects(c("BF", "WW"), G = G, seed = 2)
 ```
 
 The message reports what other populations would see (here the founder pool,
@@ -109,9 +108,8 @@ QTL (or the `pairs` you supply), and all three blocks are calibrated together,
 highest order first.
 
 ```{r genome}
-set.seed(3)
 pop <- get_table(pop, "genome_meta") |>
-  define_genome_effects("FI", G_A = 1, G_D = 0.3, G_AA = 0.2)
+  define_genome_effects("FI", G_A = 1, G_D = 0.3, G_AA = 0.2, seed = 3)
 ```
 
 The messages report the additive floor of this draw (below), the inbreeding
@@ -125,10 +123,9 @@ so the additive variance cannot be made arbitrarily small. A `G_A` below what
 the drawn architecture can cancel is refused, with the floor named:
 
 ```{r floor, error = TRUE}
-set.seed(4)
 pop <- get_table(pop, "genome_meta") |>
   filter(locus_id <= 10) |>
-  define_genome_effects("LS", G_A = 0.001, G_D = 1)
+  define_genome_effects("LS", G_A = 0.001, G_D = 1, seed = 4)
 ```
 
 The floor belongs to the sampled architecture: another seed, or more loci,

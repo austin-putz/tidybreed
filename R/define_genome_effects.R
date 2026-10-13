@@ -154,12 +154,6 @@
 #' approximate, with no closeness guarantee; a message gives requested and
 #' delivered values. It is not stored.
 #'
-#' @section Reproducibility:
-#' There is no `seed` argument: the draws use R's random number stream, so
-#' call [set.seed()] before the function to reproduce a model. Every input
-#' check runs before the first draw, so a refused call consumes no random
-#' numbers.
-#'
 #' @param tbl A `tidybreed_table` from [get_table()]`("genome_meta")`,
 #'   optionally filtered with [dplyr::filter()]. Every selected locus is a QTL
 #'   of every trait in the call (one shared QTL set), and A x A pairs are
@@ -215,6 +209,13 @@
 #'   calibration the delivered blocks are compared with another population's
 #'   view (see *Details*), and a ratio outside the bounds warns. Default
 #'   `c(0.8, 1.25)`; `NULL` turns the comparison off.
+#' @param seed Optional integer, applied with [set.seed()] immediately before
+#'   the draw, after every input check and after each block's anchor
+#'   feasibility check, so those refusals never touch the RNG. A failure that
+#'   depends on the draw itself -- the drawn architecture's rank, the additive
+#'   floor, or a calibration that fails verification -- comes after the seed
+#'   and has consumed RNG draws. `NULL` (default) draws from the current
+#'   stream, so a preceding [set.seed()] reproduces the call too.
 #'
 #' @return The `tidybreed_pop`, invisibly. The effects are written to the
 #'   `genome_effects` tables under the owner `"generated"`, and any passed
@@ -240,11 +241,11 @@
 #' # Additive, dominance and A x A targets for one trait, QTL on chromosome 1.
 #' # The targets are written to trait_var_comp with the effects; the A x A
 #' # pairs are a random matching of the QTL.
-#' set.seed(21)
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr_name == "1") |>
-#'   define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05)
+#'   define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05,
+#'     seed = 21)
 #'
 #' # Measure it: the genic anchor at the founder frequencies gives the
 #' # targets back
@@ -257,36 +258,34 @@
 #' # BF (approximate with several traits: a message gives the delivered value)
 #' G_A <- matrix(c(0.3, 0.1, 0.1, 0.4), 2, 2)
 #' G_D <- diag(c(0.08, 0.05))
-#' set.seed(22)
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   define_genome_effects(c("BF", "WW"), G_A = G_A, G_D = G_D,
-#'     inbreeding_depression = c(BF = 1.5))
+#'     inbreeding_depression = c(BF = 1.5), seed = 22)
 #'
 #' # Your own A x A design: one hub locus interacting with three others
 #' pairs <- data.frame(locus_name_1 = "Locus_10",
 #'                     locus_name_2 = c("Locus_20", "Locus_30", "Locus_40"))
-#' set.seed(23)
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr_name == "1") |>
-#'   define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs)
+#'   define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs,
+#'     seed = 23)
 #'
 #' # Additive only first, dominance added later. The stored G_A is read back,
 #' # and with the same seed the additive architecture draw is unchanged.
-#' set.seed(24)
-#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", G_A = 1)
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   define_genome_effects("FI", G_A = 1, seed = 24)
 #' pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
-#' set.seed(24)
-#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
+#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", seed = 24)
 #'
 #' # Exact in the founders themselves, linkage disequilibrium included
-#' set.seed(25)
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   dplyr::filter(chr_name == "2") |>
 #'   define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
-#'     base_tbl = get_table(pop, "ind_meta"))
+#'     base_tbl = get_table(pop, "ind_meta"), seed = 25)
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   extract_genetic_variance(trait_name = "IMF")
@@ -308,7 +307,8 @@ define_genome_effects <- function(tbl,
                                   dominance_degree_sd   = 0.097,
                                   inbreeding_depression = NULL,
                                   base_tbl              = NULL,
-                                  warn_bounds           = c(0.8, 1.25)) {
+                                  warn_bounds           = c(0.8, 1.25),
+                                  seed                  = NULL) {
 
   # ── 1. Arguments. No RNG and no write until the draw (step 8). ─────────────
   if (!inherits(tbl, "tidybreed_table")) {
@@ -338,6 +338,7 @@ define_genome_effects <- function(tbl,
   .qtl_validate_scalar(dominance_degree_mean, "dominance_degree_mean")
   .qtl_validate_scalar(dominance_degree_sd, "dominance_degree_sd", min = 0)
   .qtl_validate_warn_bounds(warn_bounds)
+  if (!is.null(seed)) .qtl_validate_scalar(seed, "seed", integral = TRUE)
   inbreeding_depression <- .dge_check_inbreeding(inbreeding_depression,
                                                  trait_name, dominance_degree_sd)
   pairs <- .dge_check_pairs_arg(pairs)
@@ -506,7 +507,8 @@ define_genome_effects <- function(tbl,
     }
   }
 
-  # ── 8. Draw (D2 order). The only RNG use. ─────────────────────────────────
+  # ── 8. Seed, then draw (D2 order). The only RNG use. ──────────────────────
+  if (!is.null(seed)) set.seed(seed)
   dr <- .dge_draw(mask, G$additive, has_d, has_aa, pair_idx, n_pairs,
                   qtl_name, qtl_id)
 

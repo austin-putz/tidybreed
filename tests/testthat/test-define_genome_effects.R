@@ -317,6 +317,35 @@ test_that("C4 (b): additive-only targets write define_additive_effects()'s rows,
   }
 })
 
+test_that("C4 (b): seed = s gives define_additive_effects(seed = s)'s rows", {
+  for (anc in c("genic", "realised")) {
+    p1 <- dge_pop("c4s1"); p2 <- dge_pop("c4s2")
+    quiet(define_additive_effects(gm_at(p1), c("T1", "T2"), G = GA2, anchor = anc,
+                                  base_tbl = if (anc == "realised") gen0(p1),
+                                  seed = 21))
+    quiet(define_genome_effects(gm_at(p2), c("T1", "T2"), G_A = GA2, anchor = anc,
+                                base_tbl = if (anc == "realised") gen0(p2),
+                                seed = 21))
+    expect_identical(rows_noid(p2), rows_noid(p1))
+    close_pop(p1); close_pop(p2)
+  }
+})
+
+test_that("seed = s is set.seed(s) just before the call", {
+  p1 <- dge_pop("seed1"); p2 <- dge_pop("seed2")
+  on.exit({ close_pop(p1); close_pop(p2) })
+  set.seed(21)
+  quiet(define_genome_effects(gm_at(p1), c("T1", "T2"), G_A = GA2, G_D = GD2,
+                              G_AA = GAA2))
+  s1 <- seed_state()
+  set.seed(999)
+  quiet(define_genome_effects(gm_at(p2), c("T1", "T2"), G_A = GA2, G_D = GD2,
+                              G_AA = GAA2, seed = 21))
+  expect_identical(rows_noid(p2), rows_noid(p1))
+  expect_identical(tvc(p2), tvc(p1))
+  expect_identical(seed_state(), s1)
+})
+
 test_that("C4 (b) / D5: explicit zero G_D and G_AA give the same additive rows and no other terms", {
   p1 <- dge_pop("c4z1"); p2 <- dge_pop("c4z2")
   on.exit({ close_pop(p1); close_pop(p2) })
@@ -681,10 +710,18 @@ test_that("C20: every knowable refusal preserves .Random.seed and the database",
   pop <- dge_pop("c20")
   on.exit(close_pop(pop))
   gm <- gm_at(pop)
+  # Each refusal twice: as given, and with a seed, which must not be set
+  # before a knowable refusal.
   ref <- function(pattern, ...) {
     args <- list(...)
     expect_refusal(pop, function() do.call(define_genome_effects, c(list(gm), args)), pattern)
+    expect_refusal(pop, function() do.call(define_genome_effects,
+                                           c(list(gm), args, seed = 5)), pattern)
   }
+  expect_refusal(pop, function() define_genome_effects(gm, "T1", G_A = 1, seed = 1.5),
+                 "`seed` must be an integer")
+  expect_refusal(pop, function() define_genome_effects(gm, "T1", G_A = 1, seed = "a"),
+                 "`seed` must be a single finite numeric value")
   ref("dominance_degree_sd", "T1", G_A = 1, G_D = 0.1, dominance_degree_sd = -1)
   ref("warn_bounds", "T1", G_A = 1, warn_bounds = c(2, 1))
   ref("needs `dominance_degree_sd` > 0", "T1", G_A = 1, G_D = 0.1,

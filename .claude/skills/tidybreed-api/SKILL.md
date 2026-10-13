@@ -476,11 +476,13 @@ that the two lists and `SYSTEM_TABLES` name the same tables.
 trait_var_comp_tbl = NULL, pairs = NULL, n_pairs = NULL, anchor =
 c("genic", "realised"), dominance_degree_mean = 0.19, dominance_degree_sd =
 0.097, inbreeding_depression = NULL, base_tbl = NULL, warn_bounds = c(0.8,
-1.25))` — samples additive, dominance and A×A effects and **calibrates** them so
+1.25), seed = NULL)` — samples additive, dominance and A×A effects and **calibrates** them so
 `G_A`, `G_D`, `G_AA` are delivered exactly under the anchor; writes under
 `"generated"` with `mode = "replace_owner"` (the trait's whole generated model,
 line-scoped Part A variants included, counted in a message). Common scope
-only; no `seed` (callers use `set.seed()`), no `effects`. Same pipe subject,
+only; no `effects`. `seed` (0.76.7) is `set.seed(seed)` at the top of step
+8, after every knowable refusal, exactly as `define_additive_effects()` does;
+`NULL` draws from the current stream. Same pipe subject,
 base resolution (`.dae_resolve_base()`, Wahlund warning) and size limit as
 `define_additive_effects()`.
 
