@@ -1,5 +1,16 @@
 # Changelog
 
+## tidybreed 0.76.7 (2026-10-12)
+
+- [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  gains `seed =`, matching
+  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md):
+  `set.seed(seed)` is applied just before the draw, after every check
+  that can refuse the call, so `define_genome_effects(..., seed = 21)`
+  writes exactly what `set.seed(21); define_genome_effects(...)` writes.
+  Omitting it changes nothing. The examples and the genetic-models
+  vignette pass the seed in the call.
+
 ## tidybreed 0.76.6 (2026-10-12)
 
 Documentation of the genome-effect functions; no change to any result.

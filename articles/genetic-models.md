@@ -67,12 +67,12 @@ get_table(pop, "ind_tgv") |> collect() |> arrange(id_ind) |> head(6)
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1    227 A_1    ADG        additive            0.42
-#> 2    350 A_1    ADG        indicator           0   
-#> 3    140 A_1    ADG        interaction        -0.08
-#> 4    279 A_10   ADG        additive            0.12
-#> 5    430 A_10   ADG        indicator           0.1 
-#> 6    125 A_10   ADG        interaction         0
+#> 1    214 A_1    ADG        interaction        -0.08
+#> 2    130 A_1    ADG        additive            0.42
+#> 3    416 A_1    ADG        indicator           0   
+#> 4    163 A_10   ADG        interaction         0   
+#> 5     38 A_10   ADG        additive            0.12
+#> 6    332 A_10   ADG        indicator           0.1
 ```
 
 Each individual gets one value per component; the `ind_tgv_total` view
@@ -95,10 +95,9 @@ expectation at the base allele frequencies, default) or `"realised"`
 
 G <- matrix(c(1.0, 0.4,
               0.4, 2.0), 2, dimnames = list(c("BF", "WW"), c("BF", "WW")))
-set.seed(2)
 pop <- get_table(pop, "genome_meta") |>
   filter(locus_id <= 40) |>
-  define_additive_effects(c("BF", "WW"), G = G)
+  define_additive_effects(c("BF", "WW"), G = G, seed = 2)
 #> The founder pool (pool expectation under random pairing) sees relative spectrum [0.851, 1.01] of the target (sampling LD of 400 haplotypes).
 #> Set correlated additive effects for traits: BF, WW (method: shared; base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered [BF,BF = 1; BF,WW = 0.4; WW,WW = 2].
 ```
@@ -117,9 +116,8 @@ calibrated together, highest order first.
 
 ``` r
 
-set.seed(3)
 pop <- get_table(pop, "genome_meta") |>
-  define_genome_effects("FI", G_A = 1, G_D = 0.3, G_AA = 0.2)
+  define_genome_effects("FI", G_A = 1, G_D = 0.3, G_AA = 0.2, seed = 3)
 #> Drew 30 random A x A pairs: every QTL paired once (floor(60 / 2)), as AlphaSimR does. Pass n_pairs for fewer pairs, or pairs for a chosen design (a locus may then appear in several pairs).
 #> Set genome effects for 60 QTL and 30 pairs on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1; dominance variance 0.3; additive-by-additive variance 0.2.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): FI = 0.3706. G_A - floor has smallest eigenvalue 0.6294 on the correlation scale.
@@ -142,10 +140,9 @@ the floor named:
 
 ``` r
 
-set.seed(4)
 pop <- get_table(pop, "genome_meta") |>
   filter(locus_id <= 10) |>
-  define_genome_effects("LS", G_A = 0.001, G_D = 1)
+  define_genome_effects("LS", G_A = 0.001, G_D = 1, seed = 4)
 #> Error:
 #> ! `G_A` is below the additive floor for this sampled architecture under the "genic" anchor. The dominance and additive-by-additive effects already induce additive variance that the drawn additive architecture cannot cancel: at least LS = 0.451916 (the floor's diagonal; G_A - floor has smallest eigenvalue -450.9 on the correlation scale). Raise `G_A` or lower `G_D` / `G_AA`. The floor belongs to this draw: another seed gives another floor. Nothing was written.
 ```

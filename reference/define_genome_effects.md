@@ -33,7 +33,8 @@ define_genome_effects(
   dominance_degree_sd = 0.097,
   inbreeding_depression = NULL,
   base_tbl = NULL,
-  warn_bounds = c(0.8, 1.25)
+  warn_bounds = c(0.8, 1.25),
+  seed = NULL
 )
 ```
 
@@ -131,6 +132,19 @@ define_genome_effects(
   delivered blocks are compared with another population's view (see
   *Details*), and a ratio outside the bounds warns. Default
   `c(0.8, 1.25)`; `NULL` turns the comparison off.
+
+- seed:
+
+  Optional integer, applied with
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) immediately before
+  the draw, after every input check and after each block's anchor
+  feasibility check, so those refusals never touch the RNG. A failure
+  that depends on the draw itself – the drawn architecture's rank, the
+  additive floor, or a calibration that fails verification – comes after
+  the seed and has consumed RNG draws. `NULL` (default) draws from the
+  current stream, so a preceding
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) reproduces the call
+  too.
 
 ## Value
 
@@ -300,13 +314,6 @@ calibration then mixes the columns, so the delivered depression is
 approximate, with no closeness guarantee; a message gives requested and
 delivered values. It is not stored.
 
-## Reproducibility
-
-There is no `seed` argument: the draws use R's random number stream, so
-call [`set.seed()`](https://rdrr.io/r/base/Random.html) before the
-function to reproduce a model. Every input check runs before the first
-draw, so a refused call consumes no random numbers.
-
 ## See also
 
 [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
@@ -331,7 +338,7 @@ pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 200)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpYogPXV/duckdb
+#> ℹ /tmp/RtmpOJ05Ue/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -359,11 +366,11 @@ for (t in c("ADG", "BF", "WW", "LS", "FI", "IMF")) pop <- define_trait(pop, t)
 # Additive, dominance and A x A targets for one trait, QTL on chromosome 1.
 # The targets are written to trait_var_comp with the effects; the A x A
 # pairs are a random matching of the QTL.
-set.seed(21)
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr_name == "1") |>
-  define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05)
+  define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05,
+    seed = 21)
 #> Drew 50 random A x A pairs: every QTL paired once (floor(100 / 2)), as AlphaSimR does. Pass n_pairs for fewer pairs, or pairs for a chosen design (a locus may then appear in several pairs).
 #> Set genome effects for 100 QTL and 50 pairs on trait ADG (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.3; dominance variance 0.1; additive-by-additive variance 0.05.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): ADG = 0.1266. G_A - floor has smallest eigenvalue 0.578 on the correlation scale.
@@ -390,11 +397,10 @@ pop |>
 # BF (approximate with several traits: a message gives the delivered value)
 G_A <- matrix(c(0.3, 0.1, 0.1, 0.4), 2, 2)
 G_D <- diag(c(0.08, 0.05))
-set.seed(22)
 pop <- pop |>
   get_table("genome_meta") |>
   define_genome_effects(c("BF", "WW"), G_A = G_A, G_D = G_D,
-    inbreeding_depression = c(BF = 1.5))
+    inbreeding_depression = c(BF = 1.5), seed = 22)
 #> Set genome effects for 200 QTL on traits BF, WW (base: founder_haplotypes): exact under the genic anchor; delivered additive [BF,BF = 0.3; BF,WW = 0.1; WW,WW = 0.4]; dominance [BF,BF = 0.08; BF,WW = -1.43077e-17; WW,WW = 0.05].
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): BF = 0.02238, WW = 0.01478. G_A - floor has smallest eigenvalue 0.658 on the correlation scale.
 #> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): BF requested 1.5, delivered 1.18895. Approximate for several traits: each requested trait's degree mean is solved as if it stood alone and the joint calibration mixes the columns, so there is no closeness guarantee.
@@ -404,11 +410,11 @@ pop <- pop |>
 # Your own A x A design: one hub locus interacting with three others
 pairs <- data.frame(locus_name_1 = "Locus_10",
                     locus_name_2 = c("Locus_20", "Locus_30", "Locus_40"))
-set.seed(23)
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr_name == "1") |>
-  define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs)
+  define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs,
+    seed = 23)
 #> Set genome effects for 100 QTL and 3 pairs on trait LS (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.2; additive-by-additive variance 0.05.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): LS = 0.09074. G_A - floor has smallest eigenvalue 0.5463 on the correlation scale.
 #> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): LS: 100 QTL with a != 0, 3 pairs with e != 0.
@@ -416,14 +422,14 @@ pop <- pop |>
 
 # Additive only first, dominance added later. The stored G_A is read back,
 # and with the same seed the additive architecture draw is unchanged.
-set.seed(24)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", G_A = 1)
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_genome_effects("FI", G_A = 1, seed = 24)
 #> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1.
 #> The founder pool (pool expectation under random pairing) sees relative spectrum [1.12, 1.12] of the target (sampling LD of 200 haplotypes).
 pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
 #> Stored 'dominance' covariance matrix for: FI.
-set.seed(24)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
+pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", seed = 24)
 #> Replaced 200 generated terms of trait 'FI'.
 #> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1; dominance variance 0.2.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): FI = 0.08266. G_A - floor has smallest eigenvalue 0.9173 on the correlation scale.
@@ -432,12 +438,11 @@ pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
 #> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [1.11, 1.11] of the target (sampling LD of 200 haplotypes).
 
 # Exact in the founders themselves, linkage disequilibrium included
-set.seed(25)
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr_name == "2") |>
   define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta"))
+    base_tbl = get_table(pop, "ind_meta"), seed = 25)
 #> Set genome effects for 100 QTL on trait IMF (base: ind_meta): exact under the realised anchor; delivered additive variance 0.2; dominance variance 0.05.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): IMF = 0.01428. G_A - floor has smallest eigenvalue 0.9286 on the correlation scale.
 #> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the realised anchor's frequencies): implied IMF = 1.484.
