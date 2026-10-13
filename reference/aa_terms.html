@@ -35,7 +35,7 @@ before zero pairs are dropped.'><meta property="og:image" content="https://austi
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,12 +98,14 @@ before zero pairs are dropped.</p>
 
 
 <dl><dt id="arg-locus-name-locus-name-">locus_name_1, locus_name_2<a class="anchor" aria-label="anchor" href="#arg-locus-name-locus-name-"></a></dt>
-<dd><p>Character vectors of the same length, one
-pair per position. A pair's two loci must differ.</p></dd>
+<dd><p>Character vectors of the same length,
+one pair per position. A pair's two loci must differ; a
+locus may appear in several pairs.</p></dd>
 
 
 <dt id="arg-e">e<a class="anchor" aria-label="anchor" href="#arg-e"></a></dt>
-<dd><p>Numeric coefficient per pair, recycled.</p></dd>
+<dd><p>Numeric A x A coefficient per pair, or one recycled. Pairs with
+<code>e = 0</code> are dropped.</p></dd>
 
 
 <dt id="arg-p-p-">p_1, p_2<a class="anchor" aria-label="anchor" href="#arg-p-p-"></a></dt>
@@ -173,8 +175,48 @@ table, for the reason given in <code><a href="ad_terms.html">ad_terms()</a></cod
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Two pairs sharing one locus</span></span></span>
+<span class="r-in"><span><span class="fu">aa_terms</span><span class="op">(</span>locus_name_1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Locus_10"</span>, <span class="st">"Locus_10"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>         locus_name_2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Locus_44"</span>, <span class="st">"Locus_50"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>         e <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="op">-</span><span class="fl">0.03</span><span class="op">)</span>, p_1 <span class="op">=</span> <span class="fl">0.35</span>, p_2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.60</span>, <span class="fl">0.50</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Implied genetic mean (functional coding), reported only — written to no table: (Locus_10, Locus_44) mu = -0.0048; (Locus_10, Locus_50) mu =  0.0000. Running total over these pairs: -0.0048.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                    term_id locus_name contrast_name center_value</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 aa:8:Locus_10|8:Locus_44   Locus_10      additive          0.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 aa:8:Locus_10|8:Locus_44   Locus_44      additive          0.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 aa:8:Locus_10|8:Locus_50   Locus_10      additive          0.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 aa:8:Locus_10|8:Locus_50   Locus_50      additive          0.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   copy_count_value dosage_value genome_value effect_name</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1               NA           NA         0.08        &lt;NA&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2               NA           NA         0.08        &lt;NA&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3               NA           NA        -0.03        &lt;NA&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4               NA           NA        -0.03        &lt;NA&gt;</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A complete functional model: main effects plus one interaction</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"aa_example"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_genome.html">define_genome</a></span><span class="op">(</span>n_loci <span class="op">=</span> <span class="fl">60</span>, n_chr <span class="op">=</span> <span class="fl">2</span>, chr_len_Mb <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>n_haplotypes <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> duckdb keeps downloaded extensions and secrets in a temporary directory:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> /tmp/RtmpYogPXV/duckdb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> This is removed when the R session ends.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Secrets are lost.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> See ?duckdb_storage for details and alternatives.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Opened in-memory population 'aa_example'</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Defined genome: 60 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Views created: genome_effect_terms, genome_effect_loci</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generating 100 founder haplotypes (method = "uniform")...</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Created founder_haplotypes (100 haplotypes x 60 loci)</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"founder_haplotypes"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="add_founders.html">add_founders</a></span><span class="op">(</span>n_males <span class="op">=</span> <span class="fl">10</span>, n_females <span class="op">=</span> <span class="fl">10</span>, line_name <span class="op">=</span> <span class="st">"A"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added 20 founders (10 males, 10 females) to line 'A'</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ADG"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'ADG'.</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="define_genome_effect_terms.html">define_genome_effect_terms</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>    trait_name <span class="op">=</span> <span class="st">"ADG"</span>,</span></span>
 <span class="r-in"><span>    terms <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span></span>
@@ -182,7 +224,10 @@ table, for the reason given in <code><a href="ad_terms.html">ad_terms()</a></cod
 <span class="r-in"><span>               a <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.30</span>, <span class="op">-</span><span class="fl">0.12</span><span class="op">)</span>, d <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.10</span>, <span class="fl">0.05</span><span class="op">)</span>, p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.35</span>, <span class="fl">0.60</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>      <span class="fu">aa_terms</span><span class="op">(</span>locus_name_1 <span class="op">=</span> <span class="st">"Locus_10"</span>, locus_name_2 <span class="op">=</span> <span class="st">"Locus_44"</span>,</span></span>
 <span class="r-in"><span>               e <span class="op">=</span> <span class="fl">0.08</span>, p_1 <span class="op">=</span> <span class="fl">0.35</span>, p_2 <span class="op">=</span> <span class="fl">0.60</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Implied genetic mean (functional coding), reported only — written to no table: Locus_10 mu = -0.0445; Locus_44 mu =  0.0000. Running total over these single-locus main effects: -0.0445.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Implied genetic mean (functional coding), reported only — written to no table: (Locus_10, Locus_44) mu = -0.0048. Running total over these pairs: -0.0048.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Wrote 5 genome-effect terms (6 member rows) for trait 'ADG' under owner 'custom' [append].</span>
+<span class="r-in"><span><span class="fu"><a href="close_pop.html">close_pop</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

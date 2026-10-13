@@ -43,59 +43,102 @@ define_genome_effects(
 
   A `tidybreed_table` from
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)`("genome_meta")`,
-  optionally filtered. Its loci are the QTL of every trait.
+  optionally filtered with
+  [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html).
+  Every selected locus is a QTL of every trait in the call (one shared
+  QTL set), and A x A pairs are drawn or checked within it.
 
 - trait_name:
 
-  Character vector of existing traits.
+  Character vector of existing traits (from
+  [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)).
+  With two or more, the architectures are drawn jointly and each target
+  is a `k x k` matrix across them; the call calibrates the traits
+  together, so a stored block that pairs one of them with a trait
+  outside the call is refused.
 
 - G_A, G_D, G_AA:
 
-  Optional `k x k` targets (a number for one trait), named in
-  `trait_name` order or unnamed. Written with the effects; never over a
-  stored block. `NULL` reads the block from `trait_var_comp_tbl`.
+  Optional targets for the `additive`, `dominance` and
+  `additive_by_additive` blocks: a symmetric positive-semidefinite
+  `k x k` matrix with dimnames in `trait_name` order (or unnamed, taken
+  in that order), or a single number when there is one trait. A passed
+  block is written to `trait_var_comp` with the effects, and is refused
+  if that block is already stored for any of the traits. `NULL`
+  (default) reads the block from storage, and leaves it out of the model
+  when none is stored. An additive block is required; see *Targets*.
 
 - trait_var_comp_tbl:
 
   Optional filtered `get_table(pop, "trait_var_comp")`: the stored rows
-  to use for blocks not passed. `NULL` reads the stored population-wide
-  rows.
+  to use for the blocks not passed, e.g.
+  `filter(effect_name != "dominance")` to leave a stored dominance
+  target out of this model. `NULL` (default) reads the stored
+  population-wide rows.
 
 - pairs:
 
-  Optional data frame `locus_name_1`, `locus_name_2`.
+  Optional data frame with columns `locus_name_1` and `locus_name_2`:
+  your own A x A design, one row per interacting pair of selected loci.
+  Needs an `additive_by_additive` target; not with `n_pairs`. See
+  *Pairs*.
 
 - n_pairs:
 
-  Optional number of random pairs, `1..floor(m / 2)`.
+  Optional whole number, `1` to `floor(m / 2)` for `m` selected loci:
+  how many random disjoint pairs to draw. `NULL` (default, with
+  `pairs = NULL`) pairs every QTL once. Needs an `additive_by_additive`
+  target.
 
 - anchor:
 
-  `"genic"` (default) or `"realised"`.
+  `"genic"` (default) or `"realised"`: the reference population the
+  targets are exact for. See *Details*.
 
 - dominance_degree_mean, dominance_degree_sd:
 
-  Mean and standard deviation of the dominance degrees that shape the
-  dominance architecture. Defaults `0.19` and `0.097`.
+  Shape of the dominance architecture: each QTL's dominance effect is
+  drawn as `d = h |a|`, with degree `h ~ N(mean, sd)` and `a` its
+  sampled additive effect, before calibration rescales the dominance
+  effects to `G_D`. A positive mean makes most heterozygotes better than
+  the homozygote average, so the model has inbreeding depression.
+  Defaults `0.19` and `0.097`. Used only with a non-zero dominance
+  target; both `0` is refused.
 
 - inbreeding_depression:
 
-  Optional numeric vector named by trait.
+  Optional numeric vector named by trait, e.g. `c(ADG = 1.2)`: the drop
+  in the trait mean per unit of inbreeding `F` (positive = depression)
+  to build in. For each named trait it replaces `dominance_degree_mean`
+  with the value that delivers it; traits not named keep
+  `dominance_degree_mean`. Needs a non-zero dominance target and
+  `dominance_degree_sd > 0`. See *Inbreeding depression*.
 
 - base_tbl:
 
-  Optional `tidybreed_table` selecting the base population, as in
-  [`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md).
-  Required under `"realised"`.
+  Optional `tidybreed_table` from
+  [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
+  (optionally filtered) whose allele frequencies are the base: the
+  founder pool (`founder_haplotypes`), allele copies (`ind_haplotype`)
+  or individuals (any table with `id_ind`). The base frequencies centre
+  the effects and set the genic anchor. `NULL` (default) uses the whole
+  founder table. Required under `anchor = "realised"`, where it must
+  select individuals.
 
 - warn_bounds:
 
-  `c(lower, upper)` for the comparison with another population, or
-  `NULL` to turn it off.
+  `c(lower, upper)` with `0 < lower <= upper`: after calibration the
+  delivered blocks are compared with another population's view (see
+  *Details*), and a ratio outside the bounds warns. Default
+  `c(0.8, 1.25)`; `NULL` turns the comparison off.
 
 ## Value
 
-The `tidybreed_pop`, invisibly.
+The `tidybreed_pop`, invisibly. The effects are written to the
+`genome_effects` tables under the owner `"generated"`, and any passed
+target to `trait_var_comp`. Run
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+to evaluate them.
 
 ## Details
 
@@ -135,14 +178,16 @@ under `"genic"` it is zero however large `G_D` is.
   studies.
 
 - `"realised"`: the covariances of the individuals `base_tbl` selects,
-  linkage disequilibrium included. The effects are still **stored** with
-  HWE-referenced contrasts centred at the base frequencies, so the
-  stored `additive` / `dominance` split is not the cohort's; the total
-  is exact, and
+  linkage disequilibrium included.
   [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)`(anchor = "realised")`
-  on the same individuals gives the targets back. `base_tbl` must select
-  individuals with complete genotypes, and the in-memory design arrays
-  have a size limit.
+  on the same individuals gives each target block back. The blocks need
+  not be uncorrelated in that cohort, so its total variance also carries
+  a `between_components` covariance. The effects are still **stored**
+  with HWE-referenced contrasts centred at the base frequencies, so the
+  stored `additive` / `dominance` components of `ind_tgv` are not the
+  cohort's own split; each individual's total genetic value is the same
+  either way. `base_tbl` must select individuals with complete
+  genotypes, and the in-memory design arrays have a size limit.
 
 Under linkage disequilibrium the `additive` component of a realised
 cohort is a contrast component, not a joint regression: calibration is
@@ -255,30 +300,163 @@ calibration then mixes the columns, so the delivered depression is
 approximate, with no closeness guarantee; a message gives requested and
 delivered values. It is not stored.
 
+## Reproducibility
+
+There is no `seed` argument: the draws use R's random number stream, so
+call [`set.seed()`](https://rdrr.io/r/base/Random.html) before the
+function to reproduce a model. Every input check runs before the first
+draw, so a refused call consumes no random numbers.
+
 ## See also
 
-[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md),
-[`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md),
-[`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md),
-[`remove_generated_effects()`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md),
-[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md).
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+for line-specific or imprinted additive effects;
+[`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+to measure what a population has;
+[`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md)
+to store a target first;
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+[`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
+and
+[`aa_terms()`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md)
+for known coefficients;
+[`remove_generated_effects()`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md).
 
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-pop <- pop |> define_trait("ADG")
+# A small in-memory population
 set.seed(1)
+pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
+  define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 200)
+#> duckdb keeps downloaded extensions and secrets in a temporary directory:
+#> ℹ /tmp/RtmpYogPXV/duckdb
+#> This is removed when the R session ends.
+#> • Extensions are re-downloaded each session.
+#> • Secrets are lost.
+#> ℹ Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).
+#> ℹ Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).
+#> ℹ See ?duckdb_storage for details and alternatives.
+#> Opened in-memory population 'dge_example'
+#> Defined genome: 200 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb
+#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins
+#>   Views created: genome_effect_terms, genome_effect_loci
+#> Generating 200 founder haplotypes (method = "uniform")...
+#>   Created founder_haplotypes (200 haplotypes x 200 loci)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 50, n_females = 50, line_name = "A")
+#> Added 100 founders (50 males, 50 females) to line 'A'
+for (t in c("ADG", "BF", "WW", "LS", "FI", "IMF")) pop <- define_trait(pop, t)
+#> Added trait 'ADG'.
+#> Added trait 'BF'.
+#> Added trait 'WW'.
+#> Added trait 'LS'.
+#> Added trait 'FI'.
+#> Added trait 'IMF'.
+
+# Additive, dominance and A x A targets for one trait, QTL on chromosome 1.
+# The targets are written to trait_var_comp with the effects; the A x A
+# pairs are a random matching of the QTL.
+set.seed(21)
 pop <- pop |>
   get_table("genome_meta") |>
-  dplyr::filter(chr_name %in% c("1", "2")) |>
+  dplyr::filter(chr_name == "1") |>
   define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05)
+#> Drew 50 random A x A pairs: every QTL paired once (floor(100 / 2)), as AlphaSimR does. Pass n_pairs for fewer pairs, or pairs for a chosen design (a locus may then appear in several pairs).
+#> Set genome effects for 100 QTL and 50 pairs on trait ADG (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.3; dominance variance 0.1; additive-by-additive variance 0.05.
+#> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): ADG = 0.1266. G_A - floor has smallest eigenvalue 0.578 on the correlation scale.
+#> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): implied ADG = 2.233.
+#> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): ADG: 100 QTL with a != 0, 100 with d != 0, 50 pairs with e != 0.
+#> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.892, 0.892] of the target (sampling LD of 200 haplotypes).
 
-# Additive-only first, dominance added later: the additive draw is the same
-set.seed(2)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF", G_A = 1)
-pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "BF")
-set.seed(2)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF")
-} # }
+# Measure it: the genic anchor at the founder frequencies gives the
+# targets back
+pop |>
+  get_table("ind_meta") |>
+  extract_genetic_variance(trait_name = "ADG", anchor = "genic",
+    base_tbl = get_table(pop, "founder_haplotypes"))
+#> Genic (HWE + linkage equilibrium) expectation at the allele frequencies of 'founder_haplotypes', an explicit base (allele copies).
+#> # A tibble: 4 × 7
+#>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor
+#>   <chr>           <chr>        <chr>            <dbl> <int> <chr>         <chr> 
+#> 1 additive        ADG          ADG              0.3     100 full          genic 
+#> 2 dominance       ADG          ADG              0.100   100 full          genic 
+#> 3 additive_by_ad… ADG          ADG              0.05    100 full          genic 
+#> 4 total           ADG          ADG              0.45    100 full          genic 
+
+# Two correlated traits with dominance, and an inbreeding depression for
+# BF (approximate with several traits: a message gives the delivered value)
+G_A <- matrix(c(0.3, 0.1, 0.1, 0.4), 2, 2)
+G_D <- diag(c(0.08, 0.05))
+set.seed(22)
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_genome_effects(c("BF", "WW"), G_A = G_A, G_D = G_D,
+    inbreeding_depression = c(BF = 1.5))
+#> Set genome effects for 200 QTL on traits BF, WW (base: founder_haplotypes): exact under the genic anchor; delivered additive [BF,BF = 0.3; BF,WW = 0.1; WW,WW = 0.4]; dominance [BF,BF = 0.08; BF,WW = -1.43077e-17; WW,WW = 0.05].
+#> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): BF = 0.02238, WW = 0.01478. G_A - floor has smallest eigenvalue 0.658 on the correlation scale.
+#> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): BF requested 1.5, delivered 1.18895. Approximate for several traits: each requested trait's degree mean is solved as if it stood alone and the joint calibration mixes the columns, so there is no closeness guarantee.
+#> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097; solved degree mean BF = 0.0574576): BF: 200 QTL with a != 0, 200 with d != 0; WW: 200 QTL with a != 0, 200 with d != 0.
+#> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.923, 1.02] of the target (sampling LD of 200 haplotypes).
+
+# Your own A x A design: one hub locus interacting with three others
+pairs <- data.frame(locus_name_1 = "Locus_10",
+                    locus_name_2 = c("Locus_20", "Locus_30", "Locus_40"))
+set.seed(23)
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr_name == "1") |>
+  define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs)
+#> Set genome effects for 100 QTL and 3 pairs on trait LS (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.2; additive-by-additive variance 0.05.
+#> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): LS = 0.09074. G_A - floor has smallest eigenvalue 0.5463 on the correlation scale.
+#> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): LS: 100 QTL with a != 0, 3 pairs with e != 0.
+#> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.988, 0.988] of the target (sampling LD of 200 haplotypes).
+
+# Additive only first, dominance added later. The stored G_A is read back,
+# and with the same seed the additive architecture draw is unchanged.
+set.seed(24)
+pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", G_A = 1)
+#> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1.
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [1.12, 1.12] of the target (sampling LD of 200 haplotypes).
+pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
+#> Stored 'dominance' covariance matrix for: FI.
+set.seed(24)
+pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
+#> Replaced 200 generated terms of trait 'FI'.
+#> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1; dominance variance 0.2.
+#> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): FI = 0.08266. G_A - floor has smallest eigenvalue 0.9173 on the correlation scale.
+#> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): implied FI = 3.95.
+#> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): FI: 200 QTL with a != 0, 200 with d != 0.
+#> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [1.11, 1.11] of the target (sampling LD of 200 haplotypes).
+
+# Exact in the founders themselves, linkage disequilibrium included
+set.seed(25)
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr_name == "2") |>
+  define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
+    base_tbl = get_table(pop, "ind_meta"))
+#> Set genome effects for 100 QTL on trait IMF (base: ind_meta): exact under the realised anchor; delivered additive variance 0.2; dominance variance 0.05.
+#> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): IMF = 0.01428. G_A - floor has smallest eigenvalue 0.9286 on the correlation scale.
+#> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the realised anchor's frequencies): implied IMF = 1.484.
+#> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): IMF: 100 QTL with a != 0, 100 with d != 0.
+pop |>
+  get_table("ind_meta") |>
+  extract_genetic_variance(trait_name = "IMF")
+#> Realised genetic covariances of the 100 selected individuals (frequencies and regressions are the cohort's own).
+#> # A tibble: 4 × 7
+#>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor
+#>   <chr>           <chr>        <chr>            <dbl> <int> <chr>         <chr> 
+#> 1 additive        IMF          IMF             0.2      100 full          reali…
+#> 2 dominance       IMF          IMF             0.05     100 full          reali…
+#> 3 between_compon… IMF          IMF            -0.0156   100 full          reali…
+#> 4 total           IMF          IMF             0.234    100 full          reali…
+
+# Evaluate the genetic values
+pop <- pop |> get_table("ind_meta") |> add_tgv(c("ADG", "IMF"))
+#> Computed TGV for 100 individuals on trait 'ADG' (additive, dominance, interaction).
+#> Computed TGV for 100 individuals on trait 'IMF' (additive, dominance).
+close_pop(pop)
 ```

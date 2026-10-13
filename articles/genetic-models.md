@@ -67,12 +67,12 @@ get_table(pop, "ind_tgv") |> collect() |> arrange(id_ind) |> head(6)
 #> # A tibble: 6 × 5
 #>   id_tgv id_ind trait_name component_name tgv_value
 #>    <int> <chr>  <chr>      <chr>              <dbl>
-#> 1     70 A_1    ADG        additive            0.42
-#> 2    256 A_1    ADG        interaction        -0.08
-#> 3    445 A_1    ADG        indicator           0   
-#> 4     38 A_10   ADG        additive            0.12
-#> 5    169 A_10   ADG        interaction         0   
-#> 6    334 A_10   ADG        indicator           0.1
+#> 1    227 A_1    ADG        additive            0.42
+#> 2    350 A_1    ADG        indicator           0   
+#> 3    140 A_1    ADG        interaction        -0.08
+#> 4    279 A_10   ADG        additive            0.12
+#> 5    430 A_10   ADG        indicator           0.1 
+#> 6    125 A_10   ADG        interaction         0
 ```
 
 Each individual gets one value per component; the `ind_tgv_total` view

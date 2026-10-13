@@ -1,5 +1,48 @@
 # Changelog
 
+## tidybreed 0.76.6 (2026-10-12)
+
+Documentation of the genome-effect functions; no change to any result.
+
+- [`?define_additive_effects`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  and
+  [`?define_genome_effects`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  have runnable examples on a small in-memory population (previously
+  `\dontrun{}` on an undefined `pop`). Together they cover one trait,
+  correlated traits, a stored target read back, the realised anchor
+  checked with
+  [`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md),
+  crossbreeding variants, random and chosen A x A pairs, inbreeding
+  depression and adding dominance later.
+- Every argument is described in full on its own: what each target
+  matrix must look like, what `distribution = "gamma"` draws, what
+  `method = "union"` needs, how the dominance degrees and
+  `inbreeding_depression` shape the dominance effects, and what
+  `base_tbl` accepts.
+  [`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  documents that it has no `seed` argument (call
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) first), and both
+  pages say what is written.
+- References to internal plans and a manuscript were removed. The
+  realised anchor’s note now says each target block is exact and the
+  cohort’s total also carries a `between_components` covariance (it read
+  “the total is exact”).
+- [`?define_genome_effect_terms`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+  [`?ad_terms`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md),
+  [`?aa_terms`](https://austin-putz.github.io/tidybreed/reference/aa_terms.md)
+  and
+  [`?genotype_terms`](https://austin-putz.github.io/tidybreed/reference/genotype_terms.md)
+  (the writer for coefficients you supply) also have runnable examples.
+  The writer’s old last example was refused when run (a second dominance
+  term at the same locus and scope); the new set covers the builders, a
+  centre filled from `base_tbl`, an imprinted term, reciprocal dominance
+  and `mode = "replace_owner"`. The pages now explain each
+  `contrast_name`, the scalar `origin` shortcuts, that owners always
+  add, and that `mode = "replace_trait"` is refused while the trait has
+  generated terms (it read as if it cleared every owner).
+  [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
+  documents `p` as always required (it read “required for cockerham”).
+
 ## tidybreed 0.76.5 (2026-10-12)
 
 Repository housekeeping; no change to the package.

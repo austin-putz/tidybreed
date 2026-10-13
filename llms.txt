@@ -1357,7 +1357,7 @@ an observation.
   : Remove one scope of generated effects
 
 - [`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
-  : Define genome effects as terms over one or more loci
+  : Define genome effects from coefficients you supply
 
 - [`ad_terms()`](https://austin-putz.github.io/tidybreed/reference/ad_terms.md)
   :

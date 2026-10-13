@@ -21,7 +21,7 @@ component is the breeding value.'><meta property="og:image" content="https://aus
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -90,13 +90,18 @@ optional <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class
 
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
 <dd><p>Character scalar <strong>or</strong> vector. Name(s) of existing traits
-in <code>trait_meta</code>. When length &gt;= 2, the architecture is drawn jointly from
-<code>MVN(0, G)</code> and <code>method</code> becomes active.</p></dd>
+(from <code><a href="define_trait.html">define_trait()</a></code>). With two or more, the architecture is drawn
+jointly from <code>MVN(0, G)</code>, <code>G</code> is a <code>k x k</code> matrix across them, and
+<code>method</code> applies.</p></dd>
 
 
 <dt id="arg-distribution">distribution<a class="anchor" aria-label="anchor" href="#arg-distribution"></a></dt>
-<dd><p>Character. <code>"normal"</code> (default) or <code>"gamma"</code>, the
-single-trait architecture. Ignored for multi-trait (always MVN).</p></dd>
+<dd><p>Character. The shape of a single trait's sampled
+architecture before calibration: <code>"normal"</code> (default; normal effects) or
+<code>"gamma"</code> (gamma-distributed sizes with random signs: a few large QTL
+and many small ones). Calibration then scales the effects to the target
+either way. Ignored with several traits, which are always drawn from
+<code>MVN(0, G)</code>.</p></dd>
 
 
 <dt id="arg-g">G<a class="anchor" aria-label="anchor" href="#arg-g"></a></dt>
@@ -120,11 +125,13 @@ reference covariance the calibration is exact for. See <em>Details</em>.</p></dd
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
-<dd><p>Character. <code>"shared"</code> (default) or <code>"union"</code>. Multi-trait only.
-<code>"shared"</code> — all listed traits use the filtered loci as their shared QTL
-set; exact. <code>"union"</code> — per-trait QTL sets are read from existing generated
-terms at this scope, restricted to the filtered loci; per-trait scaling,
-approximate for a non-zero covariance.</p></dd>
+<dd><p>Character, multi-trait only. <code>"shared"</code> (default): every
+trait uses all the filtered loci as one shared QTL set, and the whole
+<code>G</code> is delivered exactly. <code>"union"</code>: each trait keeps the QTL set of its
+existing generated terms at this scope (restricted to the filtered
+loci), so the traits must already have generated effects there; each
+trait is scaled to its own variance, and the covariances are
+approximate (a warning gives the delivered values).</p></dd>
 
 
 <dt id="arg-base-tbl">base_tbl<a class="anchor" aria-label="anchor" href="#arg-base-tbl"></a></dt>
@@ -172,12 +179,15 @@ the draw, after every input check and after the anchor's feasibility
 check (<code>rank(G) &lt;= rank(M)</code>), so those refusals never touch the RNG. A
 failure that depends on the draw itself – the drawn architecture's rank,
 or a calibration that fails verification – comes after the seed and has
-consumed RNG draws.</p></dd>
+consumed RNG draws. <code>NULL</code> (default) draws from the current stream, so a
+preceding <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> reproduces the call too.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>The modified <code>tidybreed_pop</code> (invisibly).</p>
+    <p>The modified <code>tidybreed_pop</code> (invisibly). The effects are written
+to the <code>genome_effects</code> tables under the owner <code>"generated"</code>, and a
+passed <code>G</code> to <code>trait_var_comp</code>. Run <code><a href="add_tgv.html">add_tgv()</a></code> to evaluate them.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -193,12 +203,11 @@ compared with <code>G</code> as stored, entry by entry, to a relative tolerance 
 numerically ill-conditioned architecture) is an error before anything is
 written. The closing message says "exact" or "approximate" and gives the
 delivered covariance under the anchor.</p>
-<p><strong>How.</strong> Effects are drawn as today (one draw per QTL for one trait; joint
+<p><strong>How.</strong> Effects are drawn first (one draw per QTL for one trait; joint
 <code>MVN(0, G)</code> rows for several), and that draw is only the <em>architecture</em>
 <code>B0</code>. It is then right-multiplied by a <code>k x k</code> matrix <code>A</code> so that
-<code>B = B0 A</code> satisfies <code>B' M B = G</code> exactly (the congruence of
-Proposition 2 in the source method). For one trait this is exactly the
-scalar rescale <code>b0 * sqrt(G / sum(w b0^2))</code>. For two or more it also fixes
+<code>B = B0 A</code> satisfies <code>B' M B = G</code> exactly. For one trait this is exactly
+the scalar rescale <code>b0 * sqrt(G / sum(w b0^2))</code>. For two or more it also fixes
 the genetic <strong>correlations</strong>, which a per-trait rescale cannot: at 200 QTL
 and a target correlation of 0.4 a scalar rescale delivers anything from
 about 0.18 to 0.60. The same seed gives the same <code>B0</code>.</p>
@@ -206,8 +215,8 @@ about 0.18 to 0.60. The same seed gives the same <code>B0</code>.</p>
 calibration is exact for:</p><ul><li><p><code>anchor = "genic"</code> (default): <code>M = diag(n_eligible * p * q)</code> at the base
 allele frequencies, the random-mating (HWE + linkage-equilibrium) limit.
 Use it for multi-generation studies: under random mating the realised
-covariance converges to it. The manuscript's "reference" anchor is this
-plus a non-default <code>base_tbl</code>, whose frequencies the weights use.</p></li>
+covariance converges to it. With <code>base_tbl</code> the weights use that
+population's frequencies instead, e.g. one reference line.</p></li>
 <li><p><code>anchor = "realised"</code>: <code>M = Cov(X)</code> of the individuals <code>base_tbl</code> selects,
 linkage disequilibrium included. The single-generation / clonal option.
 <code>base_tbl</code> must select <strong>individuals</strong> (a table with <code>id_ind</code>, not
@@ -222,7 +231,7 @@ sets do not deliver. A warning gives the delivered covariance and
 correlation and names <code>method = "shared"</code> as the exact option. A trait with
 a positive target variance and no QTL in the call is an error.</p>
 <p>After calibration the delivered covariance is compared with what another
-population sees (§7.4 of the plan): the <strong>pool expectation</strong> <code>2 Cov(H)</code>
+population sees: the <strong>pool expectation</strong> <code>2 Cov(H)</code>
 when the base is the founder pool, the <strong>observed</strong> <code>Cov(X)</code> when it selects
 individuals, and the genic limit under <code>anchor = "realised"</code>. The founder
 pool's comparison is always a message: a small pool's departure is its
@@ -331,48 +340,121 @@ case.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_trait.html">define_trait()</a></code>, <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>,
-<code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="extract_allele_freq.html">extract_allele_freq()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_genome_effects.html">define_genome_effects()</a></code> for dominance and A x A effects;
+<code><a href="extract_genetic_variance.html">extract_genetic_variance()</a></code> to measure what a population has;
+<code><a href="define_trait.html">define_trait()</a></code>, <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>,
+<code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code> for known coefficients,
+<code><a href="remove_generated_effects.html">remove_generated_effects()</a></code>, <code><a href="extract_allele_freq.html">extract_allele_freq()</a></code>.</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># Single trait — all loci on chr 1-5 become QTL; write the target and</span></span></span>
-<span class="r-in"><span><span class="co"># calibrate to it in one call</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A small in-memory population with two founder lines</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"dae_example"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_genome.html">define_genome</a></span><span class="op">(</span>n_loci <span class="op">=</span> <span class="fl">200</span>, n_chr <span class="op">=</span> <span class="fl">2</span>, chr_len_Mb <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>n_haplotypes <span class="op">=</span> <span class="fl">100</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>n_haplotypes <span class="op">=</span> <span class="fl">100</span>, line_name <span class="op">=</span> <span class="st">"Landrace"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> duckdb keeps downloaded extensions and secrets in a temporary directory:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> /tmp/RtmpYogPXV/duckdb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> This is removed when the R session ends.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Secrets are lost.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> See ?duckdb_storage for details and alternatives.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Opened in-memory population 'dae_example'</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Defined genome: 200 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Views created: genome_effect_terms, genome_effect_loci</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generating 100 founder haplotypes (method = "uniform")...</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Created founder_haplotypes for line 'Duroc' (100 haplotypes x 200 loci)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generating 100 founder haplotypes (method = "uniform")...</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Created founder_haplotypes for line 'Landrace' (100 haplotypes x 200 loci)</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"founder_haplotypes"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">line_name</span> <span class="op">==</span> <span class="st">"Duroc"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="add_founders.html">add_founders</a></span><span class="op">(</span>n_males <span class="op">=</span> <span class="fl">20</span>, n_females <span class="op">=</span> <span class="fl">40</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added 60 founders (20 males, 40 females) to line 'Duroc'</span>
+<span class="r-in"><span><span class="kw">for</span> <span class="op">(</span><span class="va">t</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span>, <span class="st">"FCR"</span>, <span class="st">"LMA"</span>, <span class="st">"IMF"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span> <span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="va">pop</span>, <span class="va">t</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'ADG'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'BW'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'FCR'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'LMA'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'IMF'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'BF'.</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># The Duroc founder pool as the base (the default would pool both lines)</span></span></span>
+<span class="r-in"><span><span class="va">duroc</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"founder_haplotypes"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">line_name</span> <span class="op">==</span> <span class="st">"Duroc"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># One trait: every locus on chromosome 1 is a QTL. G writes the target to</span></span></span>
+<span class="r-in"><span><span class="co"># trait_var_comp and calibrates to it in one transaction.</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, G <span class="op">=</span> <span class="fl">0.25</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"1"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, G <span class="op">=</span> <span class="fl">0.25</span>, base_tbl <span class="op">=</span> <span class="va">duroc</span>, seed <span class="op">=</span> <span class="fl">11</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing) sees relative spectrum [0.826, 0.826] of the target (sampling LD of 100 haplotypes).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 100 QTL on trait 'ADG' (base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.25.</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Correlated traits — shared QTL set, exact G (variances and correlation)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"BW"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># Two correlated traits on one shared QTL set: both variances and the</span></span></span>
+<span class="r-in"><span><span class="co"># correlation are delivered exactly</span></span></span>
 <span class="r-in"><span><span class="va">G</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.10</span>, <span class="fl">0.10</span>, <span class="fl">0.30</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span>,</span></span>
-<span class="r-in"><span>            dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>            dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"BW"</span>, <span class="st">"FCR"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"BW"</span>, <span class="st">"FCR"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span><span class="op">)</span>, G <span class="op">=</span> <span class="va">G</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"BW"</span>, <span class="st">"FCR"</span><span class="op">)</span>, G <span class="op">=</span> <span class="va">G</span>, base_tbl <span class="op">=</span> <span class="va">duroc</span>, seed <span class="op">=</span> <span class="fl">12</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing) sees relative spectrum [1.01, 1.12] of the target (sampling LD of 100 haplotypes).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set correlated additive effects for traits: BW, FCR (method: shared; base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered [BW,BW = 0.25; BW,FCR = 0.1; FCR,FCR = 0.3].</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># A target stored beforehand is read back: no G</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"FCR"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"additive"</span>, <span class="fl">0.1</span>, trait_name <span class="op">=</span> <span class="st">"FCR"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"FCR"</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Exact in the generation-0 individuals themselves, LD included</span></span></span>
+<span class="r-in"><span><span class="co"># A target stored beforehand is read back when G is omitted</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"additive"</span>, <span class="fl">0.4</span>, trait_name <span class="op">=</span> <span class="st">"LMA"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Stored 'additive' covariance matrix for: LMA.</span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"FCR"</span>, anchor <span class="op">=</span> <span class="st">"realised"</span>,</span></span>
-<span class="r-in"><span>    base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">gen</span> <span class="op">==</span> <span class="fl">0L</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"LMA"</span>, base_tbl <span class="op">=</span> <span class="va">duroc</span>, seed <span class="op">=</span> <span class="fl">13</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing) sees relative spectrum [1.21, 1.21] of the target (sampling LD of 100 haplotypes).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 200 QTL on trait 'LMA' (base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.4.</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Crossbreeding: three variants. The common fallback names its base to say</span></span></span>
-<span class="r-in"><span><span class="co"># "yes, pool"; each line's variant centers on its own founder pool by default.</span></span></span>
-<span class="r-in"><span><span class="va">gm</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"1"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>,</span></span>
-<span class="r-in"><span>               base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"founder_haplotypes"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"ADG"</span>, line_name <span class="op">=</span> <span class="st">"Landrace"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-in"><span><span class="co"># Exact in the founders themselves, linkage disequilibrium included</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"IMF"</span>, G <span class="op">=</span> <span class="fl">0.1</span>, anchor <span class="op">=</span> <span class="st">"realised"</span>,</span></span>
+<span class="r-in"><span>    base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">14</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 200 QTL on trait 'IMF' (base: ind_meta; scope: all lines, both parents' copies): exact under the realised anchor; delivered variance 0.1.</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="extract_genetic_variance.html">extract_genetic_variance</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"IMF"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Realised genetic covariances of the 60 selected individuals (frequencies and regressions are the cohort's own).</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 3 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> additive        IMF          IMF              0.100    60 full          reali…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> between_compon… IMF          IMF              0        60 full          reali…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> total           IMF          IMF              0.100    60 full          reali…</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Crossbreeding: a common variant centred on the pooled founder table</span></span></span>
+<span class="r-in"><span><span class="co"># (named on purpose, so no Wahlund warning), plus one variant per line,</span></span></span>
+<span class="r-in"><span><span class="co"># each centred on that line's own pool and reading the common target</span></span></span>
+<span class="r-in"><span><span class="va">gm</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"2"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"BF"</span>, G <span class="op">=</span> <span class="fl">0.2</span>,</span></span>
+<span class="r-in"><span>  base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"founder_haplotypes"</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">15</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing) sees relative spectrum [0.889, 0.889] of the target (sampling LD of 200 haplotypes).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.2.</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"BF"</span>, line_name <span class="op">=</span> <span class="st">"Duroc"</span>, seed <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes [1 filter]; scope: line Duroc, both parents' copies): exact under the genic anchor; delivered variance 0.2.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Line-specific effects are centred on line Duroc's own base, so they add no difference between line means. For differences between lines, use common effects centred on one reference line (see ?define_additive_effects).</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">gm</span> <span class="op">|&gt;</span> <span class="fu">define_additive_effects</span><span class="op">(</span><span class="st">"BF"</span>, line_name <span class="op">=</span> <span class="st">"Landrace"</span>, seed <span class="op">=</span> <span class="fl">17</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes [1 filter]; scope: line Landrace, both parents' copies): exact under the genic anchor; delivered variance 0.2.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Line-specific effects are centred on line Landrace's own base, so they add no difference between line means. For differences between lines, use common effects centred on one reference line (see ?define_additive_effects).</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Evaluate the breeding values</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="add_tgv.html">add_tgv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BW"</span>, <span class="st">"FCR"</span>, <span class="st">"BF"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 60 individuals on trait 'ADG' (additive).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 60 individuals on trait 'BW' (additive).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 60 individuals on trait 'FCR' (additive).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 60 individuals on trait 'BF' (additive).</span>
+<span class="r-in"><span><span class="fu"><a href="close_pop.html">close_pop</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

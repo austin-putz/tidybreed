@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,16 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.6" id="tidybreed-0766-2026-10-12">tidybreed 0.76.6 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0766-2026-10-12"></a></h2>
+<p>Documentation of the genome-effect functions; no change to any result.</p>
+<ul><li>
+<code><a href="../reference/define_additive_effects.html">?define_additive_effects</a></code> and <code><a href="../reference/define_genome_effects.html">?define_genome_effects</a></code> have runnable examples on a small in-memory population (previously <code>\dontrun{}</code> on an undefined <code>pop</code>). Together they cover one trait, correlated traits, a stored target read back, the realised anchor checked with <code><a href="../reference/extract_genetic_variance.html">extract_genetic_variance()</a></code>, crossbreeding variants, random and chosen A x A pairs, inbreeding depression and adding dominance later.</li>
+<li>Every argument is described in full on its own: what each target matrix must look like, what <code>distribution = "gamma"</code> draws, what <code>method = "union"</code> needs, how the dominance degrees and <code>inbreeding_depression</code> shape the dominance effects, and what <code>base_tbl</code> accepts. <code><a href="../reference/define_genome_effects.html">define_genome_effects()</a></code> documents that it has no <code>seed</code> argument (call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> first), and both pages say what is written.</li>
+<li>References to internal plans and a manuscript were removed. The realised anchor’s note now says each target block is exact and the cohort’s total also carries a <code>between_components</code> covariance (it read “the total is exact”).</li>
+<li>
+<code><a href="../reference/define_genome_effect_terms.html">?define_genome_effect_terms</a></code>, <code><a href="../reference/ad_terms.html">?ad_terms</a></code>, <code><a href="../reference/aa_terms.html">?aa_terms</a></code> and <code><a href="../reference/genotype_terms.html">?genotype_terms</a></code> (the writer for coefficients you supply) also have runnable examples. The writer’s old last example was refused when run (a second dominance term at the same locus and scope); the new set covers the builders, a centre filled from <code>base_tbl</code>, an imprinted term, reciprocal dominance and <code>mode = "replace_owner"</code>. The pages now explain each <code>contrast_name</code>, the scalar <code>origin</code> shortcuts, that owners always add, and that <code>mode = "replace_trait"</code> is refused while the trait has generated terms (it read as if it cleared every owner). <code><a href="../reference/ad_terms.html">ad_terms()</a></code> documents <code>p</code> as always required (it read “required for cockerham”).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.5" id="tidybreed-0765-2026-10-12">tidybreed 0.76.5 (2026-10-12)<a class="anchor" aria-label="anchor" href="#tidybreed-0765-2026-10-12"></a></h2>
 <p>Repository housekeeping; no change to the package.</p>

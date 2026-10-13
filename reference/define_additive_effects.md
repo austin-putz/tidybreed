@@ -43,14 +43,19 @@ define_additive_effects(
 
 - trait_name:
 
-  Character scalar **or** vector. Name(s) of existing traits in
-  `trait_meta`. When length \>= 2, the architecture is drawn jointly
-  from `MVN(0, G)` and `method` becomes active.
+  Character scalar **or** vector. Name(s) of existing traits (from
+  [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md)).
+  With two or more, the architecture is drawn jointly from `MVN(0, G)`,
+  `G` is a `k x k` matrix across them, and `method` applies.
 
 - distribution:
 
-  Character. `"normal"` (default) or `"gamma"`, the single-trait
-  architecture. Ignored for multi-trait (always MVN).
+  Character. The shape of a single trait's sampled architecture before
+  calibration: `"normal"` (default; normal effects) or `"gamma"`
+  (gamma-distributed sizes with random signs: a few large QTL and many
+  small ones). Calibration then scales the effects to the target either
+  way. Ignored with several traits, which are always drawn from
+  `MVN(0, G)`.
 
 - G:
 
@@ -74,11 +79,13 @@ define_additive_effects(
 
 - method:
 
-  Character. `"shared"` (default) or `"union"`. Multi-trait only.
-  `"shared"` — all listed traits use the filtered loci as their shared
-  QTL set; exact. `"union"` — per-trait QTL sets are read from existing
-  generated terms at this scope, restricted to the filtered loci;
-  per-trait scaling, approximate for a non-zero covariance.
+  Character, multi-trait only. `"shared"` (default): every trait uses
+  all the filtered loci as one shared QTL set, and the whole `G` is
+  delivered exactly. `"union"`: each trait keeps the QTL set of its
+  existing generated terms at this scope (restricted to the filtered
+  loci), so the traits must already have generated effects there; each
+  trait is scaled to its own variance, and the covariances are
+  approximate (a warning gives the delivered values).
 
 - base_tbl:
 
@@ -130,11 +137,18 @@ define_additive_effects(
   check (`rank(G) <= rank(M)`), so those refusals never touch the RNG. A
   failure that depends on the draw itself – the drawn architecture's
   rank, or a calibration that fails verification – comes after the seed
-  and has consumed RNG draws.
+  and has consumed RNG draws. `NULL` (default) draws from the current
+  stream, so a preceding
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) reproduces the call
+  too.
 
 ## Value
 
-The modified `tidybreed_pop` (invisibly).
+The modified `tidybreed_pop` (invisibly). The effects are written to the
+`genome_effects` tables under the owner `"generated"`, and a passed `G`
+to `trait_var_comp`. Run
+[`add_tgv()`](https://austin-putz.github.io/tidybreed/reference/add_tgv.md)
+to evaluate them.
 
 ## Details
 
@@ -153,12 +167,11 @@ ill-conditioned architecture) is an error before anything is written.
 The closing message says "exact" or "approximate" and gives the
 delivered covariance under the anchor.
 
-**How.** Effects are drawn as today (one draw per QTL for one trait;
-joint `MVN(0, G)` rows for several), and that draw is only the
-*architecture* `B0`. It is then right-multiplied by a `k x k` matrix `A`
-so that `B = B0 A` satisfies `B' M B = G` exactly (the congruence of
-Proposition 2 in the source method). For one trait this is exactly the
-scalar rescale `b0 * sqrt(G / sum(w b0^2))`. For two or more it also
+**How.** Effects are drawn first (one draw per QTL for one trait; joint
+`MVN(0, G)` rows for several), and that draw is only the *architecture*
+`B0`. It is then right-multiplied by a `k x k` matrix `A` so that
+`B = B0 A` satisfies `B' M B = G` exactly. For one trait this is exactly
+the scalar rescale `b0 * sqrt(G / sum(w b0^2))`. For two or more it also
 fixes the genetic **correlations**, which a per-trait rescale cannot: at
 200 QTL and a target correlation of 0.4 a scalar rescale delivers
 anything from about 0.18 to 0.60. The same seed gives the same `B0`.
@@ -169,9 +182,8 @@ calibration is exact for:
 - `anchor = "genic"` (default): `M = diag(n_eligible * p * q)` at the
   base allele frequencies, the random-mating (HWE + linkage-equilibrium)
   limit. Use it for multi-generation studies: under random mating the
-  realised covariance converges to it. The manuscript's "reference"
-  anchor is this plus a non-default `base_tbl`, whose frequencies the
-  weights use.
+  realised covariance converges to it. With `base_tbl` the weights use
+  that population's frequencies instead, e.g. one reference line.
 
 - `anchor = "realised"`: `M = Cov(X)` of the individuals `base_tbl`
   selects, linkage disequilibrium included. The single-generation /
@@ -191,14 +203,14 @@ option. A trait with a positive target variance and no QTL in the call
 is an error.
 
 After calibration the delivered covariance is compared with what another
-population sees (§7.4 of the plan): the **pool expectation** `2 Cov(H)`
-when the base is the founder pool, the **observed** `Cov(X)` when it
-selects individuals, and the genic limit under `anchor = "realised"`.
-The founder pool's comparison is always a message: a small pool's
-departure is its sampling LD, not a mistake in the call. To get the
-target exactly in the founders, add them first and calibrate with
-`anchor = "realised"` on them. The observed and genic-limit comparisons
-warn when the relative spectrum leaves `warn_bounds`. Nothing is stored.
+population sees: the **pool expectation** `2 Cov(H)` when the base is
+the founder pool, the **observed** `Cov(X)` when it selects individuals,
+and the genic limit under `anchor = "realised"`. The founder pool's
+comparison is always a message: a small pool's departure is its sampling
+LD, not a mistake in the call. To get the target exactly in the
+founders, add them first and calibrate with `anchor = "realised"` on
+them. The observed and genic-limit comparisons warn when the relative
+spectrum leaves `warn_bounds`. Nothing is stored.
 
 ## Targets
 
@@ -321,48 +333,124 @@ warns on exactly that case.
 
 ## See also
 
+[`define_genome_effects()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+for dominance and A x A effects;
+[`extract_genetic_variance()`](https://austin-putz.github.io/tidybreed/reference/extract_genetic_variance.md)
+to measure what a population has;
 [`define_trait()`](https://austin-putz.github.io/tidybreed/reference/define_trait.md),
 [`define_effect_cov_matrix()`](https://austin-putz.github.io/tidybreed/reference/define_effect_cov_matrix.md),
-[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md),
+[`define_genome_effect_terms()`](https://austin-putz.github.io/tidybreed/reference/define_genome_effect_terms.md)
+for known coefficients,
+[`remove_generated_effects()`](https://austin-putz.github.io/tidybreed/reference/remove_generated_effects.md),
 [`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md).
 
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-# Single trait — all loci on chr 1-5 become QTL; write the target and
-# calibrate to it in one call
-pop <- pop |> define_trait("ADG")
+# A small in-memory population with two founder lines
+set.seed(1)
+pop <- open_pop(pop_name = "dae_example", db_name = ":memory:") |>
+  define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "Duroc") |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "Landrace")
+#> duckdb keeps downloaded extensions and secrets in a temporary directory:
+#> ℹ /tmp/RtmpYogPXV/duckdb
+#> This is removed when the R session ends.
+#> • Extensions are re-downloaded each session.
+#> • Secrets are lost.
+#> ℹ Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).
+#> ℹ Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).
+#> ℹ See ?duckdb_storage for details and alternatives.
+#> Opened in-memory population 'dae_example'
+#> Defined genome: 200 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb
+#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins
+#>   Views created: genome_effect_terms, genome_effect_loci
+#> Generating 100 founder haplotypes (method = "uniform")...
+#>   Created founder_haplotypes for line 'Duroc' (100 haplotypes x 200 loci)
+#> Generating 100 founder haplotypes (method = "uniform")...
+#>   Created founder_haplotypes for line 'Landrace' (100 haplotypes x 200 loci)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  dplyr::filter(line_name == "Duroc") |>
+  add_founders(n_males = 20, n_females = 40, line_name = "Duroc")
+#> Added 60 founders (20 males, 40 females) to line 'Duroc'
+for (t in c("ADG", "BW", "FCR", "LMA", "IMF", "BF")) pop <- define_trait(pop, t)
+#> Added trait 'ADG'.
+#> Added trait 'BW'.
+#> Added trait 'FCR'.
+#> Added trait 'LMA'.
+#> Added trait 'IMF'.
+#> Added trait 'BF'.
+
+# The Duroc founder pool as the base (the default would pool both lines)
+duroc <- get_table(pop, "founder_haplotypes") |>
+  dplyr::filter(line_name == "Duroc")
+
+# One trait: every locus on chromosome 1 is a QTL. G writes the target to
+# trait_var_comp and calibrates to it in one transaction.
 pop <- pop |>
   get_table("genome_meta") |>
-  dplyr::filter(chr_name %in% as.character(1:5)) |>
-  define_additive_effects("ADG", G = 0.25)
+  dplyr::filter(chr_name == "1") |>
+  define_additive_effects("ADG", G = 0.25, base_tbl = duroc, seed = 11)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [0.826, 0.826] of the target (sampling LD of 100 haplotypes).
+#> Set additive effects for 100 QTL on trait 'ADG' (base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.25.
 
-# Correlated traits — shared QTL set, exact G (variances and correlation)
-pop <- pop |> define_trait("BW")
+# Two correlated traits on one shared QTL set: both variances and the
+# correlation are delivered exactly
 G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
-            dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
+            dimnames = list(c("BW", "FCR"), c("BW", "FCR")))
 pop <- pop |>
   get_table("genome_meta") |>
-  define_additive_effects(c("ADG", "BW"), G = G)
+  define_additive_effects(c("BW", "FCR"), G = G, base_tbl = duroc, seed = 12)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [1.01, 1.12] of the target (sampling LD of 100 haplotypes).
+#> Set correlated additive effects for traits: BW, FCR (method: shared; base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered [BW,BW = 0.25; BW,FCR = 0.1; FCR,FCR = 0.3].
 
-# A target stored beforehand is read back: no G
-pop <- pop |> define_trait("FCR") |>
-  define_effect_cov_matrix("additive", 0.1, trait_name = "FCR")
-pop <- pop |> get_table("genome_meta") |> define_additive_effects("FCR")
-
-# Exact in the generation-0 individuals themselves, LD included
+# A target stored beforehand is read back when G is omitted
+pop <- pop |> define_effect_cov_matrix("additive", 0.4, trait_name = "LMA")
+#> Stored 'additive' covariance matrix for: LMA.
 pop <- pop |>
   get_table("genome_meta") |>
-  define_additive_effects("FCR", anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
+  define_additive_effects("LMA", base_tbl = duroc, seed = 13)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [1.21, 1.21] of the target (sampling LD of 100 haplotypes).
+#> Set additive effects for 200 QTL on trait 'LMA' (base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.4.
 
-# Crossbreeding: three variants. The common fallback names its base to say
-# "yes, pool"; each line's variant centers on its own founder pool by default.
-gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1")
-pop <- gm |> define_additive_effects("ADG",
-               base_tbl = get_table(pop, "founder_haplotypes"))
-pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
-pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
-} # }
+# Exact in the founders themselves, linkage disequilibrium included
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_additive_effects("IMF", G = 0.1, anchor = "realised",
+    base_tbl = get_table(pop, "ind_meta"), seed = 14)
+#> Set additive effects for 200 QTL on trait 'IMF' (base: ind_meta; scope: all lines, both parents' copies): exact under the realised anchor; delivered variance 0.1.
+pop |>
+  get_table("ind_meta") |>
+  extract_genetic_variance(trait_name = "IMF")
+#> Realised genetic covariances of the 60 selected individuals (frequencies and regressions are the cohort's own).
+#> # A tibble: 3 × 7
+#>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor
+#>   <chr>           <chr>        <chr>            <dbl> <int> <chr>         <chr> 
+#> 1 additive        IMF          IMF              0.100    60 full          reali…
+#> 2 between_compon… IMF          IMF              0        60 full          reali…
+#> 3 total           IMF          IMF              0.100    60 full          reali…
+
+# Crossbreeding: a common variant centred on the pooled founder table
+# (named on purpose, so no Wahlund warning), plus one variant per line,
+# each centred on that line's own pool and reading the common target
+gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "2")
+pop <- gm |> define_additive_effects("BF", G = 0.2,
+  base_tbl = get_table(pop, "founder_haplotypes"), seed = 15)
+#> The founder pool (pool expectation under random pairing) sees relative spectrum [0.889, 0.889] of the target (sampling LD of 200 haplotypes).
+#> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.2.
+pop <- gm |> define_additive_effects("BF", line_name = "Duroc", seed = 16)
+#> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes [1 filter]; scope: line Duroc, both parents' copies): exact under the genic anchor; delivered variance 0.2.
+#> Line-specific effects are centred on line Duroc's own base, so they add no difference between line means. For differences between lines, use common effects centred on one reference line (see ?define_additive_effects).
+pop <- gm |> define_additive_effects("BF", line_name = "Landrace", seed = 17)
+#> Set additive effects for 100 QTL on trait 'BF' (base: founder_haplotypes [1 filter]; scope: line Landrace, both parents' copies): exact under the genic anchor; delivered variance 0.2.
+#> Line-specific effects are centred on line Landrace's own base, so they add no difference between line means. For differences between lines, use common effects centred on one reference line (see ?define_additive_effects).
+
+# Evaluate the breeding values
+pop <- pop |> get_table("ind_meta") |> add_tgv(c("ADG", "BW", "FCR", "BF"))
+#> Computed TGV for 60 individuals on trait 'ADG' (additive).
+#> Computed TGV for 60 individuals on trait 'BW' (additive).
+#> Computed TGV for 60 individuals on trait 'FCR' (additive).
+#> Computed TGV for 60 individuals on trait 'BF' (additive).
+close_pop(pop)
 ```

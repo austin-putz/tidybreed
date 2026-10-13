@@ -27,7 +27,7 @@ write identical rows for the same seed."><meta property="og:image" content="http
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,60 +96,97 @@ write identical rows for the same seed.</p>
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
 <dd><p>A <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code><code>("genome_meta")</code>,
-optionally filtered. Its loci are the QTL of every trait.</p></dd>
+optionally filtered with <code><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">dplyr::filter()</a></code>. Every selected locus is a QTL
+of every trait in the call (one shared QTL set), and A x A pairs are
+drawn or checked within it.</p></dd>
 
 
 <dt id="arg-trait-name">trait_name<a class="anchor" aria-label="anchor" href="#arg-trait-name"></a></dt>
-<dd><p>Character vector of existing traits.</p></dd>
+<dd><p>Character vector of existing traits (from
+<code><a href="define_trait.html">define_trait()</a></code>). With two or more, the architectures are drawn jointly
+and each target is a <code>k x k</code> matrix across them; the call calibrates
+the traits together, so a stored block that pairs one of them with a
+trait outside the call is refused.</p></dd>
 
 
 <dt id="arg-g-a-g-d-g-aa">G_A, G_D, G_AA<a class="anchor" aria-label="anchor" href="#arg-g-a-g-d-g-aa"></a></dt>
-<dd><p>Optional <code>k x k</code> targets (a number for one trait),
-named in <code>trait_name</code> order or unnamed. Written with the effects; never
-over a stored block. <code>NULL</code> reads the block from <code>trait_var_comp_tbl</code>.</p></dd>
+<dd><p>Optional targets for the <code>additive</code>, <code>dominance</code> and
+<code>additive_by_additive</code> blocks: a symmetric positive-semidefinite
+<code>k x k</code> matrix with dimnames in <code>trait_name</code> order (or unnamed, taken in
+that order), or a single number when there is one trait. A passed block
+is written to <code>trait_var_comp</code> with the effects, and is refused if that
+block is already stored for any of the traits. <code>NULL</code> (default) reads
+the block from storage, and leaves it out of the model when none is
+stored. An additive block is required; see <em>Targets</em>.</p></dd>
 
 
 <dt id="arg-trait-var-comp-tbl">trait_var_comp_tbl<a class="anchor" aria-label="anchor" href="#arg-trait-var-comp-tbl"></a></dt>
 <dd><p>Optional filtered
-<code>get_table(pop, "trait_var_comp")</code>: the stored rows to use for blocks not
-passed. <code>NULL</code> reads the stored population-wide rows.</p></dd>
+<code>get_table(pop, "trait_var_comp")</code>: the stored rows to use for the blocks
+not passed, e.g. <code>filter(effect_name != "dominance")</code> to leave a stored
+dominance target out of this model. <code>NULL</code> (default) reads the stored
+population-wide rows.</p></dd>
 
 
 <dt id="arg-pairs">pairs<a class="anchor" aria-label="anchor" href="#arg-pairs"></a></dt>
-<dd><p>Optional data frame <code>locus_name_1</code>, <code>locus_name_2</code>.</p></dd>
+<dd><p>Optional data frame with columns <code>locus_name_1</code> and
+<code>locus_name_2</code>: your own A x A design, one row per interacting pair of
+selected loci. Needs an <code>additive_by_additive</code> target; not with
+<code>n_pairs</code>. See <em>Pairs</em>.</p></dd>
 
 
 <dt id="arg-n-pairs">n_pairs<a class="anchor" aria-label="anchor" href="#arg-n-pairs"></a></dt>
-<dd><p>Optional number of random pairs, <code>1..floor(m / 2)</code>.</p></dd>
+<dd><p>Optional whole number, <code>1</code> to <code>floor(m / 2)</code> for <code>m</code>
+selected loci: how many random disjoint pairs to draw. <code>NULL</code> (default,
+with <code>pairs = NULL</code>) pairs every QTL once. Needs an
+<code>additive_by_additive</code> target.</p></dd>
 
 
 <dt id="arg-anchor">anchor<a class="anchor" aria-label="anchor" href="#arg-anchor"></a></dt>
-<dd><p><code>"genic"</code> (default) or <code>"realised"</code>.</p></dd>
+<dd><p><code>"genic"</code> (default) or <code>"realised"</code>: the reference
+population the targets are exact for. See <em>Details</em>.</p></dd>
 
 
 <dt id="arg-dominance-degree-mean-dominance-degree-sd">dominance_degree_mean, dominance_degree_sd<a class="anchor" aria-label="anchor" href="#arg-dominance-degree-mean-dominance-degree-sd"></a></dt>
-<dd><p>Mean and standard
-deviation of the dominance degrees that shape the dominance
-architecture. Defaults <code>0.19</code> and <code>0.097</code>.</p></dd>
+<dd><p>Shape of the dominance
+architecture: each QTL's dominance effect is drawn as <code>d = h |a|</code>, with
+degree <code>h ~ N(mean, sd)</code> and <code>a</code> its sampled additive effect, before
+calibration rescales the dominance effects to <code>G_D</code>. A positive mean
+makes most heterozygotes better than the homozygote average, so the
+model has inbreeding depression. Defaults <code>0.19</code> and <code>0.097</code>. Used only
+with a non-zero dominance target; both <code>0</code> is refused.</p></dd>
 
 
 <dt id="arg-inbreeding-depression">inbreeding_depression<a class="anchor" aria-label="anchor" href="#arg-inbreeding-depression"></a></dt>
-<dd><p>Optional numeric vector named by trait.</p></dd>
+<dd><p>Optional numeric vector named by trait, e.g.
+<code>c(ADG = 1.2)</code>: the drop in the trait mean per unit of inbreeding <code>F</code>
+(positive = depression) to build in. For each named trait it replaces
+<code>dominance_degree_mean</code> with the value that delivers it; traits not
+named keep <code>dominance_degree_mean</code>. Needs a non-zero dominance target
+and <code>dominance_degree_sd &gt; 0</code>. See <em>Inbreeding depression</em>.</p></dd>
 
 
 <dt id="arg-base-tbl">base_tbl<a class="anchor" aria-label="anchor" href="#arg-base-tbl"></a></dt>
-<dd><p>Optional <code>tidybreed_table</code> selecting the base population,
-as in <code><a href="define_additive_effects.html">define_additive_effects()</a></code>. Required under <code>"realised"</code>.</p></dd>
+<dd><p>Optional <code>tidybreed_table</code> from <code><a href="get_table.html">get_table()</a></code> (optionally
+filtered) whose allele frequencies are the base: the founder pool
+(<code>founder_haplotypes</code>), allele copies (<code>ind_haplotype</code>) or individuals
+(any table with <code>id_ind</code>). The base frequencies centre the effects and
+set the genic anchor. <code>NULL</code> (default) uses the whole founder table.
+Required under <code>anchor = "realised"</code>, where it must select individuals.</p></dd>
 
 
 <dt id="arg-warn-bounds">warn_bounds<a class="anchor" aria-label="anchor" href="#arg-warn-bounds"></a></dt>
-<dd><p><code>c(lower, upper)</code> for the comparison with another
-population, or <code>NULL</code> to turn it off.</p></dd>
+<dd><p><code>c(lower, upper)</code> with <code>0 &lt; lower &lt;= upper</code>: after
+calibration the delivered blocks are compared with another population's
+view (see <em>Details</em>), and a ratio outside the bounds warns. Default
+<code>c(0.8, 1.25)</code>; <code>NULL</code> turns the comparison off.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>The <code>tidybreed_pop</code>, invisibly.</p>
+    <p>The <code>tidybreed_pop</code>, invisibly. The effects are written to the
+<code>genome_effects</code> tables under the owner <code>"generated"</code>, and any passed
+target to <code>trait_var_comp</code>. Run <code><a href="add_tgv.html">add_tgv()</a></code> to evaluate them.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -181,13 +218,14 @@ gives another floor, and with every base frequency at <code>0.5</code> under
 <p><strong>The anchor</strong> is the reference covariance the calibration is exact for:</p><ul><li><p><code>"genic"</code> (default): the random-mating (HWE + linkage-equilibrium) limit
 at the base allele frequencies. Use it for multi-generation studies.</p></li>
 <li><p><code>"realised"</code>: the covariances of the individuals <code>base_tbl</code> selects,
-linkage disequilibrium included. The effects are still <strong>stored</strong> with
-HWE-referenced contrasts centred at the base frequencies, so the stored
-<code>additive</code> / <code>dominance</code> split is not the cohort's; the total is exact,
-and <code><a href="extract_genetic_variance.html">extract_genetic_variance()</a></code><code>(anchor = "realised")</code> on the same
-individuals gives the targets back. <code>base_tbl</code> must select individuals
-with complete genotypes, and the in-memory design arrays have a size
-limit.</p></li>
+linkage disequilibrium included. <code><a href="extract_genetic_variance.html">extract_genetic_variance()</a></code><code>(anchor = "realised")</code> on the same individuals gives each target block back. The
+blocks need not be uncorrelated in that cohort, so its total variance
+also carries a <code>between_components</code> covariance. The effects are still
+<strong>stored</strong> with HWE-referenced contrasts centred at the base frequencies,
+so the stored <code>additive</code> / <code>dominance</code> components of <code>ind_tgv</code> are not
+the cohort's own split; each individual's total genetic value is the
+same either way. <code>base_tbl</code> must select individuals with complete
+genotypes, and the in-memory design arrays have a size limit.</p></li>
 </ul><p>Under linkage disequilibrium the <code>additive</code> component of a realised cohort
 is a contrast component, not a joint regression: calibration is exact for
 the anchor and nothing more.</p>
@@ -290,29 +328,159 @@ approximate, with no closeness guarantee; a message gives requested and
 delivered values. It is not stored.</p>
     </div>
     <div class="section level2">
+    <h2 id="reproducibility">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility"></a></h2>
+
+
+<p>There is no <code>seed</code> argument: the draws use R's random number stream, so
+call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> before the function to reproduce a model. Every input
+check runs before the first draw, so a refused call consumes no random
+numbers.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code>, <code><a href="extract_genetic_variance.html">extract_genetic_variance()</a></code>,
-<code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code>, <code><a href="remove_generated_effects.html">remove_generated_effects()</a></code>,
-<code><a href="aa_terms.html">aa_terms()</a></code>.</p></div>
+    <div class="dont-index"><p><code><a href="define_additive_effects.html">define_additive_effects()</a></code> for line-specific or imprinted
+additive effects; <code><a href="extract_genetic_variance.html">extract_genetic_variance()</a></code> to measure what a
+population has; <code><a href="define_effect_cov_matrix.html">define_effect_cov_matrix()</a></code> to store a target first;
+<code><a href="define_genome_effect_terms.html">define_genome_effect_terms()</a></code>, <code><a href="ad_terms.html">ad_terms()</a></code> and <code><a href="aa_terms.html">aa_terms()</a></code> for known
+coefficients; <code><a href="remove_generated_effects.html">remove_generated_effects()</a></code>.</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="st">"ADG"</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A small in-memory population</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="open_pop.html">open_pop</a></span><span class="op">(</span>pop_name <span class="op">=</span> <span class="st">"dge_example"</span>, db_name <span class="op">=</span> <span class="st">":memory:"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_genome.html">define_genome</a></span><span class="op">(</span>n_loci <span class="op">=</span> <span class="fl">200</span>, n_chr <span class="op">=</span> <span class="fl">2</span>, chr_len_Mb <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="define_founder_haplotypes.html">define_founder_haplotypes</a></span><span class="op">(</span>n_haplotypes <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> duckdb keeps downloaded extensions and secrets in a temporary directory:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> /tmp/RtmpYogPXV/duckdb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> This is removed when the R session ends.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Extensions are re-downloaded each session.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Secrets are lost.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #0000BB;">ℹ</span> See ?duckdb_storage for details and alternatives.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Opened in-memory population 'dge_example'</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Defined genome: 200 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Views created: genome_effect_terms, genome_effect_loci</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generating 200 founder haplotypes (method = "uniform")...</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Created founder_haplotypes (200 haplotypes x 200 loci)</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"founder_haplotypes"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="add_founders.html">add_founders</a></span><span class="op">(</span>n_males <span class="op">=</span> <span class="fl">50</span>, n_females <span class="op">=</span> <span class="fl">50</span>, line_name <span class="op">=</span> <span class="st">"A"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added 100 founders (50 males, 50 females) to line 'A'</span>
+<span class="r-in"><span><span class="kw">for</span> <span class="op">(</span><span class="va">t</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"BF"</span>, <span class="st">"WW"</span>, <span class="st">"LS"</span>, <span class="st">"FI"</span>, <span class="st">"IMF"</span><span class="op">)</span><span class="op">)</span> <span class="va">pop</span> <span class="op">&lt;-</span> <span class="fu"><a href="define_trait.html">define_trait</a></span><span class="op">(</span><span class="va">pop</span>, <span class="va">t</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'ADG'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'BF'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'WW'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'LS'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'FI'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Added trait 'IMF'.</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Additive, dominance and A x A targets for one trait, QTL on chromosome 1.</span></span></span>
+<span class="r-in"><span><span class="co"># The targets are written to trait_var_comp with the effects; the A x A</span></span></span>
+<span class="r-in"><span><span class="co"># pairs are a random matching of the QTL.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">21</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
-<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"1"</span>, <span class="st">"2"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"1"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"ADG"</span>, G_A <span class="op">=</span> <span class="fl">0.3</span>, G_D <span class="op">=</span> <span class="fl">0.1</span>, G_AA <span class="op">=</span> <span class="fl">0.05</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Drew 50 random A x A pairs: every QTL paired once (floor(100 / 2)), as AlphaSimR does. Pass n_pairs for fewer pairs, or pairs for a chosen design (a locus may then appear in several pairs).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 100 QTL and 50 pairs on trait ADG (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.3; dominance variance 0.1; additive-by-additive variance 0.05.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): ADG = 0.1266. G_A - floor has smallest eigenvalue 0.578 on the correlation scale.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): implied ADG = 2.233.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): ADG: 100 QTL with a != 0, 100 with d != 0, 50 pairs with e != 0.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.892, 0.892] of the target (sampling LD of 200 haplotypes).</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Additive-only first, dominance added later: the additive draw is the same</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"BF"</span>, G_A <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"dominance"</span>, <span class="fl">0.2</span>, trait_name <span class="op">=</span> <span class="st">"BF"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"BF"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-in"><span><span class="co"># Measure it: the genic anchor at the founder frequencies gives the</span></span></span>
+<span class="r-in"><span><span class="co"># targets back</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="extract_genetic_variance.html">extract_genetic_variance</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"ADG"</span>, anchor <span class="op">=</span> <span class="st">"genic"</span>,</span></span>
+<span class="r-in"><span>    base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"founder_haplotypes"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Genic (HWE + linkage equilibrium) expectation at the allele frequencies of 'founder_haplotypes', an explicit base (allele copies).</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 4 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> additive        ADG          ADG              0.3     100 full          genic </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> dominance       ADG          ADG              0.100   100 full          genic </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> additive_by_ad… ADG          ADG              0.05    100 full          genic </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> total           ADG          ADG              0.45    100 full          genic </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Two correlated traits with dominance, and an inbreeding depression for</span></span></span>
+<span class="r-in"><span><span class="co"># BF (approximate with several traits: a message gives the delivered value)</span></span></span>
+<span class="r-in"><span><span class="va">G_A</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.1</span>, <span class="fl">0.1</span>, <span class="fl">0.4</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">G_D</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">22</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_genome_effects</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"BF"</span>, <span class="st">"WW"</span><span class="op">)</span>, G_A <span class="op">=</span> <span class="va">G_A</span>, G_D <span class="op">=</span> <span class="va">G_D</span>,</span></span>
+<span class="r-in"><span>    inbreeding_depression <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>BF <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 200 QTL on traits BF, WW (base: founder_haplotypes): exact under the genic anchor; delivered additive [BF,BF = 0.3; BF,WW = 0.1; WW,WW = 0.4]; dominance [BF,BF = 0.08; BF,WW = -1.43077e-17; WW,WW = 0.05].</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): BF = 0.02238, WW = 0.01478. G_A - floor has smallest eigenvalue 0.658 on the correlation scale.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): BF requested 1.5, delivered 1.18895. Approximate for several traits: each requested trait's degree mean is solved as if it stood alone and the joint calibration mixes the columns, so there is no closeness guarantee.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097; solved degree mean BF = 0.0574576): BF: 200 QTL with a != 0, 200 with d != 0; WW: 200 QTL with a != 0, 200 with d != 0.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.923, 1.02] of the target (sampling LD of 200 haplotypes).</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Your own A x A design: one hub locus interacting with three others</span></span></span>
+<span class="r-in"><span><span class="va">pairs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>locus_name_1 <span class="op">=</span> <span class="st">"Locus_10"</span>,</span></span>
+<span class="r-in"><span>                    locus_name_2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Locus_20"</span>, <span class="st">"Locus_30"</span>, <span class="st">"Locus_40"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">23</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"1"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"LS"</span>, G_A <span class="op">=</span> <span class="fl">0.2</span>, G_AA <span class="op">=</span> <span class="fl">0.05</span>, pairs <span class="op">=</span> <span class="va">pairs</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 100 QTL and 3 pairs on trait LS (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 0.2; additive-by-additive variance 0.05.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): LS = 0.09074. G_A - floor has smallest eigenvalue 0.5463 on the correlation scale.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): LS: 100 QTL with a != 0, 3 pairs with e != 0.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [0.988, 0.988] of the target (sampling LD of 200 haplotypes).</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Additive only first, dominance added later. The stored G_A is read back,</span></span></span>
+<span class="r-in"><span><span class="co"># and with the same seed the additive architecture draw is unchanged.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">24</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"FI"</span>, G_A <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing) sees relative spectrum [1.12, 1.12] of the target (sampling LD of 200 haplotypes).</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="define_effect_cov_matrix.html">define_effect_cov_matrix</a></span><span class="op">(</span><span class="st">"dominance"</span>, <span class="fl">0.2</span>, trait_name <span class="op">=</span> <span class="st">"FI"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Stored 'dominance' covariance matrix for: FI.</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">24</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"FI"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Replaced 200 generated terms of trait 'FI'.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 200 QTL on trait FI (base: founder_haplotypes): exact under the genic anchor; delivered additive variance 1; dominance variance 0.2.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): FI = 0.08266. G_A - floor has smallest eigenvalue 0.9173 on the correlation scale.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the genic anchor's frequencies): implied FI = 3.95.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): FI: 200 QTL with a != 0, 200 with d != 0.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [1.11, 1.11] of the target (sampling LD of 200 haplotypes).</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Exact in the founders themselves, linkage disequilibrium included</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">25</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"genome_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">chr_name</span> <span class="op">==</span> <span class="st">"2"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu">define_genome_effects</span><span class="op">(</span><span class="st">"IMF"</span>, G_A <span class="op">=</span> <span class="fl">0.2</span>, G_D <span class="op">=</span> <span class="fl">0.05</span>, anchor <span class="op">=</span> <span class="st">"realised"</span>,</span></span>
+<span class="r-in"><span>    base_tbl <span class="op">=</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="va">pop</span>, <span class="st">"ind_meta"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Set genome effects for 100 QTL on trait IMF (base: ind_meta): exact under the realised anchor; delivered additive variance 0.2; dominance variance 0.05.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): IMF = 0.01428. G_A - floor has smallest eigenvalue 0.9286 on the correlation scale.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the realised anchor's frequencies): implied IMF = 1.484.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): IMF: 100 QTL with a != 0, 100 with d != 0.</span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="extract_genetic_variance.html">extract_genetic_variance</a></span><span class="op">(</span>trait_name <span class="op">=</span> <span class="st">"IMF"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Realised genetic covariances of the 100 selected individuals (frequencies and regressions are the cohort's own).</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 4 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> additive        IMF          IMF             0.2      100 full          reali…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> dominance       IMF          IMF             0.05     100 full          reali…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> between_compon… IMF          IMF            -<span style="color: #BB0000;">0.015</span><span style="color: #BB0000; text-decoration: underline;">6</span>   100 full          reali…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> total           IMF          IMF             0.234    100 full          reali…</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Evaluate the genetic values</span></span></span>
+<span class="r-in"><span><span class="va">pop</span> <span class="op">&lt;-</span> <span class="va">pop</span> <span class="op">|&gt;</span> <span class="fu"><a href="get_table.html">get_table</a></span><span class="op">(</span><span class="st">"ind_meta"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="add_tgv.html">add_tgv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ADG"</span>, <span class="st">"IMF"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 100 individuals on trait 'ADG' (additive, dominance, interaction).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Computed TGV for 100 individuals on trait 'IMF' (additive, dominance).</span>
+<span class="r-in"><span><span class="fu"><a href="close_pop.html">close_pop</a></span><span class="op">(</span><span class="va">pop</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -42,11 +42,12 @@ aa_terms(
 - locus_name_1, locus_name_2:
 
   Character vectors of the same length, one pair per position. A pair's
-  two loci must differ.
+  two loci must differ; a locus may appear in several pairs.
 
 - e:
 
-  Numeric coefficient per pair, recycled.
+  Numeric A x A coefficient per pair, or one recycled. Pairs with
+  `e = 0` are dropped.
 
 - p_1, p_2:
 
@@ -118,8 +119,48 @@ It is written to no table, for the reason given in
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-pop |>
+# Two pairs sharing one locus
+aa_terms(locus_name_1 = c("Locus_10", "Locus_10"),
+         locus_name_2 = c("Locus_44", "Locus_50"),
+         e = c(0.08, -0.03), p_1 = 0.35, p_2 = c(0.60, 0.50))
+#> Implied genetic mean (functional coding), reported only — written to no table: (Locus_10, Locus_44) mu = -0.0048; (Locus_10, Locus_50) mu =  0.0000. Running total over these pairs: -0.0048.
+#>                    term_id locus_name contrast_name center_value
+#> 1 aa:8:Locus_10|8:Locus_44   Locus_10      additive          0.5
+#> 2 aa:8:Locus_10|8:Locus_44   Locus_44      additive          0.5
+#> 3 aa:8:Locus_10|8:Locus_50   Locus_10      additive          0.5
+#> 4 aa:8:Locus_10|8:Locus_50   Locus_50      additive          0.5
+#>   copy_count_value dosage_value genome_value effect_name
+#> 1               NA           NA         0.08        <NA>
+#> 2               NA           NA         0.08        <NA>
+#> 3               NA           NA        -0.03        <NA>
+#> 4               NA           NA        -0.03        <NA>
+
+# A complete functional model: main effects plus one interaction
+set.seed(1)
+pop <- open_pop(pop_name = "aa_example", db_name = ":memory:") |>
+  define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100)
+#> duckdb keeps downloaded extensions and secrets in a temporary directory:
+#> ℹ /tmp/RtmpYogPXV/duckdb
+#> This is removed when the R session ends.
+#> • Extensions are re-downloaded each session.
+#> • Secrets are lost.
+#> ℹ Run duckdb(shared_home = TRUE) (or create ~/.duckdb) to keep them (suitable for most users).
+#> ℹ Run duckdb(shared_home = FALSE) to accept the temporary directory (and silence this message).
+#> ℹ See ?duckdb_storage for details and alternatives.
+#> Opened in-memory population 'aa_example'
+#> Defined genome: 60 loci across 2 chromosomes | chr lengths (Mb): all equal to 100 Mb
+#>   Tables written: genome_meta, genome_map, ind_haplotype, ind_genotype, ind_crossover, chr_inheritance, chr_recombination, genome_effects, genome_effect_members, genome_effect_member_origins
+#>   Views created: genome_effect_terms, genome_effect_loci
+#> Generating 100 founder haplotypes (method = "uniform")...
+#>   Created founder_haplotypes (100 haplotypes x 60 loci)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "A")
+#> Added 20 founders (10 males, 10 females) to line 'A'
+pop <- define_trait(pop, "ADG")
+#> Added trait 'ADG'.
+pop <- pop |>
   define_genome_effect_terms(
     trait_name = "ADG",
     terms = rbind(
@@ -127,5 +168,8 @@ pop |>
                a = c(0.30, -0.12), d = c(0.10, 0.05), p = c(0.35, 0.60)),
       aa_terms(locus_name_1 = "Locus_10", locus_name_2 = "Locus_44",
                e = 0.08, p_1 = 0.35, p_2 = 0.60)))
-} # }
+#> Implied genetic mean (functional coding), reported only — written to no table: Locus_10 mu = -0.0445; Locus_44 mu =  0.0000. Running total over these single-locus main effects: -0.0445.
+#> Implied genetic mean (functional coding), reported only — written to no table: (Locus_10, Locus_44) mu = -0.0048. Running total over these pairs: -0.0048.
+#> Wrote 5 genome-effect terms (6 member rows) for trait 'ADG' under owner 'custom' [append].
+close_pop(pop)
 ```
