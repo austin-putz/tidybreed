@@ -851,7 +851,10 @@ TGV_COMPONENT_NAMES <- c("additive", "dominance", "indicator", "interaction")
     "       CAST(SUM(h.n_bad) AS INTEGER) AS n_bad ",
     "FROM hit h JOIN ", term_tmp, " t ",
     "  ON t.id_genome_effect = h.id_genome_effect ",
-    "GROUP BY 1, 2, 3"
+    "GROUP BY 1, 2, 3 ",
+    # Fixed row order: `id_tgv` is numbered in this order, and a parallel
+    # GROUP BY returns its groups in whatever order the threads finish.
+    "ORDER BY 1, 2, 3"
   )
 }
 

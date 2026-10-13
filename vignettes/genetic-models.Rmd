@@ -69,7 +69,7 @@ pop <- pop |>
                e = 0.08, p_1 = 0.35, p_2 = 0.60, coding = "functional")))
 
 pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
-get_table(pop, "ind_tgv") |> collect() |> arrange(id_ind) |> head(6)
+get_table(pop, "ind_tgv") |> collect() |> arrange(id_tgv) |> head(6)
 ```
 
 Each individual gets one value per component; the `ind_tgv_total` view adds

@@ -90,3 +90,31 @@ test_that("a genetic value too large for the exact accumulator errors with a tid
     suppressMessages(pop |> get_table("ind_meta") |> add_tgv("A")),
     "too large to evaluate exactly")
 })
+
+# The ids are written values too. The evaluator's GROUP BY returns rows in
+# whatever order DuckDB's threads finish, and `id_tgv` is numbered in row
+# order, so two identical populations got the same genetic values under
+# different `id_tgv`s until the evaluator sorted its result.
+test_that("add_tgv() numbers id_tgv identically in two identical populations", {
+  run <- function(name) {
+    set.seed(5)
+    pop <- suppressMessages(make_test_pop(name, n_loci = 60, n_chr = 2,
+                                          n_males = 100, n_females = 100))
+    on.exit(close_pop(pop), add = TRUE)
+    for (t in c("A", "B")) {
+      pop <- suppressMessages(define_trait(pop, t))
+      pop <- suppressMessages(define_genome_effect_terms(pop, t, rbind(
+        ad_terms(c("Locus_10", "Locus_44"), a = c(0.3, -0.1), d = c(0.1, 0.05),
+                 p = c(0.35, 0.6), report = FALSE),
+        aa_terms("Locus_10", "Locus_44", e = 0.08, p_1 = 0.35, p_2 = 0.6,
+                 report = FALSE))))
+    }
+    suppressMessages(pop |> get_table("ind_meta") |> add_tgv(c("A", "B")))
+    DBI::dbGetQuery(pop$db_conn, paste(
+      "SELECT id_tgv, id_ind, trait_name, component_name, tgv_value",
+      "FROM ind_tgv ORDER BY id_tgv"))
+  }
+  first <- run("det_id_1")
+  expect_equal(nrow(first), 200L * 2L * 3L)
+  for (i in 2:4) expect_identical(run(paste0("det_id_", i)), first)
+})
