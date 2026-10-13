@@ -15,20 +15,27 @@ ad_terms(
 )
 }
 \arguments{
-\item{locus_name}{Character vector of locus names.}
+\item{locus_name}{Character vector of distinct locus names (from
+\code{genome_meta}).}
 
-\item{a}{Numeric additive coefficient(s), recycled to \code{locus_name}.}
+\item{a}{Numeric additive coefficient(s), one per locus or one recycled.}
 
-\item{d}{Numeric dominance coefficient(s), recycled. Default \code{0}.}
+\item{d}{Numeric dominance coefficient(s), one per locus or one recycled.
+Default \code{0} (no dominance row).}
 
-\item{p}{Numeric allele-1 frequency per locus, recycled. Required for
-\code{"cockerham"}; used for the reported mean under \code{"functional"}.}
+\item{p}{Allele-1 frequency per locus, in \verb{[0, 1]}, one per locus or one
+recycled. Always required: the centre under Cockerham coding, and the
+basis of the reported mean under functional coding (where it does not
+change the stored rows). Use the frequency of the population the model
+describes, e.g. from \code{\link[=extract_allele_freq]{extract_allele_freq()}}.}
 
-\item{coding}{\code{"functional"} (default) or \code{"cockerham"}.}
+\item{coding}{\code{"functional"} (default) or \code{"cockerham"}; see
+\emph{Description}.}
 
-\item{effect_name}{Optional label carried onto both members of each locus.}
+\item{effect_name}{Optional label carried onto every row.}
 
-\item{report}{Logical; print the implied genetic mean. Default \code{TRUE}.}
+\item{report}{Logical; print the implied genetic mean as a message.
+Default \code{TRUE}.}
 }
 \value{
 A \code{terms} data frame with the fixed builder column set (see
@@ -37,18 +44,21 @@ builder, the locus and \code{a} / \code{d}, so it never collides with another
 builder's ids when outputs are \code{rbind()}-ed.
 }
 \description{
-Expands one locus's additive and dominance coefficients into the two member
-rows \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} takes. There is no third table and no separate
-storage mode — functional coding is \code{additive} with \code{center_value = 0.5} plus
-an \code{indicator} on the heterozygous state, Cockerham coding is \code{additive} plus
-\code{dominance}, both centred at \code{p}.
+Turns each locus's additive and dominance coefficients into the \code{terms}
+rows \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}} writes: one row per non-zero
+coefficient. Functional coding gives an \code{additive} row centred at \code{0.5}
+and an \code{indicator} row on the heterozygote; Cockerham coding gives
+\code{additive} and \code{dominance} rows centred at \code{p}.
 \itemize{
-\item \code{coding = "functional"} — the genotypic value is \code{a * (g - 1) + d * 1[g = 1]},
-where \code{g} is the dosage of allele 1. Values are \strong{absolute}, so the
-genetic component has a non-zero mean by construction.
-\item \code{coding = "cockerham"} — \code{a} is the average effect \code{alpha} and \code{d} the
-dominance deviation \code{delta} on the HWE-orthogonal contrast
-(\verb{-2p^2}, \verb{2pq}, \verb{-2q^2}). Values are deviations, with mean 0.
+\item \code{coding = "functional"} (default): the genotypic value is
+\code{a * (g - 1) + d * 1[g = 1]}, where \code{g} is the dosage of allele 1 (0, 1
+or 2). So \code{a} is half the difference between the two homozygotes and \code{d}
+the heterozygote's deviation from their midpoint. Values are
+\strong{absolute}, so the genetic values have a non-zero mean.
+\item \code{coding = "cockerham"}: \code{a} is the average effect \code{alpha} and \code{d} the
+dominance effect on the HWE dominance contrast, which is \verb{-2p^2}, \verb{2pq},
+\verb{-2q^2} at dosages 0, 1, 2. Values are deviations with mean 0 under HWE
+at \code{p}.
 }
 }
 \section{The reported mean is not written anywhere}{
@@ -64,10 +74,29 @@ frequencies and LD.
 }
 
 \examples{
-\dontrun{
-tt <- ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)
-pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
-}
+# The rows only; nothing is written
+ad_terms(c("Locus_10", "Locus_20"), a = c(0.4, -0.2), d = c(0.1, 0),
+         p = c(0.3, 0.5))
+
+# The same model's statistical (Cockerham) coefficients at p = 0.3
+# (Locus_10 only): alpha = a + (q - p) d
+ad_terms("Locus_10", a = 0.4 + (0.7 - 0.3) * 0.1, d = 0.1, p = 0.3,
+         coding = "cockerham")
+
+# Write them for a trait
+set.seed(1)
+pop <- open_pop(pop_name = "ad_example", db_name = ":memory:") |>
+  define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "A")
+pop <- define_trait(pop, "ADG")
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    ad_terms("Locus_10", a = 0.4, d = 0.1, p = 0.3),
+    effect_owner = "qtl_map")
+close_pop(pop)
 }
 \seealso{
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=aa_terms]{aa_terms()}}, \code{\link[=genotype_terms]{genotype_terms()}}.

@@ -16,10 +16,12 @@ aa_terms(
 )
 }
 \arguments{
-\item{locus_name_1, locus_name_2}{Character vectors of the same length, one
-pair per position. A pair's two loci must differ.}
+\item{locus_name_1, locus_name_2}{Character vectors of the same length,
+one pair per position. A pair's two loci must differ; a
+locus may appear in several pairs.}
 
-\item{e}{Numeric coefficient per pair, recycled.}
+\item{e}{Numeric A x A coefficient per pair, or one recycled. Pairs with
+\code{e = 0} are dropped.}
 
 \item{p_1, p_2}{Allele-1 frequency of each pair's first and second locus,
 recycled. Required under both codings: the centres under Cockerham, the
@@ -88,8 +90,21 @@ table, for the reason given in \code{\link[=ad_terms]{ad_terms()}}.
 }
 
 \examples{
-\dontrun{
-pop |>
+# Two pairs sharing one locus
+aa_terms(locus_name_1 = c("Locus_10", "Locus_10"),
+         locus_name_2 = c("Locus_44", "Locus_50"),
+         e = c(0.08, -0.03), p_1 = 0.35, p_2 = c(0.60, 0.50))
+
+# A complete functional model: main effects plus one interaction
+set.seed(1)
+pop <- open_pop(pop_name = "aa_example", db_name = ":memory:") |>
+  define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "A")
+pop <- define_trait(pop, "ADG")
+pop <- pop |>
   define_genome_effect_terms(
     trait_name = "ADG",
     terms = rbind(
@@ -97,7 +112,7 @@ pop |>
                a = c(0.30, -0.12), d = c(0.10, 0.05), p = c(0.35, 0.60)),
       aa_terms(locus_name_1 = "Locus_10", locus_name_2 = "Locus_44",
                e = 0.08, p_1 = 0.35, p_2 = 0.60)))
-}
+close_pop(pop)
 }
 \seealso{
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}, \code{\link[=genotype_terms]{genotype_terms()}}.

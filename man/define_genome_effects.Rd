@@ -23,38 +23,75 @@ define_genome_effects(
 }
 \arguments{
 \item{tbl}{A \code{tidybreed_table} from \code{\link[=get_table]{get_table()}}\code{("genome_meta")},
-optionally filtered. Its loci are the QTL of every trait.}
+optionally filtered with \code{\link[dplyr:filter]{dplyr::filter()}}. Every selected locus is a QTL
+of every trait in the call (one shared QTL set), and A x A pairs are
+drawn or checked within it.}
 
-\item{trait_name}{Character vector of existing traits.}
+\item{trait_name}{Character vector of existing traits (from
+\code{\link[=define_trait]{define_trait()}}). With two or more, the architectures are drawn jointly
+and each target is a \verb{k x k} matrix across them; the call calibrates
+the traits together, so a stored block that pairs one of them with a
+trait outside the call is refused.}
 
-\item{G_A, G_D, G_AA}{Optional \verb{k x k} targets (a number for one trait),
-named in \code{trait_name} order or unnamed. Written with the effects; never
-over a stored block. \code{NULL} reads the block from \code{trait_var_comp_tbl}.}
+\item{G_A, G_D, G_AA}{Optional targets for the \code{additive}, \code{dominance} and
+\code{additive_by_additive} blocks: a symmetric positive-semidefinite
+\verb{k x k} matrix with dimnames in \code{trait_name} order (or unnamed, taken in
+that order), or a single number when there is one trait. A passed block
+is written to \code{trait_var_comp} with the effects, and is refused if that
+block is already stored for any of the traits. \code{NULL} (default) reads
+the block from storage, and leaves it out of the model when none is
+stored. An additive block is required; see \emph{Targets}.}
 
 \item{trait_var_comp_tbl}{Optional filtered
-\code{get_table(pop, "trait_var_comp")}: the stored rows to use for blocks not
-passed. \code{NULL} reads the stored population-wide rows.}
+\code{get_table(pop, "trait_var_comp")}: the stored rows to use for the blocks
+not passed, e.g. \code{filter(effect_name != "dominance")} to leave a stored
+dominance target out of this model. \code{NULL} (default) reads the stored
+population-wide rows.}
 
-\item{pairs}{Optional data frame \code{locus_name_1}, \code{locus_name_2}.}
+\item{pairs}{Optional data frame with columns \code{locus_name_1} and
+\code{locus_name_2}: your own A x A design, one row per interacting pair of
+selected loci. Needs an \code{additive_by_additive} target; not with
+\code{n_pairs}. See \emph{Pairs}.}
 
-\item{n_pairs}{Optional number of random pairs, \verb{1..floor(m / 2)}.}
+\item{n_pairs}{Optional whole number, \code{1} to \code{floor(m / 2)} for \code{m}
+selected loci: how many random disjoint pairs to draw. \code{NULL} (default,
+with \code{pairs = NULL}) pairs every QTL once. Needs an
+\code{additive_by_additive} target.}
 
-\item{anchor}{\code{"genic"} (default) or \code{"realised"}.}
+\item{anchor}{\code{"genic"} (default) or \code{"realised"}: the reference
+population the targets are exact for. See \emph{Details}.}
 
-\item{dominance_degree_mean, dominance_degree_sd}{Mean and standard
-deviation of the dominance degrees that shape the dominance
-architecture. Defaults \code{0.19} and \code{0.097}.}
+\item{dominance_degree_mean, dominance_degree_sd}{Shape of the dominance
+architecture: each QTL's dominance effect is drawn as \verb{d = h |a|}, with
+degree \code{h ~ N(mean, sd)} and \code{a} its sampled additive effect, before
+calibration rescales the dominance effects to \code{G_D}. A positive mean
+makes most heterozygotes better than the homozygote average, so the
+model has inbreeding depression. Defaults \code{0.19} and \code{0.097}. Used only
+with a non-zero dominance target; both \code{0} is refused.}
 
-\item{inbreeding_depression}{Optional numeric vector named by trait.}
+\item{inbreeding_depression}{Optional numeric vector named by trait, e.g.
+\code{c(ADG = 1.2)}: the drop in the trait mean per unit of inbreeding \code{F}
+(positive = depression) to build in. For each named trait it replaces
+\code{dominance_degree_mean} with the value that delivers it; traits not
+named keep \code{dominance_degree_mean}. Needs a non-zero dominance target
+and \code{dominance_degree_sd > 0}. See \emph{Inbreeding depression}.}
 
-\item{base_tbl}{Optional \code{tidybreed_table} selecting the base population,
-as in \code{\link[=define_additive_effects]{define_additive_effects()}}. Required under \code{"realised"}.}
+\item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
+filtered) whose allele frequencies are the base: the founder pool
+(\code{founder_haplotypes}), allele copies (\code{ind_haplotype}) or individuals
+(any table with \code{id_ind}). The base frequencies centre the effects and
+set the genic anchor. \code{NULL} (default) uses the whole founder table.
+Required under \code{anchor = "realised"}, where it must select individuals.}
 
-\item{warn_bounds}{\code{c(lower, upper)} for the comparison with another
-population, or \code{NULL} to turn it off.}
+\item{warn_bounds}{\code{c(lower, upper)} with \verb{0 < lower <= upper}: after
+calibration the delivered blocks are compared with another population's
+view (see \emph{Details}), and a ratio outside the bounds warns. Default
+\code{c(0.8, 1.25)}; \code{NULL} turns the comparison off.}
 }
 \value{
-The \code{tidybreed_pop}, invisibly.
+The \code{tidybreed_pop}, invisibly. The effects are written to the
+\code{genome_effects} tables under the owner \code{"generated"}, and any passed
+target to \code{trait_var_comp}. Run \code{\link[=add_tgv]{add_tgv()}} to evaluate them.
 }
 \description{
 Selects QTL from a filtered \code{genome_meta} table, samples additive,
@@ -105,13 +142,14 @@ gives another floor, and with every base frequency at \code{0.5} under
 \item \code{"genic"} (default): the random-mating (HWE + linkage-equilibrium) limit
 at the base allele frequencies. Use it for multi-generation studies.
 \item \code{"realised"}: the covariances of the individuals \code{base_tbl} selects,
-linkage disequilibrium included. The effects are still \strong{stored} with
-HWE-referenced contrasts centred at the base frequencies, so the stored
-\code{additive} / \code{dominance} split is not the cohort's; the total is exact,
-and \code{\link[=extract_genetic_variance]{extract_genetic_variance()}}\code{(anchor = "realised")} on the same
-individuals gives the targets back. \code{base_tbl} must select individuals
-with complete genotypes, and the in-memory design arrays have a size
-limit.
+linkage disequilibrium included. \code{\link[=extract_genetic_variance]{extract_genetic_variance()}}\code{(anchor = "realised")} on the same individuals gives each target block back. The
+blocks need not be uncorrelated in that cohort, so its total variance
+also carries a \code{between_components} covariance. The effects are still
+\strong{stored} with HWE-referenced contrasts centred at the base frequencies,
+so the stored \code{additive} / \code{dominance} components of \code{ind_tgv} are not
+the cohort's own split; each individual's total genetic value is the
+same either way. \code{base_tbl} must select individuals with complete
+genotypes, and the in-memory design arrays have a size limit.
 }
 
 Under linkage disequilibrium the \code{additive} component of a realised cohort
@@ -221,25 +259,87 @@ approximate, with no closeness guarantee; a message gives requested and
 delivered values. It is not stored.
 }
 
+\section{Reproducibility}{
+
+There is no \code{seed} argument: the draws use R's random number stream, so
+call \code{\link[=set.seed]{set.seed()}} before the function to reproduce a model. Every input
+check runs before the first draw, so a refused call consumes no random
+numbers.
+}
+
 \examples{
-\dontrun{
-pop <- pop |> define_trait("ADG")
+# A small in-memory population
 set.seed(1)
+pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
+  define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 200)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 50, n_females = 50, line_name = "A")
+for (t in c("ADG", "BF", "WW", "LS", "FI", "IMF")) pop <- define_trait(pop, t)
+
+# Additive, dominance and A x A targets for one trait, QTL on chromosome 1.
+# The targets are written to trait_var_comp with the effects; the A x A
+# pairs are a random matching of the QTL.
+set.seed(21)
 pop <- pop |>
   get_table("genome_meta") |>
-  dplyr::filter(chr_name \%in\% c("1", "2")) |>
+  dplyr::filter(chr_name == "1") |>
   define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05)
 
-# Additive-only first, dominance added later: the additive draw is the same
-set.seed(2)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF", G_A = 1)
-pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "BF")
-set.seed(2)
-pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF")
-}
+# Measure it: the genic anchor at the founder frequencies gives the
+# targets back
+pop |>
+  get_table("ind_meta") |>
+  extract_genetic_variance(trait_name = "ADG", anchor = "genic",
+    base_tbl = get_table(pop, "founder_haplotypes"))
+
+# Two correlated traits with dominance, and an inbreeding depression for
+# BF (approximate with several traits: a message gives the delivered value)
+G_A <- matrix(c(0.3, 0.1, 0.1, 0.4), 2, 2)
+G_D <- diag(c(0.08, 0.05))
+set.seed(22)
+pop <- pop |>
+  get_table("genome_meta") |>
+  define_genome_effects(c("BF", "WW"), G_A = G_A, G_D = G_D,
+    inbreeding_depression = c(BF = 1.5))
+
+# Your own A x A design: one hub locus interacting with three others
+pairs <- data.frame(locus_name_1 = "Locus_10",
+                    locus_name_2 = c("Locus_20", "Locus_30", "Locus_40"))
+set.seed(23)
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr_name == "1") |>
+  define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs)
+
+# Additive only first, dominance added later. The stored G_A is read back,
+# and with the same seed the additive architecture draw is unchanged.
+set.seed(24)
+pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", G_A = 1)
+pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
+set.seed(24)
+pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
+
+# Exact in the founders themselves, linkage disequilibrium included
+set.seed(25)
+pop <- pop |>
+  get_table("genome_meta") |>
+  dplyr::filter(chr_name == "2") |>
+  define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
+    base_tbl = get_table(pop, "ind_meta"))
+pop |>
+  get_table("ind_meta") |>
+  extract_genetic_variance(trait_name = "IMF")
+
+# Evaluate the genetic values
+pop <- pop |> get_table("ind_meta") |> add_tgv(c("ADG", "IMF"))
+close_pop(pop)
 }
 \seealso{
-\code{\link[=define_additive_effects]{define_additive_effects()}}, \code{\link[=extract_genetic_variance]{extract_genetic_variance()}},
-\code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}}, \code{\link[=remove_generated_effects]{remove_generated_effects()}},
-\code{\link[=aa_terms]{aa_terms()}}.
+\code{\link[=define_additive_effects]{define_additive_effects()}} for line-specific or imprinted
+additive effects; \code{\link[=extract_genetic_variance]{extract_genetic_variance()}} to measure what a
+population has; \code{\link[=define_effect_cov_matrix]{define_effect_cov_matrix()}} to store a target first;
+\code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}} and \code{\link[=aa_terms]{aa_terms()}} for known
+coefficients; \code{\link[=remove_generated_effects]{remove_generated_effects()}}.
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/define_genome_effect_terms.R
 \name{define_genome_effect_terms}
 \alias{define_genome_effect_terms}
-\title{Define genome effects as terms over one or more loci}
+\title{Define genome effects from coefficients you supply}
 \usage{
 define_genome_effect_terms(
   pop,
@@ -18,159 +18,193 @@ define_genome_effect_terms(
 \arguments{
 \item{pop}{A \code{tidybreed_pop}.}
 
-\item{trait_name}{Character scalar. Must exist in \code{trait_meta}.}
+\item{trait_name}{Character scalar: an existing trait (from
+\code{\link[=define_trait]{define_trait()}}).}
 
-\item{terms}{Long data frame; see \strong{The \code{terms} data frame}.}
+\item{terms}{A data frame of terms; see \emph{The \code{terms} data frame}. Usually
+built with \code{\link[=ad_terms]{ad_terms()}}, \code{\link[=aa_terms]{aa_terms()}} and \code{\link[=genotype_terms]{genotype_terms()}}.}
 
-\item{effect_owner}{Character scalar naming the writer that owns these rows,
-\strong{for replacement only}. Owners always sum and are never selected between,
-because \code{effect_owner} is part of the fallback-family signature. Default
-\code{"custom"}.}
+\item{effect_owner}{Character scalar labelling who owns these terms, so a
+later call can replace them without touching anyone else's. Owners never
+compete: all owners' terms add. Default \code{"custom"}; \code{"generated"} is
+reserved for the generators and refused.}
 
-\item{mode}{One of \code{"append"}, \code{"replace_scope"}, \code{"replace_owner"},
-\code{"replace_trait"}.}
+\item{mode}{\code{"append"} (default), \code{"replace_scope"}, \code{"replace_owner"} or
+\code{"replace_trait"}; see \emph{Replacement modes}.}
 
-\item{origin}{Scope; see \strong{Scope (\code{origin})}.}
+\item{origin}{\code{NULL} (default, every allele copy), a named list of scalars
+or a per-member data frame; see \emph{Scope (\code{origin})}.}
 
 \item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
-filtered) selecting the allele copies whose frequencies fill
-\code{center_value} on any \code{additive} or \code{dominance} member that has none:
-\code{founder_haplotypes}, \code{ind_haplotype}, or any table with an \code{id_ind}
-column, from the same \code{pop} — see \code{\link[=extract_allele_freq]{extract_allele_freq()}}. An explicit
-\code{center_value} is never overwritten; \code{indicator} members are never
-touched; the base is queried only if some centre is actually missing.
-\code{NULL} (default) fills nothing, and a missing centre is an error. The
-fill is Cockerham \code{p} only — functional coding writes \code{0.5} explicitly
-(\code{\link[=ad_terms]{ad_terms()}} does). One \code{base_tbl} gives one \code{p} per locus per call, so
-line-scoped surfaces are written one line at a time with
-\code{mode = "append"}.}
+filtered) whose allele frequencies fill any missing \code{center_value} on
+\code{additive} and \code{dominance} members: \code{founder_haplotypes},
+\code{ind_haplotype}, or any table with an \code{id_ind} column, from the same
+\code{pop} (see \code{\link[=extract_allele_freq]{extract_allele_freq()}}). Given centres are never
+overwritten, and \code{indicator} members have none. \code{NULL} (default) fills
+nothing, so a missing centre is an error. The fill is Cockerham \code{p};
+functional coding writes \code{0.5} itself (as \code{\link[=ad_terms]{ad_terms()}} does). One call
+gives one \code{p} per locus, so write line-specific terms one line per call.}
 
-\item{require_complete}{Logical. When \code{TRUE}, an indicator surface must name
-every reachable \verb{(copy_count, dosage)} state on every member — including
-\code{copy_count_value = 0} where a chromosome can be absent. Default \code{FALSE}
-(sparse: a cell you do not write contributes zero).}
+\item{require_complete}{Logical. \code{TRUE} requires an \code{indicator} table to
+cover every reachable genotype state of its loci (including
+\code{copy_count_value = 0} where a chromosome can be absent). Default
+\code{FALSE}: a state you leave out contributes zero.}
 }
 \value{
-The \code{tidybreed_pop}, invisibly.
+The \code{tidybreed_pop}, invisibly. Run \code{\link[=add_tgv]{add_tgv()}} to evaluate the
+terms; \code{get_table(pop, "genome_effect_terms")} lists them.
 }
 \description{
-Writes genome effects in the term / member / origin form: one coefficient
-(\code{genome_effects}) over one or more loci (\code{genome_effect_members}), each
-locus optionally scoped to allele copies of a given line and/or parent of
-origin (\code{genome_effect_member_origins}).
+Writes genome-effect terms whose coefficients you already know (GWAS
+estimates, a published QTL map, a hand-built test model) for one trait.
+Each term is one coefficient (\code{genome_effects}) over one or more loci
+(\code{genome_effect_members}), each locus optionally restricted to allele
+copies from a given line and/or parent (\code{genome_effect_member_origins}).
+\code{\link[=add_tgv]{add_tgv()}} then evaluates every term into \code{ind_tgv}.
 
-\code{terms} is a \strong{long data frame, one row per (term x locus)} — the same shape
-as every table \code{\link[=get_table]{get_table()}} returns. Scope is supplied separately in
-\code{origin} so the common case stays flat.
+Nothing is sampled or scaled: the coefficients are written as given, so
+the trait has whatever variance they imply. To sample effects calibrated
+to a target variance use \code{\link[=define_additive_effects]{define_additive_effects()}} or
+\code{\link[=define_genome_effects]{define_genome_effects()}}. Those generators write the reserved owner
+\code{"generated"} through the same internal engine; this function refuses that
+owner, so your terms and generated ones never replace each other.
 
-\code{define_genome_effect_terms()} writes any effect you supply; \verb{define_*_effects()}
-functions such as \code{\link[=define_additive_effects]{define_additive_effects()}} sample effects of one shape
-and write them through the same path.
+Most models are easiest to build with the helpers, which return \code{terms}
+rows that \code{rbind()} together:
+\itemize{
+\item \code{\link[=ad_terms]{ad_terms()}}: additive and dominance coefficients per locus;
+\item \code{\link[=aa_terms]{aa_terms()}}: additive-by-additive coefficients per locus pair;
+\item \code{\link[=genotype_terms]{genotype_terms()}}: any genotypic value table over one or more loci.
+}
 }
 \section{The \code{terms} data frame}{
-\tabular{lll}{
+
+One row per (term x locus), the long shape every \code{\link[=get_table]{get_table()}} table has.\tabular{lll}{
    Column \tab Required \tab Meaning \cr
-   \code{term_id} \tab yes, unless one term \tab Groups rows into one term. \strong{User-facing only} — never stored; the writer replaces it with an \code{id_genome_effect}. Any atomic type \cr
+   \code{term_id} \tab yes, unless one term \tab Groups rows into one term. \strong{Input only}: never stored; the writer assigns an \code{id_genome_effect}. Any atomic type \cr
    \code{genome_value} \tab yes \tab The term's coefficient. Constant within a \code{term_id} \cr
-   \code{effect_name} \tab no \tab Per-term label. Constant within a \code{term_id}; no mathematical meaning \cr
-   \code{locus_name} \tab yes \tab Resolved to \code{locus_id}; each locus at most once per term \cr
-   \code{contrast_name} \tab yes \tab \code{"additive"}, \code{"dominance"} or \code{"indicator"} \cr
-   \code{center_value} \tab non-indicator \tab \code{p} for Cockerham coding, \code{0.5} for functional \cr
-   \code{copy_count_value}, \code{dosage_value} \tab indicator \tab The local genotype state. \code{copy_count_value} is inferred at ordinary diploid-autosomal loci \cr
+   \code{effect_name} \tab no \tab A free label per term (constant within a \code{term_id}); no mathematical meaning \cr
+   \code{locus_name} \tab yes \tab A locus in \code{genome_meta}; each locus at most once per term \cr
+   \code{contrast_name} \tab yes \tab \code{"additive"}: each counted allele-1 copy minus \code{center_value} (\code{g - 2 * center_value} over both copies). \code{"dominance"}: the HWE dominance contrast at \code{center_value}. \code{"indicator"}: 1 when the locus is in the state below, else 0 \cr
+   \code{center_value} \tab \code{additive}, \code{dominance} \tab The centre: the allele-1 frequency \code{p} for Cockerham (statistical) coding, \code{0.5} for functional coding. May be left \code{NA} with \code{base_tbl} \cr
+   \code{copy_count_value}, \code{dosage_value} \tab \code{indicator} \tab The genotype state: copies present and copies of allele 1. \code{copy_count_value} may be left \code{NA} at ordinary diploid autosomal loci (it is 2) \cr
 }
 
 
-A single-term call may omit \code{term_id} entirely.
+A term with several members is their product, so a two-locus \code{additive}
+term is an A x A interaction and a two-locus \code{indicator} term is one cell
+of a two-locus genotype table.
 }
 
 \section{Scope (\code{origin})}{
 
 \itemize{
-\item \code{NULL} (default) — the common scope: no origin rows, matches every allele
-copy.
-\item A \strong{named scalar list}, e.g. \code{list(line_name = "Duroc", parent_origin = 1)}
-— one scope applied to every member of every term. Accepted names are
-\code{line_match_type}, \code{line_name}, \code{parent_origin} and \code{copy_count}.
-\item A \strong{data frame} with columns \code{term_id}, \code{locus_name}, \code{line_match_type},
-\code{line_name}, \code{parent_origin}, \code{copy_count} — per-member scopes, needed for
-the exact multisets a \code{dominance} or \code{indicator} member takes. Keyed by
-\code{locus_name}, so you never touch canonical slot order.
+\item \code{NULL} (default): the common scope, every allele copy.
+\item A \strong{named list of scalars} applied to every member of every term, with
+names among \code{line_name}, \code{parent_origin} (\code{1} sire, \code{2} dam),
+\code{line_match_type} and \code{copy_count}. \code{list(line_name = "Duroc")} is
+copies from line Duroc (\code{line_match_type = "exact"});
+\code{list(parent_origin = 1)} is copies from the sire, any line
+(\code{line_match_type = "any"}).
+\item A \strong{data frame} with columns \code{term_id}, \code{locus_name}, \code{line_match_type}
+(\code{"exact"}, \code{"unknown"} or \code{"any"}), \code{line_name}, \code{parent_origin},
+\code{copy_count}: one scope per member, needed for the copy combinations a
+\code{dominance} or \code{indicator} member takes, such as reciprocal dominance.
 }
 
-An \code{additive} member takes at most one origin row; a genotype member takes an
-exact multiset whose \code{copy_count}s sum to the state's copy count (2 for
-\code{dominance}, \code{copy_count_value} for \code{indicator}). A scalar list therefore
-scopes \code{additive} members but is usually not enough for a genotype member —
-the validator says so, naming the locus.
+An \code{additive} member takes at most one origin row. A \code{dominance} or
+\code{indicator} member takes one row per kind of copy, whose \code{copy_count}s sum
+to the state's copy count (2 for \code{dominance}), so a scalar list is usually
+not enough for one; the error names the locus.
+
+Where a copy matches both a line-specific term and a common one in the
+same family (same trait, owner, loci and contrasts), the more specific
+term applies to it, not both; terms of different owners always add.
 }
 
 \section{Replacement modes}{
 
 \itemize{
-\item \code{"append"} — insert; a term duplicating an existing family + scope identity
-is rejected.
-\item \code{"replace_scope"} — delete only the variants in \verb{(trait_name, effect_owner)}
-whose origin predicate \strong{equals} the supplied scope, then insert. This is
-what \code{\link[=define_additive_effects]{define_additive_effects()}} uses, so successive common / line-A /
-line-B calls each replace only their own variant. Requires \code{origin} to be
-\code{NULL} or a scalar list (a per-member \code{origin} data frame has no single
-scope to key on).
-\item \code{"replace_owner"} — replace everything under \verb{(trait_name, effect_owner)}.
-\item \code{"replace_trait"} — clear every owner's terms for the trait. Never implied.
+\item \code{"append"} (default): insert; a term with the same family and scope as
+an existing one is refused.
+\item \code{"replace_scope"}: delete this owner's terms for the trait whose scope
+equals \code{origin}, then insert. Needs \code{origin} to be \code{NULL} or a scalar
+list.
+\item \code{"replace_owner"}: delete all of this owner's terms for the trait, then
+insert.
+\item \code{"replace_trait"}: delete every owner's terms for the trait, then
+insert. Refused while the trait has generated terms: those are replaced
+only by re-running a generator, or removed with
+\code{\link[=remove_generated_effects]{remove_generated_effects()}}.
 }
+
+Rows are never deleted from the genome-effect tables any other way.
 }
 
 \examples{
-\dontrun{
-# One dominance term, Cockerham coding at p = 0.3
-pop <- pop |> define_genome_effect_terms(
-  trait_name = "ADG",
-  terms = data.frame(locus_name    = "Locus_10",
-                     contrast_name = "dominance",
-                     center_value  = 0.3,
-                     genome_value  = 0.8)
-)
+set.seed(1)
+pop <- open_pop(pop_name = "terms_example", db_name = ":memory:") |>
+  define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100, line_name = "Duroc")
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "Duroc")
+pop <- define_trait(pop, "ADG")
 
-# A hand-entered 3x3 A x A surface: nine cells, nine terms, two members each
-cells <- expand.grid(g1 = 0:2, g2 = 0:2)
-cells$value <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-surface <- rbind(
-  data.frame(term_id = seq_len(nrow(cells)), locus_name = "Locus_10",
-             contrast_name = "indicator", dosage_value = cells$g1,
-             genome_value  = cells$value),
-  data.frame(term_id = seq_len(nrow(cells)), locus_name = "Locus_44",
-             contrast_name = "indicator", dosage_value = cells$g2,
-             genome_value  = cells$value)
-)
-pop <- pop |> define_genome_effect_terms("ADG", surface[surface$genome_value != 0, ],
-                                         effect_owner = "epistasis_AxA")
+# Additive and dominance effects of two loci, functional coding
+# (a = half the homozygote difference, d = heterozygote deviation)
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    ad_terms(c("Locus_10", "Locus_20"), a = c(0.4, -0.2), d = c(0.1, 0),
+             p = c(0.3, 0.5)),
+    effect_owner = "qtl_map")
 
-# Reciprocal dominance: the F1 value depends on which parent gave which line
-pop <- pop |> define_genome_effect_terms(
-  "ADG",
-  terms = data.frame(term_id = 1L, locus_name = "Locus_10",
-                     contrast_name = "dominance",
-                     center_value = 0.3, genome_value = 1.2),
-  origin = data.frame(term_id = 1L, locus_name = "Locus_10",
-                      line_match_type = "exact",
-                      line_name     = c("Duroc", "Landrace"),
-                      parent_origin = c(1L, 2L),
-                      copy_count    = c(1L, 1L)),
-  effect_owner = "reciprocal"
-)
+# An A x A interaction between them, added under its own owner
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    aa_terms("Locus_10", "Locus_20", e = 0.05, p_1 = 0.3, p_2 = 0.5),
+    effect_owner = "epistasis")
 
-# Let the writer fill Cockerham p from a base population: leave
-# center_value out and pass base_tbl (see extract_allele_freq()).
-pop <- pop |> define_genome_effect_terms(
-  "ADG",
-  data.frame(locus_name = "Locus_10", contrast_name = "dominance",
-             genome_value = 0.8),
-  base_tbl = get_table(pop, "founder_haplotypes") |>
-    dplyr::filter(line_name == "A")
-)
-}
+# The same kind of rows written directly: one Cockerham additive term
+# whose centre is filled from the founders' allele frequency
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    data.frame(locus_name = "Locus_30", contrast_name = "additive",
+               genome_value = 0.25),
+    effect_owner = "candidate_gene",
+    base_tbl = get_table(pop, "founder_haplotypes"))
+
+# An effect only on copies inherited from the sire (imprinting)
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    ad_terms("Locus_40", a = 0.3, p = 0.5),
+    effect_owner = "imprinted", origin = list(parent_origin = 1))
+
+# Reciprocal dominance: the heterozygote value depends on which parent
+# gave the Duroc copy and which the Landrace copy
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    terms = data.frame(term_id = 1L, locus_name = "Locus_50",
+                       contrast_name = "dominance", center_value = 0.5,
+                       genome_value = 1.2),
+    origin = data.frame(term_id = 1L, locus_name = "Locus_50",
+                        line_match_type = "exact",
+                        line_name = c("Duroc", "Landrace"),
+                        parent_origin = c(1L, 2L), copy_count = 1L),
+    effect_owner = "reciprocal")
+
+# Change your mind: replace everything under one owner
+pop <- pop |>
+  define_genome_effect_terms("ADG",
+    ad_terms(c("Locus_10", "Locus_20"), a = c(0.5, -0.1), p = c(0.3, 0.5)),
+    effect_owner = "qtl_map", mode = "replace_owner")
+
+get_table(pop, "genome_effect_terms")
+pop <- pop |> get_table("ind_meta") |> add_tgv("ADG")
+close_pop(pop)
 }
 \seealso{
-\code{\link[=ad_terms]{ad_terms()}} and \code{\link[=genotype_terms]{genotype_terms()}} build \code{terms};
-\code{\link[=define_additive_effects]{define_additive_effects()}} for generated additive QTL effects.
+\code{\link[=ad_terms]{ad_terms()}}, \code{\link[=aa_terms]{aa_terms()}} and \code{\link[=genotype_terms]{genotype_terms()}} build \code{terms};
+\code{\link[=define_additive_effects]{define_additive_effects()}} and \code{\link[=define_genome_effects]{define_genome_effects()}} for sampled,
+calibrated effects; \code{\link[=add_tgv]{add_tgv()}}.
 }

@@ -13,16 +13,18 @@ genotype_terms(
 )
 }
 \arguments{
-\item{genotypes}{A data frame whose columns are named by \code{locus_name} and
-hold \strong{dosages} of allele 1, one row per genotype combination. A
-\code{copy_count} list may accompany it for variable-copy loci.}
+\item{genotypes}{A data frame with one column per locus, named by
+\code{locus_name}, holding the \strong{dosage} of allele 1 (0, 1 or 2 at a diploid
+locus); one row per genotype combination. \code{\link[=expand.grid]{expand.grid()}} builds a full
+table.}
 
-\item{value}{Numeric vector of genotypic values, one per row of \code{genotypes}.}
+\item{value}{Numeric vector of genotypic values, one per row of
+\code{genotypes}.}
 
-\item{copy_count}{Optional named list or vector giving \code{copy_count_value} per
-locus column. Omitted, it is inferred by the writer at diploid-autosomal
-loci; a variable-copy locus needs it, or a \code{copy_count} column-shaped data
-frame matching \code{genotypes}.}
+\item{copy_count}{Optional \code{copy_count_value} (copies present) per locus
+column: a named list or vector, or a data frame shaped like \code{genotypes}.
+Leave it \code{NULL} at ordinary diploid autosomal loci, where it is 2; a
+locus whose copy number varies (e.g. sex chromosomes) needs it.}
 
 \item{drop_zero}{Logical; drop rows whose \code{value} is exactly 0, since they
 contribute nothing. Default \code{TRUE}.}
@@ -37,23 +39,33 @@ the surface's loci and the row number, so surfaces over different loci
 never share a \code{term_id} when bound together.
 }
 \description{
-Turns a genotype-by-value table into \code{indicator} terms: one term per row of
-\code{genotypes}, one member per locus column. This is indicator completeness made
-concrete — an arbitrary function of a finite set of genotype states \emph{is} a
-sum of indicator terms, so a hand-entered surface needs no second
-representation, only rows.
+Turns a table of genotypic values into \code{indicator} terms: one term per row
+of \code{genotypes}, adding \code{value} to every individual with exactly that
+genotype at those loci. Any function of the genotypes at a few loci can be
+written this way, e.g. a two-locus epistasis table read from a paper.
 
-A cell you leave out is a term you did not write, contributing zero. Ask for
-the opposite with \code{define_genome_effect_terms(require_complete = TRUE)}, which
-then demands every reachable \verb{(copy_count, dosage)} state.
+A genotype you leave out contributes zero. To be told when one is
+missing, write with \code{define_genome_effect_terms(require_complete = TRUE)},
+which then requires every reachable genotype state.
 }
 \examples{
-\dontrun{
+# A two-locus table: value only when both loci carry allele 1
 cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
 vals  <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-pop <- pop |> define_genome_effect_terms(
-  "ADG", genotype_terms(cells, vals), effect_owner = "epistasis_AxA")
-}
+genotype_terms(cells, vals)
+
+set.seed(1)
+pop <- open_pop(pop_name = "genotype_example", db_name = ":memory:") |>
+  define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+  define_founder_haplotypes(n_haplotypes = 100)
+pop <- pop |>
+  get_table("founder_haplotypes") |>
+  add_founders(n_males = 10, n_females = 10, line_name = "A")
+pop <- define_trait(pop, "ADG")
+pop <- pop |>
+  define_genome_effect_terms("ADG", genotype_terms(cells, vals),
+    effect_owner = "epistasis_table")
+close_pop(pop)
 }
 \seealso{
 \code{\link[=define_genome_effect_terms]{define_genome_effect_terms()}}, \code{\link[=ad_terms]{ad_terms()}}, \code{\link[=aa_terms]{aa_terms()}}.

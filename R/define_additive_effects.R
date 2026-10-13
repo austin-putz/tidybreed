@@ -25,12 +25,11 @@
 #' written. The closing message says "exact" or "approximate" and gives the
 #' delivered covariance under the anchor.
 #'
-#' **How.** Effects are drawn as today (one draw per QTL for one trait; joint
+#' **How.** Effects are drawn first (one draw per QTL for one trait; joint
 #' `MVN(0, G)` rows for several), and that draw is only the *architecture*
 #' `B0`. It is then right-multiplied by a `k x k` matrix `A` so that
-#' `B = B0 A` satisfies `B' M B = G` exactly (the congruence of
-#' Proposition 2 in the source method). For one trait this is exactly the
-#' scalar rescale `b0 * sqrt(G / sum(w b0^2))`. For two or more it also fixes
+#' `B = B0 A` satisfies `B' M B = G` exactly. For one trait this is exactly
+#' the scalar rescale `b0 * sqrt(G / sum(w b0^2))`. For two or more it also fixes
 #' the genetic **correlations**, which a per-trait rescale cannot: at 200 QTL
 #' and a target correlation of 0.4 a scalar rescale delivers anything from
 #' about 0.18 to 0.60. The same seed gives the same `B0`.
@@ -41,8 +40,8 @@
 #' * `anchor = "genic"` (default): `M = diag(n_eligible * p * q)` at the base
 #'   allele frequencies, the random-mating (HWE + linkage-equilibrium) limit.
 #'   Use it for multi-generation studies: under random mating the realised
-#'   covariance converges to it. The manuscript's "reference" anchor is this
-#'   plus a non-default `base_tbl`, whose frequencies the weights use.
+#'   covariance converges to it. With `base_tbl` the weights use that
+#'   population's frequencies instead, e.g. one reference line.
 #' * `anchor = "realised"`: `M = Cov(X)` of the individuals `base_tbl` selects,
 #'   linkage disequilibrium included. The single-generation / clonal option.
 #'   `base_tbl` must select **individuals** (a table with `id_ind`, not
@@ -59,7 +58,7 @@
 #' a positive target variance and no QTL in the call is an error.
 #'
 #' After calibration the delivered covariance is compared with what another
-#' population sees (§7.4 of the plan): the **pool expectation** `2 Cov(H)`
+#' population sees: the **pool expectation** `2 Cov(H)`
 #' when the base is the founder pool, the **observed** `Cov(X)` when it selects
 #' individuals, and the genic limit under `anchor = "realised"`. The founder
 #' pool's comparison is always a message: a small pool's departure is its
@@ -171,10 +170,15 @@
 #' @param tbl A `tidybreed_table` from [get_table()]`("genome_meta")` (with an
 #'   optional [dplyr::filter()]). The filtered rows determine which loci are QTL.
 #' @param trait_name Character scalar **or** vector. Name(s) of existing traits
-#'   in `trait_meta`. When length >= 2, the architecture is drawn jointly from
-#'   `MVN(0, G)` and `method` becomes active.
-#' @param distribution Character. `"normal"` (default) or `"gamma"`, the
-#'   single-trait architecture. Ignored for multi-trait (always MVN).
+#'   (from [define_trait()]). With two or more, the architecture is drawn
+#'   jointly from `MVN(0, G)`, `G` is a `k x k` matrix across them, and
+#'   `method` applies.
+#' @param distribution Character. The shape of a single trait's sampled
+#'   architecture before calibration: `"normal"` (default; normal effects) or
+#'   `"gamma"` (gamma-distributed sizes with random signs: a few large QTL
+#'   and many small ones). Calibration then scales the effects to the target
+#'   either way. Ignored with several traits, which are always drawn from
+#'   `MVN(0, G)`.
 #' @param G Optional additive-genetic (co)variance target: a `k x k` matrix
 #'   (named in `trait_name` order, or unnamed), or a single number for one
 #'   trait. Written to `trait_var_comp` (with the call's `line_name`) in the
@@ -186,11 +190,13 @@
 #'   or to calibrate one trait of a stored block alone. Not with `G`.
 #' @param anchor Character. `"genic"` (default) or `"realised"`: the
 #'   reference covariance the calibration is exact for. See *Details*.
-#' @param method Character. `"shared"` (default) or `"union"`. Multi-trait only.
-#'   `"shared"` — all listed traits use the filtered loci as their shared QTL
-#'   set; exact. `"union"` — per-trait QTL sets are read from existing generated
-#'   terms at this scope, restricted to the filtered loci; per-trait scaling,
-#'   approximate for a non-zero covariance.
+#' @param method Character, multi-trait only. `"shared"` (default): every
+#'   trait uses all the filtered loci as one shared QTL set, and the whole
+#'   `G` is delivered exactly. `"union"`: each trait keeps the QTL set of its
+#'   existing generated terms at this scope (restricted to the filtered
+#'   loci), so the traits must already have generated effects there; each
+#'   trait is scaled to its own variance, and the covariances are
+#'   approximate (a warning gives the delivered values).
 #' @param base_tbl Optional `tidybreed_table` from [get_table()] (optionally
 #'   filtered) selecting the allele copies that define base allele
 #'   frequencies: `founder_haplotypes`, `ind_haplotype`, or any table with an
@@ -223,50 +229,78 @@
 #'   check (`rank(G) <= rank(M)`), so those refusals never touch the RNG. A
 #'   failure that depends on the draw itself -- the drawn architecture's rank,
 #'   or a calibration that fails verification -- comes after the seed and has
-#'   consumed RNG draws.
+#'   consumed RNG draws. `NULL` (default) draws from the current stream, so a
+#'   preceding [set.seed()] reproduces the call too.
 #'
-#' @return The modified `tidybreed_pop` (invisibly).
+#' @return The modified `tidybreed_pop` (invisibly). The effects are written
+#'   to the `genome_effects` tables under the owner `"generated"`, and a
+#'   passed `G` to `trait_var_comp`. Run [add_tgv()] to evaluate them.
 #'
-#' @seealso [define_trait()], [define_effect_cov_matrix()],
-#'   [define_genome_effect_terms()], [extract_allele_freq()].
+#' @seealso [define_genome_effects()] for dominance and A x A effects;
+#'   [extract_genetic_variance()] to measure what a population has;
+#'   [define_trait()], [define_effect_cov_matrix()],
+#'   [define_genome_effect_terms()] for known coefficients,
+#'   [remove_generated_effects()], [extract_allele_freq()].
 #'
 #' @examples
-#' \dontrun{
-#' # Single trait — all loci on chr 1-5 become QTL; write the target and
-#' # calibrate to it in one call
-#' pop <- pop |> define_trait("ADG")
+#' # A small in-memory population with two founder lines
+#' set.seed(1)
+#' pop <- open_pop(pop_name = "dae_example", db_name = ":memory:") |>
+#'   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 100, line_name = "Duroc") |>
+#'   define_founder_haplotypes(n_haplotypes = 100, line_name = "Landrace")
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   dplyr::filter(line_name == "Duroc") |>
+#'   add_founders(n_males = 20, n_females = 40, line_name = "Duroc")
+#' for (t in c("ADG", "BW", "FCR", "LMA", "IMF", "BF")) pop <- define_trait(pop, t)
+#'
+#' # The Duroc founder pool as the base (the default would pool both lines)
+#' duroc <- get_table(pop, "founder_haplotypes") |>
+#'   dplyr::filter(line_name == "Duroc")
+#'
+#' # One trait: every locus on chromosome 1 is a QTL. G writes the target to
+#' # trait_var_comp and calibrates to it in one transaction.
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
-#'   dplyr::filter(chr_name %in% as.character(1:5)) |>
-#'   define_additive_effects("ADG", G = 0.25)
+#'   dplyr::filter(chr_name == "1") |>
+#'   define_additive_effects("ADG", G = 0.25, base_tbl = duroc, seed = 11)
 #'
-#' # Correlated traits — shared QTL set, exact G (variances and correlation)
-#' pop <- pop |> define_trait("BW")
+#' # Two correlated traits on one shared QTL set: both variances and the
+#' # correlation are delivered exactly
 #' G <- matrix(c(0.25, 0.10, 0.10, 0.30), 2, 2,
-#'             dimnames = list(c("ADG", "BW"), c("ADG", "BW")))
+#'             dimnames = list(c("BW", "FCR"), c("BW", "FCR")))
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
-#'   define_additive_effects(c("ADG", "BW"), G = G)
+#'   define_additive_effects(c("BW", "FCR"), G = G, base_tbl = duroc, seed = 12)
 #'
-#' # A target stored beforehand is read back: no G
-#' pop <- pop |> define_trait("FCR") |>
-#'   define_effect_cov_matrix("additive", 0.1, trait_name = "FCR")
-#' pop <- pop |> get_table("genome_meta") |> define_additive_effects("FCR")
-#'
-#' # Exact in the generation-0 individuals themselves, LD included
+#' # A target stored beforehand is read back when G is omitted
+#' pop <- pop |> define_effect_cov_matrix("additive", 0.4, trait_name = "LMA")
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
-#'   define_additive_effects("FCR", anchor = "realised",
-#'     base_tbl = get_table(pop, "ind_meta") |> dplyr::filter(gen == 0L))
+#'   define_additive_effects("LMA", base_tbl = duroc, seed = 13)
 #'
-#' # Crossbreeding: three variants. The common fallback names its base to say
-#' # "yes, pool"; each line's variant centers on its own founder pool by default.
-#' gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "1")
-#' pop <- gm |> define_additive_effects("ADG",
-#'                base_tbl = get_table(pop, "founder_haplotypes"))
-#' pop <- gm |> define_additive_effects("ADG", line_name = "Duroc")
-#' pop <- gm |> define_additive_effects("ADG", line_name = "Landrace")
-#' }
+#' # Exact in the founders themselves, linkage disequilibrium included
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   define_additive_effects("IMF", G = 0.1, anchor = "realised",
+#'     base_tbl = get_table(pop, "ind_meta"), seed = 14)
+#' pop |>
+#'   get_table("ind_meta") |>
+#'   extract_genetic_variance(trait_name = "IMF")
+#'
+#' # Crossbreeding: a common variant centred on the pooled founder table
+#' # (named on purpose, so no Wahlund warning), plus one variant per line,
+#' # each centred on that line's own pool and reading the common target
+#' gm <- pop |> get_table("genome_meta") |> dplyr::filter(chr_name == "2")
+#' pop <- gm |> define_additive_effects("BF", G = 0.2,
+#'   base_tbl = get_table(pop, "founder_haplotypes"), seed = 15)
+#' pop <- gm |> define_additive_effects("BF", line_name = "Duroc", seed = 16)
+#' pop <- gm |> define_additive_effects("BF", line_name = "Landrace", seed = 17)
+#'
+#' # Evaluate the breeding values
+#' pop <- pop |> get_table("ind_meta") |> add_tgv(c("ADG", "BW", "FCR", "BF"))
+#' close_pop(pop)
 #' @export
 define_additive_effects <- function(tbl,
                                     trait_name,

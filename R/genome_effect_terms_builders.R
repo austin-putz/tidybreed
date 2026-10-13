@@ -1,18 +1,21 @@
 #' Build `terms` rows for a functional or Cockerham (a, d) pair
 #'
 #' @description
-#' Expands one locus's additive and dominance coefficients into the two member
-#' rows [define_genome_effect_terms()] takes. There is no third table and no separate
-#' storage mode — functional coding is `additive` with `center_value = 0.5` plus
-#' an `indicator` on the heterozygous state, Cockerham coding is `additive` plus
-#' `dominance`, both centred at `p`.
+#' Turns each locus's additive and dominance coefficients into the `terms`
+#' rows [define_genome_effect_terms()] writes: one row per non-zero
+#' coefficient. Functional coding gives an `additive` row centred at `0.5`
+#' and an `indicator` row on the heterozygote; Cockerham coding gives
+#' `additive` and `dominance` rows centred at `p`.
 #'
-#' * `coding = "functional"` — the genotypic value is `a * (g - 1) + d * 1[g = 1]`,
-#'   where `g` is the dosage of allele 1. Values are **absolute**, so the
-#'   genetic component has a non-zero mean by construction.
-#' * `coding = "cockerham"` — `a` is the average effect `alpha` and `d` the
-#'   dominance deviation `delta` on the HWE-orthogonal contrast
-#'   (`-2p^2`, `2pq`, `-2q^2`). Values are deviations, with mean 0.
+#' * `coding = "functional"` (default): the genotypic value is
+#'   `a * (g - 1) + d * 1[g = 1]`, where `g` is the dosage of allele 1 (0, 1
+#'   or 2). So `a` is half the difference between the two homozygotes and `d`
+#'   the heterozygote's deviation from their midpoint. Values are
+#'   **absolute**, so the genetic values have a non-zero mean.
+#' * `coding = "cockerham"`: `a` is the average effect `alpha` and `d` the
+#'   dominance effect on the HWE dominance contrast, which is `-2p^2`, `2pq`,
+#'   `-2q^2` at dosages 0, 1, 2. Values are deviations with mean 0 under HWE
+#'   at `p`.
 #'
 #' @section The reported mean is not written anywhere:
 #' For functional coding the implied mean of the **genetic component** is
@@ -24,14 +27,21 @@
 #' for an epistatic term, whose expectation depends on joint genotype
 #' frequencies and LD.
 #'
-#' @param locus_name Character vector of locus names.
-#' @param a Numeric additive coefficient(s), recycled to `locus_name`.
-#' @param d Numeric dominance coefficient(s), recycled. Default `0`.
-#' @param p Numeric allele-1 frequency per locus, recycled. Required for
-#'   `"cockerham"`; used for the reported mean under `"functional"`.
-#' @param coding `"functional"` (default) or `"cockerham"`.
-#' @param effect_name Optional label carried onto both members of each locus.
-#' @param report Logical; print the implied genetic mean. Default `TRUE`.
+#' @param locus_name Character vector of distinct locus names (from
+#'   `genome_meta`).
+#' @param a Numeric additive coefficient(s), one per locus or one recycled.
+#' @param d Numeric dominance coefficient(s), one per locus or one recycled.
+#'   Default `0` (no dominance row).
+#' @param p Allele-1 frequency per locus, in `[0, 1]`, one per locus or one
+#'   recycled. Always required: the centre under Cockerham coding, and the
+#'   basis of the reported mean under functional coding (where it does not
+#'   change the stored rows). Use the frequency of the population the model
+#'   describes, e.g. from [extract_allele_freq()].
+#' @param coding `"functional"` (default) or `"cockerham"`; see
+#'   *Description*.
+#' @param effect_name Optional label carried onto every row.
+#' @param report Logical; print the implied genetic mean as a message.
+#'   Default `TRUE`.
 #'
 #' @return A `terms` data frame with the fixed builder column set (see
 #'   [aa_terms()]): one row per non-zero coefficient. `term_id` encodes the
@@ -41,10 +51,29 @@
 #' @seealso [define_genome_effect_terms()], [aa_terms()], [genotype_terms()].
 #'
 #' @examples
-#' \dontrun{
-#' tt <- ad_terms("Locus_10", a = 0.4, d = 0.2, p = 0.3)
-#' pop <- pop |> define_genome_effect_terms("ADG", tt, effect_owner = "functional")
-#' }
+#' # The rows only; nothing is written
+#' ad_terms(c("Locus_10", "Locus_20"), a = c(0.4, -0.2), d = c(0.1, 0),
+#'          p = c(0.3, 0.5))
+#'
+#' # The same model's statistical (Cockerham) coefficients at p = 0.3
+#' # (Locus_10 only): alpha = a + (q - p) d
+#' ad_terms("Locus_10", a = 0.4 + (0.7 - 0.3) * 0.1, d = 0.1, p = 0.3,
+#'          coding = "cockerham")
+#'
+#' # Write them for a trait
+#' set.seed(1)
+#' pop <- open_pop(pop_name = "ad_example", db_name = ":memory:") |>
+#'   define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 100)
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   add_founders(n_males = 10, n_females = 10, line_name = "A")
+#' pop <- define_trait(pop, "ADG")
+#' pop <- pop |>
+#'   define_genome_effect_terms("ADG",
+#'     ad_terms("Locus_10", a = 0.4, d = 0.1, p = 0.3),
+#'     effect_owner = "qtl_map")
+#' close_pop(pop)
 #' @export
 ad_terms <- function(locus_name, a, d = 0, p,
                      coding      = c("functional", "cockerham"),
@@ -138,24 +167,25 @@ ad_terms <- function(locus_name, a, d = 0, p,
 #' Build `terms` rows from a table of genotype values
 #'
 #' @description
-#' Turns a genotype-by-value table into `indicator` terms: one term per row of
-#' `genotypes`, one member per locus column. This is indicator completeness made
-#' concrete — an arbitrary function of a finite set of genotype states *is* a
-#' sum of indicator terms, so a hand-entered surface needs no second
-#' representation, only rows.
+#' Turns a table of genotypic values into `indicator` terms: one term per row
+#' of `genotypes`, adding `value` to every individual with exactly that
+#' genotype at those loci. Any function of the genotypes at a few loci can be
+#' written this way, e.g. a two-locus epistasis table read from a paper.
 #'
-#' A cell you leave out is a term you did not write, contributing zero. Ask for
-#' the opposite with `define_genome_effect_terms(require_complete = TRUE)`, which
-#' then demands every reachable `(copy_count, dosage)` state.
+#' A genotype you leave out contributes zero. To be told when one is
+#' missing, write with `define_genome_effect_terms(require_complete = TRUE)`,
+#' which then requires every reachable genotype state.
 #'
-#' @param genotypes A data frame whose columns are named by `locus_name` and
-#'   hold **dosages** of allele 1, one row per genotype combination. A
-#'   `copy_count` list may accompany it for variable-copy loci.
-#' @param value Numeric vector of genotypic values, one per row of `genotypes`.
-#' @param copy_count Optional named list or vector giving `copy_count_value` per
-#'   locus column. Omitted, it is inferred by the writer at diploid-autosomal
-#'   loci; a variable-copy locus needs it, or a `copy_count` column-shaped data
-#'   frame matching `genotypes`.
+#' @param genotypes A data frame with one column per locus, named by
+#'   `locus_name`, holding the **dosage** of allele 1 (0, 1 or 2 at a diploid
+#'   locus); one row per genotype combination. [expand.grid()] builds a full
+#'   table.
+#' @param value Numeric vector of genotypic values, one per row of
+#'   `genotypes`.
+#' @param copy_count Optional `copy_count_value` (copies present) per locus
+#'   column: a named list or vector, or a data frame shaped like `genotypes`.
+#'   Leave it `NULL` at ordinary diploid autosomal loci, where it is 2; a
+#'   locus whose copy number varies (e.g. sex chromosomes) needs it.
 #' @param drop_zero Logical; drop rows whose `value` is exactly 0, since they
 #'   contribute nothing. Default `TRUE`.
 #' @param effect_name Optional label carried onto every term.
@@ -169,12 +199,23 @@ ad_terms <- function(locus_name, a, d = 0, p,
 #' @seealso [define_genome_effect_terms()], [ad_terms()], [aa_terms()].
 #'
 #' @examples
-#' \dontrun{
+#' # A two-locus table: value only when both loci carry allele 1
 #' cells <- expand.grid(Locus_10 = 0:2, Locus_44 = 0:2)
 #' vals  <- c(0, 0, 0,  0, 1.4, 2.1,  0, 2.1, 3.6)
-#' pop <- pop |> define_genome_effect_terms(
-#'   "ADG", genotype_terms(cells, vals), effect_owner = "epistasis_AxA")
-#' }
+#' genotype_terms(cells, vals)
+#'
+#' set.seed(1)
+#' pop <- open_pop(pop_name = "genotype_example", db_name = ":memory:") |>
+#'   define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 100)
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   add_founders(n_males = 10, n_females = 10, line_name = "A")
+#' pop <- define_trait(pop, "ADG")
+#' pop <- pop |>
+#'   define_genome_effect_terms("ADG", genotype_terms(cells, vals),
+#'     effect_owner = "epistasis_table")
+#' close_pop(pop)
 #' @export
 genotype_terms <- function(genotypes, value, copy_count = NULL,
                            drop_zero = TRUE, effect_name = NULL) {
@@ -292,9 +333,11 @@ genotype_terms <- function(genotypes, value, copy_count = NULL,
 #' and linkage equilibrium), and their running total. It is written to no
 #' table, for the reason given in [ad_terms()].
 #'
-#' @param locus_name_1,locus_name_2 Character vectors of the same length, one
-#'   pair per position. A pair's two loci must differ.
-#' @param e Numeric coefficient per pair, recycled.
+#' @param locus_name_1,locus_name_2 Character vectors of the same length,
+#'   one pair per position. A pair's two loci must differ; a
+#'   locus may appear in several pairs.
+#' @param e Numeric A x A coefficient per pair, or one recycled. Pairs with
+#'   `e = 0` are dropped.
 #' @param p_1,p_2 Allele-1 frequency of each pair's first and second locus,
 #'   recycled. Required under both codings: the centres under Cockerham, the
 #'   basis of the reported mean under functional.
@@ -309,8 +352,21 @@ genotype_terms <- function(genotypes, value, copy_count = NULL,
 #' @seealso [define_genome_effect_terms()], [ad_terms()], [genotype_terms()].
 #'
 #' @examples
-#' \dontrun{
-#' pop |>
+#' # Two pairs sharing one locus
+#' aa_terms(locus_name_1 = c("Locus_10", "Locus_10"),
+#'          locus_name_2 = c("Locus_44", "Locus_50"),
+#'          e = c(0.08, -0.03), p_1 = 0.35, p_2 = c(0.60, 0.50))
+#'
+#' # A complete functional model: main effects plus one interaction
+#' set.seed(1)
+#' pop <- open_pop(pop_name = "aa_example", db_name = ":memory:") |>
+#'   define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 100)
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   add_founders(n_males = 10, n_females = 10, line_name = "A")
+#' pop <- define_trait(pop, "ADG")
+#' pop <- pop |>
 #'   define_genome_effect_terms(
 #'     trait_name = "ADG",
 #'     terms = rbind(
@@ -318,7 +374,7 @@ genotype_terms <- function(genotypes, value, copy_count = NULL,
 #'                a = c(0.30, -0.12), d = c(0.10, 0.05), p = c(0.35, 0.60)),
 #'       aa_terms(locus_name_1 = "Locus_10", locus_name_2 = "Locus_44",
 #'                e = 0.08, p_1 = 0.35, p_2 = 0.60)))
-#' }
+#' close_pop(pop)
 #' @export
 aa_terms <- function(locus_name_1, locus_name_2, e, p_1, p_2,
                      coding      = c("functional", "cockerham"),

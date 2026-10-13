@@ -50,13 +50,15 @@
 #' * `"genic"` (default): the random-mating (HWE + linkage-equilibrium) limit
 #'   at the base allele frequencies. Use it for multi-generation studies.
 #' * `"realised"`: the covariances of the individuals `base_tbl` selects,
-#'   linkage disequilibrium included. The effects are still **stored** with
-#'   HWE-referenced contrasts centred at the base frequencies, so the stored
-#'   `additive` / `dominance` split is not the cohort's; the total is exact,
-#'   and [extract_genetic_variance()]`(anchor = "realised")` on the same
-#'   individuals gives the targets back. `base_tbl` must select individuals
-#'   with complete genotypes, and the in-memory design arrays have a size
-#'   limit.
+#'   linkage disequilibrium included. [extract_genetic_variance()]`(anchor =
+#'   "realised")` on the same individuals gives each target block back. The
+#'   blocks need not be uncorrelated in that cohort, so its total variance
+#'   also carries a `between_components` covariance. The effects are still
+#'   **stored** with HWE-referenced contrasts centred at the base frequencies,
+#'   so the stored `additive` / `dominance` components of `ind_tgv` are not
+#'   the cohort's own split; each individual's total genetic value is the
+#'   same either way. `base_tbl` must select individuals with complete
+#'   genotypes, and the in-memory design arrays have a size limit.
 #'
 #' Under linkage disequilibrium the `additive` component of a realised cohort
 #' is a contrast component, not a joint regression: calibration is exact for
@@ -152,49 +154,146 @@
 #' approximate, with no closeness guarantee; a message gives requested and
 #' delivered values. It is not stored.
 #'
+#' @section Reproducibility:
+#' There is no `seed` argument: the draws use R's random number stream, so
+#' call [set.seed()] before the function to reproduce a model. Every input
+#' check runs before the first draw, so a refused call consumes no random
+#' numbers.
+#'
 #' @param tbl A `tidybreed_table` from [get_table()]`("genome_meta")`,
-#'   optionally filtered. Its loci are the QTL of every trait.
-#' @param trait_name Character vector of existing traits.
-#' @param G_A,G_D,G_AA Optional `k x k` targets (a number for one trait),
-#'   named in `trait_name` order or unnamed. Written with the effects; never
-#'   over a stored block. `NULL` reads the block from `trait_var_comp_tbl`.
+#'   optionally filtered with [dplyr::filter()]. Every selected locus is a QTL
+#'   of every trait in the call (one shared QTL set), and A x A pairs are
+#'   drawn or checked within it.
+#' @param trait_name Character vector of existing traits (from
+#'   [define_trait()]). With two or more, the architectures are drawn jointly
+#'   and each target is a `k x k` matrix across them; the call calibrates
+#'   the traits together, so a stored block that pairs one of them with a
+#'   trait outside the call is refused.
+#' @param G_A,G_D,G_AA Optional targets for the `additive`, `dominance` and
+#'   `additive_by_additive` blocks: a symmetric positive-semidefinite
+#'   `k x k` matrix with dimnames in `trait_name` order (or unnamed, taken in
+#'   that order), or a single number when there is one trait. A passed block
+#'   is written to `trait_var_comp` with the effects, and is refused if that
+#'   block is already stored for any of the traits. `NULL` (default) reads
+#'   the block from storage, and leaves it out of the model when none is
+#'   stored. An additive block is required; see *Targets*.
 #' @param trait_var_comp_tbl Optional filtered
-#'   `get_table(pop, "trait_var_comp")`: the stored rows to use for blocks not
-#'   passed. `NULL` reads the stored population-wide rows.
-#' @param pairs Optional data frame `locus_name_1`, `locus_name_2`.
-#' @param n_pairs Optional number of random pairs, `1..floor(m / 2)`.
-#' @param anchor `"genic"` (default) or `"realised"`.
-#' @param dominance_degree_mean,dominance_degree_sd Mean and standard
-#'   deviation of the dominance degrees that shape the dominance
-#'   architecture. Defaults `0.19` and `0.097`.
-#' @param inbreeding_depression Optional numeric vector named by trait.
-#' @param base_tbl Optional `tidybreed_table` selecting the base population,
-#'   as in [define_additive_effects()]. Required under `"realised"`.
-#' @param warn_bounds `c(lower, upper)` for the comparison with another
-#'   population, or `NULL` to turn it off.
+#'   `get_table(pop, "trait_var_comp")`: the stored rows to use for the blocks
+#'   not passed, e.g. `filter(effect_name != "dominance")` to leave a stored
+#'   dominance target out of this model. `NULL` (default) reads the stored
+#'   population-wide rows.
+#' @param pairs Optional data frame with columns `locus_name_1` and
+#'   `locus_name_2`: your own A x A design, one row per interacting pair of
+#'   selected loci. Needs an `additive_by_additive` target; not with
+#'   `n_pairs`. See *Pairs*.
+#' @param n_pairs Optional whole number, `1` to `floor(m / 2)` for `m`
+#'   selected loci: how many random disjoint pairs to draw. `NULL` (default,
+#'   with `pairs = NULL`) pairs every QTL once. Needs an
+#'   `additive_by_additive` target.
+#' @param anchor `"genic"` (default) or `"realised"`: the reference
+#'   population the targets are exact for. See *Details*.
+#' @param dominance_degree_mean,dominance_degree_sd Shape of the dominance
+#'   architecture: each QTL's dominance effect is drawn as `d = h |a|`, with
+#'   degree `h ~ N(mean, sd)` and `a` its sampled additive effect, before
+#'   calibration rescales the dominance effects to `G_D`. A positive mean
+#'   makes most heterozygotes better than the homozygote average, so the
+#'   model has inbreeding depression. Defaults `0.19` and `0.097`. Used only
+#'   with a non-zero dominance target; both `0` is refused.
+#' @param inbreeding_depression Optional numeric vector named by trait, e.g.
+#'   `c(ADG = 1.2)`: the drop in the trait mean per unit of inbreeding `F`
+#'   (positive = depression) to build in. For each named trait it replaces
+#'   `dominance_degree_mean` with the value that delivers it; traits not
+#'   named keep `dominance_degree_mean`. Needs a non-zero dominance target
+#'   and `dominance_degree_sd > 0`. See *Inbreeding depression*.
+#' @param base_tbl Optional `tidybreed_table` from [get_table()] (optionally
+#'   filtered) whose allele frequencies are the base: the founder pool
+#'   (`founder_haplotypes`), allele copies (`ind_haplotype`) or individuals
+#'   (any table with `id_ind`). The base frequencies centre the effects and
+#'   set the genic anchor. `NULL` (default) uses the whole founder table.
+#'   Required under `anchor = "realised"`, where it must select individuals.
+#' @param warn_bounds `c(lower, upper)` with `0 < lower <= upper`: after
+#'   calibration the delivered blocks are compared with another population's
+#'   view (see *Details*), and a ratio outside the bounds warns. Default
+#'   `c(0.8, 1.25)`; `NULL` turns the comparison off.
 #'
-#' @return The `tidybreed_pop`, invisibly.
+#' @return The `tidybreed_pop`, invisibly. The effects are written to the
+#'   `genome_effects` tables under the owner `"generated"`, and any passed
+#'   target to `trait_var_comp`. Run [add_tgv()] to evaluate them.
 #'
-#' @seealso [define_additive_effects()], [extract_genetic_variance()],
-#'   [define_effect_cov_matrix()], [remove_generated_effects()],
-#'   [aa_terms()].
+#' @seealso [define_additive_effects()] for line-specific or imprinted
+#'   additive effects; [extract_genetic_variance()] to measure what a
+#'   population has; [define_effect_cov_matrix()] to store a target first;
+#'   [define_genome_effect_terms()], [ad_terms()] and [aa_terms()] for known
+#'   coefficients; [remove_generated_effects()].
 #'
 #' @examples
-#' \dontrun{
-#' pop <- pop |> define_trait("ADG")
+#' # A small in-memory population
 #' set.seed(1)
+#' pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
+#'   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
+#'   define_founder_haplotypes(n_haplotypes = 200)
+#' pop <- pop |>
+#'   get_table("founder_haplotypes") |>
+#'   add_founders(n_males = 50, n_females = 50, line_name = "A")
+#' for (t in c("ADG", "BF", "WW", "LS", "FI", "IMF")) pop <- define_trait(pop, t)
+#'
+#' # Additive, dominance and A x A targets for one trait, QTL on chromosome 1.
+#' # The targets are written to trait_var_comp with the effects; the A x A
+#' # pairs are a random matching of the QTL.
+#' set.seed(21)
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
-#'   dplyr::filter(chr_name %in% c("1", "2")) |>
+#'   dplyr::filter(chr_name == "1") |>
 #'   define_genome_effects("ADG", G_A = 0.3, G_D = 0.1, G_AA = 0.05)
 #'
-#' # Additive-only first, dominance added later: the additive draw is the same
-#' set.seed(2)
-#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF", G_A = 1)
-#' pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "BF")
-#' set.seed(2)
-#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("BF")
-#' }
+#' # Measure it: the genic anchor at the founder frequencies gives the
+#' # targets back
+#' pop |>
+#'   get_table("ind_meta") |>
+#'   extract_genetic_variance(trait_name = "ADG", anchor = "genic",
+#'     base_tbl = get_table(pop, "founder_haplotypes"))
+#'
+#' # Two correlated traits with dominance, and an inbreeding depression for
+#' # BF (approximate with several traits: a message gives the delivered value)
+#' G_A <- matrix(c(0.3, 0.1, 0.1, 0.4), 2, 2)
+#' G_D <- diag(c(0.08, 0.05))
+#' set.seed(22)
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   define_genome_effects(c("BF", "WW"), G_A = G_A, G_D = G_D,
+#'     inbreeding_depression = c(BF = 1.5))
+#'
+#' # Your own A x A design: one hub locus interacting with three others
+#' pairs <- data.frame(locus_name_1 = "Locus_10",
+#'                     locus_name_2 = c("Locus_20", "Locus_30", "Locus_40"))
+#' set.seed(23)
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(chr_name == "1") |>
+#'   define_genome_effects("LS", G_A = 0.2, G_AA = 0.05, pairs = pairs)
+#'
+#' # Additive only first, dominance added later. The stored G_A is read back,
+#' # and with the same seed the additive architecture draw is unchanged.
+#' set.seed(24)
+#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", G_A = 1)
+#' pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
+#' set.seed(24)
+#' pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI")
+#'
+#' # Exact in the founders themselves, linkage disequilibrium included
+#' set.seed(25)
+#' pop <- pop |>
+#'   get_table("genome_meta") |>
+#'   dplyr::filter(chr_name == "2") |>
+#'   define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
+#'     base_tbl = get_table(pop, "ind_meta"))
+#' pop |>
+#'   get_table("ind_meta") |>
+#'   extract_genetic_variance(trait_name = "IMF")
+#'
+#' # Evaluate the genetic values
+#' pop <- pop |> get_table("ind_meta") |> add_tgv(c("ADG", "IMF"))
+#' close_pop(pop)
 #' @export
 define_genome_effects <- function(tbl,
                                   trait_name,

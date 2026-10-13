@@ -90,7 +90,7 @@
 #' The coupling `C = diag(b) B_d + E_c`
 #'
 #' `E_c` puts `c_l e_r` on locus `k` and `c_k e_r` on locus `l` for each pair
-#' `r = (k, l)`: the additive effect a pair induces at a locus whose partner's
+#' `(k, l)` numbered `r`: the additive effect a pair induces at a locus whose partner's
 #' mean dosage is not 1. Accumulated with one `rowsum()`, never a loop over
 #' pairs; a locus in several pairs (a hub) collects all of them.
 #'
