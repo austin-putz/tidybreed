@@ -419,3 +419,36 @@ is_plain_autosome <- function(chr_row) {
     chr_row$from_parent_1[["F"]] == 1L && chr_row$from_parent_2[["F"]] == 1L &&
     isTRUE(chr_row$recombines[["M"]]) && isTRUE(chr_row$recombines[["F"]])
 }
+
+
+#' Chromosomes that are plain autosomes for every line with rules
+#'
+#' The batch-global classification [add_offspring()] uses to split the gamete
+#' kernel's chromosomes from the special-chromosome path. A chromosome is plain
+#' only if `is_plain_autosome()` holds for the line-agnostic default **and** for
+#' every line that has a row in `chr_inheritance` or `chr_recombination`, each
+#' resolved through the usual sex/line precedence. Resolving (not reading raw
+#' rows) keeps a fully shadowed rule from moving a chromosome off the kernel.
+#'
+#' The answer depends only on the stored rule tables, never on which lines a call
+#' mates, so appending matings to a call leaves the earlier rows' offspring
+#' unchanged. Adding a line rule that makes a chromosome special moves it off
+#' the kernel for every line (plans/line_specific_chr_rules_add_offspring.md, D1).
+#'
+#' @param conn A DBI connection.
+#' @return Character vector of plain-autosome `chr_name`s, in `chr_name` order.
+#' @keywords internal
+#' @noRd
+.plain_autosome_chrs <- function(conn) {
+  lines <- DBI::dbGetQuery(conn, paste(
+    "SELECT line_name FROM chr_inheritance WHERE line_name IS NOT NULL",
+    "UNION",
+    "SELECT line_name FROM chr_recombination WHERE line_name IS NOT NULL",
+    "ORDER BY line_name"))$line_name
+  maps <- lapply(c(list(NULL), as.list(lines)),
+                 function(ln) get_chr_rules_map(conn, ln))
+  chrs <- names(maps[[1L]])
+  chrs[vapply(chrs, function(cn) {
+    all(vapply(maps, function(m) is_plain_autosome(m[[cn]]), logical(1)))
+  }, logical(1))]
+}

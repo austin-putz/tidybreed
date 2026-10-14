@@ -1,3 +1,26 @@
+# tidybreed 0.76.12 (2026-10-13)
+
+* `add_offspring()` now applies line-specific `define_chromosome()` rules on
+  chromosomes that are ordinary autosomes for every line. Before, such a
+  chromosome always went through the gamete kernel, which reads no rules, so
+  the line rule was silently ignored. Example: an F1-only rule giving males
+  only the dam's copy of chr 1, where F1 males got two copies anyway. A
+  founder made hemizygous by its line's rule also could not be used as a
+  parent: `add_offspring()` stopped on its "autosomal ind_haplotype rows"
+  count.
+* A chromosome now takes the fast path only if it is an ordinary autosome for
+  every line that has rules. One line's rule therefore moves that chromosome
+  to the slower per-offspring path for every line, and changes later seeded
+  offspring of every line. The classification depends only on the stored
+  rules, so adding matings to a call does not change the offspring of the
+  rows already in it. Populations without line-specific rules give the same
+  output as before.
+* `?add_offspring` now says that a two-copy parent that does not recombine
+  passes on one of its two copies chosen at random. It used to say "no
+  additional RNG draws", which is true only for a one-copy parent.
+* Plan: `plans/line_specific_chr_rules_add_offspring.md`. The follow-up check
+  policy (`allow =`) is recorded in `plans/TODO.md`.
+
 # tidybreed 0.76.11 (2026-10-13)
 
 * Plan for review: `plans/line_specific_chr_rules_add_offspring.md`.

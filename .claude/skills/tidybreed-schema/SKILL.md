@@ -247,9 +247,13 @@ priority-window fallback `(sex=S,line=L) → (sex=S,NULL) → (NULL,line=L) →
 `validate_chr_inheritance()`/`validate_chr_recombination()` run inside every write
 transaction: NULL-normalized key uniqueness, orphan-`chr_name` (R-enforced FK),
 valid sex, `sum ≤ 2`, resolvability for both `M` and `F`, and a deterministic
-sex-vs-line shadowing check. A chromosome takes the fast autosome path only when
-its resolved inheritance is `1,1` for both offspring sexes **and** `recombines`
-for both parent sexes. `2,0` (uniparental disomy) is storage-expressible but
+sex-vs-line shadowing check. In `add_offspring()` a chromosome takes the fast
+autosome path only when its resolved inheritance is `1,1` for both offspring sexes
+**and** `recombines` for both parent sexes, under the line-agnostic rules **and**
+for every line with a row in either table (`.plain_autosome_chrs()`). One line's
+non-default rule therefore moves that chromosome to the special path for every
+line. The classification reads only the stored rules, never the lines a call mates.
+`add_founders()` classifies at the founders' own line. `2,0` (uniparental disomy) is storage-expressible but
 errors at the `add_offspring()`/`add_founders()` kernel boundary (unimplemented
 transmission mechanism).
 

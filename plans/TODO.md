@@ -7,6 +7,8 @@ plans. Proposed APIs below are proposals, not existing functions.
 
 ## Recommended next steps
 
+0. **Write `plans/check_policy.md`** (section below): the check policy and the
+   inventory of refusals, then the chromosome / genome-effect checks as its first use.
 1. **Finish the small documentation and release checks below.** The new effect
    generators and variance extractor are implemented; another genetics expansion
    is not needed to start documenting the package.
@@ -20,6 +22,75 @@ plans. Proposed APIs below are proposals, not existing functions.
 4. **Build the first runnable Quarto chapters now.** Start with a small complete
    breeding cycle, genetic models, and target-versus-measured variance. Expand into
    the full cookbook and methods book using [the documentation proposal](documentation.md).
+
+## Check policy: refuse by default, `allow =` to bypass (next plan)
+
+Agreed with the user on 2026-10-13, while reviewing
+`plans/line_specific_chr_rules_add_offspring.md` (its §6). The next plan is
+**`plans/check_policy.md`**: a written policy plus an inventory of every refusal in
+`R/`, reviewed by the user and Codex before any code.
+
+**Decisions already made:**
+
+- **Users may model anything.** Unusual genomes, chromosomes and custom effects are
+  allowed. By default the package refuses or warns loudly when an assumption breaks.
+  The user can relax a named check, and from then on the package computes what is
+  well-defined and accepts what they did.
+- **Three kinds of check:**
+  1. **Integrity and safety. Never bypassable.** DB consistency and orphans, id rules,
+     determinism, the failure/rollback contract, the closed formula grammar (`eval()`
+     security). The 0.76.10 `define_chromosome()` guard is here too: if bypassed,
+     stored haplotypes would disagree with the rules.
+  2. **Not implemented. Not a check.** For example, `2,0` transmission in
+     `add_offspring()`. Implement it, or define a behavior before offering a bypass.
+  3. **Modelling assumptions. Bypassable.**
+- **A check is bypassable only when every later function has a defined, documented
+  behavior for the state it lets through.** Otherwise the bypass only moves the crash.
+- **Mechanism.** One argument, named the same across functions: `allow =`, a character
+  vector of named relaxations (e.g. `allow = "non_diploid_dominance"`). Every refusal
+  message ends with the exact value to pass. Not a blanket `check = FALSE`, and not a
+  global option.
+- **Default level.**
+  - **Refuse** when the result would be silently wrong: calibration, a missing genotype
+    state, a variance target.
+  - **Warn** when the result is literally what was asked for, only unusual (e.g.
+    additive effects on a hemizygous chromosome, counted per copy, which is correct).
+- **Later code that trusts an earlier check re-checks the condition itself** and needs
+  its own `allow =`. A relaxation is not stored in the database. Example:
+  `define_phenotype(prevalence = )` trusts calibration of `"generated"` terms (Q21).
+  If a generator ran with the diploid check relaxed, prevalence re-checks and refuses
+  without its own `allow =`.
+
+**First use: the chromosome / genome-effect checks.** They read only the line-agnostic
+`chr_inheritance` rules today:
+
+- `assert_qtl_autosomal()` (generators)
+- `.ge_validate_dominance_ploidy()` (every genome-effect write)
+- `.ge_reachable_copy_counts()` (`copy_count_value` inference, `require_complete`)
+
+With a line rule that makes a chromosome hemizygous in one line, these approve effects
+that are then wrong:
+
+- dominance fails late in `add_tgv()`;
+- generated-QTL calibration misses its target, silently;
+- indicator members get no effect, silently;
+- `require_complete` passes an incomplete surface.
+
+Separately, `define_chromosome()` never re-runs these checks after it writes a rule.
+So "effects first, then `define_chromosome()`" gets through even for line-agnostic
+X/Y rules.
+
+The follow-up covers:
+
+- resolve copy counts over every (sex, line) context with rules;
+- diploid means "two copies in every context" (recombination is irrelevant);
+- reachable copy counts are the union over contexts;
+- dominance keeps its exact two-copy-origin exception;
+- `define_chromosome()` re-validates after a write;
+- `allow =` values for each check;
+- `add_tgv()` / `add_phenotype()` `allow =` to skip dominance for animals with a copy
+  count other than 2, with a message giving the counts;
+- tests for both configuration orders.
 
 ## Documentation and release cleanup
 
@@ -186,6 +257,23 @@ is divergent selection from a common founder pool, continued in the same databas
   `ind_haplotype` rows becoming `founder_haplotypes` rows with their `line_name`.
 - **Mutation, and per-line mutation rates** over generations. There is no mutation in the
   package yet.
+- **Per-gamete fast-path routing for line-specific chromosome rules (option C).**
+  - **Current rule** (0.76.12, `plans/line_specific_chr_rules_add_offspring.md`, D1 =
+    option A): a chromosome that *any* line's rule makes special goes through the
+    per-offspring R path for *every* line.
+  - **Two costs of that rule:**
+    - Every line runs slower. In one benchmark (10 chromosomes, 10k loci, 2,000
+      offspring), the first special chromosome added ~10 s to 15.7 s, and each
+      further one ~3.5 s.
+    - A rule for line B changes line A's seeded offspring from then on, so paired
+      scenario comparisons lose common random numbers.
+  - **Option C:** choose the path per gamete from its own context (offspring sex/line,
+    parent sex/line), so a rule affects only the animals it names. The C++ kernel
+    probably stays as it is, since it already takes chromosome bounds per gamete group.
+    The parent matrices, per-gamete row counts and batch assembly in `add_offspring()`
+    need rework, and hemizygous parents need placeholder rows.
+  - **When to do it:** when a real cross-strain or cross-species use case needs the
+    speed or isolated seeds.
 
 ## Accepted limitations to explain in the book
 

@@ -1,6 +1,16 @@
 # Plan: honor line-specific chromosome rules in `add_offspring()`
 
-Status: proposed, for review (user + Codex). Nothing implemented yet.
+Status: revised after a Codex review (its points are folded in below; the review
+file itself was not kept).
+D1–D3 accepted. Nothing implemented yet.
+
+**Process (decided 2026-10-13):**
+1. Implement, then run the targeted test files and the full suite.
+2. Report the results and any deviations from this plan to the user before
+   committing.
+3. Commit the plan and the code together as 0.76.12. Push
+   only on request.
+4. Codex reviews that commit afterwards if wanted. Fixes become 0.76.13.
 Target version for the implementation: 0.76.12 (this plan is committed as 0.76.11).
 
 ## 1. The bug
@@ -106,16 +116,30 @@ classification changes.
 
 Classifying from only the lines present in the current mating would make one
 offspring's chromosomes depend on which other matings are in the same call.
-That breaks the rule that seeded output is a function of stored inputs. The
-autosome kernel draws all autosomes from one kind = 1 stream per gamete, so
+The autosome kernel draws all autosomes from one kind = 1 stream per gamete, so
 moving a chromosome in or out of the autosome set changes the draws for the
 others.
 
-With D1, classification is a function of the stored rule tables alone. The
-consequence is that adding a rule for line B changes line A's seeded offspring
-from then on (the chromosome moves to the special path for every line, so the
-draws change). That is allowed by the reproducibility contract (forward-looking,
-within the current stored inputs) and is the price of a stable classification.
+That would not break the reproducibility contract: the matings are inputs, and
+the same inputs would still give the same output. D1 is a stronger property we
+choose to keep: **appending unrelated matings to a call does not change the
+offspring of the rows already there** (same row index `o`, same stream). With
+D1, classification is a function of the stored rule tables alone.
+
+The consequence is that adding a rule for line B changes line A's seeded
+offspring from then on: the chromosome moves to the special path for every
+line, so the draws change. A new rule is a change to the stored inputs, so this
+is consistent with the contract. It gets documented (§5).
+
+**Decision (2026-10-13, user):** option A, as above. The alternatives considered:
+
+- **B:** classify from the lines in the current call. Rejected: the same mating
+  would give different offspring depending on the rest of the call.
+- **C:** choose the path per gamete, so a rule touches only the animals it
+  names. Deferred to `plans/TODO.md` (Lines and populations).
+
+Measured cost of A (10 chromosomes, 10k loci, 2,000 offspring): 15.7 s with
+no special chromosome, 25.4 s with one, then about +3.5 s for each further one.
 
 **D2. Resolve rules, not raw rows.**
 
@@ -141,16 +165,18 @@ some line has made special.
 - **No line-specific rows:** `.plain_autosome_chrs()` returns exactly the
   chromosomes `is_plain_autosome(get_chr_rules_map(conn)[[cn]])` did. The
   classification, the kernel inputs and the RNG streams are the same, so output
-  is bit-identical to today. `test-parity.R` and
-  `test-genome-effects-determinism.R` keep covering this. Nothing in them
-  changes.
+  is unchanged. That is a side effect of unchanged inputs and streams, not a
+  new requirement: no old-output golden tests. The guarantees tested are the
+  usual ones, bit-identical repeated runs of the current code and R ↔ C++
+  parity (`test-parity.R`, `test-make_gametes_parity.R`).
 - **With line-specific rows:** output changes, which is the point of the fix.
   No golden-from-old comparison.
 - **RNG:** classification is pure SQL reads (`dbGetQuery`), which does not
   touch R's RNG. The stream keys (`.gamete_stream_id(o, r, kind)`) are
   unchanged.
 - **R ↔ C++ parity:** the kernel's inputs come after classification, and the
-  kernel itself is untouched.
+  kernel itself is untouched. Test 11 below runs the mixed-line fixture under
+  both kernels anyway, since the autosome set the kernel sees now changes.
 
 ## 4. Tests (`tests/testthat/test-add_offspring.R`, new block)
 
@@ -173,12 +199,14 @@ individuals, because the 0.76.10 guard refuses anything else.
 3. **Line recombination rule on a default autosome is honored.**
    - Rule: chr 1, `parent_sex = "M"`, `line_name = "A"`, `recombines = FALSE`.
      It may be set after founders (the guard only covers inheritance).
+   - The offspring are of a **different line** (C) from the line-A sire, so the
+     test fails if recombination is accidentally resolved at the offspring's
+     line.
    - `add_offspring(store_crossovers = TRUE)`: no `ind_crossover` rows for chr 1
      with `parent_origin = 1` from line-A sires. Each offspring's paternal chr 1
      equals one of its sire's two haplotypes exactly.
-   - Dams, and sires of another line, still recombine on chr 1 (at least one
-     crossover across the offspring, with a seed and enough offspring that this
-     is not flaky; or check against a line without the rule).
+   - Dams, and line-B sires, still recombine on chr 1 (at least one crossover
+     each, with a fixed seed and enough offspring that this is not flaky).
 4. **Same seed, same output** with line rules present: two identical runs,
    `expect_identical()` on `ind_haplotype` and `ind_crossover`.
 5. **Classification is a function of stored rules only (pins D1).**
@@ -192,11 +220,41 @@ individuals, because the 0.76.10 guard refuses anything else.
 6. **No line rules: unchanged classification.** A direct test of the helper
    that `.plain_autosome_chrs()` equals the line-agnostic classification on a
    population with X/Y/MT rules and no line rows.
+7. **No fast-path chromosomes.** A one-chromosome genome whose only chromosome
+   is made special by a line rule. Offspring are still produced correctly. This
+   covers the empty autosome matrices and the special-only write path.
+8. **Absent chromosome.** A line rule of `0,0` on a default autosome: those
+   offspring get no `ind_haplotype` rows for it, and everyone else gets two
+   copies.
+9. **Unsupported transmission rolls back.**
+   - A line rule of `2,0` on a default autosome.
+   - Use `batch_size = 1`, with a valid mating ordered before the failing one,
+     so an earlier batch has already written rows inside the transaction.
+   - `add_offspring()` errors. `ind_meta`, `ind_haplotype` and `ind_crossover`
+     are unchanged.
+   - The existing `test-kernel-boundary.R` case starts from a chromosome that
+     is special for all lines, so it never reached this routing.
+10. **Resolved rules, not raw rows (pins D2).**
+    - A non-plain `(NULL, line L)` row on chr 1, fully shadowed by explicit
+      plain `(M, L)` and `(F, L)` rows.
+    - `.plain_autosome_chrs()` still lists chr 1.
+    - The offspring are bit-identical to the same population without any line-L
+      rows, so chr 1 stayed on the fast path.
+11. **Batch size and kernel parity.**
+    - The mixed-line fixture from test 1, with the line-A recombination rule
+      from test 3 added.
+    - Run with `tidybreed.kernel = "r"` and `"auto"` (C++), and with `batch_size = 1`
+      and `batch_size = nrow(matings)`.
+    - `expect_identical()` on `ind_haplotype` and on `ind_crossover` without
+      `id_crossover`. That is a surrogate key, and by existing design it is
+      allowed to vary with batch size (`test-recombination_dqrng.R:127`).
+    - Every compared query has an explicit `ORDER BY`.
 
 Then re-run the suites that touch chromosomes and offspring:
 `test-define_chromosome.R`, `test-kernel-boundary.R`, `test-add_founders.R`,
-`test-add_offspring*.R`, `test-parity.R`, `test-extract_genotypes.R`,
-`test-add_dosage.R`, and the full suite before the commit.
+`test-add_offspring.R`, `test-parity.R`, `test-make_gametes_parity.R`,
+`test-recombination_dqrng.R`, `test-extract_genotypes.R`, `test-add_dosage.R`,
+and the full suite before the commit.
 
 ## 5. Docs and bookkeeping
 
@@ -204,6 +262,16 @@ Then re-run the suites that touch chromosomes and offspring:
   `add_founders()` and `add_offspring()`. After the fix that is true; re-read
   it once. Add one sentence: a chromosome that any line makes special is drawn
   on the slower per-offspring path for every line.
+- `?add_offspring`, "Recombination model":
+  - Say that "plain autosome" means plain for every line with rules.
+  - Say that a new line-specific rule can move a chromosome off the fast path,
+    and that this changes later seeded offspring of every line.
+  - Fix an existing error. The page says a non-recombining contribution is
+    "the parent's single stored copy ... passed straight through unchanged (no
+    recombination, no additional RNG draws)". That is only true for a
+    one-copy parent. A two-copy parent that does not recombine passes on one
+    of its two homologs, chosen at random with one draw
+    (`pass_through_gamete()`, `R/recombination_helpers.R:368`).
 - `.claude/skills/tidybreed-schema/SKILL.md` (chr rule resolution) and
   `.claude/skills/tidybreed-api/SKILL.md` (`add_offspring()`): describe the
   classification over all lines with rules.
@@ -229,7 +297,22 @@ QTL on chr 1, and H animals would then carry one copy. `.egv_diploid_loci()`
 already classifies over all lines with rules, so the code base is not
 consistent here.
 
-Question for review: should these use the same "every line with rules" rule
-(probably via a shared helper next to `.plain_autosome_chrs()`)? I'd do that as
-a separate change after this one, since it changes what the genome-effect
-writers accept rather than how offspring are made.
+**Moved (2026-10-13):** these checks are now the first use of a package-wide check
+policy (refuse by default, bypass with a named `allow =`). See "Check policy" in
+`plans/TODO.md` and the coming `plans/check_policy.md`. The Codex points below carry
+over to that plan.
+
+These stay in a separate follow-up, with its own plan. The Codex review
+sets out what that plan has to settle, and I agree with all of it:
+
+- **They must not reuse `.plain_autosome_chrs()`.** Diploid checks are about
+  inheritance only. A locus on a non-recombining but two-copy chromosome is
+  still diploid.
+- **Reachable copy counts need a union** over every resolved (sex, line)
+  context, not an intersection or a yes/no test.
+- **The dominance check keeps its exception.** A member whose exact origin
+  multiset demands two copies stays allowed.
+- **Configuration order.** A chromosome rule added after effects exist can
+  break what those effects assumed. The 0.76.10 guard still allows it when the
+  affected line has no individuals yet. The follow-up decides which call
+  refuses that combination, and tests both orders.

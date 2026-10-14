@@ -137,14 +137,22 @@ pop <- pop |>
 ```
 
 `add_founders()` and `add_offspring()` resolve `chr_inheritance`/
-`chr_recombination` per chromosome: a chromosome whose resolved inheritance is
+`chr_recombination` per chromosome. A chromosome whose resolved inheritance is
 `1,1` for both offspring sexes **and** `recombines` for both parent sexes goes
-through the original, unchanged diploid path; any other chromosome routes through
-a separate branch that writes only the applicable `(sex, parent_origin)` rows and
-— for non-recombining or single-copy inheritance (Y, W, MT) — passes the parent's
-stored copy straight through instead of simulating a crossover. Copy resolution
-uses the **offspring's** sex/line; recombination resolution uses the **producing
-parent's** sex/line.
+through the original, unchanged diploid path. In `add_offspring()` that must hold
+for the line-agnostic rules **and** for every line with rules
+(`.plain_autosome_chrs()`), so one line's rule moves the chromosome off the fast
+path for every line.
+
+Any other chromosome routes through a separate branch that writes only the
+applicable `(sex, parent_origin)` rows:
+- a one-copy parent passes its copy through unchanged (no draw);
+- a two-copy parent that does not recombine passes one of its two copies,
+  chosen with one draw;
+- a two-copy parent that recombines passes a recombined copy.
+
+Copy resolution uses the **offspring's** sex/line; recombination resolution uses
+the **producing parent's** sex/line.
 
 Real polyploidy (ploidy > 2, uneven-ploidy crosses) is not yet supported;
 `ind_meta.ploidy` must be `2` for every individual.

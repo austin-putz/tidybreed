@@ -76,13 +76,24 @@
 #' haplotype is chosen at random. This
 #' applies to plain autosomes (the seeded default: `chr_inheritance`
 #' `from_parent_1 = from_parent_2 = 1` for both sexes and `chr_recombination`
-#' `recombines = TRUE` for both parent sexes). Sex chromosomes and organelles
-#' configured via [define_chromosome()] follow their own inheritance rule instead:
-#' the contributing parent's copy recombines via the same Haldane model only when
-#' that parent carries two copies of the chromosome AND the producing parent's
-#' `chr_recombination.recombines` resolves `TRUE` for its sex; otherwise the
-#' parent's single stored copy is passed straight through unchanged (no
-#' recombination, no additional RNG draws).
+#' `recombines = TRUE` for both parent sexes).
+#'
+#' **Chromosomes with rules:** a chromosome counts as a plain autosome only if
+#' it is plain for every line that has a rule in [define_chromosome()]. Any
+#' other chromosome (sex chromosomes, organelles, or one that a single line's
+#' rule changes) is drawn for every offspring on a slower per-offspring path
+#' that applies the rules. The copies an offspring inherits follow the rule for
+#' the offspring's sex and line. Whether a parent's contribution recombines
+#' follows the rule for that parent's sex and line:
+#' * A parent with two copies whose rule says it recombines passes on a
+#'   recombined copy (same Haldane model).
+#' * A parent with two copies whose rule says it does not recombine passes on
+#'   one of its two copies unchanged, chosen at random (one draw).
+#' * A parent with one copy passes it on unchanged (no draw).
+#'
+#' Because the path is decided from the stored rules, adding a line rule that
+#' makes a chromosome special moves it to the slower path for every line, and
+#' so changes later seeded offspring of every line, not only that line's.
 #'
 #' **Offspring IDs:**
 #' IDs follow the same `"{line_name}_{n}"` format as `add_founders()`. Numbering
@@ -266,13 +277,14 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
 
   n_loci     <- nrow(genome_meta_df)
 
-  # Line-agnostic default rules drive the batch-global chromosome CLASSIFICATION
-  # (plain autosome vs special). Per-individual copy/recombination decisions
-  # resolve at the correct entity's line via chr_rules_for(): inheritance by the
-  # OFFSPRING's line, recombination by the PRODUCING PARENT's line (v5 review #4).
-  # In v1 no line-specific chromosome rules exist, so every line falls back to the
-  # default and resolves identically — the seam is reserved, not yet exercised.
-  chr_rules_map   <- get_chr_rules_map(pop$db_conn)
+  # The batch-global chromosome CLASSIFICATION (plain autosome vs special) holds
+  # for every line with rules: a chromosome any line makes special leaves the
+  # kernel for all lines (.plain_autosome_chrs()). It reads the stored rules only,
+  # never the lines in this call, so appending matings cannot change earlier
+  # rows' offspring. Per-individual copy/recombination decisions on the special
+  # path resolve at the correct entity's line via chr_rules_for(): inheritance by
+  # the OFFSPRING's line, recombination by the PRODUCING PARENT's line.
+  plain_chrs      <- .plain_autosome_chrs(pop$db_conn)
   chr_rules_cache <- list()
   chr_rules_for <- function(line) {
     key <- if (length(line) == 0L || is.na(line)) "L" else paste0("L", line)
@@ -288,7 +300,8 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
     vapply(chr_ids_all, function(x) genome_meta_df$chr_name[genome_meta_df$chr == x][1], character(1)),
     chr_id_keys
   )
-  is_autosome_id <- vapply(chr_id_keys, function(k) is_plain_autosome(chr_rules_map[[chr_name_by_id[[k]]]]), logical(1))
+  is_autosome_id <- stats::setNames(unname(chr_name_by_id[chr_id_keys]) %in% plain_chrs,
+                                    chr_id_keys)
 
   autosome_locus_idx <- which(genome_meta_df$chr %in% chr_ids_all[is_autosome_id])
   special_chr_names  <- unname(chr_name_by_id[chr_id_keys[!is_autosome_id]])

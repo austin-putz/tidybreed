@@ -71,7 +71,9 @@
 #' @param line_name Optional line name: the rule applies only to animals of
 #'   that line (the offspring's line for inheritance, the parent's for
 #'   recombination), for crossbreeding designs whose lines differ. `NULL`
-#'   (default) applies to every line.
+#'   (default) applies to every line. A chromosome that any line's rule makes
+#'   special is drawn on [add_offspring()]'s slower per-offspring path for
+#'   every line.
 #' @param from_parent_1,from_parent_2 Inheritance calls: whole numbers,
 #'   always given together, of copies from the sire (parent 1) and the dam
 #'   (parent 2). Their sum is 0, 1 or 2; see the table in *Details*.
