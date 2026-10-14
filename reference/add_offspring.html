@@ -11,7 +11,7 @@ control over the mating design."><meta property="og:image" content="https://aust
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -146,13 +146,21 @@ crossover positions are uniform in cM within each chromosome, and the starting
 haplotype is chosen at random. This
 applies to plain autosomes (the seeded default: <code>chr_inheritance</code>
 <code>from_parent_1 = from_parent_2 = 1</code> for both sexes and <code>chr_recombination</code>
-<code>recombines = TRUE</code> for both parent sexes). Sex chromosomes and organelles
-configured via <code><a href="define_chromosome.html">define_chromosome()</a></code> follow their own inheritance rule instead:
-the contributing parent's copy recombines via the same Haldane model only when
-that parent carries two copies of the chromosome AND the producing parent's
-<code>chr_recombination.recombines</code> resolves <code>TRUE</code> for its sex; otherwise the
-parent's single stored copy is passed straight through unchanged (no
-recombination, no additional RNG draws).</p>
+<code>recombines = TRUE</code> for both parent sexes).</p>
+<p><strong>Chromosomes with rules:</strong> a chromosome counts as a plain autosome only if
+it is plain for every line that has a rule in <code><a href="define_chromosome.html">define_chromosome()</a></code>. Any
+other chromosome (sex chromosomes, organelles, or one that a single line's
+rule changes) is drawn for every offspring on a slower per-offspring path
+that applies the rules. The copies an offspring inherits follow the rule for
+the offspring's sex and line. Whether a parent's contribution recombines
+follows the rule for that parent's sex and line:</p><ul><li><p>A parent with two copies whose rule says it recombines passes on a
+recombined copy (same Haldane model).</p></li>
+<li><p>A parent with two copies whose rule says it does not recombine passes on
+one of its two copies unchanged, chosen at random (one draw).</p></li>
+<li><p>A parent with one copy passes it on unchanged (no draw).</p></li>
+</ul><p>Because the path is decided from the stored rules, adding a line rule that
+makes a chromosome special moves it to the slower path for every line, and
+so changes later seeded offspring of every line, not only that line's.</p>
 <p><strong>Offspring IDs:</strong>
 IDs follow the same <code>"{line_name}_{n}"</code> format as <code><a href="add_founders.html">add_founders()</a></code>. Numbering
 continues from the current maximum for each line.</p>

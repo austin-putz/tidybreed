@@ -122,14 +122,30 @@ positions are uniform in cM within each chromosome, and the starting
 haplotype is chosen at random. This applies to plain autosomes (the
 seeded default: `chr_inheritance` `from_parent_1 = from_parent_2 = 1`
 for both sexes and `chr_recombination` `recombines = TRUE` for both
-parent sexes). Sex chromosomes and organelles configured via
-[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md)
-follow their own inheritance rule instead: the contributing parent's
-copy recombines via the same Haldane model only when that parent carries
-two copies of the chromosome AND the producing parent's
-`chr_recombination.recombines` resolves `TRUE` for its sex; otherwise
-the parent's single stored copy is passed straight through unchanged (no
-recombination, no additional RNG draws).
+parent sexes).
+
+**Chromosomes with rules:** a chromosome counts as a plain autosome only
+if it is plain for every line that has a rule in
+[`define_chromosome()`](https://austin-putz.github.io/tidybreed/reference/define_chromosome.md).
+Any other chromosome (sex chromosomes, organelles, or one that a single
+line's rule changes) is drawn for every offspring on a slower
+per-offspring path that applies the rules. The copies an offspring
+inherits follow the rule for the offspring's sex and line. Whether a
+parent's contribution recombines follows the rule for that parent's sex
+and line:
+
+- A parent with two copies whose rule says it recombines passes on a
+  recombined copy (same Haldane model).
+
+- A parent with two copies whose rule says it does not recombine passes
+  on one of its two copies unchanged, chosen at random (one draw).
+
+- A parent with one copy passes it on unchanged (no draw).
+
+Because the path is decided from the stored rules, adding a line rule
+that makes a chromosome special moves it to the slower path for every
+line, and so changes later seeded offspring of every line, not only that
+line's.
 
 **Offspring IDs:** IDs follow the same `"{line_name}_{n}"` format as
 [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md).
