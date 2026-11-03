@@ -1,3 +1,27 @@
+# tidybreed 0.76.14 (2026-11-03)
+
+* Fixed: a line whose name contains `_` could receive animals only once. The
+  second `add_founders()` or `add_offspring()` call into e.g. `Duroc_F1`
+  failed with `Could not convert string 'F1_1' to INT32`.
+* Fixed: once a line `A_B` existed, adding to line `A` failed
+  (`Could not convert string 'B_1' to INT32`), and a line `A_7` could make
+  line `A` skip numbers. Ids are now numbered per line from the rows whose
+  `line_name` column is that line, by the new internal `.next_ind_number()`.
+* Id numbers are range-checked: the whole allocation must fit
+  `1..2147483647`, checked before anything is drawn or written, and an id
+  beyond it is no longer silently ignored (a line could restart at 1) or
+  written by `add_founders()`. A stored id that does not have the form
+  `{line_name}_{n}` for its line (only a hand-edited table holds one) is an
+  error naming the line.
+* `add_founders()` requires whole-number `n_males` / `n_females`.
+* `add_offspring()` no longer pastes parent ids into SQL: both parent reads
+  join a registered view. A parent id containing a quote now gives "Parent
+  ID(s) not found" instead of a parser error. `id_parent_1` / `id_parent_2`
+  must be character (a factor is converted), with no `NA` or empty string.
+* New `tests/testthat/test-individual_ids.R`; follow-up plan
+  `plans/individual_id_sql_followup.md` for the six modules that still put
+  ids in SQL text.
+
 # tidybreed 0.76.13 (2026-11-03)
 
 * New test `tests/testthat/test-recombination_rates.R` checks that recombination

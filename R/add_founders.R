@@ -54,9 +54,18 @@
 #'    [define_chromosome()])
 #'
 #' **ID Format:**
-#' - Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
-#' - Numbers are sequential within each line
-#' - If founders already exist for a line, numbering continues from max ID
+#' - Individual IDs: `"{line_name}_{n}"` (e.g., "A_1", "A_2", "B_1",
+#'   "Duroc_F1_3"). Line names may contain `_`, and one line's name may be a
+#'   prefix of another's (`A` and `A_B`).
+#' - `n` counts within each line, shared with [add_offspring()]: it continues
+#'   from the largest `n` the line currently holds in `ind_meta` (rows are
+#'   found by the `line_name` column). Numbers freed by deleting a line's
+#'   newest animals can be reused, and [archive_replicate()] restarts
+#'   numbering.
+#' - `n` must stay within `1..2147483647` (`.Machine$integer.max`); an
+#'   allocation that would leave that range is an error, checked before
+#'   anything is drawn or written. So is a stored id of the line that does
+#'   not have this form (only a hand-edited table holds one).
 #'
 #' **Multiple Lines:**
 #' - Can be called multiple times to add different lines to same database
@@ -139,6 +148,10 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   # Validate n_males and n_females
   stopifnot(is.numeric(n_males), length(n_males) == 1, n_males >= 0)
   stopifnot(is.numeric(n_females), length(n_females) == 1, n_females >= 0)
+  if (!is.finite(n_males) || !is.finite(n_females) ||
+      n_males != trunc(n_males) || n_females != trunc(n_females)) {
+    stop("n_males and n_females must be whole numbers.", call. = FALSE)
+  }
 
   # Ensure at least one founder
   if ((n_males + n_females) == 0) {
@@ -193,19 +206,16 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   # 3. Determine ID sequence
   # ============================================================================
 
-  # ind_meta always exists (created by open_pop()); query current max.
-  max_num_result <- DBI::dbGetQuery(pop$db_conn, paste0(
-    "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('_' IN id_ind) + 1) AS INTEGER)) as max_num ",
-    "FROM ind_meta WHERE LEFT(id_ind, ", nchar(line_name) + 1L, ") = '", line_name, "_'"
-  ))
-  start_id <- if (is.na(max_num_result$max_num)) 1L else as.integer(max_num_result$max_num) + 1L
+  # Next number in this line, with the whole allocation range-checked before
+  # any draw. Reads by the line_name column through a registered view.
+  n_founders <- n_males + n_females
+  start_id   <- .next_ind_number(pop$db_conn,
+                                 stats::setNames(n_founders, line_name))[[1L]]
+  n_founders <- as.integer(n_founders)
 
   # ============================================================================
   # 4. Sample haplotypes
   # ============================================================================
-
-  # Total number of founders
-  n_founders <- n_males + n_females
 
   # Sample haplotypes: 2 per individual, with replacement
   hap_indices <- matrix(
@@ -219,7 +229,8 @@ add_founders <- function(tbl, n_males, n_females, line_name, ploidy = 2L, ...,
   # ============================================================================
 
   # Generate individual IDs
-  ind_ids <- paste0(line_name, "_", seq(start_id, start_id + n_founders - 1))
+  # (start - 1) + k, never start + k - 1: the latter overflows at the limit
+  ind_ids <- paste0(line_name, "_", (start_id - 1L) + seq_len(n_founders))
 
   # Create sex vector
   sex_vector <- c(rep("M", n_males), rep("F", n_females))

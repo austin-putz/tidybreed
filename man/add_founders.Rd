@@ -83,9 +83,18 @@ sex chromosome (e.g. \verb{0, 1}), 0 for an absent chromosome (\verb{0, 0}); see
 
 \strong{ID Format:}
 \itemize{
-\item Individual IDs: \code{"{line_name}_{number}"} (e.g., "A_1", "A_2", "B_1")
-\item Numbers are sequential within each line
-\item If founders already exist for a line, numbering continues from max ID
+\item Individual IDs: \code{"{line_name}_{n}"} (e.g., "A_1", "A_2", "B_1",
+"Duroc_F1_3"). Line names may contain \verb{_}, and one line's name may be a
+prefix of another's (\code{A} and \code{A_B}).
+\item \code{n} counts within each line, shared with \code{\link[=add_offspring]{add_offspring()}}: it continues
+from the largest \code{n} the line currently holds in \code{ind_meta} (rows are
+found by the \code{line_name} column). Numbers freed by deleting a line's
+newest animals can be reused, and \code{\link[=archive_replicate]{archive_replicate()}} restarts
+numbering.
+\item \code{n} must stay within \verb{1..2147483647} (\code{.Machine$integer.max}); an
+allocation that would leave that range is an error, checked before
+anything is drawn or written. So is a stored id of the line that does
+not have this form (only a hand-edited table holds one).
 }
 
 \strong{Multiple Lines:}

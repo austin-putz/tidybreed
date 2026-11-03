@@ -3,7 +3,12 @@
 Status: revised after a Codex review (`plans/individual_id_sql_codex_review.md`,
 2026-11-03); its accepted points are folded in below. Nothing implemented.
 Decisions taken 2026-11-03: D1(a) per-line numbering, D2(a) focused fix plus
-a follow-up plan, D3 no migration. Ready to implement as 0.76.14.
+a follow-up plan, D3 no migration. **Implemented in 0.76.14** (`.next_ind_number()` in `R/sql_utils.R`, `tests/testthat/test-individual_ids.R`;
+follow-up: `plans/individual_id_sql_followup.md`). One change from §2a found
+by test 5: ids are built as `(start - 1L) + k`, since `start + k - 1L`
+overflows at the limit before the subtraction. Test 9 checks individual ids in
+every statement, and line names only in `ind_meta` statements: the map and
+rule helpers quote line names with `dbQuoteLiteral()`, which the rule allows.
 
 Target version for the implementation: 0.76.14 (this plan ships with the
 0.76.13 docs/test work).

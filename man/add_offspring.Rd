@@ -121,8 +121,17 @@ makes a chromosome special moves it to the slower path for every line, and
 so changes later seeded offspring of every line, not only that line's.
 
 \strong{Offspring IDs:}
-IDs follow the same \code{"{line_name}_{n}"} format as \code{add_founders()}. Numbering
-continues from the current maximum for each line.
+IDs follow the same \code{"{line_name}_{n}"} format as \code{add_founders()}, which
+they share a counter with: \code{n} continues from the largest \code{n} the line
+currently holds in \code{ind_meta}, and within one call each line's rows are
+numbered in \code{matings} row order. The offspring's line is whatever
+\code{line_name} its row gives; nothing is derived from the parents' lines, so a
+cross is named by you (\code{"AB"}, \code{"F1"}, ...). See \code{\link[=add_founders]{add_founders()}} for the
+supported range and what happens after deletions.
+
+\strong{Parent ids} must be character (a factor is converted), with no \code{NA} or
+empty string. They are looked up as data, never pasted into SQL, so an id
+of any shape that is not in \code{ind_meta} is reported as not found.
 }
 \examples{
 \dontrun{

@@ -282,6 +282,105 @@ next_row_id <- function(conn, table, id_col) {
 }
 
 
+#' First individual-id number to use per line
+#'
+#' Individual ids are exactly `line_name || '_' || n`, where `n` is a positive
+#' decimal integer with no leading zero and `1 <= n <= .Machine$integer.max`.
+#' For each line in `n_new`, reads the `ind_meta` rows whose `line_name` column
+#' is that line (never an id prefix, so line `A` does not see line `A_B`), takes
+#' everything after the line's own `line_name_` prefix as `n`, and returns
+#' `max(n) + 1` (`1` for a line with no rows).
+#'
+#' Line names reach DuckDB through a registered view, never SQL text. The
+#' helper only registers a view and reads, so it does not advance R's RNG.
+#'
+#' Errors, naming the line, when a stored id of the line is malformed (only a
+#' hand-edited table can hold one) or when the whole allocation
+#' `next .. next + n_new - 1` would leave the supported range. "Current
+#' maximum" is over the rows `ind_meta` holds now: numbers freed by deletion
+#' can be reused, and [archive_replicate()] restarts numbering.
+#'
+#' @param conn A DBI connection.
+#' @param n_new Whole numbers named by line: how many new ids each line needs.
+#'   Names must be unique.
+#' @return Integer vector named like `n_new`: the first `n` for each line.
+#' @keywords internal
+.next_ind_number <- function(conn, n_new) {
+  lines <- names(n_new)
+  if (length(n_new) == 0L || is.null(lines) || anyNA(lines) || any(lines == "") ||
+      anyDuplicated(lines) || !is.numeric(n_new) || anyNA(n_new) ||
+      any(n_new < 1) || any(n_new != trunc(n_new))) {
+    stop(".next_ind_number(): n_new must be positive whole numbers named by ",
+         "unique line names.", call. = FALSE)
+  }
+
+  view <- "__next_id_lines"
+  duckdb::duckdb_register(conn, view, data.frame(line_name = lines,
+                                                 stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(conn, view), silent = TRUE), add = TRUE)
+
+  # The remainder after the exact prefix must be [1-9][0-9]*. The cast stays
+  # inside the CASE: DuckDB evaluates a plain CAST before an aggregate FILTER,
+  # so it would fail on a malformed row. BIGINT holds any suffix of up to 10
+  # digits, so one above the int32 range is read as a number, never dropped.
+  rows_sql <- paste0(
+    "SELECT l.line_name, m.id_ind, ",
+    "substr(m.id_ind, length(l.line_name) + 2) AS suffix, ",
+    "starts_with(m.id_ind, l.line_name || '_') AND ",
+    "regexp_full_match(substr(m.id_ind, length(l.line_name) + 2), '[1-9][0-9]*') ",
+    "AS well_formed ",
+    "FROM ", view, " l LEFT JOIN ind_meta m ON m.line_name = l.line_name")
+  res <- DBI::dbGetQuery(conn, paste0(
+    "WITH r AS (", rows_sql, ") ",
+    "SELECT line_name, ",
+    "COUNT(*) FILTER (WHERE id_ind IS NOT NULL AND NOT well_formed) AS n_malformed, ",
+    "COUNT(*) FILTER (WHERE well_formed AND length(suffix) > 10) AS n_too_long, ",
+    "MAX(CASE WHEN well_formed AND length(suffix) <= 10 ",
+    "THEN TRY_CAST(suffix AS BIGINT) END) AS max_num ",
+    "FROM r GROUP BY line_name"))
+  # GROUP BY promises no order: map by the returned line_name.
+  res <- res[match(lines, res$line_name), , drop = FALSE]
+
+  bad <- lines[res$n_malformed > 0]
+  if (length(bad) > 0L) {
+    ex <- DBI::dbGetQuery(conn, paste0(
+      "WITH r AS (", rows_sql, ") ",
+      "SELECT line_name, id_ind FROM r ",
+      "WHERE id_ind IS NOT NULL AND NOT well_formed ",
+      "QUALIFY row_number() OVER (PARTITION BY line_name ORDER BY id_ind) <= 5 ",
+      "ORDER BY line_name, id_ind"))
+    msg <- vapply(bad, function(ln) paste0(
+      "line '", ln, "': ", res$n_malformed[lines == ln], " (e.g. ",
+      paste(ex$id_ind[ex$line_name == ln], collapse = ", "), ")"), character(1))
+    stop("ind_meta holds individual id(s) that do not have the form ",
+         "'{line_name}_{n}' (n a positive integer, no leading zero) for their ",
+         "line: ", paste(msg, collapse = "; "), ". The table was edited by hand; ",
+         "fix or remove those rows.", call. = FALSE)
+  }
+
+  limit <- .Machine$integer.max
+  max_num <- as.numeric(res$max_num)                 # NA for a line with no rows
+  nxt     <- ifelse(is.na(max_num), 1, max_num + 1)
+  last    <- nxt + as.numeric(n_new) - 1             # double: cannot overflow here
+  over    <- res$n_too_long > 0 | last > limit
+  if (any(over)) {
+    msg <- vapply(lines[over], function(ln) {
+      i <- match(ln, lines)
+      if (res$n_too_long[i] > 0 || (!is.na(max_num[i]) && max_num[i] >= limit)) {
+        paste0("line '", ln, "' already holds an id number at or above the limit")
+      } else {
+        paste0("line '", ln, "' would need numbers ", format(nxt[i], scientific = FALSE),
+               " to ", format(last[i], scientific = FALSE))
+      }
+    }, character(1))
+    stop("Individual id numbers must lie in 1..", limit, " (.Machine$integer.max): ",
+         paste(msg, collapse = "; "), ".", call. = FALSE)
+  }
+
+  stats::setNames(as.integer(nxt), lines)
+}
+
+
 #' System-managed tables that users must not overwrite with `define_table()`
 #'
 #' @keywords internal

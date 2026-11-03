@@ -38,7 +38,14 @@ autosome (`1, 1`), 1 for a hemizygous sex chromosome (e.g. `0, 1`), 0 for an
 absent chromosome (`0, 0`); `line_origin` = the founder's line, `strand = 1`).
 Does **not** write
 `ind_genotype` (on-demand via `add_dosage()`). ID format: `{line_name}_{n}`
-(e.g. `Libra_1`).
+(e.g. `Libra_1`), allocated by `.next_ind_number()` per line (shared with `add_offspring()`,
+which numbers each line's rows in `matings` row order): next = the line's
+current max `n` + 1, read by the `line_name` column through a registered view;
+line names may contain `_`. The whole allocation must fit `1..int32 max`
+(checked before any draw); a malformed stored id of the line is an error.
+`add_offspring()` reads parents through the registered view `__ao_parents`
+(both the `ind_meta` and the `ind_haplotype` read); parent ids must be
+character (factor converted), no `NA` / `""`.
 
 Accepts `...` for custom `ind_meta` columns written atomically with the new
 rows (see **Custom field forwarding** below).

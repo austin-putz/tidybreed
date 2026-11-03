@@ -282,7 +282,7 @@ populated by `add_founders()` and `add_offspring()`.
 
 | Column      | Type    | Notes                               |
 |-------------|---------|-------------------------------------|
-| id_ind      | VARCHAR  | Primary key, format `{line_name}_{n}` (e.g. `Libra_1020`) |
+| id_ind      | VARCHAR  | Primary key, exactly `line_name || '_' || n` (e.g. `Libra_1020`, `Duroc_F1_3`): `n` matches `[1-9][0-9]*`, `1 <= n <= .Machine$integer.max`, counted per line (founders and offspring share it) from the largest `n` among the line's current rows, found by the `line_name` column, never an id prefix. Allocated only by `.next_ind_number()` (`R/sql_utils.R`), which errors on a malformed id or an out-of-range allocation. Not a lifetime counter: numbers freed by deletion can be reused; `archive_replicate()` restarts numbering |
 | id_parent_1 | VARCHAR  | NA for founders                     |
 | id_parent_2 | VARCHAR  | NA for founders                     |
 | line_name   | VARCHAR  | Genetic line name                   |

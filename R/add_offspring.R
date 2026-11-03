@@ -96,8 +96,17 @@
 #' so changes later seeded offspring of every line, not only that line's.
 #'
 #' **Offspring IDs:**
-#' IDs follow the same `"{line_name}_{n}"` format as `add_founders()`. Numbering
-#' continues from the current maximum for each line.
+#' IDs follow the same `"{line_name}_{n}"` format as `add_founders()`, which
+#' they share a counter with: `n` continues from the largest `n` the line
+#' currently holds in `ind_meta`, and within one call each line's rows are
+#' numbered in `matings` row order. The offspring's line is whatever
+#' `line_name` its row gives; nothing is derived from the parents' lines, so a
+#' cross is named by you (`"AB"`, `"F1"`, ...). See [add_founders()] for the
+#' supported range and what happens after deletions.
+#'
+#' **Parent ids** must be character (a factor is converted), with no `NA` or
+#' empty string. They are looked up as data, never pasted into SQL, so an id
+#' of any shape that is not in `ind_meta` is reported as not found.
 #'
 #' @export
 #'
@@ -181,6 +190,26 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   # 4. Validate required column values
   # ============================================================================
 
+  # Parent ids are lookup values: character, no NA, no "". Any other shape is
+  # left for the "not found" check below (they reach SQL only as view rows).
+  for (col in c("id_parent_1", "id_parent_2")) {
+    v <- matings[[col]]
+    if (is.factor(v)) v <- as.character(v)
+    if (!is.character(v)) {
+      stop("matings$", col, " must be character individual ids, not ",
+           class(v)[1L], ".", call. = FALSE)
+    }
+    if (anyNA(v) || any(v == "")) {
+      stop("matings$", col, " has missing or empty id(s) in row(s) ",
+           paste(utils::head(which(is.na(v) | v == ""), 5L), collapse = ", "),
+           ".", call. = FALSE)
+    }
+    matings[[col]] <- v
+  }
+  if (is.factor(matings$line_name)) {
+    matings$line_name <- as.character(matings$line_name)
+  }
+
   invalid_sex <- !matings$sex %in% c("M", "F")
   if (any(invalid_sex)) {
     bad <- paste(unique(matings$sex[invalid_sex]), collapse = ", ")
@@ -230,12 +259,20 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   # 7. Validate all parent IDs exist in ind_meta; fetch their sex and ploidy
   # ============================================================================
 
+  # The parent ids reach DuckDB as rows of a registered view, never SQL text;
+  # both the ind_meta and the ind_haplotype read join to it. Registering does
+  # not advance R's RNG. Removed on success and on error.
   unique_parents <- unique(c(matings$id_parent_1, matings$id_parent_2))
-  parent_id_list <- paste(paste0("'", unique_parents, "'"), collapse = ", ")
+  parent_view    <- "__ao_parents"
+  duckdb::duckdb_register(pop$db_conn, parent_view,
+                          data.frame(id_ind = unique_parents, stringsAsFactors = FALSE))
+  on.exit(try(duckdb::duckdb_unregister(pop$db_conn, parent_view), silent = TRUE),
+          add = TRUE)
 
   parent_meta <- DBI::dbGetQuery(
     pop$db_conn,
-    paste0("SELECT id_ind, sex, ploidy, line_name FROM ind_meta WHERE id_ind IN (", parent_id_list, ")")
+    paste0("SELECT m.id_ind, m.sex, m.ploidy, m.line_name FROM ind_meta m ",
+           "JOIN ", parent_view, " USING (id_ind)")
   )
 
   missing_parents <- setdiff(unique_parents, parent_meta$id_ind)
@@ -363,9 +400,9 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   parent_haps_raw <- DBI::dbGetQuery(
     pop$db_conn,
     paste0(
-      "SELECT id_ind, parent_origin, locus_id, allele, line_origin ",
-      "FROM ind_haplotype WHERE id_ind IN (", parent_id_list,
-      ") ORDER BY id_ind, parent_origin, locus_id"
+      "SELECT h.id_ind, h.parent_origin, h.locus_id, h.allele, h.line_origin ",
+      "FROM ind_haplotype h JOIN ", parent_view, " USING (id_ind) ",
+      "ORDER BY h.id_ind, h.parent_origin, h.locus_id"
     )
   )
 
@@ -455,20 +492,11 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
   # 10. Determine offspring IDs (per-line sequential numbering)
   # ============================================================================
 
-  unique_lines <- unique(matings$line_name)
-  line_start   <- integer(length(unique_lines))
-  names(line_start) <- unique_lines
-
-  for (ln in unique_lines) {
-    res <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0(
-        "SELECT MAX(CAST(SUBSTRING(id_ind FROM POSITION('_' IN id_ind) + 1) AS INTEGER)) AS max_num ",
-        "FROM ind_meta WHERE LEFT(id_ind, ", nchar(ln) + 1L, ") = '", ln, "_'"
-      )
-    )
-    line_start[ln] <- if (is.na(res$max_num)) 1L else as.integer(res$max_num) + 1L
-  }
+  # One start per line, read by the line_name column through a registered view
+  # and range-checked for the whole allocation (.next_ind_number()).
+  n_per_line <- table(matings$line_name)
+  line_start <- .next_ind_number(
+    pop$db_conn, stats::setNames(as.vector(n_per_line), names(n_per_line)))
 
   n_offspring  <- nrow(matings)
 
@@ -485,14 +513,14 @@ add_offspring <- function(pop, matings, seed = NULL, store_crossovers = FALSE,
          "id. Split the mating into multiple add_offspring() calls.", call. = FALSE)
   }
 
-  offspring_ids <- character(n_offspring)
-  line_counter  <- as.list(line_start)
-
-  for (i in seq_len(n_offspring)) {
-    ln             <- matings$line_name[i]
-    offspring_ids[i] <- paste0(ln, "_", line_counter[[ln]])
-    line_counter[[ln]] <- line_counter[[ln]] + 1L
-  }
+  # Ids in mating-row order: the k-th row of a line gets start + k - 1. Row order
+  # decides which offspring gets which id (and which per-gamete stream), as
+  # before. The range check above proved every number fits int32; computing
+  # (start - 1) + k rather than start + k - 1 keeps the sum itself in range.
+  rank_in_line  <- stats::ave(seq_len(n_offspring), matings$line_name,
+                              FUN = seq_along)
+  offspring_ids <- paste0(matings$line_name, "_",
+                          (line_start[matings$line_name] - 1L) + rank_in_line)
 
   # ============================================================================
   # 11. Batch setup (parent-keyed descriptors + offspring metadata; once)
