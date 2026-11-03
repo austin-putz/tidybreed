@@ -110,10 +110,29 @@
 #' Base allele frequencies center the true breeding value (the Falconer
 #' `allele - p` term) and set the genic weights `n_eligible * p q`. They come
 #' from `base_tbl`, a filtered `tidybreed_table` whose identity says *what kind
-#' of thing* is selected and whose [dplyr::filter()] says *which* (see
-#' [extract_allele_freq()] for the three accepted shapes: the founder pool,
-#' allele copies in `ind_haplotype`, or individuals from any table with
-#' `id_ind`).
+#' of thing* is selected and whose [dplyr::filter()] says *which*. The pipe
+#' subject `tbl` picks the loci; `base_tbl` picks the population. Three shapes
+#' are accepted (the same as [extract_allele_freq()], which you can call
+#' first to see the `p` a base gives):
+#'
+#' * **The founder pool** -- `get_table(pop, "founder_haplotypes")`, optionally
+#'   `|> filter(line_name == "Duroc")`: the haplotypes
+#'   [define_founder_haplotypes()] wrote.
+#' * **Allele copies** -- `get_table(pop, "ind_haplotype") |>
+#'   filter(line_origin == "Duroc")`: exactly those copies, e.g. Duroc-origin
+#'   copies at any cross depth.
+#' * **Individuals** -- any table with `id_ind`, semi-joined on its distinct
+#'   ids. The founders [add_founders()] created are the `ind_meta` rows with
+#'   no parents: `get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`
+#'   (add `line_name == "Duroc"` for one line, or filter on a custom column
+#'   such as `gen == 0L`). `ind_phenotype`, `ind_ebv` and the like work the
+#'   same way.
+#'
+#' The founder pool and the founders are different bases. [add_founders()]
+#' samples haplotypes from the pool with replacement, so the founders'
+#' frequencies depart from the pool's by sampling noise. Use the pool for the
+#' expectation, the founder individuals to calibrate to the animals actually
+#' simulated; only individuals can serve as a `"realised"` anchor.
 #'
 #' When `base_tbl = NULL` the base is **the population the effect applies to**,
 #' resolved with the same `line -> NULL` precedence as `resolve_genome_map()`:
@@ -200,7 +219,9 @@
 #' @param base_tbl Optional `tidybreed_table` from [get_table()] (optionally
 #'   filtered) selecting the allele copies that define base allele
 #'   frequencies: `founder_haplotypes`, `ind_haplotype`, or any table with an
-#'   `id_ind` column. Must come from the same `pop` as `tbl`. `NULL` (default)
+#'   `id_ind` column (e.g. the founders,
+#'   `get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`). Must come
+#'   from the same `pop` as `tbl`. `NULL` (default)
 #'   resolves to the founder pool of the line the effect applies to — see
 #'   *Which population centers the effects*. Under `anchor = "realised"` it is
 #'   required and names the individuals whose `Cov(X)` is the anchor.
@@ -259,6 +280,9 @@
 #' duroc <- get_table(pop, "founder_haplotypes") |>
 #'   dplyr::filter(line_name == "Duroc")
 #'
+#' # The p a base gives, before committing to it
+#' head(extract_allele_freq(duroc))
+#'
 #' # One trait: every locus on chromosome 1 is a QTL. G writes the target to
 #' # trait_var_comp and calibrates to it in one transaction.
 #' pop <- pop |>
@@ -280,11 +304,15 @@
 #'   get_table("genome_meta") |>
 #'   define_additive_effects("LMA", base_tbl = duroc, seed = 13)
 #'
-#' # Exact in the founders themselves, linkage disequilibrium included
+#' # Exact in the founders themselves, linkage disequilibrium included. The
+#' # founders add_founders() created are the ind_meta rows with no parents;
+#' # the loci come from the pipe, the individuals from base_tbl.
+#' founders <- get_table(pop, "ind_meta") |>
+#'   dplyr::filter(is.na(id_parent_1), line_name == "Duroc")
 #' pop <- pop |>
 #'   get_table("genome_meta") |>
 #'   define_additive_effects("IMF", G = 0.1, anchor = "realised",
-#'     base_tbl = get_table(pop, "ind_meta"), seed = 14)
+#'     base_tbl = founders, seed = 14)
 #' pop |>
 #'   get_table("ind_meta") |>
 #'   extract_genetic_variance(trait_name = "IMF")

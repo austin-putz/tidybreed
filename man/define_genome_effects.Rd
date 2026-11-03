@@ -80,7 +80,9 @@ and \code{dominance_degree_sd > 0}. See \emph{Inbreeding depression}.}
 \item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
 filtered) whose allele frequencies are the base: the founder pool
 (\code{founder_haplotypes}), allele copies (\code{ind_haplotype}) or individuals
-(any table with \code{id_ind}). The base frequencies centre the effects and
+(any table with \code{id_ind}, e.g. the founders,
+\code{get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))}; see
+\emph{Choosing the base}). The base frequencies centre the effects and
 set the genic anchor. \code{NULL} (default) uses the whole founder table.
 Required under \code{anchor = "realised"}, where it must select individuals.}
 
@@ -229,6 +231,26 @@ at the \strong{pooled} frequencies (with a Wahlund warning); pass \code{base_tbl
 calibrate on one reference line.
 }
 
+\section{Choosing the base}{
+
+The pipe subject \code{tbl} picks the loci; \code{base_tbl} picks the population
+whose allele frequencies centre the effects and set the anchor. It takes
+the three shapes \code{\link[=define_additive_effects]{define_additive_effects()}} describes:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{get_table(pop, "founder_haplotypes")                     # the founder pool
+get_table(pop, "ind_haplotype") |>
+  filter(line_origin == "A")                             # allele copies
+get_table(pop, "ind_meta") |>
+  filter(is.na(id_parent_1))                             # the founders
+}\if{html}{\out{</div>}}
+
+\code{\link[=add_founders]{add_founders()}} samples the pool with replacement, so the founder
+individuals' frequencies are not the pool's. Calibrate on the founders
+(\code{anchor = "realised"}, which needs individuals) to hit the targets in the
+animals actually simulated; \code{\link[=extract_allele_freq]{extract_allele_freq()}} shows the \code{p} any base
+gives.
+}
+
 \section{What a re-run replaces}{
 
 Every \code{"generated"} term of the traits, at every scope: line-scoped
@@ -321,12 +343,16 @@ pop <- pop |>
 pop <- pop |> define_effect_cov_matrix("dominance", 0.2, trait_name = "FI")
 pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", seed = 24)
 
-# Exact in the founders themselves, linkage disequilibrium included
+# Exact in the founders themselves, linkage disequilibrium included. The
+# founders add_founders() created are the ind_meta rows with no parents;
+# the loci come from the pipe, the individuals from base_tbl.
+founders <- get_table(pop, "ind_meta") |>
+  dplyr::filter(is.na(id_parent_1))
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr_name == "2") |>
   define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta"), seed = 25)
+    base_tbl = founders, seed = 25)
 pop |>
   get_table("ind_meta") |>
   extract_genetic_variance(trait_name = "IMF")

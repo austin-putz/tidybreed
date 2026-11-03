@@ -60,7 +60,9 @@ approximate (a warning gives the delivered values).}
 \item{base_tbl}{Optional \code{tidybreed_table} from \code{\link[=get_table]{get_table()}} (optionally
 filtered) selecting the allele copies that define base allele
 frequencies: \code{founder_haplotypes}, \code{ind_haplotype}, or any table with an
-\code{id_ind} column. Must come from the same \code{pop} as \code{tbl}. \code{NULL} (default)
+\code{id_ind} column (e.g. the founders,
+\code{get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))}). Must come
+from the same \code{pop} as \code{tbl}. \code{NULL} (default)
 resolves to the founder pool of the line the effect applies to — see
 \emph{Which population centers the effects}. Under \code{anchor = "realised"} it is
 required and names the individuals whose \code{Cov(X)} is the anchor.}
@@ -217,10 +219,29 @@ on such a trait then needs \verb{thresholds =} instead of \verb{prevalence =}.
 Base allele frequencies center the true breeding value (the Falconer
 \code{allele - p} term) and set the genic weights \verb{n_eligible * p q}. They come
 from \code{base_tbl}, a filtered \code{tidybreed_table} whose identity says \emph{what kind
-of thing} is selected and whose \code{\link[dplyr:filter]{dplyr::filter()}} says \emph{which} (see
-\code{\link[=extract_allele_freq]{extract_allele_freq()}} for the three accepted shapes: the founder pool,
-allele copies in \code{ind_haplotype}, or individuals from any table with
-\code{id_ind}).
+of thing} is selected and whose \code{\link[dplyr:filter]{dplyr::filter()}} says \emph{which}. The pipe
+subject \code{tbl} picks the loci; \code{base_tbl} picks the population. Three shapes
+are accepted (the same as \code{\link[=extract_allele_freq]{extract_allele_freq()}}, which you can call
+first to see the \code{p} a base gives):
+\itemize{
+\item \strong{The founder pool} -- \code{get_table(pop, "founder_haplotypes")}, optionally
+\verb{|> filter(line_name == "Duroc")}: the haplotypes
+\code{\link[=define_founder_haplotypes]{define_founder_haplotypes()}} wrote.
+\item \strong{Allele copies} -- \code{get_table(pop, "ind_haplotype") |> filter(line_origin == "Duroc")}: exactly those copies, e.g. Duroc-origin
+copies at any cross depth.
+\item \strong{Individuals} -- any table with \code{id_ind}, semi-joined on its distinct
+ids. The founders \code{\link[=add_founders]{add_founders()}} created are the \code{ind_meta} rows with
+no parents: \code{get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))}
+(add \code{line_name == "Duroc"} for one line, or filter on a custom column
+such as \code{gen == 0L}). \code{ind_phenotype}, \code{ind_ebv} and the like work the
+same way.
+}
+
+The founder pool and the founders are different bases. \code{\link[=add_founders]{add_founders()}}
+samples haplotypes from the pool with replacement, so the founders'
+frequencies depart from the pool's by sampling noise. Use the pool for the
+expectation, the founder individuals to calibrate to the animals actually
+simulated; only individuals can serve as a \code{"realised"} anchor.
 
 When \code{base_tbl = NULL} the base is \strong{the population the effect applies to},
 resolved with the same \code{line -> NULL} precedence as \code{resolve_genome_map()}:
@@ -295,6 +316,9 @@ for (t in c("ADG", "BW", "FCR", "LMA", "IMF", "BF")) pop <- define_trait(pop, t)
 duroc <- get_table(pop, "founder_haplotypes") |>
   dplyr::filter(line_name == "Duroc")
 
+# The p a base gives, before committing to it
+head(extract_allele_freq(duroc))
+
 # One trait: every locus on chromosome 1 is a QTL. G writes the target to
 # trait_var_comp and calibrates to it in one transaction.
 pop <- pop |>
@@ -316,11 +340,15 @@ pop <- pop |>
   get_table("genome_meta") |>
   define_additive_effects("LMA", base_tbl = duroc, seed = 13)
 
-# Exact in the founders themselves, linkage disequilibrium included
+# Exact in the founders themselves, linkage disequilibrium included. The
+# founders add_founders() created are the ind_meta rows with no parents;
+# the loci come from the pipe, the individuals from base_tbl.
+founders <- get_table(pop, "ind_meta") |>
+  dplyr::filter(is.na(id_parent_1), line_name == "Duroc")
 pop <- pop |>
   get_table("genome_meta") |>
   define_additive_effects("IMF", G = 0.1, anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta"), seed = 14)
+    base_tbl = founders, seed = 14)
 pop |>
   get_table("ind_meta") |>
   extract_genetic_variance(trait_name = "IMF")

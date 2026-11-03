@@ -1,3 +1,31 @@
+# tidybreed 0.76.13 (2026-11-03)
+
+* New test `tests/testthat/test-recombination_rates.R` checks that recombination
+  delivers the genetic map, not only that it is reproducible. Realised
+  recombination fractions match the Haldane map function at the `genome_map`
+  distances, crossover counts are Poisson(L / 100) with uniform positions, there
+  is no interference or transmission bias, and each gamete uses its producing
+  parent's map. Checked on the kernel alone (irregular map) and end to end
+  through `add_offspring()`, reading recombination from `line_origin` in an
+  A x B F2: a male map twice the default, a 0.5 cM/Mb chromosome, and an X that
+  recombines in females and passes unchanged from a hemizygous male. Injecting
+  a 15% rate error or non-uniform crossover positions fails it.
+* New vignette "Recombination and genetic maps" (`vignettes/recombination.Rmd`):
+  the model, where `pos_cM` comes from, and the same checks with plots, plus
+  achiasmy and the X.
+* `?define_additive_effects` and `?define_genome_effects` now show how to pick
+  the base population: the founder pool, allele copies, or individuals such as
+  the founders (`get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`),
+  and explain that the founders' frequencies differ from the pool's. Their
+  realised-anchor examples select the founders explicitly.
+* Plan `plans/individual_id_sql.md` (decided, not yet implemented): a line whose name
+  contains `_` can receive animals only once, and line `A` cannot be added to
+  once a line `A_B` exists (`Could not convert string ... to INT32` in
+  `add_founders()` / `add_offspring()`); `add_offspring()` also puts parent ids
+  in SQL text.
+* Draft plan `plans/check_policy.md` (with `plans/check_policy_inventory.md`):
+  refuse by default, `allow =` to bypass. Not implemented.
+
 # tidybreed 0.76.12 (2026-10-13)
 
 * `add_offspring()` now applies line-specific `define_chromosome()` rules on
