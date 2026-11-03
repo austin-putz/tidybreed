@@ -7,6 +7,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/LICENSE.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/articles/genetic-models.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/articles/index.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/articles/recombination.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/articles/tidybreed-introduction.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/authors.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/index.html</loc></url>
@@ -119,6 +120,7 @@
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-individual_descriptions.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-largest_remainder.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-list_archive_tables.html</loc></url>
+<url><loc>https://austin-putz.github.io/tidybreed/reference/dot-next_ind_number.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-observation_model_descriptions.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-pivot_pheno_wide.html</loc></url>
 <url><loc>https://austin-putz.github.io/tidybreed/reference/dot-prevalence_composite_msg.html</loc></url>

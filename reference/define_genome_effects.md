@@ -121,10 +121,12 @@ define_genome_effects(
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
   (optionally filtered) whose allele frequencies are the base: the
   founder pool (`founder_haplotypes`), allele copies (`ind_haplotype`)
-  or individuals (any table with `id_ind`). The base frequencies centre
-  the effects and set the genic anchor. `NULL` (default) uses the whole
-  founder table. Required under `anchor = "realised"`, where it must
-  select individuals.
+  or individuals (any table with `id_ind`, e.g. the founders,
+  `get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`; see
+  *Choosing the base*). The base frequencies centre the effects and set
+  the genic anchor. `NULL` (default) uses the whole founder table.
+  Required under `anchor = "realised"`, where it must select
+  individuals.
 
 - warn_bounds:
 
@@ -271,6 +273,28 @@ differences between lines. The default base pools the founder table, so
 the targets then hold at the **pooled** frequencies (with a Wahlund
 warning); pass `base_tbl` to calibrate on one reference line.
 
+## Choosing the base
+
+The pipe subject `tbl` picks the loci; `base_tbl` picks the population
+whose allele frequencies centre the effects and set the anchor. It takes
+the three shapes
+[`define_additive_effects()`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+describes:
+
+    get_table(pop, "founder_haplotypes")                     # the founder pool
+    get_table(pop, "ind_haplotype") |>
+      filter(line_origin == "A")                             # allele copies
+    get_table(pop, "ind_meta") |>
+      filter(is.na(id_parent_1))                             # the founders
+
+[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+samples the pool with replacement, so the founder individuals'
+frequencies are not the pool's. Calibrate on the founders
+(`anchor = "realised"`, which needs individuals) to hit the targets in
+the animals actually simulated;
+[`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
+shows the `p` any base gives.
+
 ## What a re-run replaces
 
 Every `"generated"` term of the traits, at every scope: line-scoped
@@ -338,7 +362,7 @@ pop <- open_pop(pop_name = "dge_example", db_name = ":memory:") |>
   define_genome(n_loci = 200, n_chr = 2, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 200)
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpPGk1YX/duckdb
+#> ℹ /tmp/RtmpvvfSjW/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -437,13 +461,17 @@ pop <- pop |> get_table("genome_meta") |> define_genome_effects("FI", seed = 24)
 #> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): FI: 200 QTL with a != 0, 200 with d != 0.
 #> The founder pool (pool expectation under random pairing; additive block only, dominance and additive-by-additive not compared) sees relative spectrum [1.11, 1.11] of the target (sampling LD of 200 haplotypes).
 
-# Exact in the founders themselves, linkage disequilibrium included
+# Exact in the founders themselves, linkage disequilibrium included. The
+# founders add_founders() created are the ind_meta rows with no parents;
+# the loci come from the pipe, the individuals from base_tbl.
+founders <- get_table(pop, "ind_meta") |>
+  dplyr::filter(is.na(id_parent_1))
 pop <- pop |>
   get_table("genome_meta") |>
   dplyr::filter(chr_name == "2") |>
   define_genome_effects("IMF", G_A = 0.2, G_D = 0.05, anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta"), seed = 25)
-#> Set genome effects for 100 QTL on trait IMF (base: ind_meta): exact under the realised anchor; delivered additive variance 0.2; dominance variance 0.05.
+    base_tbl = founders, seed = 25)
+#> Set genome effects for 100 QTL on trait IMF (base: ind_meta [1 filter]): exact under the realised anchor; delivered additive variance 0.2; dominance variance 0.05.
 #> Additive floor for this sampled architecture (the least additive variance its dominance and A x A effects allow; another draw gives another floor): IMF = 0.01428. G_A - floor has smallest eigenvalue 0.9286 on the correlation scale.
 #> Inbreeding depression (drop in the mean per unit of F, positive = depression; sum 2pq d under the realised anchor's frequencies): implied IMF = 1.484.
 #> Functional effects (sampling: dominance_degree_mean = 0.19, dominance_degree_sd = 0.097): IMF: 100 QTL with a != 0, 100 with d != 0.

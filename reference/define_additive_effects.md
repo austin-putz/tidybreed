@@ -93,11 +93,12 @@ define_additive_effects(
   [`get_table()`](https://austin-putz.github.io/tidybreed/reference/get_table.md)
   (optionally filtered) selecting the allele copies that define base
   allele frequencies: `founder_haplotypes`, `ind_haplotype`, or any
-  table with an `id_ind` column. Must come from the same `pop` as `tbl`.
-  `NULL` (default) resolves to the founder pool of the line the effect
-  applies to — see *Which population centers the effects*. Under
-  `anchor = "realised"` it is required and names the individuals whose
-  `Cov(X)` is the anchor.
+  table with an `id_ind` column (e.g. the founders,
+  `get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`). Must come
+  from the same `pop` as `tbl`. `NULL` (default) resolves to the founder
+  pool of the line the effect applies to — see *Which population centers
+  the effects*. Under `anchor = "realised"` it is required and names the
+  individuals whose `Cov(X)` is the anchor.
 
 - line_name:
 
@@ -269,10 +270,35 @@ Base allele frequencies center the true breeding value (the Falconer
 come from `base_tbl`, a filtered `tidybreed_table` whose identity says
 *what kind of thing* is selected and whose
 [`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)
-says *which* (see
-[`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md)
-for the three accepted shapes: the founder pool, allele copies in
-`ind_haplotype`, or individuals from any table with `id_ind`).
+says *which*. The pipe subject `tbl` picks the loci; `base_tbl` picks
+the population. Three shapes are accepted (the same as
+[`extract_allele_freq()`](https://austin-putz.github.io/tidybreed/reference/extract_allele_freq.md),
+which you can call first to see the `p` a base gives):
+
+- **The founder pool** – `get_table(pop, "founder_haplotypes")`,
+  optionally `|> filter(line_name == "Duroc")`: the haplotypes
+  [`define_founder_haplotypes()`](https://austin-putz.github.io/tidybreed/reference/define_founder_haplotypes.md)
+  wrote.
+
+- **Allele copies** –
+  `get_table(pop, "ind_haplotype") |> filter(line_origin == "Duroc")`:
+  exactly those copies, e.g. Duroc-origin copies at any cross depth.
+
+- **Individuals** – any table with `id_ind`, semi-joined on its distinct
+  ids. The founders
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  created are the `ind_meta` rows with no parents:
+  `get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))` (add
+  `line_name == "Duroc"` for one line, or filter on a custom column such
+  as `gen == 0L`). `ind_phenotype`, `ind_ebv` and the like work the same
+  way.
+
+The founder pool and the founders are different bases.
+[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+samples haplotypes from the pool with replacement, so the founders'
+frequencies depart from the pool's by sampling noise. Use the pool for
+the expectation, the founder individuals to calibrate to the animals
+actually simulated; only individuals can serve as a `"realised"` anchor.
 
 When `base_tbl = NULL` the base is **the population the effect applies
 to**, resolved with the same `line -> NULL` precedence as
@@ -354,7 +380,7 @@ pop <- open_pop(pop_name = "dae_example", db_name = ":memory:") |>
   define_founder_haplotypes(n_haplotypes = 100, line_name = "Duroc") |>
   define_founder_haplotypes(n_haplotypes = 100, line_name = "Landrace")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpPGk1YX/duckdb
+#> ℹ /tmp/RtmpvvfSjW/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -386,6 +412,18 @@ for (t in c("ADG", "BW", "FCR", "LMA", "IMF", "BF")) pop <- define_trait(pop, t)
 duroc <- get_table(pop, "founder_haplotypes") |>
   dplyr::filter(line_name == "Duroc")
 
+# The p a base gives, before committing to it
+head(extract_allele_freq(duroc))
+#> # A tibble: 6 × 3
+#>   locus_id locus_name allele_freq
+#>      <int> <chr>            <dbl>
+#> 1        1 Locus_1           0.77
+#> 2        2 Locus_2           0.42
+#> 3        3 Locus_3           0.78
+#> 4        4 Locus_4           0.54
+#> 5        5 Locus_5           0.72
+#> 6        6 Locus_6           0.98
+
 # One trait: every locus on chromosome 1 is a QTL. G writes the target to
 # trait_var_comp and calibrates to it in one transaction.
 pop <- pop |>
@@ -414,12 +452,16 @@ pop <- pop |>
 #> The founder pool (pool expectation under random pairing) sees relative spectrum [1.21, 1.21] of the target (sampling LD of 100 haplotypes).
 #> Set additive effects for 200 QTL on trait 'LMA' (base: founder_haplotypes [1 filter]; scope: all lines, both parents' copies): exact under the genic anchor; delivered variance 0.4.
 
-# Exact in the founders themselves, linkage disequilibrium included
+# Exact in the founders themselves, linkage disequilibrium included. The
+# founders add_founders() created are the ind_meta rows with no parents;
+# the loci come from the pipe, the individuals from base_tbl.
+founders <- get_table(pop, "ind_meta") |>
+  dplyr::filter(is.na(id_parent_1), line_name == "Duroc")
 pop <- pop |>
   get_table("genome_meta") |>
   define_additive_effects("IMF", G = 0.1, anchor = "realised",
-    base_tbl = get_table(pop, "ind_meta"), seed = 14)
-#> Set additive effects for 200 QTL on trait 'IMF' (base: ind_meta; scope: all lines, both parents' copies): exact under the realised anchor; delivered variance 0.1.
+    base_tbl = founders, seed = 14)
+#> Set additive effects for 200 QTL on trait 'IMF' (base: ind_meta [2 filters]; scope: all lines, both parents' copies): exact under the realised anchor; delivered variance 0.1.
 pop |>
   get_table("ind_meta") |>
   extract_genetic_variance(trait_name = "IMF")
@@ -427,9 +469,9 @@ pop |>
 #> # A tibble: 3 × 7
 #>   effect_name     trait_name_1 trait_name_2 cov_value n_ind decomposition anchor
 #>   <chr>           <chr>        <chr>            <dbl> <int> <chr>         <chr> 
-#> 1 additive        IMF          IMF              0.100    60 full          reali…
-#> 2 between_compon… IMF          IMF              0        60 full          reali…
-#> 3 total           IMF          IMF              0.100    60 full          reali…
+#> 1 additive        IMF          IMF                0.1    60 full          reali…
+#> 2 between_compon… IMF          IMF                0      60 full          reali…
+#> 3 total           IMF          IMF                0.1    60 full          reali…
 
 # Crossbreeding: a common variant centred on the pooled founder table
 # (named on purpose, so no Wahlund warning), plus one variant per line,

@@ -130,7 +130,7 @@ nothing to disk; in a real run you would omit `db_name` and get a
 
 pop <- open_pop(pop_name = "demo", db_name = ":memory:")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpfZtksI/duckdb
+#> ℹ /tmp/RtmpcLi7Ca/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -256,7 +256,7 @@ Two helpers exist so you never have to guess what is in the database.
 ``` r
 
 schema(pop)
-#> ── Schema: demo ─────────────────────────────── 27 tables · 3.1 MiB in memory ──
+#> ── Schema: demo ─────────────────────────────── 27 tables · 3.3 MiB in memory ──
 #>   Use describe_table(pop, "name") for column-level details.
 #> 
 #>   Genome
@@ -463,8 +463,8 @@ pop |> get_table("ind_meta") |> count(sex, farm) |> collect()
 #> # A tibble: 2 × 3
 #>   sex   farm        n
 #>   <chr> <chr>   <dbl>
-#> 1 M     AI_Stud   250
-#> 2 F     Iowa      250
+#> 1 F     Iowa      250
+#> 2 M     AI_Stud   250
 ```
 
 The warning above is deliberate:

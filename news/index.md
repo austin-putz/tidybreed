@@ -1,5 +1,76 @@
 # Changelog
 
+## tidybreed 0.76.14 (2026-11-03)
+
+- Fixed: a line whose name contains `_` could receive animals only once.
+  The second
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  or
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  call into e.g. `Duroc_F1` failed with
+  `Could not convert string 'F1_1' to INT32`.
+- Fixed: once a line `A_B` existed, adding to line `A` failed
+  (`Could not convert string 'B_1' to INT32`), and a line `A_7` could
+  make line `A` skip numbers. Ids are now numbered per line from the
+  rows whose `line_name` column is that line, by the new internal
+  [`.next_ind_number()`](https://austin-putz.github.io/tidybreed/reference/dot-next_ind_number.md).
+- Id numbers are range-checked: the whole allocation must fit
+  `1..2147483647`, checked before anything is drawn or written, and an
+  id beyond it is no longer silently ignored (a line could restart at 1)
+  or written by
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md).
+  A stored id that does not have the form `{line_name}_{n}` for its line
+  (only a hand-edited table holds one) is an error naming the line.
+- [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  requires whole-number `n_males` / `n_females`.
+- [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  no longer pastes parent ids into SQL: both parent reads join a
+  registered view. A parent id containing a quote now gives “Parent
+  ID(s) not found” instead of a parser error. `id_parent_1` /
+  `id_parent_2` must be character (a factor is converted), with no `NA`
+  or empty string.
+- New `tests/testthat/test-individual_ids.R`; follow-up plan
+  `plans/individual_id_sql_followup.md` for the six modules that still
+  put ids in SQL text.
+
+## tidybreed 0.76.13 (2026-11-03)
+
+- New test `tests/testthat/test-recombination_rates.R` checks that
+  recombination delivers the genetic map, not only that it is
+  reproducible. Realised recombination fractions match the Haldane map
+  function at the `genome_map` distances, crossover counts are Poisson(L
+  / 100) with uniform positions, there is no interference or
+  transmission bias, and each gamete uses its producing parent’s map.
+  Checked on the kernel alone (irregular map) and end to end through
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md),
+  reading recombination from `line_origin` in an A x B F2: a male map
+  twice the default, a 0.5 cM/Mb chromosome, and an X that recombines in
+  females and passes unchanged from a hemizygous male. Injecting a 15%
+  rate error or non-uniform crossover positions fails it.
+- New vignette “Recombination and genetic maps”
+  (`vignettes/recombination.Rmd`): the model, where `pos_cM` comes from,
+  and the same checks with plots, plus achiasmy and the X.
+- [`?define_additive_effects`](https://austin-putz.github.io/tidybreed/reference/define_additive_effects.md)
+  and
+  [`?define_genome_effects`](https://austin-putz.github.io/tidybreed/reference/define_genome_effects.md)
+  now show how to pick the base population: the founder pool, allele
+  copies, or individuals such as the founders
+  (`get_table(pop, "ind_meta") |> filter(is.na(id_parent_1))`), and
+  explain that the founders’ frequencies differ from the pool’s. Their
+  realised-anchor examples select the founders explicitly.
+- Plan `plans/individual_id_sql.md` (decided, not yet implemented): a
+  line whose name contains `_` can receive animals only once, and line
+  `A` cannot be added to once a line `A_B` exists
+  (`Could not convert string ... to INT32` in
+  [`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+  /
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md));
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)
+  also puts parent ids in SQL text.
+- Draft plan `plans/check_policy.md` (with
+  `plans/check_policy_inventory.md`): refuse by default, `allow =` to
+  bypass. Not implemented.
+
 ## tidybreed 0.76.12 (2026-10-13)
 
 - [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md)

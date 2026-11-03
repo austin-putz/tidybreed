@@ -112,11 +112,22 @@ the result back to update your object: `pop <- add_founders(pop, ...)`
 
 **ID Format:**
 
-- Individual IDs: `"{line_name}_{number}"` (e.g., "A_1", "A_2", "B_1")
+- Individual IDs: `"{line_name}_{n}"` (e.g., "A_1", "A_2", "B_1",
+  "Duroc_F1_3"). Line names may contain `_`, and one line's name may be
+  a prefix of another's (`A` and `A_B`).
 
-- Numbers are sequential within each line
+- `n` counts within each line, shared with
+  [`add_offspring()`](https://austin-putz.github.io/tidybreed/reference/add_offspring.md):
+  it continues from the largest `n` the line currently holds in
+  `ind_meta` (rows are found by the `line_name` column). Numbers freed
+  by deleting a line's newest animals can be reused, and
+  [`archive_replicate()`](https://austin-putz.github.io/tidybreed/reference/archive_replicate.md)
+  restarts numbering.
 
-- If founders already exist for a line, numbering continues from max ID
+- `n` must stay within `1..2147483647` (`.Machine$integer.max`); an
+  allocation that would leave that range is an error, checked before
+  anything is drawn or written. So is a stored id of the line that does
+  not have this form (only a hand-edited table holds one).
 
 **Multiple Lines:**
 

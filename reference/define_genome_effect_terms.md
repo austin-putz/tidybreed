@@ -199,7 +199,7 @@ pop <- open_pop(pop_name = "terms_example", db_name = ":memory:") |>
   define_genome(n_loci = 60, n_chr = 2, chr_len_Mb = 100) |>
   define_founder_haplotypes(n_haplotypes = 100, line_name = "Duroc")
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpPGk1YX/duckdb
+#> ℹ /tmp/RtmpvvfSjW/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
@@ -282,10 +282,10 @@ get_table(pop, "genome_effect_terms")
 #> # A tibble: 6 × 9
 #>   trait_name effect_owner   effect_name id_genome_effect effect_order
 #>   <chr>      <chr>          <chr>                  <int>        <dbl>
-#> 1 ADG        imprinted      NA                         6            1
-#> 2 ADG        reciprocal     NA                         7            1
-#> 3 ADG        epistasis      NA                         4            2
-#> 4 ADG        candidate_gene NA                         5            1
+#> 1 ADG        epistasis      NA                         4            2
+#> 2 ADG        candidate_gene NA                         5            1
+#> 3 ADG        imprinted      NA                         6            1
+#> 4 ADG        reciprocal     NA                         7            1
 #> 5 ADG        qtl_map        NA                         8            1
 #> 6 ADG        qtl_map        NA                         9            1
 #> # ℹ 4 more variables: contrast_signature <chr>, family_key <chr>,

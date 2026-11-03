@@ -148,8 +148,18 @@ line, and so changes later seeded offspring of every line, not only that
 line's.
 
 **Offspring IDs:** IDs follow the same `"{line_name}_{n}"` format as
-[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md).
-Numbering continues from the current maximum for each line.
+[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md),
+which they share a counter with: `n` continues from the largest `n` the
+line currently holds in `ind_meta`, and within one call each line's rows
+are numbered in `matings` row order. The offspring's line is whatever
+`line_name` its row gives; nothing is derived from the parents' lines,
+so a cross is named by you (`"AB"`, `"F1"`, ...). See
+[`add_founders()`](https://austin-putz.github.io/tidybreed/reference/add_founders.md)
+for the supported range and what happens after deletions.
+
+**Parent ids** must be character (a factor is converted), with no `NA`
+or empty string. They are looked up as data, never pasted into SQL, so
+an id of any shape that is not in `ind_meta` is reported as not found.
 
 ## Examples
 
