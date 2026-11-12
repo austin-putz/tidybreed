@@ -22,7 +22,8 @@ assert_ploidy_2(pop, ids = NULL)
 - ids:
 
   Optional character vector of `id_ind` to check; `NULL` (default)
-  checks every individual in `ind_meta`.
+  checks every individual in `ind_meta`, and `character(0)` checks
+  nobody.
 
 ## Value
 

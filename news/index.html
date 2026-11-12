@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.14</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.15</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,6 +36,18 @@
       <small>Source: <a href="https://github.com/austin-putz/tidybreed/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.76.15" id="tidybreed-07615-2026-11-04">tidybreed 0.76.15 (2026-11-04)<a class="anchor" aria-label="anchor" href="#tidybreed-07615-2026-11-04"></a></h2>
+<ul><li>Resolved individual ids no longer appear in SQL text anywhere in <code><a href="../reference/add_dosage.html">add_dosage()</a></code>, <code><a href="../reference/add_genotypes.html">add_genotypes()</a></code>, <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code>, <code><a href="../reference/add_ebv.html">add_ebv()</a></code> or the BLUPF90 file builders. They go through the new internal <code>.with_id_view()</code>. A user’s own <code>filter(id_ind %in% ...)</code> is still rendered into SQL by dbplyr; the CLAUDE.md rule now says so.</li>
+<li>Row order is now deliberate: <code><a href="../reference/extract_genotypes.html">extract_genotypes()</a></code> rows, <code>pedigree.txt</code> and <code>genotype.txt</code> are sorted by <code>id_ind</code>.</li>
+<li>Fixed: the repeated-record mean in <code><a href="../reference/build_data_file.html">build_data_file()</a></code> depended on DuckDB’s thread count, and the drift reached <code>data.txt</code>. It is now accumulated in <code>id_phenotype</code> order, so it is bit-identical at any thread count.</li>
+<li>
+<code><a href="../reference/build_data_file.html">build_data_file()</a></code> now refuses a fixed effect whose <code>source_table</code> has duplicate rows for an animal being read, as <code><a href="../reference/add_phenotype.html">add_phenotype()</a></code> already did. The value written used to depend on row order.</li>
+<li>Fixed: <code>add_ebv(phenotype = )</code> with a filter that matched no records warned that the data file “may be empty” and then evaluated on every record. It is now an error, raised before anything is written; <code><a href="../reference/build_data_file.html">build_data_file()</a></code> treats an empty <code>pheno_ids</code> as no records, never as all.</li>
+<li>
+<code><a href="../reference/add_ebv.html">add_ebv()</a></code> reports, per trait, how many animals have a non-missing record (<code>Records [ADG]: 1200 animals</code>). A trait with none is allowed and labelled (its EBVs come only from genetic correlations); no trait with any is an error.</li>
+<li>New <code>tests/testthat/test-individual_id_views.R</code>. Report: <code>plans/individual_id_sql_followup_report.md</code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.76.14" id="tidybreed-07614-2026-11-03">tidybreed 0.76.14 (2026-11-03)<a class="anchor" aria-label="anchor" href="#tidybreed-07614-2026-11-03"></a></h2>
 <ul><li>Fixed: a line whose name contains <code>_</code> could receive animals only once. The second <code><a href="../reference/add_founders.html">add_founders()</a></code> or <code><a href="../reference/add_offspring.html">add_offspring()</a></code> call into e.g. <code>Duroc_F1</code> failed with <code>Could not convert string 'F1_1' to INT32</code>.</li>

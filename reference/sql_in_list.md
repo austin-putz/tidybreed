@@ -22,7 +22,7 @@ sql_in_list(values, what = "value")
 - what:
 
   Human-readable role label used in error messages (e.g. `"locus name"`,
-  `"individual ID"`).
+  `"trait name"`).
 
 ## Value
 

@@ -1,5 +1,41 @@
 # Changelog
 
+## tidybreed 0.76.15 (2026-11-04)
+
+- Resolved individual ids no longer appear in SQL text anywhere in
+  [`add_dosage()`](https://austin-putz.github.io/tidybreed/reference/add_dosage.md),
+  [`add_genotypes()`](https://austin-putz.github.io/tidybreed/reference/add_genotypes.md),
+  [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md),
+  [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
+  or the BLUPF90 file builders. They go through the new internal
+  `.with_id_view()`. A user’s own `filter(id_ind %in% ...)` is still
+  rendered into SQL by dbplyr; the CLAUDE.md rule now says so.
+- Row order is now deliberate:
+  [`extract_genotypes()`](https://austin-putz.github.io/tidybreed/reference/extract_genotypes.md)
+  rows, `pedigree.txt` and `genotype.txt` are sorted by `id_ind`.
+- Fixed: the repeated-record mean in
+  [`build_data_file()`](https://austin-putz.github.io/tidybreed/reference/build_data_file.md)
+  depended on DuckDB’s thread count, and the drift reached `data.txt`.
+  It is now accumulated in `id_phenotype` order, so it is bit-identical
+  at any thread count.
+- [`build_data_file()`](https://austin-putz.github.io/tidybreed/reference/build_data_file.md)
+  now refuses a fixed effect whose `source_table` has duplicate rows for
+  an animal being read, as
+  [`add_phenotype()`](https://austin-putz.github.io/tidybreed/reference/add_phenotype.md)
+  already did. The value written used to depend on row order.
+- Fixed: `add_ebv(phenotype = )` with a filter that matched no records
+  warned that the data file “may be empty” and then evaluated on every
+  record. It is now an error, raised before anything is written;
+  [`build_data_file()`](https://austin-putz.github.io/tidybreed/reference/build_data_file.md)
+  treats an empty `pheno_ids` as no records, never as all.
+- [`add_ebv()`](https://austin-putz.github.io/tidybreed/reference/add_ebv.md)
+  reports, per trait, how many animals have a non-missing record
+  (`Records [ADG]: 1200 animals`). A trait with none is allowed and
+  labelled (its EBVs come only from genetic correlations); no trait with
+  any is an error.
+- New `tests/testthat/test-individual_id_views.R`. Report:
+  `plans/individual_id_sql_followup_report.md`.
+
 ## tidybreed 0.76.14 (2026-11-03)
 
 - Fixed: a line whose name contains `_` could receive animals only once.

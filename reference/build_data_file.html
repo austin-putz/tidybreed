@@ -9,7 +9,7 @@ trait observations (missing → 0)."><meta property="og:image" content="https://
 
     <a class="navbar-brand me-2" href="../index.html">tidybreed</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.14</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.76.15</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,13 +72,25 @@ trait observations (missing → 0).</p>
 <dt id="arg-pheno-ids">pheno_ids<a class="anchor" aria-label="anchor" href="#arg-pheno-ids"></a></dt>
 <dd><p>optional integer vector of <code>ind_phenotype.id_phenotype</code>
 values to restrict which phenotype records are included (e.g. to exclude
-future records). <code>NULL</code> (default) includes all matching records.</p></dd>
+future records). <code>NULL</code> (default) includes all matching records; an
+empty vector selects none, which is an error.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>list with data, col_map, distinct_effects, effects_df,
 n_fixed_effects, trait_cols</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Repeated records are averaged in <code>id_phenotype</code> order, so the mean does not
+depend on the thread count. A fixed effect's <code>source_table</code> must hold one
+row per animal read: duplicate rows are an error, because which row would
+be used depends on row order.</p>
+<p>Prints one message per trait with the number of animals that have a
+non-missing value. A trait with none is allowed (in a multi-trait model its
+EBVs come through the genetic correlations); every trait with none is an
+error.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

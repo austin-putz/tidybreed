@@ -64,7 +64,7 @@ pop <- open_pop(pop_name = "recombination", db_name = ":memory:") |>
                 chr_len_Mb = c(150, 100, 80),
                 cM_per_Mb  = c(1, 0.5, 1))
 #> duckdb keeps downloaded extensions and secrets in a temporary directory:
-#> ℹ /tmp/RtmpvmPipF/duckdb
+#> ℹ /tmp/RtmpoQYuvm/duckdb
 #> This is removed when the R session ends.
 #> • Extensions are re-downloaded each session.
 #> • Secrets are lost.
