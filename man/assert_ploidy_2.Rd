@@ -10,7 +10,7 @@ assert_ploidy_2(pop, ids = NULL)
 \item{pop}{A \code{tidybreed_pop}.}
 
 \item{ids}{Optional character vector of \code{id_ind} to check; \code{NULL} (default)
-checks every individual in \code{ind_meta}.}
+checks every individual in \code{ind_meta}, and \code{character(0)} checks nobody.}
 }
 \value{
 Invisible \code{NULL} on success; errors otherwise.

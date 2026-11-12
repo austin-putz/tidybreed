@@ -1,6 +1,6 @@
 # SQL-injection hardening for add_dosage() / extract_genotypes(): chip_name
 # identifier validation (via the constructed is_<chip_name>/has_<chip_name>
-# column) and sql_in_list() escaping for locus_name/id_ind IN-lists.
+# column) and sql_in_list() escaping for locus_name IN-lists.
 
 # ---------------------------------------------------------------------------
 # sql_in_list() direct unit tests

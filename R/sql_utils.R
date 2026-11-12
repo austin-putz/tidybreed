@@ -547,7 +547,7 @@ format_sql_value <- function(value, db_type) {
 #'   list. Must be non-empty and free of `NA` (a bare `NA` would otherwise
 #'   silently become the literal string `'NA'` in SQL).
 #' @param what Human-readable role label used in error messages
-#'   (e.g. `"locus name"`, `"individual ID"`).
+#'   (e.g. `"locus name"`, `"trait name"`).
 #' @return A single character string: comma-separated, single-quoted,
 #'   escaped values.
 #' @keywords internal
@@ -560,6 +560,52 @@ sql_in_list <- function(values, what = "value") {
   }
   escaped <- gsub("'", "''", values)
   paste0("'", escaped, "'", collapse = ", ")
+}
+
+
+# Counter behind `.with_id_view()`'s view names (namespace bindings are
+# locked, an environment's contents are not; no RNG involved).
+.id_view_state <- new.env(parent = emptyenv())
+.id_view_state$n <- 0L
+
+#' Run a callback with individual ids registered as a view
+#'
+#' How a resolved vector of individual ids reaches SQL: as a one-column view
+#' `id_ind`, never as text. `fun` receives the view's name and uses it as
+#' `id_ind IN (SELECT id_ind FROM <view>)` or `JOIN <view> USING (id_ind)`.
+#'
+#' Neither form keeps row order: a read whose order reaches output needs its
+#' own `ORDER BY`. A view holds the frame it was registered with, so an id set
+#' that changes needs a new call.
+#'
+#' Not for use inside a transaction: in an aborted one `duckdb_unregister()`
+#' errors and the view survives the rollback. `fun` must finish its database
+#' work before returning; a lazy table over the view is not a valid result.
+#'
+#' @param conn DuckDB connection.
+#' @param ids Character vector without `NA`. Registered as `unique(ids)`,
+#'   because a join against repeated ids multiplies source rows.
+#'   `character(0)` is an empty view: nobody, never everyone.
+#' @param fun Function of one argument, the view name.
+#' @return Whatever `fun` returns. The view is gone afterwards, on error too.
+#' @keywords internal
+#' @noRd
+.with_id_view <- function(conn, ids, fun) {
+  if (!is.character(ids)) {
+    stop("`ids` must be a character vector.", call. = FALSE)
+  }
+  if (anyNA(ids)) {
+    stop("NA not allowed in individual ID list.", call. = FALSE)
+  }
+  # A fresh name per call: nested calls cannot collide, and overwrite stays at
+  # its default so a live name would be an error rather than a silent swap.
+  .id_view_state$n <- .id_view_state$n + 1L
+  view <- paste0("__id_view_", .id_view_state$n)
+  duckdb::duckdb_register(conn, view, data.frame(id_ind = unique(ids),
+                                                 stringsAsFactors = FALSE))
+  # Installed only now, so a failed registration unregisters nothing.
+  on.exit(try(duckdb::duckdb_unregister(conn, view), silent = TRUE), add = TRUE)
+  fun(view)
 }
 
 

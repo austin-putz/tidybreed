@@ -90,7 +90,8 @@ rows are written. Applies only in \code{software = "blupf90"} mode.}
 \code{get_table("ind_phenotype") |> filter(...)}. When supplied, only phenotype
 records matching the filter are included in the BLUPF90 data file. The
 pedigree is unaffected — all traced ancestors remain in the pedigree file
-regardless of this filter. Ignored (with a warning) in \code{parent_avg} mode.
+regardless of this filter. A filter that matches no records is an error.
+Ignored (with a warning) in \code{parent_avg} mode.
 Applies only in \code{software = "blupf90"} mode.}
 
 \item{...}{Optional extra columns written to \code{ind_ebv} (scalars only;

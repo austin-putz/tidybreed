@@ -209,8 +209,11 @@ this file was updated before.
 ## Hard Rules (always apply; detail in the skills above)
 
 - **IDs:** integer primary keys are assigned by `next_int_id()`, never by DuckDB
-  auto-increment. Individual ids never appear in SQL text — register them as a
-  view (`resolve_subset_ids()`, `.ap_read_by_id()`, `R/contributor_tgv.R`).
+  auto-increment. A resolved vector of individual ids never appears in SQL text
+  — register it as a view (`.with_id_view()`; also `.ap_read_by_id()`,
+  `R/contributor_tgv.R`). The one exception is a user's own predicate:
+  `resolve_subset_ids()` renders pending filters with `dbplyr::sql_render()`, so
+  `filter(id_ind %in% c("A_1", "A_2"))` puts those strings in SQL.
 - **RNG:** never call `dbWriteTable()` in the `add_phenotype()` path (it advances
   the RNG); sort before every RNG-consuming step; an individual without a record
   must not consume RNG or leave stochastic state. Nothing in `R/` touches

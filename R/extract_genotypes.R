@@ -151,21 +151,25 @@ extract_genotypes <- function(tbl,
     stop("No individuals found in the filtered set.", call. = FALSE)
   }
 
-  # --- Resolve final individual IDs ---
+  # --- Resolve final individual IDs. Every read is ordered: has_ids is the
+  #     matrix's row order. ---
   if (!is.null(chip_name)) {
     # Chip path: intersect has_<chip> == TRUE with any pending filter
     if (is.null(subset_ids)) {
       has_ids <- DBI::dbGetQuery(
         pop$db_conn,
-        paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE")
+        paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE ",
+               "ORDER BY id_ind")
       )$id_ind
     } else {
-      ids_sql <- sql_in_list(subset_ids, what = "individual ID")
-      has_ids <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE ",
-               "AND id_ind IN (", ids_sql, ")")
-      )$id_ind
+      has_ids <- .with_id_view(pop$db_conn, subset_ids, function(view) {
+        DBI::dbGetQuery(
+          pop$db_conn,
+          paste0("SELECT id_ind FROM ind_meta WHERE ", col_name, " = TRUE ",
+                 "AND id_ind IN (SELECT id_ind FROM ", view, ") ",
+                 "ORDER BY id_ind")
+        )$id_ind
+      })
     }
     if (length(has_ids) == 0) {
       stop("No genotyped animals found for chip '", chip_name,
@@ -176,7 +180,7 @@ extract_genotypes <- function(tbl,
     if (is.null(subset_ids)) {
       has_ids <- DBI::dbGetQuery(
         pop$db_conn,
-        "SELECT DISTINCT id_ind FROM ind_haplotype"
+        "SELECT DISTINCT id_ind FROM ind_haplotype ORDER BY id_ind"
       )$id_ind
     } else {
       has_ids <- subset_ids
@@ -241,16 +245,18 @@ extract_genotypes <- function(tbl,
   # SUM(allele) per id_ind x locus). Columns are named locus_<locus_id> and
   # ordered by locus_id; rows are the resolved individuals. ---
   locus_cols   <- paste0("locus_", locus_ids)
-  ids_sql      <- sql_in_list(has_ids, what = "individual ID")
   locus_id_sql <- paste(locus_ids, collapse = ", ")
 
-  agg <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
-           "FROM ind_haplotype ",
-           "WHERE id_ind IN (", ids_sql, ") AND locus_id IN (", locus_id_sql, ") ",
-           "GROUP BY id_ind, locus_id")
-  )
+  agg <- .with_id_view(pop$db_conn, has_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
+             "FROM ind_haplotype ",
+             "WHERE id_ind IN (SELECT id_ind FROM ", view, ") ",
+             "AND locus_id IN (", locus_id_sql, ") ",
+             "GROUP BY id_ind, locus_id")
+    )
+  })
 
   uid <- unique(has_ids)
   m <- matrix(0L, nrow = length(uid), ncol = length(locus_ids),

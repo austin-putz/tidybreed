@@ -95,39 +95,45 @@ add_dosage <- function(tbl, chip_name = NULL, locus_names = NULL,
       chip_col, " = TRUE)")
   }
 
-  id_filter_sql <- ""
-  if (!is.null(subset_ids)) {
-    ids_sql <- sql_in_list(subset_ids, what = "individual ID")
-    id_filter_sql <- paste0(" AND h.id_ind IN (", ids_sql, ")")
-  }
+  # `view` is NULL for the unrestricted path. The DELETE and the INSERT share
+  # one view of the resolved ids: a selection from ind_genotype itself must
+  # not be a live subquery, or the DELETE empties it before the INSERT.
+  materialize <- function(view = NULL) {
+    in_view <- paste0("IN (SELECT id_ind FROM ", view, ")")
 
-  # --- Optional cache-scope reset for the candidate individuals ---
-  if (isTRUE(overwrite_dosage)) {
-    if (is.null(subset_ids)) {
-      DBI::dbExecute(pop$db_conn, "DELETE FROM ind_genotype")
-    } else {
-      ids_sql <- sql_in_list(subset_ids, what = "individual ID")
-      DBI::dbExecute(pop$db_conn,
-        paste0("DELETE FROM ind_genotype WHERE id_ind IN (", ids_sql, ")"))
+    # --- Optional cache-scope reset for the candidate individuals ---
+    if (isTRUE(overwrite_dosage)) {
+      DBI::dbExecute(pop$db_conn, paste0(
+        "DELETE FROM ind_genotype",
+        if (!is.null(view)) paste0(" WHERE id_ind ", in_view)))
     }
+
+    # --- Materialize dosage. INSERT OR REPLACE relies on the (id_ind, locus_id)
+    #     primary key, so re-running is idempotent. ---
+    n_before <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT COUNT(*) AS n FROM ind_genotype")$n
+    DBI::dbExecute(pop$db_conn, paste0(
+      "INSERT OR REPLACE INTO ind_genotype (id_ind, locus_id, locus_name, dosage_value) ",
+      "SELECT h.id_ind, h.locus_id, h.locus_name, CAST(SUM(h.allele) AS UTINYINT) ",
+      "FROM ind_haplotype h ",
+      "WHERE 1 = 1",
+      if (!is.null(view)) paste0(" AND h.id_ind ", in_view),
+      locus_filter_sql, " ",
+      "GROUP BY h.id_ind, h.locus_id, h.locus_name"
+    ))
+    n_after <- DBI::dbGetQuery(pop$db_conn,
+      "SELECT COUNT(*) AS n FROM ind_genotype")$n
+    c(n_before = n_before, n_after = n_after)
   }
 
-  # --- Materialize dosage. INSERT OR REPLACE relies on the (id_ind, locus_id)
-  #     primary key, so re-running is idempotent. ---
-  n_before <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM ind_genotype")$n
-  DBI::dbExecute(pop$db_conn, paste0(
-    "INSERT OR REPLACE INTO ind_genotype (id_ind, locus_id, locus_name, dosage_value) ",
-    "SELECT h.id_ind, h.locus_id, h.locus_name, CAST(SUM(h.allele) AS UTINYINT) ",
-    "FROM ind_haplotype h ",
-    "WHERE 1 = 1", id_filter_sql, locus_filter_sql, " ",
-    "GROUP BY h.id_ind, h.locus_id, h.locus_name"
-  ))
-  n_after <- DBI::dbGetQuery(pop$db_conn,
-    "SELECT COUNT(*) AS n FROM ind_genotype")$n
+  n <- if (is.null(subset_ids)) {
+    materialize()
+  } else {
+    .with_id_view(pop$db_conn, subset_ids, materialize)
+  }
 
-  message("Materialized dosage into ind_genotype (", n_after,
-          " total rows; ", n_after - n_before, " new).")
+  message("Materialized dosage into ind_genotype (", n[["n_after"]],
+          " total rows; ", n[["n_after"]] - n[["n_before"]], " new).")
 
   invisible(pop)
 }

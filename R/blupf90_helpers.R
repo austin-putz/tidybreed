@@ -31,23 +31,28 @@ find_blupf90_binary <- function(name) {
 trace_pedigree <- function(pop, subset_ids, n_gen) {
   all_ids <- subset_ids
   for (gen in seq_len(n_gen)) {
-    id_in <- paste0("'", all_ids, "'", collapse = ", ")
-    new_parents <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0("SELECT DISTINCT id_parent_1, id_parent_2 FROM ind_meta ",
-             "WHERE id_ind IN (", id_in, ")")
-    )
+    # all_ids grows, so each generation registers its own view
+    new_parents <- .with_id_view(pop$db_conn, all_ids, function(view) {
+      DBI::dbGetQuery(
+        pop$db_conn,
+        paste0("SELECT DISTINCT id_parent_1, id_parent_2 FROM ind_meta ",
+               "WHERE id_ind IN (SELECT id_ind FROM ", view, ")")
+      )
+    })
     new_parent_ids <- unique(c(new_parents$id_parent_1, new_parents$id_parent_2))
     new_parent_ids <- new_parent_ids[!is.na(new_parent_ids) & !new_parent_ids %in% all_ids]
     if (length(new_parent_ids) == 0) break
     all_ids <- c(all_ids, new_parent_ids)
   }
-  id_in <- paste0("'", all_ids, "'", collapse = ", ")
-  ped <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind, id_parent_1, id_parent_2 FROM ind_meta ",
-           "WHERE id_ind IN (", id_in, ")")
-  )
+  # Ordered: this is the row order of pedigree.txt
+  ped <- .with_id_view(pop$db_conn, all_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind, id_parent_1, id_parent_2 FROM ind_meta ",
+             "WHERE id_ind IN (SELECT id_ind FROM ", view, ") ",
+             "ORDER BY id_ind")
+    )
+  })
   ped$id_parent_1[is.na(ped$id_parent_1)] <- "0"
   ped$id_parent_2[is.na(ped$id_parent_2)] <- "0"
   ped
@@ -59,13 +64,24 @@ trace_pedigree <- function(pop, subset_ids, n_gen) {
 #' Column layout: mu(1), id_ind(2), fixed_class effects, fixed_cov effects,
 #' trait observations (missing → 0).
 #'
+#' Repeated records are averaged in `id_phenotype` order, so the mean does not
+#' depend on the thread count. A fixed effect's `source_table` must hold one
+#' row per animal read: duplicate rows are an error, because which row would
+#' be used depends on row order.
+#'
+#' Prints one message per trait with the number of animals that have a
+#' non-missing value. A trait with none is allowed (in a multi-trait model its
+#' EBVs come through the genetic correlations); every trait with none is an
+#' error.
+#'
 #' @param pop tidybreed_pop
 #' @param subset_ids character vector of animal IDs whose phenotypes to include
 #' @param trait_name character vector of trait names
 #' @param eval_dir path to evaluation folder; writes data.txt there
 #' @param pheno_ids optional integer vector of `ind_phenotype.id_phenotype`
 #'   values to restrict which phenotype records are included (e.g. to exclude
-#'   future records). `NULL` (default) includes all matching records.
+#'   future records). `NULL` (default) includes all matching records; an
+#'   empty vector selects none, which is an error.
 #' @return list with data, col_map, distinct_effects, effects_df,
 #'   n_fixed_effects, trait_cols
 #' @keywords internal
@@ -114,23 +130,43 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
   if (n_eff > 0) col_map <- c(col_map, setNames(eff_cols, de$effect_name))
   col_map <- c(col_map, setNames(trt_cols, trait))
 
-  # Pull phenotypic data: average per id_ind per trait
-  id_in <- paste0("'", subset_ids, "'", collapse = ", ")
-  pheno_clause <- if (!is.null(pheno_ids) && length(pheno_ids) > 0)
+  # Pull phenotypic data: average per id_ind per trait. Not AVG(): a parallel
+  # floating aggregate depends on the thread count, and the drift reaches
+  # data.txt. id_phenotype is the primary key, so this order is total.
+  no_records <- "No phenotypic records found for the requested individuals and traits."
+  # NULL is "no restriction"; an empty vector is "no records", never "all"
+  if (!is.null(pheno_ids) && length(pheno_ids) == 0L)
+    stop(no_records, call. = FALSE)
+  pheno_clause <- if (!is.null(pheno_ids))
     paste0(" AND id_phenotype IN (", paste(pheno_ids, collapse = ", "), ")")
   else ""
-  pheno_long <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind, phenotype_name AS trait_name, ",
-           "AVG(pheno_value) AS pheno_value FROM ind_phenotype ",
-           "WHERE phenotype_name IN (", trait_in, ") ",
-           "AND id_ind IN (", id_in, ")",
-           pheno_clause,
-           " GROUP BY id_ind, phenotype_name")
-  )
+  pheno_long <- .with_id_view(pop$db_conn, subset_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind, phenotype_name AS trait_name, ",
+             "list_avg(list(pheno_value ORDER BY id_phenotype)) AS pheno_value ",
+             "FROM ind_phenotype ",
+             "WHERE phenotype_name IN (", trait_in, ") ",
+             "AND id_ind IN (SELECT id_ind FROM ", view, ")",
+             pheno_clause,
+             " GROUP BY id_ind, phenotype_name")
+    )
+  })
   if (nrow(pheno_long) == 0)
-    stop("No phenotypic records found for the requested individuals and traits.",
-         call. = FALSE)
+    stop(no_records, call. = FALSE)
+
+  # Animals with a non-missing value: an animal whose records are all NULL
+  # has a row here but is written as missing
+  n_with <- vapply(trait, function(t)
+    sum(!is.na(pheno_long$pheno_value[pheno_long$trait_name == t])), integer(1))
+  if (all(n_with == 0L))
+    stop(no_records, call. = FALSE)
+  for (t in trait) {
+    message(sprintf("  Records [%s]: %d animals%s", t, n_with[[t]],
+                    if (n_with[[t]] == 0L)
+                      " (EBVs come only from genetic correlations with other traits)"
+                    else ""))
+  }
 
   # Pivot wider manually
   all_ids_with_pheno <- unique(pheno_long$id_ind)
@@ -153,12 +189,21 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
     for (src_tbl in unique_src_tables) {
       eff_sub <- de[de$source_table == src_tbl, , drop = FALSE]
       src_cols <- unique(eff_sub$source_column)
-      id_in_df <- paste0("'", pheno_wide$id_ind, "'", collapse = ", ")
-      src_data <- DBI::dbGetQuery(
-        pop$db_conn,
-        paste0("SELECT id_ind, ", paste(src_cols, collapse = ", "),
-               " FROM ", src_tbl, " WHERE id_ind IN (", id_in_df, ")")
-      )
+      src_data <- .with_id_view(pop$db_conn, pheno_wide$id_ind, function(view) {
+        DBI::dbGetQuery(
+          pop$db_conn,
+          paste0("SELECT id_ind, ", paste(src_cols, collapse = ", "),
+                 " FROM ", src_tbl,
+                 " WHERE id_ind IN (SELECT id_ind FROM ", view, ")")
+        )
+      })
+      # match() below takes the first row, and "first" depends on row order
+      if (anyDuplicated(src_data$id_ind) > 0L) {
+        stop("Effect '", paste(eff_sub$effect_name, collapse = "', '"),
+             "': source table '", src_tbl,
+             "' has duplicate id_ind rows for the current subset.",
+             call. = FALSE)
+      }
       for (eff_row in seq_len(nrow(eff_sub))) {
         eff  <- eff_sub[eff_row, ]
         col_vals <- src_data[[eff$source_column]][
@@ -207,13 +252,16 @@ build_data_file <- function(pop, subset_ids, trait_name, eval_dir,
 write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
   has_col <- paste0("has_", chip_name)
   is_col  <- paste0("is_", chip_name)
-  id_in   <- paste0("'", all_ped_ids, "'", collapse = ", ")
 
-  geno_ids <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind FROM ind_meta WHERE id_ind IN (", id_in, ") ",
-           "AND ", has_col, " = TRUE")
-  )$id_ind
+  # Ordered: this is the row order of genotype.txt
+  geno_ids <- .with_id_view(pop$db_conn, all_ped_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind FROM ind_meta ",
+             "WHERE id_ind IN (SELECT id_ind FROM ", view, ") ",
+             "AND ", has_col, " = TRUE ORDER BY id_ind")
+    )$id_ind
+  })
 
   if (length(geno_ids) == 0) {
     message("No genotyped animals found in the evaluation set for chip '", chip_name, "'.")
@@ -227,15 +275,17 @@ write_geno_file <- function(pop, all_ped_ids, chip_name, eval_dir) {
   n_loci    <- length(chip_loci)
   locus_cols <- paste0("locus_", chip_loci)
 
-  id_in_geno   <- paste0("'", geno_ids, "'", collapse = ", ")
   locus_id_sql <- paste(chip_loci, collapse = ", ")
-  agg <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
-           "FROM ind_haplotype ",
-           "WHERE id_ind IN (", id_in_geno, ") AND locus_id IN (", locus_id_sql, ") ",
-           "GROUP BY id_ind, locus_id")
-  )
+  agg <- .with_id_view(pop$db_conn, geno_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind, locus_id, CAST(SUM(allele) AS INTEGER) AS dosage ",
+             "FROM ind_haplotype ",
+             "WHERE id_ind IN (SELECT id_ind FROM ", view, ") ",
+             "AND locus_id IN (", locus_id_sql, ") ",
+             "GROUP BY id_ind, locus_id")
+    )
+  })
   uid <- unique(geno_ids)
   m <- matrix(0L, nrow = length(uid), ncol = length(chip_loci),
               dimnames = list(NULL, locus_cols))

@@ -76,11 +76,13 @@ add_genotypes <- function(tbl,
       paste0("UPDATE ind_meta SET ", col_name, " = TRUE")
     )
   } else {
-    ids_sql <- sql_in_list(subset_ids, what = "individual ID")
-    DBI::dbExecute(
-      pop$db_conn,
-      paste0("UPDATE ind_meta SET ", col_name, " = TRUE WHERE id_ind IN (", ids_sql, ")")
-    )
+    .with_id_view(pop$db_conn, subset_ids, function(view) {
+      DBI::dbExecute(
+        pop$db_conn,
+        paste0("UPDATE ind_meta SET ", col_name, " = TRUE ",
+               "WHERE id_ind IN (SELECT id_ind FROM ", view, ")")
+      )
+    })
   }
 
   n_genotyped <- DBI::dbGetQuery(

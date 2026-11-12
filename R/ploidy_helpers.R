@@ -9,23 +9,19 @@
 #'
 #' @param pop A `tidybreed_pop`.
 #' @param ids Optional character vector of `id_ind` to check; `NULL` (default)
-#'   checks every individual in `ind_meta`.
+#'   checks every individual in `ind_meta`, and `character(0)` checks nobody.
 #' @return Invisible `NULL` on success; errors otherwise.
 #' @keywords internal
 assert_ploidy_2 <- function(pop, ids = NULL) {
-  if (is.null(ids)) {
-    where_sql <- "WHERE ploidy != 2"
+  count_sql <- "SELECT COUNT(*) AS n FROM ind_meta WHERE ploidy != 2"
+  n_bad <- if (is.null(ids)) {
+    DBI::dbGetQuery(pop$db_conn, count_sql)$n
   } else {
-    where_sql <- paste0(
-      "WHERE id_ind IN (", sql_in_list(ids, what = "individual ID"), ") ",
-      "AND ploidy != 2"
-    )
+    .with_id_view(pop$db_conn, ids, function(view) {
+      DBI::dbGetQuery(pop$db_conn, paste0(
+        count_sql, " AND id_ind IN (SELECT id_ind FROM ", view, ")"))$n
+    })
   }
-
-  n_bad <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT COUNT(*) AS n FROM ind_meta ", where_sql)
-  )$n
 
   if (n_bad > 0) {
     stop(

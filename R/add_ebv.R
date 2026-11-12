@@ -68,7 +68,8 @@
 #'   `get_table("ind_phenotype") |> filter(...)`. When supplied, only phenotype
 #'   records matching the filter are included in the BLUPF90 data file. The
 #'   pedigree is unaffected — all traced ancestors remain in the pedigree file
-#'   regardless of this filter. Ignored (with a warning) in `parent_avg` mode.
+#'   regardless of this filter. A filter that matches no records is an error.
+#'   Ignored (with a warning) in `parent_avg` mode.
 #'   Applies only in `software = "blupf90"` mode.
 #' @param ... Optional extra columns written to `ind_ebv` (scalars only;
 #'   broadcast to all records). Supply per-record vectors with
@@ -188,8 +189,8 @@ add_ebv <- function(tbl,
         stop("Collected `phenotype` table must contain 'id_phenotype'.", call. = FALSE)
       pheno_ids <- unique(pheno_collected[["id_phenotype"]])
       if (length(pheno_ids) == 0)
-        warning("`phenotype` filter matched no records; data file may be empty.",
-                call. = FALSE)
+        stop("`phenotype` filter matched no records in ind_phenotype; ",
+             "nothing to evaluate.", call. = FALSE)
     }
   }
 
@@ -288,40 +289,42 @@ add_ebv <- function(tbl,
 
 ebv_parent_avg <- function(pop, subset_ids, trait_name, model, eval_nums) {
   trait <- trait_name
-  id_in    <- paste0("'", subset_ids, "'", collapse = ", ")
-  cand_meta <- DBI::dbGetQuery(
-    pop$db_conn,
-    paste0("SELECT id_ind, id_parent_1, id_parent_2 FROM ind_meta ",
-           "WHERE id_ind IN (", id_in, ")")
-  )
+  cand_meta <- .with_id_view(pop$db_conn, subset_ids, function(view) {
+    DBI::dbGetQuery(
+      pop$db_conn,
+      paste0("SELECT id_ind, id_parent_1, id_parent_2 FROM ind_meta ",
+             "WHERE id_ind IN (SELECT id_ind FROM ", view, ")")
+    )
+  })
 
   parent_ids <- unique(c(cand_meta$id_parent_1, cand_meta$id_parent_2))
   parent_ids <- parent_ids[!is.na(parent_ids)]
 
   if (length(parent_ids) > 0) {
-    pid_in   <- paste0("'", parent_ids, "'", collapse = ", ")
     trait_in <- paste0("'", trait, "'", collapse = ", ")
     # Get latest EBV per parent per (trait, model); flag if multiple evals exist
-    parent_ebv <- DBI::dbGetQuery(
-      pop$db_conn,
-      paste0(
-        "SELECT e.id_ind, e.trait_name, e.ebv_value, agg.max_eval, agg.n_evals ",
-        "FROM ind_ebv e ",
-        "JOIN ( ",
-        "  SELECT id_ind, trait_name, ",
-        "         MAX(eval_number) AS max_eval, ",
-        "         COUNT(DISTINCT eval_number) AS n_evals ",
-        "  FROM ind_ebv ",
-        "  WHERE model = '", model, "' ",
-        "  AND trait_name IN (", trait_in, ") ",
-        "  AND id_ind IN (", pid_in, ") ",
-        "  GROUP BY id_ind, trait_name ",
-        ") agg ON e.id_ind = agg.id_ind ",
-        "      AND e.trait_name = agg.trait_name ",
-        "      AND e.eval_number = agg.max_eval ",
-        "WHERE e.model = '", model, "'"
+    parent_ebv <- .with_id_view(pop$db_conn, parent_ids, function(view) {
+      DBI::dbGetQuery(
+        pop$db_conn,
+        paste0(
+          "SELECT e.id_ind, e.trait_name, e.ebv_value, agg.max_eval, agg.n_evals ",
+          "FROM ind_ebv e ",
+          "JOIN ( ",
+          "  SELECT id_ind, trait_name, ",
+          "         MAX(eval_number) AS max_eval, ",
+          "         COUNT(DISTINCT eval_number) AS n_evals ",
+          "  FROM ind_ebv ",
+          "  WHERE model = '", model, "' ",
+          "  AND trait_name IN (", trait_in, ") ",
+          "  AND id_ind IN (SELECT id_ind FROM ", view, ") ",
+          "  GROUP BY id_ind, trait_name ",
+          ") agg ON e.id_ind = agg.id_ind ",
+          "      AND e.trait_name = agg.trait_name ",
+          "      AND e.eval_number = agg.max_eval ",
+          "WHERE e.model = '", model, "'"
+        )
       )
-    )
+    })
     # Warn per trait if any parent has multiple evaluations
     if (nrow(parent_ebv) > 0) {
       multi <- unique(parent_ebv$trait_name[parent_ebv$n_evals > 1])

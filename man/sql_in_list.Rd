@@ -12,7 +12,7 @@ list. Must be non-empty and free of \code{NA} (a bare \code{NA} would otherwise
 silently become the literal string \code{'NA'} in SQL).}
 
 \item{what}{Human-readable role label used in error messages
-(e.g. \code{"locus name"}, \code{"individual ID"}).}
+(e.g. \code{"locus name"}, \code{"trait name"}).}
 }
 \value{
 A single character string: comma-separated, single-quoted,

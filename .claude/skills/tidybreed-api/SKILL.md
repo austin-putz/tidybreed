@@ -277,6 +277,62 @@ pop |>
   add_phenotype("ADG2")
 ```
 
+### `.with_id_view()` (internal)
+
+`R/sql_utils.R` (0.76.15). `.with_id_view(conn, ids, fun)` runs `fun(view_name)`
+with `ids` registered as a one-column view `id_ind`, unregistered on exit, and
+returns `fun()`'s result. It is how `add_dosage()`, `add_genotypes()`,
+`extract_genotypes()`, `assert_ploidy_2()`, `ebv_parent_avg()` and the BLUPF90
+file builders reach SQL. Use `id_ind IN (SELECT id_ind FROM <view>)` (the only
+form for `UPDATE` / `DELETE`) or `JOIN <view> USING (id_ind)`. Where
+`resolve_subset_ids()` returns `NULL`, keep the no-filter branch and do not call
+it.
+
+- **Set semantics:** registers `unique(ids)`; a join against repeated ids would
+  multiply source rows and change a `SUM()`.
+- **Input:** a character vector without `NA`; `NULL` is an error. No id-format
+  check. `character(0)` is an empty `VARCHAR` view: nobody, never everyone.
+- **Names:** `__id_view_<k>` from a private counter (no RNG), so calls can nest.
+  `on.exit()` is installed only after registration succeeds. RNG-neutral.
+- **Not inside a transaction:** in an aborted one `duckdb_unregister()` errors
+  and the view survives the rollback.
+- **Eager:** `fun()` finishes its database work; a lazy table over the view is
+  not a valid result.
+- **One call per id set:** a view holds the frame it was registered with.
+  `trace_pedigree()` registers per generation because its set grows;
+  `extract_genotypes()`, `ebv_parent_avg()`, `build_data_file()` and
+  `write_geno_file()` each read two different sets. `add_dosage()` spans its
+  `DELETE` and `INSERT` with one view of the resolved snapshot, because a
+  selection from `ind_genotype` itself must not become a live subquery.
+- **Row order:** neither form keeps it. A read whose order reaches output needs
+  `ORDER BY id_ind`: the `has_ids` reads of `extract_genotypes()`, the final
+  read of `trace_pedigree()` (`pedigree.txt`) and the `geno_ids` read of
+  `write_geno_file()` (`genotype.txt`). Other reads are matched back by a unique
+  key.
+
+### `build_data_file()` (internal)
+
+`R/blupf90_helpers.R`. Writes the BLUPF90 `data.txt`. Two deliberate choices:
+
+- The repeated-record mean is
+  `list_avg(list(pheno_value ORDER BY id_phenotype))`. **Do not simplify it back
+  to `AVG()`**: that is a parallel floating aggregate, and the thread-count drift
+  survives `write.table()`'s 15 digits into `data.txt`. Do not use
+  `GEV_ACC_TYPE` either: its decimal round trip moves a single-record value.
+  `tests/testthat/test-individual_id_views.R` pins this.
+- A fixed effect's `source_table` with two rows for an animal being read is
+  refused, as in `add_phenotype()`: which row `match()` takes depends on row
+  order, and no column of a generic table can break the tie. Duplicates among
+  animals not being read are not refused.
+- `pheno_ids = NULL` is "no restriction"; a non-`NULL` empty vector is "no
+  records" (error), never "all". `add_ebv()` refuses a `phenotype =` filter that
+  matches nothing during validation, before any write.
+- It messages `Records [<trait>]: <n> animals` per trait (animals with a
+  non-missing value; an all-NULL animal is a missing row and not counted). A
+  trait with 0 is allowed (EBVs via genetic correlations); every trait at 0 is
+  the "No phenotypic records found" error. A `message()`, deliberately not a
+  `warning()`: late-measured traits have no records early in every run.
+
 ### `schema()` / `describe_table()`
 
 `R/schema.R`

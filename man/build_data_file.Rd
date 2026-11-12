@@ -17,7 +17,8 @@ build_data_file(pop, subset_ids, trait_name, eval_dir, pheno_ids = NULL)
 
 \item{pheno_ids}{optional integer vector of \code{ind_phenotype.id_phenotype}
 values to restrict which phenotype records are included (e.g. to exclude
-future records). \code{NULL} (default) includes all matching records.}
+future records). \code{NULL} (default) includes all matching records; an
+empty vector selects none, which is an error.}
 }
 \value{
 list with data, col_map, distinct_effects, effects_df,
@@ -26,5 +27,16 @@ n_fixed_effects, trait_cols
 \description{
 Column layout: mu(1), id_ind(2), fixed_class effects, fixed_cov effects,
 trait observations (missing → 0).
+}
+\details{
+Repeated records are averaged in \code{id_phenotype} order, so the mean does not
+depend on the thread count. A fixed effect's \code{source_table} must hold one
+row per animal read: duplicate rows are an error, because which row would
+be used depends on row order.
+
+Prints one message per trait with the number of animals that have a
+non-missing value. A trait with none is allowed (in a multi-trait model its
+EBVs come through the genetic correlations); every trait with none is an
+error.
 }
 \keyword{internal}
